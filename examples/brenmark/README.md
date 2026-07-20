@@ -1,6 +1,6 @@
 # The Brenmark
 
-**Status: aspirational** — not valid under any spec draft; exists to drive syntax design. Fulfills [#4](https://github.com/Nossimonov/Chartdown/issues/4), authored against Marcus's hexcrawl narrative in [docs/use-cases.md](../../docs/use-cases.md) §2.
+**Status: aspirational** — hex addressing, vocabulary, and route/region semantics remain pre-spec; the lexical layer conforms to [spec 01 (document model)](../../docs/spec/01-document-model.md), whose §7 sanctions this file's colon-less `[hexes]` ledger as spec-defined shorthand (pending [#8](https://github.com/Nossimonov/Chartdown/issues/8)). Spec-01 canonicalization (2026-07-20): `(difficult)` → `difficult`, `gm "…"` → `gm="…"`. Fulfills [#4](https://github.com/Nossimonov/Chartdown/issues/4), authored against Marcus's hexcrawl narrative in [docs/use-cases.md](../../docs/use-cases.md) §2.
 
 ## The chart
 

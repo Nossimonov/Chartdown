@@ -1,37 +1,37 @@
 # Vessany
 
 map: region
-extent: 900x600 mi           ; origin northwest; x east, y south
+extent: 900x600mi            ; origin northwest; x east, y south
 compass: on
 scale-bar: on
 
 [water]
-sea "The Argen Sea" : west of coastline
 coastline : from (210,0) via (150,130) (200,300) (120,390) (170,520) to (140,600)
+sea "The Argen Sea" : west of coastline
 bay "Gull Bay" : on coastline at (120,390)
 
 [terrain]
 mountains "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
-forest "Thornwood" : blob around (430,170)  ~90 mi
-hills "The Vess Downs" : blob around (520,400)  ~120 mi
+forest "Thornwood" : blob (430,170) size=90mi
+hills "The Vess Downs" : blob (520,400) size=120mi
 
 [paths]
-river "The Vess" : from the Serpent's Spine near (720,240) to Gull Bay
-road "Coast Road" : Argenport to Merrow's Rest, along coast
-road "King's Way" : Highkeep to Argenport
+river "The Vess" : from "The Serpent's Spine" near (720,240) to "Gull Bay"
+road "Coast Road" : "Argenport" to "Merrow's Rest" along coastline
+road "King's Way" : "Highkeep" to "Argenport"
 
 [settlements]
 capital "Highkeep" : (360,330)
-city "Argenport" : on coast at (160,470)
-town "Merrow's Rest" : on coast, 70 mi north of Argenport
-town "Dunmere" : south edge of Thornwood
-village "Gull Landing" : on Gull Bay
-village "Sparrowdown" : 40 mi east of Highkeep
+city "Argenport" : on coastline at (160,470)
+town "Merrow's Rest" : on coastline 70mi north of "Argenport"
+town "Dunmere" : south edge of "Thornwood"
+village "Gull Landing" : on "Gull Bay"
+village "Sparrowdown" : 40mi east of "Highkeep"
 
 [realms]
-realm "Vessany" : west of the Serpent's Spine
-realm "Khar" : east of the Serpent's Spine
-border : crest of the Serpent's Spine    gm "Redrawn at the Treaty of Argen; Khar disputes the southern third."
+realm "Vessany" : west of "The Serpent's Spine"
+realm "Khar" : east of "The Serpent's Spine"
+border : crest of "The Serpent's Spine" gm="Redrawn at the Treaty of Argen; Khar disputes the southern third."
 
 [labels]
 "The Argen Sea" : sprawl (60,200)..(120,450)

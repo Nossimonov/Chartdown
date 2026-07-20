@@ -11,3 +11,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-mit-code-cc-by-spec.md) | Code is MIT; the specification is CC-BY-4.0 | Accepted |
+| [0002](0002-document-model-lexical-layer.md) | One line grammar, `;` comments, `key=value` properties; embedded and standalone documents are identical | Accepted |

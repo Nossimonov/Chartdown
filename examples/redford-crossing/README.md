@@ -1,6 +1,8 @@
 # Ambush at Redford Crossing
 
-**Status: aspirational** — not valid under any spec draft; exists to drive syntax design. Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
+**Status: aspirational** — placements, vocabulary, and structure details remain pre-spec; the lexical layer conforms to [spec 01 (document model)](../../docs/spec/01-document-model.md). Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
+
+**Spec-01 canonicalization (2026-07-20):** parentheticals removed (`(overturned)` → `overturned` flag, `(difficult)` → `difficult`), parameters normalized to `key=value` (`width=2`, `light=20ft`, `size=2`, `facing=south`), and the pseudo-English relations (`on river at`, `crossing ford`) dropped rather than frozen prematurely — the ford is now placed directly (`ford : K9..L10 difficult`); whether relations return at battlemap scale is [#8](https://github.com/Nossimonov/Chartdown/issues/8)'s call. Building detail lines survive as spec 01's *provisional* construct.
 
 ## The scene
 
@@ -54,8 +56,8 @@ Against Sarah's checklist (use-cases §1): grid+scale ✓ · semantic terrain fr
 ## Open questions this example deliberately raises
 
 - **Topological relations are contested.** `ford : on river at …` and `road : … crossing ford` read nicely but flirt with pseudo-English — the AppleScript trap: syntax that looks like prose, inviting users to type *other* prose that doesn't parse. Alternatives: a small closed set of relation keywords with rigid grammar, or no relations at battlemap scale at all (`ford : K9..L10 (difficult)` works; the only loss is the renderer knowing ford and river should visually merge). Region maps genuinely need relations ("road from A to B along the coast"), so the decision lives in [#8](https://github.com/Nossimonov/Chartdown/issues/8) with region-map needs in view.
-- **Name vs. property is ambiguous and must not stay so.** Is `wagon (overturned)` a feature *named* "wagon (overturned)" or a `wagon` in an overturned state? Intended reading: bare word = semantic type, quoted string = display name, trailing/parenthesized words = properties — but nothing in the syntax enforces one reading yet. Relatedly, the property forms are inconsistent *on purpose* — `(overturned)`, bare `hidden`, `width 2`, `light 20 ft` — so [#7](https://github.com/Nossimonov/Chartdown/issues/7) settles one canonical form with concrete material.
+- ~~**Name vs. property ambiguity.**~~ **Resolved by [spec 01](../../docs/spec/01-document-model.md) §5** (via [#13](https://github.com/Nossimonov/Chartdown/issues/13)): bare word = flag, `key=value` = parameter, quoted = name/text, parentheses removed from the language.
 - **What does the language "know"?** Does `wagon` mean anything to a parser, and how can `facing south` work if not? Position to test in proposals: a standard vocabulary of semantic types whose variant states (`overturned`) renderers understand; unknown types are legal and render as a generic glyph + label; and *generic* properties — `facing`, `size`, `hidden`, `light` — are pure geometry/visibility, applying to any entity regardless of vocabulary. Extensibility of the vocabulary is [#9](https://github.com/Nossimonov/Chartdown/issues/9)'s question.
 - Are `[gm]` entries that reference entities by name (`tollhouse : "…"`) attachments or redefinitions? Resolution rules belong to [#11](https://github.com/Nossimonov/Chartdown/issues/11).
 - `building` is rect-based here; non-rectangular structures (L-shaped ruin) will need either polygon footprints or composition — battlemap-primitives proposal territory.
-- Comment character (`;` here) and token allegiance modeling — minor, parked in [#7](https://github.com/Nossimonov/Chartdown/issues/7)/[#9](https://github.com/Nossimonov/Chartdown/issues/9).
+- ~~Comment character~~ — **resolved by [spec 01](../../docs/spec/01-document-model.md) §3**: `;`. Token allegiance modeling remains parked in [#9](https://github.com/Nossimonov/Chartdown/issues/9).

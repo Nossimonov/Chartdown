@@ -1,34 +1,35 @@
 # Ambush at Redford Crossing
 
 map: battlemap
+chartdown: 0.1
 grid: square 20x15          ; columns A-T, rows 1-15
-scale: 5 ft
+scale: 5ft
 
 [terrain]
 forest : area A11..F15
-river "The Redford" : path A9 F9 K9 P10 T10  width 2
-ford : on river at K9..L10  (difficult)
-mud : area H11..J11  (difficult)
-road "Old Toll Road" : path K1 K15  crossing ford
+river "The Redford" : path A9 F9 K9 P10 T10 width=2
+ford : K9..L10 difficult
+mud : area H11..J11 difficult
+road "Old Toll Road" : path K1 K15
 
 [structures]
 tollhouse "Ruined Toll House" : building N3..Q6
-  ruined : north wall, east wall
-  door : south at O6
-  window : west at N4
+  ruined : north east
+  door : south O6
+  window : west N4
 
 [features]
-wagon (overturned) : K11 facing south
-campfire : O7  light 20 ft
+wagon : K11 overturned facing=south
+campfire : O7 light=20ft
 crates : P4
 
 [tokens]
 goblins g1 g2 : C12 E13
 goblin-archers a1 a2 : O4 P5
-ogre "Gruk" : G9  size 2  hidden
+ogre "Gruk" : G9 size=2 hidden
 party start : J14..L15
 
 [gm]
-trigger ambush : K9..L10  "spring when the wagon is mid-ford"
+trigger ambush : K9..L10 "spring when the wagon is mid-ford"
 tollhouse : "Archers hold fire until the trigger."
 crates : "40 gp and a toll ledger naming the goblins' employer."

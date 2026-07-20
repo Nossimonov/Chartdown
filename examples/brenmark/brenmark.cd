@@ -1,8 +1,8 @@
 # The Brenmark
 
 map: hexcrawl
-grid: hex 8x9  pointy odd-row       ; address = column+row: 0203 is col 02, row 03
-scale: 6 mi
+grid: hex 8x9 pointy odd-row        ; address = column+row: 0203 is col 02, row 03
+scale: 6mi
 numbers: on
 
 [hexes]
@@ -10,20 +10,20 @@ numbers: on
 0201 sea
 0202 plains village "Saltmere"
 0203 plains
-0204 marsh  (difficult)
+0204 marsh difficult
 0301 hills
 0302 plains town "Redford"
 0303 plains
 0304 forest
-0401 hills ruin "Harrow Tor"        gm "Haunted; the ghost knows the pass song."
+0401 hills ruin "Harrow Tor" gm="Haunted; the ghost knows the pass song."
 0402 plains
 0403 forest
-0404 forest lair                    gm "Spider queen — steer them off until level 3."
+0404 forest lair gm="Spider queen — steer them off until level 3."
 0501 mountains
 0502 hills dungeon "The Barrowdown"
 0503 forest keep "Thornhold"
 0504 forest
-0601 mountains                      gm "Pass snowed shut until spring."
+0601 mountains gm="Pass snowed shut until spring."
 0602 mountains
 0603 hills
 0604 plains city "Bren"

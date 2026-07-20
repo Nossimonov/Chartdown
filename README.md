@@ -22,21 +22,24 @@ Chartdown aims to do for maps what Markdown did for documents and what Mermaid d
 
 ```chartdown
 # Ambush at Redford Crossing
+
+map: battlemap
 grid: square 20x15
+scale: 5ft
 
 [terrain]
-river   : path (0,8) (7,8) (9,7) (19,7) width=2
-forest  : area (0,0)..(6,5)
-bridge  : rect (8,7)..(9,9)
+forest : area A11..F15
+river "The Redford" : path A9 F9 K9 P10 T10 width=2
+ford : K9..L10 difficult
 
 [features]
-wagon (overturned) : (10,8)
-campfire           : (12,10)
+wagon : K11 overturned facing=south
+campfire : O7 light=20ft
 
 [tokens]
-@goblin  g1..g4 : (3,4) (5,2) (4,6) (6,3)
-@pc      Aria   : (14,8)
-@pc      Bram   : (15,9)
+goblins g1 g2 : C12 E13
+ogre "Gruk" : G9 size=2 hidden
+party start : J14..L15
 ```
 
 …rendering to a gridded battlemap with terrain, features, and labeled tokens.
