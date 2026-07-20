@@ -1,0 +1,97 @@
+# 06 — Battlemap Primitives
+
+**Status: Draft** (accepted from proposal [#18](https://github.com/Nossimonov/Chartdown/issues/18) as amended: footprint scope clarified; elevation included in v0.1). Defines the `battlemap` map type: sections, the battlemap slice of the standard library, structure details (de-provisionalizing spec 01 §4's parked construct), tokens, and elevation.
+
+## 1. Sections
+
+Known battlemap sections: `[terrain]`, `[structures]`, `[features]`, `[tokens]`, plus the universal `[vocab]` and `[gm]`, and `[labels]` (section 07). Paths (rivers, roads) live in `[terrain]`; shape tokens distinguish them.
+
+## 2. Standard-library additions (battlemap slice)
+
+```chartdown
+; structures, barriers, openings — the interop-critical triad
+building : structure states=ruined
+wall : barrier states=ruined
+fence : barrier sight=all               ; blocks passage, not sight
+pillar : barrier
+door : opening passes=closed sight=none
+gate : door
+window : opening passes=none sight=all
+arrow-slit : window
+stairs : feature
+
+; tactical terrain
+mud : terrain states=difficult
+sand : terrain
+grass : terrain
+snow : terrain
+ice : terrain states=difficult
+water : terrain states=difficult
+rubble : terrain states=difficult
+
+; elevation transitions
+ramp : feature
+slope : terrain
+
+; props
+wagon : feature states=overturned
+crates : feature
+barrel : feature
+chest : feature
+table : feature
+altar : feature
+statue : feature
+well : feature
+boulder : feature
+tree : feature
+pit : feature states=difficult
+
+; light-emitting props (light= is generic; these carry overridable defaults)
+campfire : feature light=20ft
+torch : feature light=20ft
+lantern : feature light=15ft
+brazier : feature light=20ft
+
+; play aids
+start : zone
+```
+
+`light=<range>` is a **generic parameter** — any entity may emit light; the props above merely carry defaults (`campfire : O7 light=30ft` overrides).
+
+## 3. Structure details
+
+An indented line beneath a `structure` entity is a **structure detail**, interpreted in the parent's frame:
+
+```chartdown
+building tollhouse "Ruined Toll House" : N3..Q6
+  ruined : north east          ; wall-state : side words — whole walls
+  door : O6.s                  ; opening : edge token on the perimeter
+  window : N4.w
+```
+
+- **Side words** (`north east south west`) address whole walls of the footprint; **edge tokens** (spec 02 §5) address specific cell edges. Wall-state lines mark sides or edges; opening lines place doors/windows/gates on the perimeter.
+- Details are anonymous by default and may take ids like any line (`door back-door : Q5.e`).
+- **Footprints** are a rect range (`N3..Q6`) or a cell list — the union of the listed cells and ranges. Odd *orthogonal* shapes are therefore fully in scope: an L-shaped hall is `building : K5..M8 K9..K12`, perimeter derived. Only **non-axis-aligned geometry** (diagonal walls, curved keep walls, corner-point-traced footprints) is deferred beyond v0.1.
+- **Smoothing note** *(non-normative)*: an angled wall is representable today as a saw-tooth of cells at the appropriate angle, and a renderer MAY render stair-stepped footprints and wall runs as clean diagonals or curves — provided movement and occupancy semantics follow the declared cells. The syntax conveys cells; appearance is the renderer's.
+- Freestanding walls need no parent: `wall : K5.e K6.e K7.e` (edge runs, spec 02 §5), with `ruined` available as a state.
+
+## 4. Tokens — no bestiary, by design
+
+The standard library ships **zero creature words**. Creatures are setting content: an unknown word in `[tokens]` infers the token archetype (spec 04 §3) and renders as a labeled token; `size=<n>` (cells per side) and `side=<word>` (themed to colors) carry the tactics. Communities publish creature vocabularies via `use:`; themes supply art. The zero is mechanical (inference already renders anything), cultural (no implied canon), and legal (nothing IP-adjacent to police).
+
+A token-archetype word with an **area placement** renders as a staging zone: `party start : J14..L15` marks where the PCs begin.
+
+## 5. Elevation
+
+- **`elevation=<measure>`** is a generic parameter on areas, zones, structures, and features; default `0`. A sniper perch is a zone at height: `ledge perch "The Old Wall" : zone N2..Q3 elevation=15ft`.
+- **Ledges are emergent, not drawn**: wherever adjacent placements' elevations differ, the renderer draws a theme-styled edge, and the drop is the difference — precisely the number the table asks for. There is no cliff-tracing grammar.
+- **Transitions are vocabulary**: `stairs`, `ramp`, and `slope` are traversable connections, placed spanning a boundary.
+- **Tokens carry no elevation** — a creature's altitude is play-state, which is VTT territory (vision non-goal: Chartdown is not a VTT).
+
+## 6. Export note (non-normative)
+
+The archetype facets map 1:1 onto Universal VTT: barrier and wall geometry → `line_of_sight`; `opening` with its `passes`/`sight` facets → `portals` (closed state, window-ness); `light=` → `lights`; grid and `scale:` → `resolution`. Elevation flattens on UVTT export (ledges bake into the rendered image; walls are unaffected); richer multi-level export targets (e.g. Foundry scene levels) are ecosystem-phase work. This mapping is why the triad is modeled first-class: export is a transform, not an interpretation.
+
+---
+
+*This document is part of the Chartdown specification and is licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/), per [ADR 0001](../decisions/0001-mit-code-cc-by-spec.md).*

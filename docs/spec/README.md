@@ -2,7 +2,7 @@
 
 **License:** the contents of this directory are licensed [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) (not MIT like the rest of the repository) — see [ADR 0001](../decisions/0001-mit-code-cc-by-spec.md). Spec files should carry a CC-BY-4.0 notice as they are added.
 
-**Status: sections 01–05 are drafted; all else is planned.** This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
+**Status: sections 01–06 are drafted; all else is planned.** This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
 
 ## How the spec grows
 
@@ -21,7 +21,7 @@ As sections are accepted they will land as numbered files so the spec reads in o
 | [`03-identity-and-links.md`](03-identity-and-links.md) | Entity identity, references, anchors, crosslinks, `[gm]` attachments |
 | [`04-vocabulary-and-archetypes.md`](04-vocabulary-and-archetypes.md) | Archetypes, open vocabulary, derivation, inference, theme contract |
 | [`05-map-primitives.md`](05-map-primitives.md) | The topographic standard library; region and hexcrawl map types |
-| `06-battlemap-primitives.md` | Standard-library tokens, walls, doors, structures; elevation |
+| [`06-battlemap-primitives.md`](06-battlemap-primitives.md) | Battlemap type: structures, openings, props, tokens, elevation |
 | `07-labels-and-legends.md` | Text, legends, scale indicators |
 | `08-styling.md` | Theme file format |
 

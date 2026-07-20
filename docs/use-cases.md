@@ -33,6 +33,7 @@ Her options tonight are all bad: forty minutes in Dungeondraft for a scene that 
 - Props as point features with a semantic type and optional facing (overturned wagon, campfire, crates).
 - Tokens: creature type + instance name (`goblin g1..g4`), size in cells (an ogre is 2×2), allegiance for coloring; a batch syntax so four goblins are one line, and a marked area rather than tokens for "PCs start here."
 - Light sources with rough radius (campfire, lantern) — the toll house interior should read as dark.
+- Elevation for set-piece terrain: ledges, sniper perches, and tiered arenas as areas at declared heights, with the drop height being the difference (martial players *will* ask what they can kick an enemy off of); traversable transitions (stairs, ramps). *(Added with [#18](https://github.com/Nossimonov/Chartdown/issues/18) — its absence from the original narrative was a writing gap, not evidence of non-need.)*
 - GM-only annotations (the archers' hiding spot, a trap trigger area) excluded from a player-facing render.
 - Named entities addressable for prose crosslinks ("the toll house," "the ford").
 - The whole scene in roughly 25 lines, skimmable unrendered; a one-line diff when the wagon moves.
