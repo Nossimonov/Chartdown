@@ -67,6 +67,9 @@ landmark : feature
 realm : zone
 region : zone
 border : path
+
+; annotation (see section 07)
+note : feature
 ```
 
 The list is deliberately curated: every missing word is one `[vocab]` line away (spec 04 §3's escalation ladder), and a small library is a stable one.
