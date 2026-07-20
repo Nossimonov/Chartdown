@@ -69,4 +69,4 @@ This project runs **issue-first and spec-first** — see [CONTRIBUTING.md](CONTR
 
 ## License
 
-Not yet chosen — tracked in the issue tracker.
+[MIT](LICENSE), with one carve-out: the language specification in [docs/spec/](docs/spec/) is [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/), so anyone can implement or republish the spec with attribution. Rationale in [ADR 0001](docs/decisions/0001-mit-code-cc-by-spec.md).

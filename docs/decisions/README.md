@@ -10,4 +10,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 
 | # | Title | Status |
 |---|---|---|
-| — | *No decisions recorded yet.* | |
+| [0001](0001-mit-code-cc-by-spec.md) | Code is MIT; the specification is CC-BY-4.0 | Accepted |
