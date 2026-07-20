@@ -1,0 +1,13 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies & build output (for the eventual reference implementation)
+node_modules/
+dist/
+coverage/
+*.log
