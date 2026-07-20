@@ -15,7 +15,7 @@ ASCII mock (two characters per hex — terrain, then feature; `··` = unexplore
 ```
       A   B   C   D   E   F   G   H
  1    ~~  ~~  h·  hR  m·  m·  ··  ··
- 2      ~~  pV  pT  p·  hD  m·  ··
+ 2      ~~  pV  pT  p·  hD  m·  m?
  3    ~~  p·  p·  f·  fK  h·  ··  ··
  4      ~~  pM  f·  fL  f·  pC  ··
  5    ~~  ··  ··  ··  ··  ··  ··  ··
@@ -25,7 +25,7 @@ ASCII mock (two characters per hex — terrain, then feature; `··` = unexplore
  9    ~~  ··  ··  ··  ··  ··  ··  ··
 ```
 
-`~` sea · `p` plains · `h` hills · `f` forest · `m` mountains · `pM` marsh · features: `V` village, `T` town, `C` city, `R` ruin, `D` dungeon, `K` keep, `L` lair (GM render only)
+`~` sea · `p` plains · `h` hills · `f` forest · `m` mountains · `pM` marsh · `m?` seen (terrain visible, contents hidden) · features: `V` village, `T` town, `C` city, `R` ruin, `D` dungeon, `K` keep, `L` lair (GM render only)
 
 ## What this example asserts (syntax under test)
 
@@ -48,5 +48,5 @@ Against Marcus's checklist (use-cases §2): orientation/parity/dimensions/scale 
 - ~~Routes and adjacency~~ — **resolved by spec 02 §4**: consecutive hexes SHOULD be adjacent; renderers bridge non-adjacent steps deterministically and warn.
 - ~~Range semantics~~ — **resolved by spec 02 §2**: one matching axis = run, both differing = bounding block in offset space.
 - ~~Ledger density~~ — **resolved by spec 02 §4**: ledger form (`C4 forest`) is canonical and tool-emitted; grouped form (`forest : C4 D3 D4`) is legal human sugar; letter addresses soften the wall.
-- **Feature words vs. the vocabulary question**: `keep`, `lair`, `dungeon` assume a known site vocabulary — same "what does the language know?" question the battlemap example raises for `wagon` ([#9](https://github.com/Nossimonov/Chartdown/issues/9)).
-- **Exploration state granularity**: omission = unexplored works for Marcus, but "sighted from a distance" (terrain known, contents unknown) needs an explicit marker eventually — hex property or GM-section concern? (hexcrawl-primitives territory)
+- ~~Feature words vs. the vocabulary question~~ — **resolved by [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) (mechanism) and [spec 05](../../docs/spec/05-map-primitives.md) §1 (content)**: `keep`, `lair`, `dungeon` are standard-library entries; the ledger grammar (first word terrain, then contents) is spec 05 §3.
+- ~~Exploration state granularity~~ — **resolved by [spec 05](../../docs/spec/05-map-primitives.md) §3** (via [#17](https://github.com/Nossimonov/Chartdown/issues/17)): omission = unexplored; `seen` renders terrain but hides contents (demonstrated at G2, the white peak); `unexplored` force-fogs a mentioned hex so GMs can pre-author and reveal per session. GM mode ignores both.

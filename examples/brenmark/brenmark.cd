@@ -25,6 +25,7 @@ E3 forest keep "Thornhold"
 E4 forest
 F1 mountains gm="Pass snowed shut until spring."
 F2 mountains
+G2 mountains seen gm="The white peak, visible from Harrow Tor; contents unknown to the party."
 F3 hills
 F4 plains city "Bren"
 
