@@ -1,0 +1,27 @@
+# Gumdrop Vale, Sigma-5-5
+
+map: region
+extent: 12x8mi               ; a small survey region, year 3742
+seed: 3742
+
+[vocab]
+gumdrop-hills : hills                       ; treat like hills; a theme draws gumdrops
+licorice-forest : forest                    ; treat like a forest; lollipops instead of trees
+taffy-river : river
+hovercart : wagon states=overturned,parked
+sugar-silo : feature
+
+[terrain]
+gumdrop-hills "The Gumdrop Hills" : blob (4,3) size=2mi
+licorice-forest : area (7,2) (9,2) (9,5) (7,6)
+
+[paths]
+taffy-river : from (1,1) via (5,4) to (11,6)
+
+[settlements]
+village "Fondant Hollow" : south edge of "The Gumdrop Hills"
+
+[features]
+sugar-silo : (10,3)
+hovercart : (5,4) overturned link="notes/the-crash.md"
+zorbleflax : (8,7)                          ; defined nowhere — renders as a generic glyph labeled "zorbleflax"

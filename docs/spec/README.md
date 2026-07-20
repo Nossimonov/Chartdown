@@ -2,7 +2,7 @@
 
 **License:** the contents of this directory are licensed [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) (not MIT like the rest of the repository) — see [ADR 0001](../decisions/0001-mit-code-cc-by-spec.md). Spec files should carry a CC-BY-4.0 notice as they are added.
 
-**Status: sections 01–03 are drafted; all else is planned.** This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
+**Status: sections 01–04 are drafted; all else is planned.** This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
 
 ## How the spec grows
 
@@ -19,9 +19,10 @@ As sections are accepted they will land as numbered files so the spec reads in o
 | [`01-document-model.md`](01-document-model.md) | File format, fenced-block embedding, metadata, sections, comments |
 | [`02-coordinates-and-grids.md`](02-coordinates-and-grids.md) | Addresses, edges, gridless points, relational placement, resolution |
 | [`03-identity-and-links.md`](03-identity-and-links.md) | Entity identity, references, anchors, crosslinks, `[gm]` attachments |
-| `04-map-primitives.md` | Terrain areas, paths, points of interest, regions |
-| `05-battlemap-primitives.md` | Tokens, walls, doors, elevation |
-| `06-labels-and-legends.md` | Text, legends, scale indicators |
-| `07-styling.md` | Themes, style separation from content |
+| [`04-vocabulary-and-archetypes.md`](04-vocabulary-and-archetypes.md) | Archetypes, open vocabulary, derivation, inference, theme contract |
+| `05-map-primitives.md` | Standard-library terrain, paths, points of interest, regions |
+| `06-battlemap-primitives.md` | Standard-library tokens, walls, doors, structures; elevation |
+| `07-labels-and-legends.md` | Text, legends, scale indicators |
+| `08-styling.md` | Theme file format |
 
 This table is a plan, not a promise — Phase 1 proposals may reshape it.
