@@ -1,6 +1,6 @@
 # The Brenmark
 
-**Status: aspirational** — hex addressing, vocabulary, and route/region semantics remain pre-spec; the lexical layer conforms to [spec 01 (document model)](../../docs/spec/01-document-model.md), whose §7 sanctions this file's colon-less `[hexes]` ledger as spec-defined shorthand (pending [#8](https://github.com/Nossimonov/Chartdown/issues/8)). Spec-01 canonicalization (2026-07-20): `(difficult)` → `difficult`, `gm "…"` → `gm="…"`. Fulfills [#4](https://github.com/Nossimonov/Chartdown/issues/4), authored against Marcus's hexcrawl narrative in [docs/use-cases.md](../../docs/use-cases.md) §2.
+**Status: aspirational** — hexcrawl vocabulary and section semantics remain pre-spec; conforms to [spec 01 (document model)](../../docs/spec/01-document-model.md) and [spec 02 (coordinates and grids)](../../docs/spec/02-coordinates-and-grids.md), including the sanctioned `[hexes]` ledger shorthand. Spec-01 canonicalization (2026-07-20): `(difficult)` → `difficult`, `gm "…"` → `gm="…"`. Spec-02 canonicalization (2026-07-20): digit-pair addresses re-rendered to unified chess-style (`0203` → `B3`). Fulfills [#4](https://github.com/Nossimonov/Chartdown/issues/4), authored against Marcus's hexcrawl narrative in [docs/use-cases.md](../../docs/use-cases.md) §2.
 
 ## The chart
 
@@ -13,7 +13,7 @@ Classic wargame-style hex chart: terrain icon per hex, hex numbers on, settlemen
 ASCII mock (two characters per hex — terrain, then feature; `··` = unexplored; even columns are the offset ones):
 
 ```
-      01  02  03  04  05  06  07  08
+      A   B   C   D   E   F   G   H
  1    ~~  ~~  h·  hR  m·  m·  ··  ··
  2      ~~  pV  pT  p·  hD  m·  ··
  3    ~~  p·  p·  f·  fK  h·  ··  ··
@@ -44,9 +44,9 @@ Against Marcus's checklist (use-cases §2): orientation/parity/dimensions/scale 
 
 ## Open questions this example deliberately raises
 
-- **Are addresses `colrow` or `rowcol`?** `0203` follows Text Mapper/wargame convention (column 02, row 03), but nothing in the syntax self-documents this; the header comment is doing load-bearing work. [#8](https://github.com/Nossimonov/Chartdown/issues/8) must fix the convention and consider making it declarable.
+- ~~Address convention~~ — **resolved by [spec 02](../../docs/spec/02-coordinates-and-grids.md) §2/§4** (via [#14](https://github.com/Nossimonov/Chartdown/issues/14) as amended): chess-style column-letter + row-number (`C4`) unified across all grid types; digit-pair dropped; orientation + offset parity mandatory in the header.
+- ~~Routes and adjacency~~ — **resolved by spec 02 §4**: consecutive hexes SHOULD be adjacent; renderers bridge non-adjacent steps deterministically and warn.
+- ~~Range semantics~~ — **resolved by spec 02 §2**: one matching axis = run, both differing = bounding block in offset space.
+- ~~Ledger density~~ — **resolved by spec 02 §4**: ledger form (`C4 forest`) is canonical and tool-emitted; grouped form (`forest : C4 D3 D4`) is legal human sugar; letter addresses soften the wall.
 - **Feature words vs. the vocabulary question**: `keep`, `lair`, `dungeon` assume a known site vocabulary — same "what does the language know?" question the battlemap example raises for `wagon` ([#9](https://github.com/Nossimonov/Chartdown/issues/9)).
-- **Exploration state granularity**: omission = unexplored works for Marcus, but "sighted from a distance" (terrain known, contents unknown) needs an explicit marker eventually — is that a hex property or a GM-section concern? ([#7](https://github.com/Nossimonov/Chartdown/issues/7))
-- **Do routes validate adjacency?** If consecutive route hexes aren't neighbors, is that an error, or does the renderer route through intervening hexes? Matters for both authoring forgiveness and diff stability.
-- **Range semantics on hex addresses**: `0302..0304` reads as a column run; is a rectangular block range (`0302..0604`) legal, and does it respect offset geometry? ([#8](https://github.com/Nossimonov/Chartdown/issues/8))
-- **The ledger form is dense by nature — is a grouped form warranted?** Hex-keyed lines optimize append/diff/lookup but make for a brutal wall of addresses (any cell-content chart looks like this; Text Mapper is identical). The skim-friendly inversion — `forest : 0304 0403 0404 0504`, grouping by content — reads far softer but sacrifices one-line-per-hex diffs and scatters a hex's facts across lines. Whether both forms are legal (canonical ledger + grouped sugar), and whether friendlier addresses (`C4`, spreadsheet-style `AA` columns past 26) beat `0304`, belongs to [#7](https://github.com/Nossimonov/Chartdown/issues/7)/[#8](https://github.com/Nossimonov/Chartdown/issues/8).
+- **Exploration state granularity**: omission = unexplored works for Marcus, but "sighted from a distance" (terrain known, contents unknown) needs an explicit marker eventually — hex property or GM-section concern? (hexcrawl-primitives territory)

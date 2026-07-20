@@ -15,8 +15,8 @@ road "Old Toll Road" : path K1 K15
 [structures]
 tollhouse "Ruined Toll House" : building N3..Q6
   ruined : north east
-  door : south O6
-  window : west N4
+  door : O6.s
+  window : N4.w
 
 [features]
 wagon : K11 overturned facing=south

@@ -1,36 +1,36 @@
 # The Brenmark
 
 map: hexcrawl
-grid: hex 8x9 pointy odd-row        ; address = column+row: 0203 is col 02, row 03
+grid: hex 8x9 pointy odd-row        ; address = column letter + row number: C4 is col C, row 4
 scale: 6mi
 numbers: on
 
 [hexes]
-0101..0109 sea                      ; the western coast
-0201 sea
-0202 plains village "Saltmere"
-0203 plains
-0204 marsh difficult
-0301 hills
-0302 plains town "Redford"
-0303 plains
-0304 forest
-0401 hills ruin "Harrow Tor" gm="Haunted; the ghost knows the pass song."
-0402 plains
-0403 forest
-0404 forest lair gm="Spider queen — steer them off until level 3."
-0501 mountains
-0502 hills dungeon "The Barrowdown"
-0503 forest keep "Thornhold"
-0504 forest
-0601 mountains gm="Pass snowed shut until spring."
-0602 mountains
-0603 hills
-0604 plains city "Bren"
+A1..A9 sea                          ; the western coast
+B1 sea
+B2 plains village "Saltmere"
+B3 plains
+B4 marsh difficult
+C1 hills
+C2 plains town "Redford"
+C3 plains
+C4 forest
+D1 hills ruin "Harrow Tor" gm="Haunted; the ghost knows the pass song."
+D2 plains
+D3 forest
+D4 forest lair gm="Spider queen — steer them off until level 3."
+E1 mountains
+E2 hills dungeon "The Barrowdown"
+E3 forest keep "Thornhold"
+E4 forest
+F1 mountains gm="Pass snowed shut until spring."
+F2 mountains
+F3 hills
+F4 plains city "Bren"
 
 [routes]
-road "Old Trade Road" : 0202 0302 0402 0502 0603 0604
-river "The Bren" : 0601 0502 0403 0304 0204 0104
+road "Old Trade Road" : B2 C2 D2 E2 F3 F4
+river "The Bren" : F1 E2 D3 C4 B4 A4
 
 [regions]
-realm "Duchy of Bren" : 0302..0304 0402..0404 0502..0504 0602..0604
+realm "Duchy of Bren" : C2..C4 D2..D4 E2..E4 F2..F4

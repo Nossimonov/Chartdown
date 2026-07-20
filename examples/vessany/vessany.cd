@@ -16,7 +16,7 @@ forest "Thornwood" : blob (430,170) size=90mi
 hills "The Vess Downs" : blob (520,400) size=120mi
 
 [paths]
-river "The Vess" : from "The Serpent's Spine" near (720,240) to "Gull Bay"
+river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"
 road "Coast Road" : "Argenport" to "Merrow's Rest" along coastline
 road "King's Way" : "Highkeep" to "Argenport"
 
@@ -31,7 +31,7 @@ village "Sparrowdown" : 40mi east of "Highkeep"
 [realms]
 realm "Vessany" : west of "The Serpent's Spine"
 realm "Khar" : east of "The Serpent's Spine"
-border : crest of "The Serpent's Spine" gm="Redrawn at the Treaty of Argen; Khar disputes the southern third."
+border : along "The Serpent's Spine" gm="Redrawn at the Treaty of Argen; Khar disputes the southern third."
 
 [labels]
 "The Argen Sea" : sprawl (60,200)..(120,450)
