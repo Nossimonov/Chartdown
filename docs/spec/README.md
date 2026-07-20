@@ -4,6 +4,14 @@
 
 **Status: sections 01–07 are drafted — all content sections of v0.1. Only 08 (theme file format) remains planned.** This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
 
+## Machine-ingestion artifacts (issue #12)
+
+Three artifacts keep the spec agent-consumable, and they are **mandatory maintenance**: any commit that changes a spec section MUST update the first two in the same commit.
+
+1. [`grammar.ebnf`](grammar.ebnf) — the consolidated grammar of all drafted sections. Informative: prose sections are normative and win on conflict; the grammar exists as the cross-section consistency check and the parser-writer's map.
+2. [`digest.md`](digest.md) — the single-file language reference (llms.txt-style), compressed for dropping into an agent's context, ending in a few-shot micro-corpus. Every snippet in it must be valid — it teaches by example.
+3. **The example corpus convention**: every spec section includes worked source examples; every [`examples/`](../../examples/) directory pairs a `.cd` source with a README describing the intended render. Together they are the paired source↔render corpus; agents (and humans) learn the language from them as much as from prose.
+
 ## How the spec grows
 
 1. A [syntax proposal issue](../../CONTRIBUTING.md#syntax-proposals) is opened with worked examples.

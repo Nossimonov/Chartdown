@@ -13,3 +13,5 @@ Chartdown documents live here — **written before the syntax exists**. This is 
 - Cover all three target map types. Phase 0 aims for at least one aspirational example each of: a region/fantasy map, a hex chart, and a battlemap.
 
 When a spec change invalidates an example, fixing the example is part of that spec change's PR — examples and spec never contradict each other on `main`.
+
+These pairs double as the language's **few-shot corpus** (see [docs/spec/README.md](../docs/spec/README.md), machine-ingestion artifacts): each `.cd` + README pair is a source↔intended-render example that agents and new users learn from, which is one more reason examples must stay impeccably valid.

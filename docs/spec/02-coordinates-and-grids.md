@@ -15,7 +15,7 @@
 A cell address is column letters followed by a row number: `K11`, `C4`. Columns run `A`–`Z`, then spreadsheet-style `AA`, `AB`, … — there is no width cap. The same form addresses square cells and hexes; the header's `grid:` declaration determines geometry.
 
 - **Lists**: whitespace-separated addresses (`C12 E13`).
-- **Ranges**: `A11..F15` — inclusive between the two corner cells. On square grids this is the rectangle; on hex grids, a range with one matching axis is a run along the other, and a range with both differing is the bounding block in offset space.
+- **Ranges**: `A11..F15` — inclusive between the two corner cells. On square grids this is the rectangle; on hex grids, a range with one matching axis is a run along the other, and a range with both differing is the bounding block in offset space. On gridless maps, `(x1,y1)..(x2,y2)` bounds the rectangle between two points (used by, e.g., label `sprawl`).
 
 ## 3. Square grids
 
@@ -99,7 +99,7 @@ relational = ( "at" , point )
            | ( "on" , ref , [ "at" , point ] )
            | ( compass , "edge" , "of" , ref )
            | ( "near" , ( ref | point ) )
-           | ( "from" , endpoint , { "via" , point } , "to" , endpoint )
+           | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
            | ( "along" , ref ) ;
 endpoint   = ref , [ "at" , point ] | point ;
 ref        = word | string ;

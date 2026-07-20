@@ -1,0 +1,105 @@
+(* ===================================================================
+   Chartdown consolidated grammar — spec draft v0.1 (sections 01–07)
+   Status: informative consolidation; the prose spec sections are
+   normative and win on any conflict. Maintained per issue #12:
+   every spec change updates this file in the same commit.
+   Lexical fine print (whitespace, string escapes, INDENT) is defined
+   in prose (spec 01); semantic rules (resolution order, fail-loud
+   references, GM stripping) are prose-only and noted as comments.
+   =================================================================== *)
+
+(* ---- document skeleton — spec 01 ---- *)
+
+document       = [ title ] , header , { section } ;
+title          = "#" , text , EOL ;                  (* first non-blank line only *)
+header         = map-line , { header-line } ;
+map-line       = "map" , ":" , map-type , EOL ;
+map-type       = "battlemap" | "hexcrawl" | "region" ;
+                 (* experimental types carry a -beta suffix *)
+header-line    = header-key , ":" , predicate , EOL ;
+header-key     = "chartdown" | "id" | "grid" | "scale" | "extent" | "seed"
+               | "use" | "theme" | "labels" | "legend" | "scale-bar"
+               | "compass" | "numbers" ;             (* "use" is repeatable; unknown keys warn *)
+
+section        = "[" , section-name , "]" , EOL , { content-line } ;
+section-name   = word ;                              (* known names per map type, spec 05/06/07;
+                                                        universal: vocab, gm, labels;
+                                                        x- prefix = silent extension namespace;
+                                                        otherwise unknown warns *)
+content-line   = line | detail-line | hex-ledger-line | vocab-line | label-line ;
+line           = subject , ":" , predicate , EOL ;
+detail-line    = INDENT , line ;                     (* structure details only — spec 06 §3 *)
+
+subject        = [ type-word ] , { id-word } , [ string ] ;
+                 (* sections may permit omitting the type word (spec 01 §4);
+                    identity/uniqueness rules: spec 03 §1 *)
+predicate      = { token } ;
+token          = placement | word | string | pair ;
+pair           = key , "=" , ( word | string | measure ) ;
+comment        = ";" , text , EOL ;                  (* legal at end of any line; ";" in strings is content *)
+
+(* ---- placements — spec 02 ---- *)
+
+placement      = address | range | edge | point | point-range | shape | relational ;
+address        = col-letters , row-number ;          (* chess-style, all grid types; AA past Z *)
+range          = address , ".." , address ;
+point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
+point-range    = point , ".." , point ;
+edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
+shape          = ( "area" | "path" | "blob" | "ridge" ) , { placement | pair } ;
+
+relational     = ( "at" , ( point | address ) )
+               | ( [ measure ] , compass , "of" , ref )
+               | ( "on" , ref , [ "at" , point ] )
+               | ( compass , "edge" , "of" , ref )
+               | ( "near" , ( ref | point ) )
+               | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
+               | ( "along" , ref ) ;
+                 (* closed grammar — no other relational forms exist.
+                    resolution: order-bounded, deterministic (seeded),
+                    fail-loud, live anchors — spec 02 §8 *)
+endpoint       = ( ref , [ "at" , point ] ) | point ;
+ref            = word | string ;                     (* word: explicit-id lookup; string: display-name
+                                                        lookup; fail-loud — spec 03 §2 *)
+compass        = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
+               | "north" | "south" | "east" | "west"
+               | "northeast" | "northwest" | "southeast" | "southwest" ;
+measure        = number , [ unit ] ;                 (* 70mi, 20ft, 12 — unit dimension must match map *)
+
+(* ---- hex ledger shorthand, [hexes] only — spec 05 §3 ---- *)
+
+hex-ledger-line = ( address | range ) , terrain-word , { content-word } ,
+                  [ string ] , { word | pair } , EOL ;
+                  (* first vocab word = hex terrain; subsequent = contents;
+                     params include seen / unexplored / gm= ;
+                     grouped alternative: ordinary line form "forest : C4 D3 D4" *)
+
+(* ---- vocabulary, [vocab] sections and use: libraries — spec 04 ---- *)
+
+vocab-line     = word , ":" , ( archetype | word ) , { pair | word } , EOL ;
+                 (* second form = derivation from another word, with overrides;
+                    cycles are errors; shadowing order: stdlib < use: < document *)
+archetype      = "terrain" | "path" | "feature" | "structure" | "barrier"
+               | "opening" | "token" | "zone" | "light" ;
+                 (* closed; extensible by spec sections only.
+                    unknown words never fail: archetype inferred from
+                    shape token, else section, else feature — spec 04 §3 *)
+
+(* ---- labels, [labels] section — spec 07 ---- *)
+
+label-line     = ( ref , ":" , label-hint )          (* override — subject MUST resolve *)
+               | ( "note" , [ id-word ] , string , ":" , placement , { word | pair } ) ;
+label-hint     = ( "sprawl" , ( range | point-range ) )
+               | ( "along" , ref )
+               | ( "at" , ( point | address ) )
+               | compass ;
+
+(* ---- reserved generic parameters and flags (usable on any content line) ----
+   flags:  hidden, nolabel, difficult, seen, unexplored, ruined, overturned (state flags per vocab)
+   pairs:  gm=, link=, detail=, facing=, size=, side=, width=, light=, elevation=, key=
+   [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
+   non-resolving subject with placement = new GM-only entity; otherwise error. *)
+
+(* ---- identity and anchors — spec 03 ----
+   entity-id = explicit id, else display-name slug; anonymous entities unreferenceable.
+   exported anchor: "cd-" doc-id "-" entity-id ; doc-id from id: header else title slug. *)

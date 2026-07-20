@@ -21,6 +21,7 @@ These come from CONTRIBUTING.md; follow them even when the user doesn't mention 
 2. **Spec-first.** Never implement rendering/parsing behavior that isn't in `docs/spec/`. If the user asks for an unspec'd feature, the first deliverable is a spec change or syntax-proposal issue, not code.
 3. **ADRs for decisions.** When work involves choosing between alternatives (syntax design, tech stack, scope), record the outcome as an ADR in `docs/decisions/` before closing the issue: copy the template, take the next number, update the index table in `docs/decisions/README.md`. Accepted ADRs are immutable — reversals are new ADRs that supersede.
 4. **Spec and examples move together.** A PR that changes the spec must update any examples it invalidates. `main` never has a spec that contradicts `examples/` or the implementation.
+   Additionally (issue #12): any change to a `docs/spec/` section updates `docs/spec/grammar.ebnf` and `docs/spec/digest.md` in the same commit — the grammar and digest are never allowed to drift from the prose.
 5. **Syntax changes go through proposals.** Use the syntax-proposal issue template (problem, worked example, alternatives, interactions). The README's syntax sketch is illustrative, not normative — don't cite it as spec, and don't extend it; if the spec diverges from it, update the README sketch to match the spec.
 
 ## Issue tracker conventions
