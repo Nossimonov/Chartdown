@@ -26,14 +26,14 @@ Markdown solved this for prose. Mermaid solved it for flowcharts. Nothing has so
 1. **Readable source.** A Chartdown document should communicate the map to a human *even without rendering*. If the text isn't skimmable, the syntax is wrong.
 2. **Examples before grammar.** We write the documents we wish we could write ([examples/](../examples/)), then design syntax to make them valid. The grammar serves the examples, never the reverse.
 3. **Progressive complexity.** A five-line document must produce a usable map. Detail (styling, precise geometry, layers) is opt-in, never required.
-4. **Semantic, not pixel-perfect.** Authors declare *what things are* (a river, a door, a goblin); renderers decide how they look. Themes and styles are separated from content, like CSS from HTML.
+4. **Semantic, not pixel-perfect.** Authors declare *what things are* (a river, a door, a goblin); renderers decide how they look. Themes and styles are separated from content, like CSS from HTML. Themes may map semantic types to user-supplied art assets (the wagon rendered is *their* wagon), but asset references live in the theme, never in the map source — every map must render from bare primitives with zero assets installed, and assets only ever upgrade the render.
 5. **Plays well with Markdown.** Chartdown should work as a fenced code block inside ordinary Markdown, the way Mermaid does, as well as a standalone file. This is a hard requirement, not a nice-to-have: the primary authoring context is a Markdown document (session notes, a wiki page, an adventure) with maps embedded in its body.
 6. **Entities are addressable.** Every named thing on a map (a settlement, a room, a token) has a stable identity that text can link to. Surrounding Markdown prose should be able to link *to* a map location ("the party crosses [the old bridge](#bridge)"), and supporting renderers should be able to link *back* — clicking a location pulls up its associated description. The syntax must provide the anchors even though the interactivity is renderer-dependent.
 
 ## Non-goals (v1)
 
 - **Not a graphical editor.** Rendering only; WYSIWYG editing is out of scope (a future ecosystem tool at best).
-- **Not artistic cartography.** We compete with grid paper and whiteboards, not with Inkarnate's hand-painted aesthetics.
+- **No bundled art, no required artistic effort.** Chartdown ships no asset library, and authoring never demands artistic skill — every map renders legibly from primitive shapes alone. This is *not* a cap on output quality: themes (and user-supplied assets, see principle 4) may make renders as evocative as a renderer cares to be. What we refuse to compete on is hand-painted authoring à la Inkarnate.
 - **Not a VTT.** No game logic, no fog of war, no dice. (Exporting *to* VTT formats is a plausible future goal.)
 - **Not real-world GIS.** No projections, no lat/long, no GeoJSON semantics.
 
