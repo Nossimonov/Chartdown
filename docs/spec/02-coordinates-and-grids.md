@@ -58,7 +58,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `from <endpoint> [via <points>] to <endpoint>` — paths | `river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"` |
 | `along <ref>` — path shape hint or feature-following line | `border : along "The Serpent's Spine"` |
 
-- `<ref>` is a bare id word or quoted display name; reference *resolution* (uniqueness, id vs name) is defined by the anchors section ([#11](https://github.com/Nossimonov/Chartdown/issues/11)).
+- `<ref>` is a bare id word or quoted display name; resolution is defined by [03 — Identity, References, and Links](03-identity-and-links.md).
 - `<endpoint>` is `<ref>`, `<point>`, or `<ref> at <point>`.
 - `<compass>` is the 8-wind set — `n s e w ne nw se sw`, full words equally legal (`north`, `northwest`).
 - `<measure>` is a number with optional unit (`70mi`, `12`).

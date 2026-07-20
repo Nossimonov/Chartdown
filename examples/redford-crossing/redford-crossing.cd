@@ -13,7 +13,7 @@ mud : area H11..J11 difficult
 road "Old Toll Road" : path K1 K15
 
 [structures]
-tollhouse "Ruined Toll House" : building N3..Q6
+building tollhouse "Ruined Toll House" : N3..Q6
   ruined : north east
   door : O6.s
   window : N4.w
@@ -21,7 +21,7 @@ tollhouse "Ruined Toll House" : building N3..Q6
 [features]
 wagon : K11 overturned facing=south
 campfire : O7 light=20ft
-crates : P4
+crates loot : P4
 
 [tokens]
 goblins g1 g2 : C12 E13
@@ -32,4 +32,4 @@ party start : J14..L15
 [gm]
 trigger ambush : K9..L10 "spring when the wagon is mid-ford"
 tollhouse : "Archers hold fire until the trigger."
-crates : "40 gp and a toll ledger naming the goblins' employer."
+loot : "40 gp and a toll ledger naming the goblins' employer."

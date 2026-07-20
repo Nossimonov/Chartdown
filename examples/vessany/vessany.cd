@@ -18,15 +18,15 @@ hills "The Vess Downs" : blob (520,400) size=120mi
 [paths]
 river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"
 road "Coast Road" : "Argenport" to "Merrow's Rest" along coastline
-road "King's Way" : "Highkeep" to "Argenport"
+road "King's Way" : highkeep to "Argenport"
 
 [settlements]
-capital "Highkeep" : (360,330)
+capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
 city "Argenport" : on coastline at (160,470)
 town "Merrow's Rest" : on coastline 70mi north of "Argenport"
 town "Dunmere" : south edge of "Thornwood"
 village "Gull Landing" : on "Gull Bay"
-village "Sparrowdown" : 40mi east of "Highkeep"
+village "Sparrowdown" : 40mi east of highkeep
 
 [realms]
 realm "Vessany" : west of "The Serpent's Spine"
