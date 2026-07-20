@@ -1,6 +1,6 @@
 # Gumdrop Vale, Sigma-5-5
 
-**Status: aspirational** — conforms to spec 01–04 (document model, coordinates, identity, vocabulary); region primitives remain pre-spec. Added with [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) (via [#16](https://github.com/Nossimonov/Chartdown/issues/16)) as the **candyland test**: proof that the vocabulary model imposes no setting.
+**Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07). Added with [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) (via [#16](https://github.com/Nossimonov/Chartdown/issues/16)) as the **candyland test**: proof that the vocabulary model imposes no setting.
 
 ## The scene
 

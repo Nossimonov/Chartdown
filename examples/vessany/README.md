@@ -1,6 +1,6 @@
 # Vessany
 
-**Status: aspirational** — placements and relational grammar remain pre-spec; the lexical layer conforms to [spec 01 (document model)](../../docs/spec/01-document-model.md). Spec-01 canonicalization (2026-07-20): commas removed, `~90 mi` → `size=90mi`, `gm "…"` → `gm="…"`, multi-word entity references quoted (`to "Merrow's Rest"` — reference form itself is [#11](https://github.com/Nossimonov/Chartdown/issues/11)-pending), and `coastline` moved above the entities that reference it, demonstrating the order-bounded resolution rule. Fulfills [#5](https://github.com/Nossimonov/Chartdown/issues/5), authored against Elena's region-map narrative in [docs/use-cases.md](../../docs/use-cases.md) §3. This is the acknowledged hard problem: continuous positioning in readable text.
+**Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07). Spec-01 canonicalization (2026-07-20): commas removed, `~90 mi` → `size=90mi`, `gm "…"` → `gm="…"`, multi-word entity references quoted (`to "Merrow's Rest"` — reference form itself is [#11](https://github.com/Nossimonov/Chartdown/issues/11)-pending), and `coastline` moved above the entities that reference it, demonstrating the order-bounded resolution rule. Fulfills [#5](https://github.com/Nossimonov/Chartdown/issues/5), authored against Elena's region-map narrative in [docs/use-cases.md](../../docs/use-cases.md) §3. This is the acknowledged hard problem: continuous positioning in readable text.
 
 ## The map
 

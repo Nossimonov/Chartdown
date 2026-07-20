@@ -1,6 +1,6 @@
 # Ambush at Redford Crossing
 
-**Status: aspirational** — placements, vocabulary, and structure details remain pre-spec; the lexical layer conforms to [spec 01 (document model)](../../docs/spec/01-document-model.md). Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
+**Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07). Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
 
 **Spec-01 canonicalization (2026-07-20):** parentheticals removed (`(overturned)` → `overturned` flag, `(difficult)` → `difficult`), parameters normalized to `key=value` (`width=2`, `light=20ft`, `size=2`, `facing=south`), and the pseudo-English relations (`on river at`, `crossing ford`) dropped rather than frozen prematurely — the ford is now placed directly (`ford : K9..L10 difficult`); whether relations return at battlemap scale is [#8](https://github.com/Nossimonov/Chartdown/issues/8)'s call. Building detail lines survive as spec 01's *provisional* construct.
 
