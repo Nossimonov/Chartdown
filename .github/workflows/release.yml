@@ -10,7 +10,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: read
+  contents: write # creates the GitHub Release from the changelog section
   id-token: write # the OIDC exchange with npm
 
 jobs:
@@ -38,4 +38,18 @@ jobs:
               exit 1
             fi
           done
+      - name: Changelog must cover this version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          if ! grep -q "^## \[$TAG\]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no '## [$TAG]' section — a version number users can't decode is noise" >&2
+            exit 1
+          fi
       - run: npm publish -w @chartdown/core -w @chartdown/render-svg -w @chartdown/cli -w @chartdown/browser
+      - name: GitHub Release from the changelog section
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          awk "/^## \[$TAG\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > release-notes.md
+          gh release create "$GITHUB_REF_NAME" --title "v$TAG" --notes-file release-notes.md
