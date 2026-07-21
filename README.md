@@ -18,9 +18,9 @@ Chartdown aims to do for maps what Markdown did for documents and what Mermaid d
 - **Fast to author** — sketch an encounter map in seconds without opening a graphical editor.
 - **Portable** — one source document, many renderers (SVG for the web, print-friendly output, VTT import someday).
 
-## What might it look like?
+## What it looks like
 
-> ⚠️ **Illustrative only.** The syntax below is a sketch to communicate the vision — it is **not** the spec. The actual syntax is being designed in the open via [syntax proposals](CONTRIBUTING.md#syntax-proposals). See [docs/spec/](docs/spec/) for the current state of the specification.
+This is real, working syntax — the language is specified in [docs/spec/](docs/spec/) and this document renders today:
 
 ```chartdown
 # Ambush at Redford Crossing
@@ -30,14 +30,14 @@ grid: square 20x15
 scale: 5ft
 
 [terrain]
-forest : area A11..F15
 river redford "The Redford" : path A9 F9 K9 P10 T10 width=2
 road tollroad "Old Toll Road" : path K1 K15
 ford : on redford on tollroad difficult
 
-[features]
-wagon : K11 overturned facing=south
-campfire : O7 light=20ft
+[structures]
+building tollhouse "Ruined Toll House" : N3..Q6
+  ruined : north east
+  door : O6.s
 
 [tokens]
 goblins g1 g2 : C12 E13
@@ -45,7 +45,11 @@ ogre "Gruk" : G9 size=2 hidden
 party start : J14..L15
 ```
 
-…rendering to a gridded battlemap with terrain, features, and labeled tokens.
+![Ambush at Redford Crossing, rendered](examples/redford-crossing/redford-crossing.svg)
+
+*The player view — "Gruk" is `hidden`, so he and every GM note are stripped; rendering with `--mode gm` shows the whole truth. The full document with GM secrets lives in [examples/redford-crossing](examples/redford-crossing/), alongside a hexcrawl, a gridless region map, a themed hexcrawl on a candy planet, and a three-story manor with a courtyard, cellar, and wall-walk.*
+
+Note the `ford` line: it never states a position. It's placed `on` the river and `on` the road, so it *derives* the crossing — move either path and the ford follows. The same anchoring works room-by-room: `table : on kitchen at C2..D2` arranges the kitchen by the kitchen.
 
 ## Try it
 
@@ -66,9 +70,15 @@ For the embedding path — the one this project exists for — open [demo/index.
 
 ## Project status
 
-**Spec draft complete; implementation beginning.** The v0.1 specification is drafted ([sections 01–07](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)), every example in [examples/](examples/) is valid under it, and the reference implementation — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — is under construction in [packages/](packages/). Nothing renders *yet*.
+**Spec v0.1 drafted and implemented.** The specification ([sections 01–08](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)) is fully implemented by the reference implementation in [packages/](packages/) — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — and every example in [examples/](examples/) renders with it. Working today:
 
-See the [roadmap](docs/roadmap.md) for the full plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
+- **Three map types**: gridded battlemaps, hex charts (ledger-style exploration logs), and gridless region maps with organic, seeded rendering
+- **The GM/player split**: `hidden`, `gm=`, and `[gm]` content strips fail-closed from player renders
+- **Battlemap depth**: walls/doors/windows with light and sight, derived crossings, elevation with fall edges, multi-level structures (floors, connectors, cellars, roofs), room-relative placement
+- **Themes as Chartdown documents**: appearance lives in swappable theme files, not in the map
+- **Tooling**: a CLI (`render`, `check`), a browser embed that renders fenced ` ```chartdown ` blocks in place, and the [client-side playground](https://nossimonov.github.io/Chartdown/)
+
+Not yet: npm packages (coming — currently build from source), UVTT export, editor integrations. See the [roadmap](docs/roadmap.md) for the plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
 
 ## Repository layout
 
