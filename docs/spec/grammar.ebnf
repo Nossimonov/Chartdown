@@ -11,6 +11,8 @@
 (* ---- document skeleton — spec 01 ---- *)
 
 document       = [ title ] , header , { section } ;
+                 (* pure-vocabulary library documents may omit the header
+                    entirely (only [vocab] sections) — spec 04 §2 *)
 title          = "#" , text , EOL ;                  (* first non-blank line only *)
 header         = map-line , { header-line } ;
 map-line       = "map" , ":" , map-type , EOL ;

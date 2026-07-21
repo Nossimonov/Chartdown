@@ -62,7 +62,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 |---|---|---|
 | `battlemap` | terrain, structures, features, tokens | structure detail lines indented under a `building` (`ruined : north east`, `door : O6.s`); footprints = rect/cell-union (orthogonal only); token word + area = staging zone; `elevation=` on areas — ledges auto-render where heights differ |
 | `hexcrawl` | hexes, routes, regions | ledger line: `C4 forest ruin "Name" gm="…"` (first word = terrain, rest = contents); omission = unexplored; `seen` = terrain only; grouped sugar `forest : C4 D3` legal |
-| `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `sea "X" : west of coastline`; borders: `border : along <ref>` |
+| `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `coastline coast : from …` then `sea "X" : west of coast` (referenced things need ids); borders: `border : along <ref>` |
 
 Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`).
 
@@ -111,14 +111,14 @@ map: region
 extent: 900x600mi
 compass: on
 [water]
-coastline : from (210,0) via (150,130) (120,390) to (140,600)
-sea "The Argen Sea" : west of coastline
+coastline coast : from (210,0) via (150,130) (120,390) to (140,600)
+sea "The Argen Sea" : west of coast
 [terrain]
 mountains spine "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
 [settlements]
 capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
-city "Argenport" : on coastline at (160,470)
-town "Merrow's Rest" : on coastline 70mi north of "Argenport"
+city "Argenport" : on coast at (160,470)
+town "Merrow's Rest" : on coast 70mi north of "Argenport"
 [realms]
 border : along spine gm="Disputed since the Treaty of Argen."
 [labels]

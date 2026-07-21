@@ -1,0 +1,2274 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`example corpus > brenmark > AST snapshot is stable 1`] = `
+{
+  "docId": "the-brenmark",
+  "grid": {
+    "cols": 8,
+    "kind": "hex",
+    "orientation": "pointy",
+    "parity": "odd-row",
+    "rows": 9,
+  },
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "hexcrawl",
+    },
+    {
+      "key": "grid",
+      "line": 4,
+      "value": "hex 8x9 pointy odd-row",
+    },
+    {
+      "key": "scale",
+      "line": 5,
+      "value": "6mi",
+    },
+    {
+      "key": "numbers",
+      "line": 6,
+      "value": "on",
+    },
+  ],
+  "kind": "document",
+  "mapType": "hexcrawl",
+  "sections": [
+    {
+      "entries": [
+        {
+          "addresses": [
+            {
+              "from": {
+                "col": "A",
+                "kind": "address",
+                "row": 1,
+              },
+              "kind": "range",
+              "to": {
+                "col": "A",
+                "kind": "address",
+                "row": 9,
+              },
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 9,
+          "name": null,
+          "pairs": [],
+          "terrain": "sea",
+        },
+        {
+          "addresses": [
+            {
+              "col": "B",
+              "kind": "address",
+              "row": 1,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 10,
+          "name": null,
+          "pairs": [],
+          "terrain": "sea",
+        },
+        {
+          "addresses": [
+            {
+              "col": "B",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "contents": [
+            "village",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 11,
+          "name": "Saltmere",
+          "pairs": [],
+          "terrain": "plains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "B",
+              "kind": "address",
+              "row": 3,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 12,
+          "name": null,
+          "pairs": [],
+          "terrain": "plains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "B",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "contents": [],
+          "flags": [
+            "difficult",
+          ],
+          "kind": "hex-line",
+          "line": 13,
+          "name": null,
+          "pairs": [],
+          "terrain": "marsh",
+        },
+        {
+          "addresses": [
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 1,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 14,
+          "name": null,
+          "pairs": [],
+          "terrain": "hills",
+        },
+        {
+          "addresses": [
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "contents": [
+            "town",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 15,
+          "name": "Redford",
+          "pairs": [],
+          "terrain": "plains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 3,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 16,
+          "name": null,
+          "pairs": [],
+          "terrain": "plains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 17,
+          "name": null,
+          "pairs": [],
+          "terrain": "forest",
+        },
+        {
+          "addresses": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 1,
+            },
+          ],
+          "contents": [
+            "ruin",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 18,
+          "name": "Harrow Tor",
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "Haunted; the ghost knows the pass song.",
+            },
+          ],
+          "terrain": "hills",
+        },
+        {
+          "addresses": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 19,
+          "name": null,
+          "pairs": [],
+          "terrain": "plains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 3,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 20,
+          "name": null,
+          "pairs": [],
+          "terrain": "forest",
+        },
+        {
+          "addresses": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "contents": [
+            "lair",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 21,
+          "name": null,
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "Spider queen — steer them off until level 3.",
+            },
+          ],
+          "terrain": "forest",
+        },
+        {
+          "addresses": [
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 1,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 22,
+          "name": null,
+          "pairs": [],
+          "terrain": "mountains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "contents": [
+            "dungeon",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 23,
+          "name": "The Barrowdown",
+          "pairs": [],
+          "terrain": "hills",
+        },
+        {
+          "addresses": [
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 3,
+            },
+          ],
+          "contents": [
+            "keep",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 24,
+          "name": "Thornhold",
+          "pairs": [],
+          "terrain": "forest",
+        },
+        {
+          "addresses": [
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 25,
+          "name": null,
+          "pairs": [],
+          "terrain": "forest",
+        },
+        {
+          "addresses": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 1,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 26,
+          "name": null,
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "Pass snowed shut until spring.",
+            },
+          ],
+          "terrain": "mountains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 27,
+          "name": null,
+          "pairs": [],
+          "terrain": "mountains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "G",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "contents": [],
+          "flags": [
+            "seen",
+          ],
+          "kind": "hex-line",
+          "line": 28,
+          "name": null,
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "The white peak, visible from Harrow Tor; contents unknown to the party.",
+            },
+          ],
+          "terrain": "mountains",
+        },
+        {
+          "addresses": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 3,
+            },
+          ],
+          "contents": [],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 29,
+          "name": null,
+          "pairs": [],
+          "terrain": "hills",
+        },
+        {
+          "addresses": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "contents": [
+            "city",
+          ],
+          "flags": [],
+          "kind": "hex-line",
+          "line": 30,
+          "name": "Bren",
+          "pairs": [],
+          "terrain": "plains",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 8,
+      "name": "hexes",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 33,
+          "name": "Old Trade Road",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "B",
+              "kind": "address",
+              "row": 2,
+            },
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 2,
+            },
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 2,
+            },
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 2,
+            },
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 3,
+            },
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "routes",
+          "texts": [],
+          "typeWord": "road",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 34,
+          "name": "The Bren",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 1,
+            },
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 2,
+            },
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 3,
+            },
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 4,
+            },
+            {
+              "col": "B",
+              "kind": "address",
+              "row": 4,
+            },
+            {
+              "col": "A",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "routes",
+          "texts": [],
+          "typeWord": "river",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 32,
+      "name": "routes",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 37,
+          "name": "Duchy of Bren",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "C",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "C",
+                "kind": "address",
+                "row": 4,
+              },
+            },
+            {
+              "from": {
+                "col": "D",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "D",
+                "kind": "address",
+                "row": 4,
+              },
+            },
+            {
+              "from": {
+                "col": "E",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "E",
+                "kind": "address",
+                "row": 4,
+              },
+            },
+            {
+              "from": {
+                "col": "F",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "F",
+                "kind": "address",
+                "row": 4,
+              },
+            },
+          ],
+          "section": "regions",
+          "texts": [],
+          "typeWord": "realm",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 36,
+      "name": "regions",
+    },
+  ],
+  "title": "The Brenmark",
+}
+`;
+
+exports[`example corpus > gumdrop-vale > AST snapshot is stable 1`] = `
+{
+  "docId": "gumdrop-vale-sigma-5-5",
+  "grid": null,
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "region",
+    },
+    {
+      "key": "extent",
+      "line": 4,
+      "value": "12x8mi",
+    },
+    {
+      "key": "seed",
+      "line": 5,
+      "value": "3742",
+    },
+  ],
+  "kind": "document",
+  "mapType": "region",
+  "sections": [
+    {
+      "entries": [
+        {
+          "base": "hills",
+          "baseIsArchetype": false,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 8,
+          "pairs": [],
+          "source": "document",
+          "word": "gumdrop-hills",
+        },
+        {
+          "base": "forest",
+          "baseIsArchetype": false,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 9,
+          "pairs": [],
+          "source": "document",
+          "word": "licorice-forest",
+        },
+        {
+          "base": "river",
+          "baseIsArchetype": false,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 10,
+          "pairs": [],
+          "source": "document",
+          "word": "taffy-river",
+        },
+        {
+          "base": "wagon",
+          "baseIsArchetype": false,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 11,
+          "pairs": [
+            {
+              "key": "states",
+              "value": "overturned,parked",
+            },
+          ],
+          "source": "document",
+          "word": "hovercart",
+        },
+        {
+          "base": "feature",
+          "baseIsArchetype": true,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 12,
+          "pairs": [],
+          "source": "document",
+          "word": "sugar-silo",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 7,
+      "name": "vocab",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 15,
+          "name": "The Gumdrop Hills",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "2mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 4,
+                  "y": 3,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "gumdrop-hills",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 16,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 7,
+                  "y": 2,
+                },
+                {
+                  "kind": "point",
+                  "x": 9,
+                  "y": 2,
+                },
+                {
+                  "kind": "point",
+                  "x": 9,
+                  "y": 5,
+                },
+                {
+                  "kind": "point",
+                  "x": 7,
+                  "y": 6,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "licorice-forest",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 14,
+      "name": "terrain",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 19,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 1,
+                  "y": 1,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 11,
+                  "y": 6,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 5,
+                  "y": 4,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "taffy-river",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 18,
+      "name": "paths",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 22,
+          "name": "Fondant Hollow",
+          "pairs": [],
+          "placements": [
+            {
+              "compass": "south",
+              "form": "edge-of",
+              "kind": "relational",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "The Gumdrop Hills",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "village",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 21,
+      "name": "settlements",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 25,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 10,
+              "y": 3,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "sugar-silo",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "overturned",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 26,
+          "name": null,
+          "pairs": [
+            {
+              "key": "link",
+              "value": "notes/the-crash.md",
+            },
+          ],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 5,
+              "y": 4,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "hovercart",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "inferred-shape",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 27,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 8,
+              "y": 7,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "zorbleflax",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 24,
+      "name": "features",
+    },
+  ],
+  "title": "Gumdrop Vale, Sigma-5-5",
+}
+`;
+
+exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
+{
+  "docId": "ambush-at-redford-crossing",
+  "grid": {
+    "cols": 20,
+    "kind": "square",
+    "rows": 15,
+  },
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "battlemap",
+    },
+    {
+      "key": "chartdown",
+      "line": 4,
+      "value": "0.1",
+    },
+    {
+      "key": "grid",
+      "line": 5,
+      "value": "square 20x15",
+    },
+    {
+      "key": "scale",
+      "line": 6,
+      "value": "5ft",
+    },
+  ],
+  "kind": "document",
+  "mapType": "battlemap",
+  "sections": [
+    {
+      "entries": [
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 9,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "from": {
+                    "col": "A",
+                    "kind": "address",
+                    "row": 11,
+                  },
+                  "kind": "range",
+                  "to": {
+                    "col": "F",
+                    "kind": "address",
+                    "row": 15,
+                  },
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "forest",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 10,
+          "name": "The Redford",
+          "pairs": [
+            {
+              "key": "width",
+              "value": "2",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "col": "A",
+                  "kind": "address",
+                  "row": 9,
+                },
+                {
+                  "col": "F",
+                  "kind": "address",
+                  "row": 9,
+                },
+                {
+                  "col": "K",
+                  "kind": "address",
+                  "row": 9,
+                },
+                {
+                  "col": "P",
+                  "kind": "address",
+                  "row": 10,
+                },
+                {
+                  "col": "T",
+                  "kind": "address",
+                  "row": 10,
+                },
+              ],
+              "kind": "shape",
+              "shape": "path",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "difficult",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 11,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "K",
+                "kind": "address",
+                "row": 9,
+              },
+              "kind": "range",
+              "to": {
+                "col": "L",
+                "kind": "address",
+                "row": 10,
+              },
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "ford",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "difficult",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 12,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "from": {
+                    "col": "H",
+                    "kind": "address",
+                    "row": 11,
+                  },
+                  "kind": "range",
+                  "to": {
+                    "col": "J",
+                    "kind": "address",
+                    "row": 11,
+                  },
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "mud",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 13,
+          "name": "Old Toll Road",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "col": "K",
+                  "kind": "address",
+                  "row": 1,
+                },
+                {
+                  "col": "K",
+                  "kind": "address",
+                  "row": 15,
+                },
+              ],
+              "kind": "shape",
+              "shape": "path",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "road",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 8,
+      "name": "terrain",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [
+                "north",
+                "east",
+              ],
+              "ids": [],
+              "kind": "detail",
+              "line": 17,
+              "name": null,
+              "pairs": [],
+              "placements": [],
+              "texts": [],
+              "typeWord": "ruined",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 18,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "O",
+                    "kind": "address",
+                    "row": 6,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 19,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "N",
+                    "kind": "address",
+                    "row": 4,
+                  },
+                  "dir": "w",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "tollhouse",
+          ],
+          "kind": "entity",
+          "line": 16,
+          "name": "Ruined Toll House",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "N",
+                "kind": "address",
+                "row": 3,
+              },
+              "kind": "range",
+              "to": {
+                "col": "Q",
+                "kind": "address",
+                "row": 6,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 15,
+      "name": "structures",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "overturned",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 22,
+          "name": null,
+          "pairs": [
+            {
+              "key": "facing",
+              "value": "south",
+            },
+          ],
+          "placements": [
+            {
+              "col": "K",
+              "kind": "address",
+              "row": 11,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "wagon",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 23,
+          "name": null,
+          "pairs": [
+            {
+              "key": "light",
+              "value": "20ft",
+            },
+          ],
+          "placements": [
+            {
+              "col": "O",
+              "kind": "address",
+              "row": 7,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "campfire",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "loot",
+          ],
+          "kind": "entity",
+          "line": 24,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "P",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "crates",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 21,
+      "name": "features",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "g1",
+            "g2",
+          ],
+          "kind": "entity",
+          "line": 27,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 12,
+            },
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 13,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "goblins",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "a1",
+            "a2",
+          ],
+          "kind": "entity",
+          "line": 28,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "O",
+              "kind": "address",
+              "row": 4,
+            },
+            {
+              "col": "P",
+              "kind": "address",
+              "row": 5,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "goblin-archers",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "inferred-shape",
+          "details": [],
+          "flags": [
+            "hidden",
+          ],
+          "gmOnly": true,
+          "ids": [],
+          "kind": "entity",
+          "line": 29,
+          "name": "Gruk",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "2",
+            },
+          ],
+          "placements": [
+            {
+              "col": "G",
+              "kind": "address",
+              "row": 9,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "ogre",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "start",
+          ],
+          "kind": "entity",
+          "line": 30,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "J",
+                "kind": "address",
+                "row": 14,
+              },
+              "kind": "range",
+              "to": {
+                "col": "L",
+                "kind": "address",
+                "row": 15,
+              },
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "party",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 26,
+      "name": "tokens",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "default",
+          "details": [],
+          "flags": [],
+          "gmOnly": true,
+          "ids": [
+            "ambush",
+          ],
+          "kind": "entity",
+          "line": 33,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "K",
+                "kind": "address",
+                "row": 9,
+              },
+              "kind": "range",
+              "to": {
+                "col": "L",
+                "kind": "address",
+                "row": 10,
+              },
+            },
+          ],
+          "section": "gm",
+          "texts": [
+            "spring when the wagon is mid-ford",
+          ],
+          "typeWord": "trigger",
+        },
+        {
+          "flags": [],
+          "kind": "gm-attachment",
+          "line": 34,
+          "pairs": [],
+          "target": {
+            "form": "id",
+            "kind": "ref",
+            "value": "tollhouse",
+          },
+          "texts": [
+            "Archers hold fire until the trigger.",
+          ],
+        },
+        {
+          "flags": [],
+          "kind": "gm-attachment",
+          "line": 35,
+          "pairs": [],
+          "target": {
+            "form": "id",
+            "kind": "ref",
+            "value": "loot",
+          },
+          "texts": [
+            "40 gp and a toll ledger naming the goblins' employer.",
+          ],
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 32,
+      "name": "gm",
+    },
+  ],
+  "title": "Ambush at Redford Crossing",
+}
+`;
+
+exports[`example corpus > vessany > AST snapshot is stable 1`] = `
+{
+  "docId": "vessany",
+  "grid": null,
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "region",
+    },
+    {
+      "key": "extent",
+      "line": 4,
+      "value": "900x600mi",
+    },
+    {
+      "key": "compass",
+      "line": 5,
+      "value": "on",
+    },
+    {
+      "key": "scale-bar",
+      "line": 6,
+      "value": "on",
+    },
+  ],
+  "kind": "document",
+  "mapType": "region",
+  "sections": [
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "coast",
+          ],
+          "kind": "entity",
+          "line": 9,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 210,
+                  "y": 0,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 140,
+                  "y": 600,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 150,
+                  "y": 130,
+                },
+                {
+                  "kind": "point",
+                  "x": 200,
+                  "y": 300,
+                },
+                {
+                  "kind": "point",
+                  "x": 120,
+                  "y": 390,
+                },
+                {
+                  "kind": "point",
+                  "x": 170,
+                  "y": 520,
+                },
+              ],
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "coastline",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 10,
+          "name": "The Argen Sea",
+          "pairs": [],
+          "placements": [
+            {
+              "compass": "west",
+              "form": "side-of",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "coast",
+              },
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "sea",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 11,
+          "name": "Gull Bay",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "point": {
+                "kind": "point",
+                "x": 120,
+                "y": 390,
+              },
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "coast",
+              },
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "bay",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 8,
+      "name": "water",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 14,
+          "name": "The Serpent's Spine",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 700,
+                  "y": 60,
+                },
+                {
+                  "kind": "point",
+                  "x": 740,
+                  "y": 280,
+                },
+                {
+                  "kind": "point",
+                  "x": 690,
+                  "y": 530,
+                },
+              ],
+              "kind": "shape",
+              "shape": "ridge",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "mountains",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 15,
+          "name": "Thornwood",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "90mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 430,
+                  "y": 170,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "forest",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 16,
+          "name": "The Vess Downs",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "120mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 520,
+                  "y": 400,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "hills",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 13,
+      "name": "terrain",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 19,
+          "name": "The Vess",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "The Serpent's Spine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 720,
+                  "y": 240,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Gull Bay",
+                },
+              },
+              "via": [],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "to",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 20,
+          "name": "Coast Road",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "along",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "coast",
+              },
+            },
+          ],
+          "section": "paths",
+          "texts": [
+            "Argenport",
+            "Merrow's Rest",
+          ],
+          "typeWord": "road",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "highkeep",
+            "to",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 21,
+          "name": "King's Way",
+          "pairs": [],
+          "placements": [],
+          "section": "paths",
+          "texts": [
+            "Argenport",
+          ],
+          "typeWord": "road",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 18,
+      "name": "paths",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "highkeep",
+          ],
+          "kind": "entity",
+          "line": 24,
+          "name": "Highkeep",
+          "pairs": [
+            {
+              "key": "link",
+              "value": "lore/highkeep.md",
+            },
+          ],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 360,
+              "y": 330,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 25,
+          "name": "Argenport",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "point": {
+                "kind": "point",
+                "x": 160,
+                "y": 470,
+              },
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "coast",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "city",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 26,
+          "name": "Merrow's Rest",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "coast",
+              },
+            },
+            {
+              "compass": "north",
+              "form": "offset-of",
+              "kind": "relational",
+              "measure": "70mi",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "Argenport",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "town",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 27,
+          "name": "Dunmere",
+          "pairs": [],
+          "placements": [
+            {
+              "compass": "south",
+              "form": "edge-of",
+              "kind": "relational",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "Thornwood",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "town",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 28,
+          "name": "Gull Landing",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "Gull Bay",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "village",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 29,
+          "name": "Sparrowdown",
+          "pairs": [],
+          "placements": [
+            {
+              "compass": "east",
+              "form": "offset-of",
+              "kind": "relational",
+              "measure": "40mi",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "highkeep",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "village",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 23,
+      "name": "settlements",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 32,
+          "name": "Vessany",
+          "pairs": [],
+          "placements": [
+            {
+              "compass": "west",
+              "form": "side-of",
+              "kind": "relational",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "The Serpent's Spine",
+              },
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 33,
+          "name": "Khar",
+          "pairs": [],
+          "placements": [
+            {
+              "compass": "east",
+              "form": "side-of",
+              "kind": "relational",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "The Serpent's Spine",
+              },
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 34,
+          "name": null,
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "Redrawn at the Treaty of Argen; Khar disputes the southern third.",
+            },
+          ],
+          "placements": [
+            {
+              "form": "along",
+              "kind": "relational",
+              "ref": {
+                "form": "name",
+                "kind": "ref",
+                "value": "The Serpent's Spine",
+              },
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "border",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 31,
+      "name": "realms",
+    },
+    {
+      "entries": [
+        {
+          "hint": {
+            "kind": "sprawl",
+            "range": {
+              "from": {
+                "kind": "point",
+                "x": 60,
+                "y": 200,
+              },
+              "kind": "point-range",
+              "to": {
+                "kind": "point",
+                "x": 120,
+                "y": 450,
+              },
+            },
+          },
+          "kind": "label-override",
+          "line": 37,
+          "target": {
+            "form": "name",
+            "kind": "ref",
+            "value": "The Argen Sea",
+          },
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 36,
+      "name": "labels",
+    },
+  ],
+  "title": "Vessany",
+}
+`;

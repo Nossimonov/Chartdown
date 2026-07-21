@@ -52,7 +52,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `<measure> <compass> of <ref>` | `town "Merrow's Rest" : 70mi north of "Argenport"` |
 | `<compass> of <ref>` — half-plane / general direction | `realm "Khar" : east of "The Serpent's Spine"` |
 | `on <ref>` | `village "Gull Landing" : on "Gull Bay"` |
-| `on <ref> at <point>` — nearest point on ref | `city "Argenport" : on coastline at (160,470)` |
+| `on <ref> at <point>` — nearest point on ref | `city "Argenport" : on coast at (160,470)` |
 | `<compass> edge of <ref>` | `town "Dunmere" : south edge of "Thornwood"` |
 | `near <ref \| point>` | `near (720,240)` |
 | `from <endpoint> [via <points>] to <endpoint>` — paths | `river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"` |

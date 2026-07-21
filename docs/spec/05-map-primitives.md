@@ -78,7 +78,7 @@ The list is deliberately curated: every missing word is one `[vocab]` line away 
 
 Known sections: `[water]`, `[terrain]`, `[paths]`, `[settlements]`, `[features]`, `[realms]` — plus the universal `[vocab]` and `[gm]`, and `[labels]` (section 07). Sections provide inference context (spec 04 §3) and skim structure; lines inside use the standard grammar.
 
-**Water and coastlines.** Water bodies are ordinary terrain areas; `coastline` is an ordinary path. A water area placed with the half-plane form — `sea "The Argen Sea" : west of coastline` — fills the map extent on the stated side of the referenced path, clipped to it. There are no winding-order conventions: the sea is on whichever side the author says, which is what the line reads as.
+**Water and coastlines.** Water bodies are ordinary terrain areas; `coastline` is an ordinary path. A water area placed with the half-plane form — `coastline coast : from …` then `sea "The Argen Sea" : west of coast` — fills the map extent on the stated side of the referenced path, clipped to it. (Per spec 03, the coastline carries an explicit id because things reference it.) There are no winding-order conventions: the sea is on whichever side the author says, which is what the line reads as.
 
 **Political boundaries.** `border : along <ref>` (a path following a feature) is the blessed idiom; realm membership by half-plane (`realm "Khar" : east of spine`) or explicit geometry.
 

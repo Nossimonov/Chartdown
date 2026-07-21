@@ -6,9 +6,9 @@ compass: on
 scale-bar: on
 
 [water]
-coastline : from (210,0) via (150,130) (200,300) (120,390) (170,520) to (140,600)
-sea "The Argen Sea" : west of coastline
-bay "Gull Bay" : on coastline at (120,390)
+coastline coast : from (210,0) via (150,130) (200,300) (120,390) (170,520) to (140,600)
+sea "The Argen Sea" : west of coast
+bay "Gull Bay" : on coast at (120,390)
 
 [terrain]
 mountains "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
@@ -17,13 +17,13 @@ hills "The Vess Downs" : blob (520,400) size=120mi
 
 [paths]
 river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"
-road "Coast Road" : "Argenport" to "Merrow's Rest" along coastline
+road "Coast Road" : "Argenport" to "Merrow's Rest" along coast
 road "King's Way" : highkeep to "Argenport"
 
 [settlements]
 capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
-city "Argenport" : on coastline at (160,470)
-town "Merrow's Rest" : on coastline 70mi north of "Argenport"
+city "Argenport" : on coast at (160,470)
+town "Merrow's Rest" : on coast 70mi north of "Argenport"
 town "Dunmere" : south edge of "Thornwood"
 village "Gull Landing" : on "Gull Bay"
 village "Sparrowdown" : 40mi east of highkeep

@@ -1,19 +1,11 @@
 /**
  * @chartdown/core — parser and AST for the Chartdown language.
  *
- * Skeleton only: the parser is issue #21. This package MUST remain free of
- * runtime dependencies (ADR 0007) — it may depend on nothing but the language.
+ * This package MUST remain free of runtime dependencies (ADR 0007) —
+ * it may depend on nothing but the language.
  */
 
-/** The Chartdown spec draft this implementation targets. */
-export const SPEC_VERSION = "0.1";
-
-/** Placeholder AST root; the real shape is defined by the parser work (#21). */
-export interface ParseResult {
-  readonly kind: "document";
-}
-
-/** Parse a Chartdown document. Not yet implemented — tracked as issue #21. */
-export function parse(_source: string): ParseResult {
-  throw new Error("@chartdown/core: parser not yet implemented (issue #21)");
-}
+export { parse, slugify, SPEC_VERSION, type ParseOptions, type ParseResult } from "./parse";
+export { STDLIB_SOURCE, ARCHETYPES } from "./vocab";
+export type { Diagnostic, Severity } from "./diagnostics";
+export type * from "./ast";

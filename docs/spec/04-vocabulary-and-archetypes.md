@@ -38,14 +38,14 @@ hovercart : wagon states=overturned,parked ; derivation with declared states
 Vocabulary comes from three sources; later **shadows** earlier, silently and deliberately:
 
 1. **The standard library** — the shipped medieval-fantasy vocabulary (`forest`, `river`, `wagon`, `door`, `keep`, …), implicitly present. It is written in this same mechanism and holds no privileged status; its content is enumerated by the primitives sections.
-2. **Used libraries** — the header key `use: <path-or-name>` imports vocabulary documents (`use: vocab/candyworld.cd`); multiple `use:` lines apply in order. This is the shareable/publishable surface.
+2. **Used libraries** — the header key `use: <path-or-name>` imports vocabulary documents (`use: vocab/candyworld.cd`); multiple `use:` lines apply in order. This is the shareable/publishable surface. A *vocabulary document* is an ordinary Chartdown document containing only `[vocab]` sections; the `map:` header line is not required for pure vocabulary documents.
 3. **In-document `[vocab]`** — one-off definitions for one map.
 
 ## 3. Unknown words and usage inference
 
 A type word with no vocabulary entry anywhere is **legal**. Its archetype is inferred from usage, checking in order:
 
-1. **Shape token in the predicate**: `area`, `blob`, or a range → `terrain`; `path`, `ridge`, or `from…to` → `path`; a lone point or cell → `feature`.
+1. **Shape or path phrase in the predicate**: `area` or `blob` → `terrain`; `path`, `ridge`, or a `from…to` phrase → `path`; a placement that is only a lone point or cell → `feature`. Bare ranges carry no shape hint — they fall through to section context, so an unknown word in `[tokens]` with an area placement stays a `token` (cf. staging zones, spec 06 §4).
 2. **Section context**: `[tokens]` → `token`; `[structures]` → `structure`; `[terrain]` → `terrain`; and correspondingly for other primitives-defined sections.
 3. **Otherwise** → `feature`.
 
