@@ -4,6 +4,15 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Added
+
+- **UVTT export** (`exportUvtt` / `exportUvttSource` in `@chartdown/render-svg`): battlemaps export to Universal VTT one file per level — walls minus opening edges → `line_of_sight`, openings → `portals` (closed per the `passes` facet; a window is a los hole plus a shut portal), `light=` → `lights`, grid → `resolution`. Geometry shared with the light engine so export can never disagree with the render; the caller supplies the raster image (ADR 0010). Player-mode exports carry no secrets.
+- **Obsidian plugin** (in-repo at `packages/obsidian`; community-store submission pending): chartdown fences render in place with a per-map toolbar — GM/player toggle, SVG export, UVTT export with the image rasterized in-app. Exports land next to the note, name their path, and reveal in the system file explorer.
+
+### Changed
+
+- Spec 06 §9 (UVTT export) is now **normative**, upgraded from the original non-normative mapping note.
+
 ## [0.1.0] — 2026-07-21
 
 The first public release: the Chartdown language v0.1 and its reference implementation, published to npm as [`@chartdown/core`](https://www.npmjs.com/package/@chartdown/core), [`@chartdown/render-svg`](https://www.npmjs.com/package/@chartdown/render-svg), [`@chartdown/cli`](https://www.npmjs.com/package/@chartdown/cli), and [`@chartdown/browser`](https://www.npmjs.com/package/@chartdown/browser).
