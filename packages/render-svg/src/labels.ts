@@ -14,32 +14,76 @@ interface Box {
 export type Anchor = "start" | "middle" | "end";
 
 export class LabelPlacer {
-  private boxes: Box[] = [];
+  protected boxes: Box[] = [];
 
   /** Reserve a non-label obstacle (e.g. a glyph) so labels avoid it. */
   block(x: number, y: number, w: number, h: number): void {
     this.boxes.push({ x, y, w, h });
   }
 
-  /** Returns the chosen y (x is never moved — horizontal shifts read as errors on maps). */
-  place(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): number {
+  protected boxFor(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): Box {
     const w = widthPx ?? textStr.length * fontSize * 0.58;
     const h = fontSize * 1.1;
     const bx = anchor === "middle" ? x - w / 2 : anchor === "end" ? x - w : x;
+    return { x: bx, y: y - h, w, h };
+  }
+
+  protected tryClaim(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): boolean {
+    const box = this.boxFor(x, y, textStr, fontSize, anchor, widthPx);
+    if (this.boxes.some((b) => intersects(b, box))) return false;
+    this.boxes.push(box);
+    return true;
+  }
+
+  protected claim(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): void {
+    this.boxes.push(this.boxFor(x, y, textStr, fontSize, anchor, widthPx));
+  }
+
+  /** Returns the chosen y (x is never moved — horizontal shifts read as errors on maps). */
+  place(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): number {
+    const h = fontSize * 1.1;
     const step = h + 2;
     const offsets = [0, step, -step, 2 * step, -2 * step, 3 * step];
     for (const dy of offsets) {
-      const box: Box = { x: bx, y: y + dy - h, w, h };
-      if (!this.boxes.some((b) => intersects(b, box))) {
-        this.boxes.push(box);
-        return y + dy;
-      }
+      if (this.tryClaim(x, y + dy, textStr, fontSize, anchor, widthPx)) return y + dy;
     }
     // Everything overlaps: take the last candidate anyway, registered, so
     // later labels at least avoid *this* one.
-    const fallback: Box = { x: bx, y: y + offsets[offsets.length - 1]! - h, w, h };
-    this.boxes.push(fallback);
-    return y + offsets[offsets.length - 1]!;
+    const last = offsets[offsets.length - 1]!;
+    this.claim(x, y + last, textStr, fontSize, anchor, widthPx);
+    return y + last;
+  }
+}
+
+export interface SidePlacement {
+  x: number;
+  y: number;
+  anchor: Anchor;
+}
+
+export class SideLabelPlacer extends LabelPlacer {
+  /**
+   * Point-marker labels: try right of the marker, then left, then vertical
+   * nudges on both sides — clusters spread sideways instead of stacking far
+   * from their markers. Fixed candidate order keeps it deterministic.
+   */
+  placeBeside(rightX: number, leftX: number, y: number, textStr: string, fontSize: number): SidePlacement {
+    const step = fontSize * 1.1 + 2;
+    const candidates: SidePlacement[] = [
+      { x: rightX, y, anchor: "start" },
+      { x: leftX, y, anchor: "end" },
+      { x: rightX, y: y + step, anchor: "start" },
+      { x: leftX, y: y + step, anchor: "end" },
+      { x: rightX, y: y - step, anchor: "start" },
+      { x: leftX, y: y - step, anchor: "end" },
+      { x: rightX, y: y + 2 * step, anchor: "start" },
+    ];
+    for (const c of candidates) {
+      if (this.tryClaim(c.x, c.y, textStr, fontSize, c.anchor)) return c;
+    }
+    const last = candidates[candidates.length - 1]!;
+    this.claim(last.x, last.y, textStr, fontSize, last.anchor);
+    return last;
   }
 }
 

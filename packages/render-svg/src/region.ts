@@ -2,11 +2,15 @@
  * Region-map renderer: gridless world-unit coordinates, relational placement
  * resolution (mirroring the parser's order-bounded guarantee), organic seeded
  * geometry, half-plane water, and derived labels (spec 05 §2, 07).
+ *
+ * Rendering is two-pass: all positions resolve first (so every marker is a
+ * known obstacle), then labels place with full knowledge — a label can never
+ * sit on a marker declared later in the document.
  */
 
 import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
-import { LabelPlacer } from "./labels";
+import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, pairOf, type Model } from "./model";
 import { INK, pathStrokeFor, terrainFill, terrainFillFor, tierFor } from "./theme";
 import {
@@ -28,6 +32,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const random = rng(model.seed + 7);
   const resolved = new Map<string, Resolved>();
   const byName = new Map<string, string>();
+  /** Direction toward declared water (from e.g. `sea : west of coast`), for landward nudges. */
+  let waterVector: XY | null = null;
 
   const keyOf = (e: EntityNode): string => entityAnchor(e) ?? `@anon-${e.line}`;
   const lookup = (ref: Ref): Resolved | undefined =>
@@ -43,7 +49,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return null;
   };
 
+  /** Meander amplitude grows with length; rivers wander more than roads. */
+  const meanderAmount = (pts: XY[], chain: string[]): number => {
+    let length = 0;
+    for (let i = 0; i < pts.length - 1; i++) length += Math.hypot(pts[i + 1]!.x - pts[i]!.x, pts[i + 1]!.y - pts[i]!.y);
+    const factor = chain.includes("river") ? 0.055 : chain.includes("road") ? 0.02 : 0.035;
+    return Math.min(32, Math.max(6, length * factor));
+  };
+
   const resolveEntity = (e: EntityNode): Resolved => {
+    const chain = model.chainOf(e.typeWord);
     const out: Resolved = {};
     let onRef: Ref | null = null;
     for (const p of e.placements) {
@@ -63,7 +78,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         } else if (p.shape === "area") {
           out.polygon = pts;
         } else {
-          out.polyline = meander(pts, 8, random);
+          out.polyline = meander(pts, meanderAmount(pts, chain), random);
           out.ridge = p.shape === "ridge";
         }
       } else if (p.kind === "relational") {
@@ -115,7 +130,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               ep.point ? toXY(ep.point) : ep.at.kind === "point" ? toXY(ep.at) : refPoint(ep.at);
             const a = endpoint(p.from);
             const b = endpoint(p.to);
-            if (a && b) out.polyline = meander([a, ...p.via.map(toXY), b], 10, random);
+            if (a && b) {
+              const raw = [a, ...p.via.map(toXY), b];
+              out.polyline = meander(raw, meanderAmount(raw, chain), random);
+            }
             break;
           }
           case "along": {
@@ -139,11 +157,40 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (line) out.point = nearestOnPolyline(line, out.point ?? centroid(line));
       else if (!out.point) {
         const base = refPoint(onRef);
-        if (base) out.point = { x: base.x, y: base.y + 10 };
+        if (base) out.point = { x: base.x, y: base.y };
+      }
+      // A settlement/feature "on" something sits on the land side of declared water.
+      if (out.point && e.section !== "water" && waterVector) {
+        out.point = { x: out.point.x - waterVector.x * 7, y: out.point.y - waterVector.y * 7 };
       }
     }
     return out;
   };
+
+  // ---------- pass 1: resolve everything ----------
+  interface Item {
+    e: EntityNode;
+    r: Resolved;
+    chain: string[];
+  }
+  const items: Item[] = [];
+  for (const e of model.entities) {
+    const r = resolveEntity(e);
+    const key = keyOf(e);
+    resolved.set(key, r);
+    if (e.name) byName.set(e.name, key);
+    if (r.halfPlane && e.section === "water") waterVector = COMPASS_VECTORS[r.halfPlane.compass] ?? null;
+    items.push({ e, r, chain: model.chainOf(e.typeWord) });
+  }
+
+  // ---------- pass 2: render, markers known before any label places ----------
+  const placer = new SideLabelPlacer();
+  for (const { e, r, chain } of items) {
+    if (r.point) {
+      const tier = tierFor(chain);
+      placer.block(r.point.x - tier.r - 1, r.point.y - tier.r - 1, tier.r * 2 + 2, tier.r * 2 + 2);
+    }
+  }
 
   const overridden = (e: EntityNode): boolean =>
     model.labelOverrides.some((o) =>
@@ -151,18 +198,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     );
 
   const layers = { areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
-  const placer = new LabelPlacer();
 
-  for (const e of model.entities) {
-    const r = resolveEntity(e);
-    const key = keyOf(e);
-    resolved.set(key, r);
-    if (e.name) byName.set(e.name, key);
-
+  for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
     const titleEl = title ? el("title", {}, title) : "";
-    const chain = model.chainOf(e.typeWord);
     const wordFill = terrainFillFor(chain);
 
     if (r.halfPlane) {
@@ -175,9 +215,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
       if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
         const c = centroid(poly);
+        const labelText = e.name.toUpperCase();
+        const y = placer.place(c.x, c.y, labelText, 18, "middle", labelText.length * (18 * 0.58 + 6));
         layers.labels.push(
-          text(e.name.toUpperCase(), {
-            x: c.x, y: c.y, "font-size": 18, "letter-spacing": 6,
+          text(labelText, {
+            x: c.x, y, "font-size": 18, "letter-spacing": 6,
             fill: isWater ? "#5a7a96" : INK, opacity: 0.55, "text-anchor": "middle", "font-family": "sans-serif",
           }),
         );
@@ -193,15 +235,15 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
       if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
         const c = r.point ?? centroid(r.polygon);
+        const y = placer.place(c.x, c.y, e.name, 11, "middle");
         layers.labels.push(
-          text(e.name, { x: c.x, y: c.y, "font-size": 11, fill: INK, opacity: 0.8, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+          text(e.name, { x: c.x, y, "font-size": 11, fill: INK, opacity: 0.8, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
         );
       }
       continue;
     }
 
     if (r.polyline) {
-      const stroke = pathStrokeFor(chain);
       if (r.ridge) {
         layers.lines.push(
           el("g", { id: anchor }, titleEl,
@@ -210,6 +252,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           ),
         );
       } else {
+        const stroke = pathStrokeFor(chain);
         const width = Number(pairOf(e.pairs, "width") ?? 2);
         layers.lines.push(
           el("g", { id: anchor }, titleEl,
@@ -232,7 +275,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
 
     if (r.point) {
       const tier = tierFor(chain);
-      placer.block(r.point.x - tier.r, r.point.y - tier.r, tier.r * 2, tier.r * 2);
       layers.points.push(
         el("g", { id: anchor }, titleEl,
           chain.includes("capital")
@@ -245,9 +287,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
       const label = e.name ?? (e.archetypeSource !== "vocab" ? e.typeWord : null) ?? (e.typeWord === "note" ? e.texts[0] ?? null : null);
       if (label && !e.flags.includes("nolabel") && !overridden(e)) {
-        const y = placer.place(r.point.x + tier.r + 3, r.point.y + 4, label, tier.font, "start");
+        const spot = placer.placeBeside(r.point.x + tier.r + 3, r.point.x - tier.r - 3, r.point.y + 4, label, tier.font);
         layers.labels.push(
-          text(label, { x: r.point.x + tier.r + 3, y, "font-size": tier.font, "font-weight": tier.weight, fill: INK, "font-family": "sans-serif" }),
+          text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: INK, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),
         );
       }
     }

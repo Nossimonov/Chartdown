@@ -19,6 +19,7 @@ const TERRAIN_FILLS: Record<string, string> = {
   snowfield: "#eff2f4", snow: "#eff2f4", tundra: "#dfe4dd", ice: "#dcebf2",
   wasteland: "#d4c8b8", mud: "#c8b294", sand: "#ecdfb8", grass: "#dde5b8",
   rubble: "#cfc8bc", slope: "#d9d0bd",
+  ford: "#cfd4b8",
 };
 
 export const terrainFill = (word: string): string => TERRAIN_FILLS[word] ?? "#d8d3c5";
