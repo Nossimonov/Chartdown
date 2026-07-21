@@ -76,6 +76,8 @@ Relational placement is legal **only** in the following forms, built from the cl
 
 Shape tokens whose geometry the renderer finishes organically (deterministically, per §8.2):
 
+> *Non-normative — finishing is not inventing.* A renderer smooths and textures the author's sketch; it never fabricates geography the sketch doesn't contain, because determinism and additive stability (§8) forbid improvisation. Sketch density is therefore authorial: a two-point path renders as a near-straight line however organic the finishing, so give a landmark river as many `via` points as its story deserves — the same budget you'd give a coastline.
+
 | Shape | Form | Meaning |
 |---|---|---|
 | `area` | `area <range \| cell/point list>` | polygon or block |

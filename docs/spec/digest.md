@@ -26,7 +26,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 - **Cells, all grids**: chess-style `K11`, `C4` (columns A..Z, AA…; 1-indexed; row 1 = north). Ranges `A11..F15` (rect / hex run / hex block). Lists: `C12 E13`.
 - **Edges/corners**: `O6.s` (n/e/s/w), `K5.nw` (corners). Wall runs: `wall : K5.e K6.e K7.e`.
 - **Gridless points**: `(x,y)` in extent units from NW origin; point ranges `(x1,y1)..(x2,y2)`.
-- **Shapes** (renderer finishes organically, deterministically): `area <cells|points|range>` · `path <seq> width=N` · `blob <center> size=<measure>` · `ridge <seq>`.
+- **Shapes** (renderer finishes organically, deterministically — finishing is not inventing; give major paths generous `via` points): `area <cells|points|range>` · `path <seq> width=N` · `blob <center> size=<measure>` · `ridge <seq>`.
 - **Relational placement — closed grammar, only these nine forms**:
   `at (x,y)` · `70mi north of <ref>` · `east of <ref>` (half-plane) · `on <ref>` · `on <ref> at (x,y)` · `south edge of <ref>` · `near <ref|point>` · `from <ep> via (p) (p) to <ep>` · `along <ref>`. Endpoints: ref, point, or `ref at (point)`.
 - **Resolution rules**: references only to *earlier* declarations (forward ref = error); deterministic (document+seed); fail-loud (no room / ambiguous = error — renderers never relocate others); anchors are **live** (moving an anchor moves dependents; use a remnant landmark — `ruin "Former site of X"` — when destroying one).

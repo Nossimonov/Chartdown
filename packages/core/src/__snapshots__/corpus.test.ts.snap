@@ -2077,7 +2077,28 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
                   "value": "Gull Bay",
                 },
               },
-              "via": [],
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 630,
+                  "y": 300,
+                },
+                {
+                  "kind": "point",
+                  "x": 520,
+                  "y": 345,
+                },
+                {
+                  "kind": "point",
+                  "x": 360,
+                  "y": 370,
+                },
+                {
+                  "kind": "point",
+                  "x": 230,
+                  "y": 385,
+                },
+              ],
             },
           ],
           "section": "paths",

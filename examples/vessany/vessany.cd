@@ -24,7 +24,7 @@ village "Gull Landing" : on "Gull Bay"
 village "Sparrowdown" : 40mi east of highkeep
 
 [paths]
-river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"
+river "The Vess" : from "The Serpent's Spine" at (720,240) via (630,300) (520,345) (360,370) (230,385) to "Gull Bay"
 road "Coast Road" : from "Argenport" to "Merrow's Rest" along coast
 road "King's Way" : from highkeep to "Argenport"
 
