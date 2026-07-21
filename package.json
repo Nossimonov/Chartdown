@@ -11,11 +11,12 @@
     "build": "node build.mjs && tsc -p packages/core/tsconfig.build.json && tsc -p packages/render-svg/tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser && tsc --noEmit -p playground"
+    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser && tsc --noEmit -p packages/obsidian && tsc --noEmit -p playground"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "esbuild": "^0.28.1",
+    "happy-dom": "^20.11.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },

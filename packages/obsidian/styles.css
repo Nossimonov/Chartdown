@@ -1,0 +1,15 @@
+.chartdown-map {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chartdown-diagnostics {
+  color: var(--text-error);
+  font-size: 0.85em;
+  font-family: var(--font-monospace);
+  margin-top: 0.5em;
+  padding: 0.5em 0.75em;
+  border-left: 2px solid var(--text-error);
+  background: var(--background-secondary);
+}

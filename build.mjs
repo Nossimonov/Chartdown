@@ -1,6 +1,7 @@
 // Build the distributable bundles: the library ESM entries (npm), the CLI
 // (node), and the browser entry (iife). Dev-time tooling only — the bundles
 // themselves remain runtime-dependency-free (ADR 0007).
+import { cpSync } from "node:fs";
 import { build } from "esbuild";
 
 // Bundles resolve workspace imports from SOURCE (same rule as vitest.config.ts
@@ -48,6 +49,21 @@ await build({
   outfile: "packages/browser/dist/chartdown.browser.js",
   logLevel: "info",
 });
+
+// Obsidian plugin (issue #38): CommonJS main.js with the `obsidian` module
+// external (the app provides it); dist/ is the complete sideloadable folder.
+await build({
+  entryPoints: ["packages/obsidian/src/main.ts"],
+  bundle: true,
+  platform: "browser",
+  format: "cjs",
+  external: ["obsidian"],
+  alias: sourceAliases,
+  outfile: "packages/obsidian/dist/main.js",
+  logLevel: "info",
+});
+cpSync("packages/obsidian/manifest.json", "packages/obsidian/dist/manifest.json");
+cpSync("packages/obsidian/styles.css", "packages/obsidian/dist/styles.css");
 
 await build({
   entryPoints: ["playground/src/playground.ts"],
