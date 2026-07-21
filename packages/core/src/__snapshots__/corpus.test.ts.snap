@@ -1044,7 +1044,9 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
-          "ids": [],
+          "ids": [
+            "redford",
+          ],
           "kind": "entity",
           "line": 10,
           "name": "The Redford",
@@ -1092,38 +1094,6 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
           "typeWord": "river",
         },
         {
-          "archetype": "feature",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [
-            "difficult",
-          ],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "line": 11,
-          "name": null,
-          "pairs": [],
-          "placements": [
-            {
-              "from": {
-                "col": "K",
-                "kind": "address",
-                "row": 9,
-              },
-              "kind": "range",
-              "to": {
-                "col": "L",
-                "kind": "address",
-                "row": 10,
-              },
-            },
-          ],
-          "section": "terrain",
-          "texts": [],
-          "typeWord": "ford",
-        },
-        {
           "archetype": "terrain",
           "archetypeSource": "vocab",
           "details": [],
@@ -1133,7 +1103,7 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 12,
+          "line": 11,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1167,9 +1137,11 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
-          "ids": [],
+          "ids": [
+            "tollroad",
+          ],
           "kind": "entity",
-          "line": 13,
+          "line": 12,
           "name": "Old Toll Road",
           "pairs": [],
           "placements": [
@@ -1193,6 +1165,43 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
           "section": "terrain",
           "texts": [],
           "typeWord": "road",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "difficult",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 13,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "redford",
+              },
+            },
+            {
+              "form": "on",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "tollroad",
+              },
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "ford",
         },
       ],
       "kind": "section",

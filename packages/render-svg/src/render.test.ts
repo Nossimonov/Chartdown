@@ -96,8 +96,8 @@ describe("crossings and layering (spec 06 §6)", () => {
     "grid: square 10x10",
     "scale: 5ft",
     "[terrain]",
-    "river : path A5 J5 width=1",
-    "road : path E1 E10",
+    "river r1 : path A5 J5 width=1",
+    "road r2 : path E1 E10",
   ];
 
   it("a road×river overlap with no crossing warns about the implied bridge", () => {
@@ -105,20 +105,43 @@ describe("crossings and layering (spec 06 §6)", () => {
     expect(diagnostics.map((d) => d.message).join()).toMatch(/crosses 'river' at E5 with no ford or bridge/);
   });
 
-  it("a ford covering the overlap silences the warning and draws above the road", () => {
-    const src = [...base, "ford : E5 difficult"].join("\n");
+  it("a derived ford (on X on Y) claims the crossing and draws the water band", () => {
+    const src = [...base, "ford : on r1 on r2 difficult"].join("\n");
     const { svg, diagnostics } = renderSource(src);
     expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
-    expect(svg.indexOf("#c3a878")).toBeLessThan(svg.indexOf("#c2d4dc")); // road stroke before ford cells
+    expect(svg.indexOf("#c3a878")).toBeLessThan(svg.indexOf("#c2d4dc")); // road stroke before ford band
+    expect(svg).toContain("clip-path");
   });
 
-  it("a bridge also satisfies the crossing rule", () => {
-    const src = [...base, "bridge : E5"].join("\n");
+  it("explicit cells remain a legal fallback", () => {
+    const src = [...base, "ford : E5 difficult"].join("\n");
     const { diagnostics } = renderSource(src);
     expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
   });
 
-  it("the corpus renders warning-free (Redford's ford covers its crossing)", () => {
+  it("a bridge also satisfies the crossing rule", () => {
+    const src = [...base, "bridge : on r1 on r2"].join("\n");
+    const { diagnostics } = renderSource(src);
+    expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+  });
+
+  it("two crossings without a disambiguator is a loud error; at <cell> resolves it", () => {
+    const zigzag = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "scale: 5ft",
+      "[terrain]",
+      "river r1 : path A5 J5 width=1",
+      "road r2 : path C1 C9 G9 G1",
+      "ford : on r1 on r2 difficult",
+    ].join("\n");
+    const ambiguous = renderSource(zigzag);
+    expect(ambiguous.diagnostics.map((d) => d.message).join()).toMatch(/ambiguous.*add 'at <cell>'/);
+    const resolved = renderSource(zigzag.replace("ford : on r1 on r2", "ford : on r1 on r2 at C5"));
+    expect(resolved.diagnostics.filter((d) => /ambiguous/.test(d.message))).toEqual([]);
+  });
+
+  it("the corpus renders diagnostic-free (Redford's derived ford claims its crossing)", () => {
     const { diagnostics } = renderSource(example("redford-crossing"), { mode: "gm" });
     expect(diagnostics).toEqual([]);
   });

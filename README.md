@@ -29,8 +29,9 @@ scale: 5ft
 
 [terrain]
 forest : area A11..F15
-river "The Redford" : path A9 F9 K9 P10 T10 width=2
-ford : K9..L10 difficult
+river redford "The Redford" : path A9 F9 K9 P10 T10 width=2
+road tollroad "Old Toll Road" : path K1 K15
+ford : on redford on tollroad difficult
 
 [features]
 wagon : K11 overturned facing=south

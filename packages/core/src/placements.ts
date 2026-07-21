@@ -177,15 +177,14 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       const ref = takeRef("on");
       if (!ref) continue;
       let point: Point | undefined;
+      // Consume an `at` clause only when a point follows (`on coast at (160,470)`);
+      // an `at <cell>` stays standalone — e.g. the crossing chooser, spec 06 §6.
       if (chunkText(peek()) === "at") {
-        i++;
-        const pt = chunkText(peek());
-        const parsed = pt ? parsePoint(pt) : null;
+        const after = chunkText(peek(1));
+        const parsed = after ? parsePoint(after) : null;
         if (parsed) {
           point = parsed;
-          i++;
-        } else {
-          diagnostics.push(error(line, "expected a point after 'on <ref> at'"));
+          i += 2;
         }
       }
       result.placements.push(

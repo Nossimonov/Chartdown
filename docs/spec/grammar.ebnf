@@ -58,6 +58,8 @@ relational     = ( "at" , ( point | address ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
                | ( "along" , ref ) ;
                  (* closed grammar — no other relational forms exist.
+                    multiple relational placements constrain jointly; two "on"
+                    path refs = band intersection (crossings, spec 06 §6).
                     resolution: order-bounded, deterministic (seeded),
                     fail-loud, live anchors — spec 02 §8 *)
 endpoint       = ( ref , [ "at" , point ] ) | point ;

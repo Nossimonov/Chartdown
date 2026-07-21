@@ -59,6 +59,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `along <ref>` — path shape hint or feature-following line | `border : along "The Serpent's Spine"` |
 
 - `<ref>` is a bare id word or quoted display name; resolution is defined by [03 — Identity, References, and Links](03-identity-and-links.md).
+- **Multiple relational placements constrain jointly**: `on coast 70mi north of argenport` means both hold. In particular, two `on` references to path entities place the entity at the **intersection of their bands** — the idiom for crossings (`ford : on redford on tollroad`), whose location is thereby derived rather than restated; see spec 06 §6. If the constraints are satisfiable in more than one place, the placement is ambiguous — a fail-loud error — and an `at <cell|point>` *chooses* among the candidates without redefining extent.
 - `<endpoint>` is `<ref>`, `<point>`, or `<ref> at <point>`.
 - `<compass>` is the 8-wind set — `n s e w ne nw se sw`, full words equally legal (`north`, `northwest`).
 - `<measure>` is a number with optional unit (`70mi`, `12`).

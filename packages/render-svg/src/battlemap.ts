@@ -7,7 +7,7 @@
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
 import { GRID_LINE, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
-import { colToNumber, el, fmt, measureToNumber, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 
 const CELL = 32;
 const MARGIN = 24;
@@ -59,9 +59,19 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     cells: Set<string>;
     isWater: boolean;
     isRoad: boolean;
+    pts: XY[];
+    width: number;
   }
   const pathRecords: PathRecord[] = [];
   const crossingCells = new Set<string>();
+  interface PendingCrossing {
+    e: EntityNode;
+    chain: string[];
+    titleEl: string;
+    anchor: string | undefined;
+  }
+  // Crossings render after the full pass so the paths they restyle are known.
+  const pendingCrossings: PendingCrossing[] = [];
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
@@ -103,7 +113,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     if (e.section === "terrain") {
       const chain = model.chainOf(e.typeWord);
       if (chain.includes("ford") || chain.includes("bridge")) {
-        renderCrossing(e, chain, titleEl, anchor);
+        pendingCrossings.push({ e, chain, titleEl, anchor });
       } else {
         renderTerrain(e, titleEl, anchor);
       }
@@ -142,6 +152,8 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
       layers.grid.push(text(String(r), { x: MARGIN - 7, y: MARGIN + (r - 0.5) * CELL + 3, "font-size": 9, fill: "#8a8272", "text-anchor": "end", "font-family": "sans-serif" }));
     }
   }
+
+  for (const pending of pendingCrossings) renderCrossing(pending);
 
   // Implied-crossing warnings (spec 06 §6): water × road overlap with no crossing.
   for (const water of pathRecords.filter((p) => p.isWater)) {
@@ -201,24 +213,205 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     return out;
   }
 
-  /** Crossings (spec 06 §6): drawn above the paths they join, shaped to their cells. */
-  function renderCrossing(e: EntityNode, chain: string[], titleEl: string, anchor: string | undefined): void {
+  /** Cells covered by a path's band: center within stroke half-width of the polyline. */
+  function bandCells(record: PathRecord): Set<string> {
+    const half = record.width / 2 + 1;
+    const cells = new Set<string>();
+    for (let col = 1; col <= frame.cols; col++) {
+      for (let row = 1; row <= frame.rows; row++) {
+        const center = { x: MARGIN + (col - 0.5) * CELL, y: MARGIN + (row - 0.5) * CELL };
+        const nearest = nearestOnPolyline(record.pts, center);
+        if (Math.hypot(nearest.x - center.x, nearest.y - center.y) <= half) cells.add(`${col}:${row}`);
+      }
+    }
+    return cells;
+  }
+
+  function connectedClusters(keys: Set<string>): string[][] {
+    const remaining = new Set(keys);
+    const clusters: string[][] = [];
+    while (remaining.size > 0) {
+      const seed = remaining.values().next().value as string;
+      const queue = [seed];
+      remaining.delete(seed);
+      const cluster: string[] = [];
+      while (queue.length > 0) {
+        const key = queue.pop()!;
+        cluster.push(key);
+        const [col, row] = key.split(":").map(Number) as [number, number];
+        for (let dc = -1; dc <= 1; dc++) {
+          for (let dr = -1; dr <= 1; dr++) {
+            const neighbor = `${col + dc}:${row + dr}`;
+            if (remaining.has(neighbor)) {
+              remaining.delete(neighbor);
+              queue.push(neighbor);
+            }
+          }
+        }
+      }
+      clusters.push(cluster.sort());
+    }
+    return clusters.sort((a, b) => (a[0]! < b[0]! ? -1 : 1));
+  }
+
+  /**
+   * Crossings (spec 06 §6): placed `on <water> on <road>`, the region derives
+   * from the bands' intersection — location is a consequence, not a fact.
+   * Explicit cells remain the fallback for underivable cases.
+   */
+  function renderCrossing(pending: PendingCrossing): void {
+    const { e, chain, titleEl, anchor } = pending;
     const isBridge = chain.includes("bridge");
+    const findRecord = (ref: { form: string; value: string }): PathRecord | undefined =>
+      pathRecords.find((p) => (ref.form === "id" ? p.e.ids.includes(ref.value) : p.e.name === ref.value));
+
+    const onRefs = e.placements.filter(
+      (p): p is Extract<Placement, { kind: "relational"; form: "on" }> => p.kind === "relational" && p.form === "on",
+    );
+    const atCell = e.placements.find(
+      (p): p is Extract<Placement, { kind: "relational"; form: "at" }> => p.kind === "relational" && p.form === "at",
+    )?.target;
+
+    let cells: { col: number; row: number }[] = [];
+    let host: PathRecord | undefined;
+
+    if (onRefs.length >= 2) {
+      const records = onRefs.map((p) => findRecord(p.ref)).filter((r): r is PathRecord => r !== undefined);
+      if (records.length >= 2) {
+        const water = records.find((r) => r.isWater) ?? records[0]!;
+        const other = records.find((r) => r !== water)!;
+        const intersection = new Set([...bandCells(water)].filter((c) => bandCells(other).has(c)));
+        const clusters = connectedClusters(intersection);
+        let chosen = clusters;
+        if (clusters.length > 1) {
+          if (atCell?.kind === "address") {
+            const key = `${colToNumber(atCell.col)}:${atCell.row}`;
+            const match = clusters.find((cluster) => cluster.includes(key));
+            chosen = match ? [match] : clusters;
+          }
+          if (chosen.length > 1) {
+            diagnostics.push({
+              severity: "error",
+              line: e.line,
+              message: `'${e.typeWord}' on '${water.e.name ?? water.e.typeWord}' and '${other.e.name ?? other.e.typeWord}' is ambiguous — they cross at ${clusters.map((c) => cellName(c[0]!)).join(" and ")}; add 'at <cell>' to choose (spec 06 §6)`,
+            });
+          }
+        }
+        cells = chosen.flat().map((key) => {
+          const [col, row] = key.split(":").map(Number) as [number, number];
+          return { col, row };
+        });
+        host = isBridge ? (records.find((r) => r.isRoad) ?? other) : water;
+      }
+    }
+    if (cells.length === 0) {
+      cells = entityCells(e);
+      const cellKeys = new Set(cells.map((c) => `${c.col}:${c.row}`));
+      host = pathRecords.find((p) => (isBridge ? p.isRoad : p.isWater) && [...p.cells].some((c) => cellKeys.has(c)));
+    }
+    for (const c of cells) crossingCells.add(`${c.col}:${c.row}`);
+
     const parts: string[] = [titleEl];
-    for (const { col, row } of entityCells(e)) {
-      crossingCells.add(`${col}:${row}`);
-      const x = MARGIN + (col - 1) * CELL;
-      const y = MARGIN + (row - 1) * CELL;
+    const derivedRecords = onRefs.map((p) => findRecord(p.ref)).filter((r): r is PathRecord => r !== undefined);
+    const water = derivedRecords.find((r) => r.isWater);
+    const roadRec = derivedRecords.find((r) => r.isRoad);
+    if (water && roadRec) {
+      // Exact geometric intersection: paint one band clipped by the other's
+      // band shape — aligned with both by construction, no cell quantization.
+      const hostRec = isBridge ? roadRec : water;
+      const clipRec = isBridge ? water : roadRec;
+      const clipId = `xing-${e.line}`;
+      parts.push(`<clipPath id="${clipId}">${bandQuads(clipRec)}</clipPath>`);
+      const scope: string[] = [];
+      const band = (stroke: string, width: number): string =>
+        el("polyline", {
+          points: pointsAttr(hostRec.pts), fill: "none", stroke, "stroke-width": width,
+          "stroke-linecap": "butt", "stroke-linejoin": "round", "clip-path": `url(#${clipId})`,
+        });
       if (isBridge) {
-        parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "#a8763e", opacity: 0.95 }));
-        parts.push(el("line", { x1: x, y1: y + 2, x2: x + CELL, y2: y + 2, stroke: "#6b4a26", "stroke-width": 2 }));
-        parts.push(el("line", { x1: x, y1: y + CELL - 2, x2: x + CELL, y2: y + CELL - 2, stroke: "#6b4a26", "stroke-width": 2 }));
+        scope.push(band("#6b4a26", hostRec.width + 6));
+        scope.push(band("#a8763e", hostRec.width));
       } else {
-        parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "#c2d4dc", opacity: 0.95 }));
-        if (e.flags.includes("difficult")) parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+        scope.push(band("#c2d4dc", hostRec.width));
+        if (e.flags.includes("difficult")) scope.push(band("url(#hatch)", hostRec.width));
+      }
+      // With multiple crossings and an `at` chooser, restrict to the chosen one.
+      if (atCell?.kind === "address" && cells.length > 0) {
+        const outerId = `xing-scope-${e.line}`;
+        const pad = CELL;
+        const rects = cells
+          .map((c) =>
+            el("rect", {
+              x: MARGIN + (c.col - 1) * CELL - pad, y: MARGIN + (c.row - 1) * CELL - pad,
+              width: CELL + 2 * pad, height: CELL + 2 * pad,
+            }),
+          )
+          .join("");
+        parts.push(`<clipPath id="${outerId}">${rects}</clipPath>`);
+        parts.push(`<g clip-path="url(#${outerId})">${scope.join("")}</g>`);
+      } else {
+        parts.push(...scope);
+      }
+    } else if (host && cells.length > 0) {
+      const clipId = `xing-${e.line}`;
+      const clipRects = cells
+        .map((c) =>
+          el("rect", { x: MARGIN + (c.col - 1) * CELL, y: MARGIN + (c.row - 1) * CELL, width: CELL, height: CELL }),
+        )
+        .join("");
+      parts.push(`<clipPath id="${clipId}">${clipRects}</clipPath>`);
+      const band = (stroke: string, width: number): string =>
+        el("polyline", {
+          points: pointsAttr(host!.pts), fill: "none", stroke, "stroke-width": width,
+          "stroke-linecap": "butt", "stroke-linejoin": "round", "clip-path": `url(#${clipId})`,
+        });
+      if (isBridge) {
+        parts.push(band("#6b4a26", host.width + 6));
+        parts.push(band("#a8763e", host.width));
+      } else {
+        parts.push(band("#c2d4dc", host.width));
+        if (e.flags.includes("difficult")) parts.push(band("url(#hatch)", host.width));
+      }
+    } else {
+      for (const { col, row } of cells) {
+        const x = MARGIN + (col - 1) * CELL;
+        const y = MARGIN + (row - 1) * CELL;
+        parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: isBridge ? "#a8763e" : "#c2d4dc", opacity: 0.95 }));
+        if (!isBridge && e.flags.includes("difficult")) parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "url(#hatch)" }));
       }
     }
     layers.crossings.push(el("g", { id: anchor }, ...parts));
+  }
+
+  function cellName(key: string): string {
+    const [col, row] = key.split(":").map(Number) as [number, number];
+    return `${colLetters(col)}${row}`;
+  }
+
+  /** A path band as clipPath geometry: one quad per segment (butt caps). */
+  function bandQuads(record: PathRecord): string {
+    const half = record.width / 2;
+    const quads: string[] = [];
+    for (let i = 0; i < record.pts.length - 1; i++) {
+      const a = record.pts[i]!;
+      const b = record.pts[i + 1]!;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = (-dy / len) * half;
+      const ny = (dx / len) * half;
+      quads.push(
+        el("polygon", {
+          points: pointsAttr([
+            { x: a.x + nx, y: a.y + ny },
+            { x: b.x + nx, y: b.y + ny },
+            { x: b.x - nx, y: b.y - ny },
+            { x: a.x - nx, y: a.y - ny },
+          ]),
+        }),
+      );
+    }
+    return quads.join("");
   }
 
   function renderTerrain(e: EntityNode, titleEl: string, anchor: string | undefined): void {
@@ -245,7 +438,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = pathStrokeFor(chain);
         pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
-        pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road") });
+        pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));

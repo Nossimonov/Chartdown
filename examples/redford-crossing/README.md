@@ -2,6 +2,8 @@
 
 **Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07). Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
 
+**Derived crossing (2026-07-20, [#25](https://github.com/Nossimonov/Chartdown/issues/25)):** the ford no longer declares cells — `ford : on redford on tollroad difficult` derives its region from the river×road band intersection, making ford/river disagreement unrepresentable (a crossing's location is a consequence, not a fact); the river and road carry ids because they're referenced, per ADR 0004.
+
 **Spec-01 canonicalization (2026-07-20):** parentheticals removed (`(overturned)` → `overturned` flag, `(difficult)` → `difficult`), parameters normalized to `key=value` (`width=2`, `light=20ft`, `size=2`, `facing=south`), and the pseudo-English relations (`on river at`, `crossing ford`) dropped rather than frozen prematurely — the ford is now placed directly (`ford : K9..L10 difficult`); whether relations return at battlemap scale is [#8](https://github.com/Nossimonov/Chartdown/issues/8)'s call. Building detail lines survive as spec 01's *provisional* construct.
 
 ## The scene

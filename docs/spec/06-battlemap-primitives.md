@@ -90,9 +90,19 @@ A token-archetype word with an **area placement** renders as a staging zone: `pa
 
 ## 6. Crossings and terrain layering
 
-*(Added from proposal [#24](https://github.com/Nossimonov/Chartdown/issues/24).)* Where a road meets a river, the result is a ford or a bridge — and the crossing replaces both at the overlap. No syntax associates them: **the geometry is the association**. A `ford` or `bridge` (by vocabulary chain) whose cells lie on a water-path × road overlap is that overlap's crossing.
+*(Added from proposal [#24](https://github.com/Nossimonov/Chartdown/issues/24); rewritten by [#25](https://github.com/Nossimonov/Chartdown/issues/25).)* Where a road meets a river, the result is a ford or a bridge — and the crossing replaces both at the overlap. A crossing's **location is a consequence, not a fact**: the canonical form derives it —
 
-- **Composition**: crossings render *above* the paths they join, shaped to their declared cells, regardless of declaration order. A ford reads as the road entering the water — water-toned cells (plus its `difficult` hatch) interrupt the road while the river continues. A bridge carries the road across — road-toned cells with edging, the water passing beneath.
+```chartdown
+river redford "The Redford" : path A9 F9 K9 P10 T10 width=2
+road tollroad "Old Toll Road" : path K1 K15
+ford : on redford on tollroad difficult
+```
+
+- **Derived region**: a crossing placed `on` two path entities occupies the **intersection of their bands**. Battlemap bands are exact (polyline through cell centers, width in cells, no organic finishing), so the crossing's cells — tactical extent, difficult-terrain footprint, render region — are a pure function of the two paths and can never disagree with them.
+- **Rendering**: crossings render above the paths they join, regardless of declaration order. A ford is a restyled segment of the water's own band (shallow tone plus its `difficult` hatch); the road runs to the band's edge on both sides. A bridge restyles the road's band across the water, with edging.
+- **Ambiguity fails loud**: if the bands intersect in more than one place, the derived placement is an error naming the crossing cells; `at <cell>` chooses among them (it never redefines extent).
+- **Explicit cells remain legal** for crossings with nothing to derive from (a ford over area-shaped water); when two `on` references resolve to paths, the derived region is authoritative.
+- **Implied-crossing warning**: a water-path × road band overlap not claimed by any crossing produces a renderer warning naming both entities and the cell — the render would otherwise imply a bridge nobody declared.
 - **Implied-crossing warning**: a water-path × road overlap not covered by any crossing's cells produces a renderer warning naming both entities and the cell — the render would otherwise imply a bridge nobody declared.
 - **Layering**: within `[terrain]`, area terrain renders beneath path bands, and paths beneath crossings; declaration order breaks ties within a kind. Consequently, a declared terrain cell grazed by a river's band reads as its bank (mud shows through at the water's edge). *Extent is always declared, never derived*: a "fill to the river" mechanic was considered and rejected — geometric fill would make tactical cells depend on renderer finishing, and cell-space fill would make one entity's extent silently track another's edits. Authors declare the bank cells they mean.
 
