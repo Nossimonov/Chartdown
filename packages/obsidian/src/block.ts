@@ -14,6 +14,8 @@ export interface BlockIO {
   /** Write a text file next to the note; overwrite silently. */
   writeFile(name: string, contents: string): Promise<void>;
   notify(message: string): void;
+  /** Reveal an exported file in the system file explorer (desktop only). */
+  reveal?(name: string): void;
   /** Rasterize `region` of an SVG to a base64 PNG (no data-URI prefix). */
   rasterize?(svg: string, region: { x: number; y: number; w: number; h: number }, outW: number, outH: number): Promise<string>;
 }
@@ -22,6 +24,8 @@ export interface BlockOptions {
   initialMode: RenderMode;
   /** File base for exports, normally the map's doc id. */
   baseName: string;
+  /** Vault-relative folder exports land in ("" = vault root) — notices say where. */
+  folderLabel: string;
   io: BlockIO;
 }
 
@@ -64,7 +68,8 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
       const { svg } = renderSource(source, { mode });
       const name = `${opts.baseName}${mode === "gm" ? "-gm" : ""}.svg`;
       await opts.io.writeFile(name, svg);
-      opts.io.notify(`Chartdown: exported ${name}`);
+      opts.io.notify(`Chartdown: exported ${opts.folderLabel}${name} (a real file in your vault folder)`);
+      opts.io.reveal?.(name);
     })();
   });
 
@@ -94,7 +99,10 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
         }
         const name = `${opts.baseName}${level ? `-${level}` : ""}.dd2vtt`;
         await opts.io.writeFile(name, JSON.stringify(result.uvtt));
-        opts.io.notify(`Chartdown: exported ${name}`);
+        // Obsidian's file explorer hides unknown extensions — the file is
+        // real but invisible in-app, so say where it went and reveal it.
+        opts.io.notify(`Chartdown: exported ${opts.folderLabel}${name} (hidden in Obsidian's explorer; it's in your vault folder)`);
+        opts.io.reveal?.(name);
       }
     })();
   });
