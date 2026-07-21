@@ -32,27 +32,17 @@ export interface BlockOptions {
 const PIXELS_PER_GRID = 70;
 
 export function mountChartdownBlock(source: string, el: HTMLElement, opts: BlockOptions): void {
-  const doc = el.ownerDocument;
   let mode: RenderMode = opts.initialMode;
 
-  const wrapper = doc.createElement("div");
-  wrapper.className = "chartdown-block";
-  const toolbar = doc.createElement("div");
-  toolbar.className = "chartdown-toolbar";
-  const modeBtn = doc.createElement("button");
-  modeBtn.className = "chartdown-mode-toggle";
-  const svgBtn = doc.createElement("button");
-  svgBtn.textContent = "Export SVG";
-  const uvttBtn = doc.createElement("button");
-  uvttBtn.textContent = "Export UVTT";
-  toolbar.append(modeBtn, svgBtn, uvttBtn);
-  const mapHost = doc.createElement("div");
-  mapHost.className = "chartdown-map-host";
-  wrapper.append(toolbar, mapHost);
-  el.appendChild(wrapper);
+  const wrapper = el.createEl("div", { cls: "chartdown-block" });
+  const toolbar = wrapper.createEl("div", { cls: "chartdown-toolbar" });
+  const modeBtn = toolbar.createEl("button", { cls: "chartdown-mode-toggle" });
+  const svgBtn = toolbar.createEl("button", { text: "Export SVG" });
+  const uvttBtn = toolbar.createEl("button", { text: "Export UVTT" });
+  const mapHost = wrapper.createEl("div", { cls: "chartdown-map-host" });
 
   const rerender = (): void => {
-    mapHost.replaceChildren();
+    mapHost.empty();
     renderChartdownBlock(source, mapHost, mode);
     modeBtn.textContent = mode === "gm" ? "GM view" : "Player view";
     modeBtn.setAttribute("aria-pressed", String(mode === "gm"));
