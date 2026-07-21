@@ -5,12 +5,11 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
+import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, rangeRect } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
-import { colLetters, colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
-
-const CELL = 32;
-const MARGIN = 24;
+import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { collectWalls } from "./walls";
 
 interface Frame {
   cols: number;
@@ -23,28 +22,6 @@ export function battlemapFrame(model: Model): Frame {
   const cols = model.doc.grid?.cols ?? 20;
   const rows = model.doc.grid?.rows ?? 15;
   return { cols, rows, w: MARGIN * 2 + cols * CELL, h: MARGIN * 2 + rows * CELL };
-}
-
-const cellOrigin = (a: Address): XY => ({
-  x: MARGIN + (colToNumber(a.col) - 1) * CELL,
-  y: MARGIN + (a.row - 1) * CELL,
-});
-const cellCenter = (a: Address): XY => {
-  const o = cellOrigin(a);
-  return { x: o.x + CELL / 2, y: o.y + CELL / 2 };
-};
-const rangeRect = (r: AddressRange): { x: number; y: number; w: number; h: number } => {
-  const a = cellOrigin(r.from);
-  const b = cellOrigin(r.to);
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, w: Math.abs(b.x - a.x) + CELL, h: Math.abs(b.y - a.y) + CELL };
-};
-
-/** Real-world measure → cells, via the scale: header (e.g. light=20ft at 5ft scale = 4 cells). */
-function measureToCells(measure: string, model: Model): number {
-  const scale = measureToNumber(model.header.get("scale") ?? "5") || 5;
-  return measureToNumber(measure) / scale;
 }
 
 export interface LevelContext {
@@ -88,60 +65,8 @@ export function renderBattlemap(
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
-  // Built per cell-edge so a window opens a gap in its wall — and window
-  // edges are keyed geometrically, so coincident walls from different
-  // structures (a room sharing the courtyard's wall) form ONE wall: a
-  // window in either opens the shared edge.
-  const segKey = (s: Segment): string => {
-    const pts = [s.a, s.b].sort((p, q) => p.x - q.x || p.y - q.y);
-    return `${Math.round(pts[0]!.x)},${Math.round(pts[0]!.y)}|${Math.round(pts[1]!.x)},${Math.round(pts[1]!.y)}`;
-  };
-  const windowSegments = new Set<string>();
-  for (const e of model.entities) {
-    if (e.archetype !== "structure") continue;
-    for (const d of e.details) {
-      if (!model.chainOf(d.typeWord).includes("window")) continue;
-      for (const p of d.placements) {
-        if (p.kind === "edge") windowSegments.add(segKey(edgeSegment(p.at, p.dir)));
-      }
-    }
-  }
-  const sightBlockers: Segment[] = [];
-  for (const e of model.entities) {
-    if (e.archetype === "structure") {
-      const range = e.placements.find((p): p is AddressRange => p.kind === "range");
-      if (!range) continue;
-      const ruined = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
-      const c1 = Math.min(colToNumber(range.from.col), colToNumber(range.to.col));
-      const c2 = Math.max(colToNumber(range.from.col), colToNumber(range.to.col));
-      const r1 = Math.min(range.from.row, range.to.row);
-      const r2 = Math.max(range.from.row, range.to.row);
-      const sideCells: Record<string, { col: number; row: number; dir: "n" | "s" | "e" | "w" }[]> = {
-        north: [], south: [], west: [], east: [],
-      };
-      for (let col = c1; col <= c2; col++) {
-        sideCells["north"]!.push({ col, row: r1, dir: "n" });
-        sideCells["south"]!.push({ col, row: r2, dir: "s" });
-      }
-      for (let row = r1; row <= r2; row++) {
-        sideCells["west"]!.push({ col: c1, row, dir: "w" });
-        sideCells["east"]!.push({ col: c2, row, dir: "e" });
-      }
-      for (const [side, cells] of Object.entries(sideCells)) {
-        if (ruined.has(side) || ruined.has(side[0]!)) continue;
-        for (const cell of cells) {
-          const address: Address = { kind: "address", col: colLetters(cell.col), row: cell.row };
-          const segment = edgeSegment(address, cell.dir);
-          if (windowSegments.has(segKey(segment))) continue; // sight=all: light passes, whoever's wall it is
-          sightBlockers.push(segment);
-        }
-      }
-    } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
-      for (const p of e.placements) {
-        if (p.kind === "edge") sightBlockers.push(edgeSegment(p.at, p.dir));
-      }
-    }
-  }
+  // Shared with the UVTT exporter via walls.ts — one wall geometry, two views.
+  const sightBlockers: Segment[] = collectWalls(model).blockers;
 
   // Cells the pieces occupy — features, footprints, connectors, tokens — so
   // room labels can dodge them (they render BELOW the pieces; a label that
@@ -854,16 +779,6 @@ export function renderBattlemap(
 
 function hasOnlyRange(e: EntityNode): boolean {
   return e.placements.length > 0 && e.placements.every((p: Placement) => p.kind === "range");
-}
-
-function edgeSegment(at: Address, dir: string): Segment {
-  const o = cellOrigin(at);
-  switch (dir) {
-    case "n": return { a: { x: o.x, y: o.y }, b: { x: o.x + CELL, y: o.y } };
-    case "s": return { a: { x: o.x, y: o.y + CELL }, b: { x: o.x + CELL, y: o.y + CELL } };
-    case "w": return { a: { x: o.x, y: o.y }, b: { x: o.x, y: o.y + CELL } };
-    default: return { a: { x: o.x + CELL, y: o.y }, b: { x: o.x + CELL, y: o.y + CELL } };
-  }
 }
 
 /**

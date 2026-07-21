@@ -1,0 +1,103 @@
+/**
+ * The per-map block UI (issue #41): a toolbar — GM/player toggle that
+ * re-renders in place, SVG export, UVTT export (one .dd2vtt per level) —
+ * above the rendered map. All side effects (writing files, notices, raster)
+ * arrive injected through BlockIO, so this whole module tests against a
+ * plain DOM.
+ */
+
+import { parse } from "@chartdown/core";
+import { exportUvttSource, renderSource } from "@chartdown/render-svg";
+import { renderChartdownBlock, type RenderMode } from "./render";
+
+export interface BlockIO {
+  /** Write a text file next to the note; overwrite silently. */
+  writeFile(name: string, contents: string): Promise<void>;
+  notify(message: string): void;
+  /** Rasterize `region` of an SVG to a base64 PNG (no data-URI prefix). */
+  rasterize?(svg: string, region: { x: number; y: number; w: number; h: number }, outW: number, outH: number): Promise<string>;
+}
+
+export interface BlockOptions {
+  initialMode: RenderMode;
+  /** File base for exports, normally the map's doc id. */
+  baseName: string;
+  io: BlockIO;
+}
+
+const PIXELS_PER_GRID = 70;
+
+export function mountChartdownBlock(source: string, el: HTMLElement, opts: BlockOptions): void {
+  const doc = el.ownerDocument;
+  let mode: RenderMode = opts.initialMode;
+
+  const wrapper = doc.createElement("div");
+  wrapper.className = "chartdown-block";
+  const toolbar = doc.createElement("div");
+  toolbar.className = "chartdown-toolbar";
+  const modeBtn = doc.createElement("button");
+  modeBtn.className = "chartdown-mode-toggle";
+  const svgBtn = doc.createElement("button");
+  svgBtn.textContent = "Export SVG";
+  const uvttBtn = doc.createElement("button");
+  uvttBtn.textContent = "Export UVTT";
+  toolbar.append(modeBtn, svgBtn, uvttBtn);
+  const mapHost = doc.createElement("div");
+  mapHost.className = "chartdown-map-host";
+  wrapper.append(toolbar, mapHost);
+  el.appendChild(wrapper);
+
+  const rerender = (): void => {
+    mapHost.replaceChildren();
+    renderChartdownBlock(source, mapHost, mode);
+    modeBtn.textContent = mode === "gm" ? "GM view" : "Player view";
+    modeBtn.setAttribute("aria-pressed", String(mode === "gm"));
+  };
+
+  modeBtn.addEventListener("click", () => {
+    mode = mode === "gm" ? "player" : "gm";
+    rerender();
+  });
+
+  svgBtn.addEventListener("click", () => {
+    void (async () => {
+      const { svg } = renderSource(source, { mode });
+      const name = `${opts.baseName}${mode === "gm" ? "-gm" : ""}.svg`;
+      await opts.io.writeFile(name, svg);
+      opts.io.notify(`Chartdown: exported ${name}`);
+    })();
+  });
+
+  uvttBtn.addEventListener("click", () => {
+    void (async () => {
+      const parsed = parse(source).document;
+      const levels = parsed.levels.length > 0 ? parsed.levels : [""];
+      for (const level of levels) {
+        const result = exportUvttSource(source, {
+          mode,
+          ...(level ? { level } : {}),
+          pixelsPerGrid: PIXELS_PER_GRID,
+        });
+        if (!result.uvtt) {
+          const error = result.diagnostics.find((d) => d.severity === "error");
+          opts.io.notify(`Chartdown: ${error?.message ?? "UVTT export failed"}`);
+          return;
+        }
+        if (opts.io.rasterize && result.svg && result.imageRegion) {
+          const size = (result.uvtt["resolution"] as { map_size: { x: number; y: number } }).map_size;
+          result.uvtt["image"] = await opts.io.rasterize(
+            result.svg,
+            result.imageRegion,
+            size.x * PIXELS_PER_GRID,
+            size.y * PIXELS_PER_GRID,
+          );
+        }
+        const name = `${opts.baseName}${level ? `-${level}` : ""}.dd2vtt`;
+        await opts.io.writeFile(name, JSON.stringify(result.uvtt));
+        opts.io.notify(`Chartdown: exported ${name}`);
+      }
+    })();
+  });
+
+  rerender();
+}

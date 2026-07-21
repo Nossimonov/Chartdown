@@ -1,3 +1,20 @@
+.chartdown-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.chartdown-toolbar button {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.chartdown-mode-toggle[aria-pressed="true"] {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
 .chartdown-map {
   width: 100%;
   height: auto;
