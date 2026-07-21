@@ -922,6 +922,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             },
           ],
           "flags": [
+            "open",
             "nolabel",
           ],
           "gmOnly": false,

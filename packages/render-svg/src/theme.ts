@@ -65,6 +65,8 @@ export const DEFAULT_THEME_SOURCE: string = [
   `ink : fill=${INK}`,
   "light : fill=#ffd98a",
   "ledge : stroke=#6b5d4a",
+  "building : fill=#efe9da",
+  "building.open : fill=#e3ddc2 ; unroofed interiors read as outdoor ground (spec 06 par.3)",
   ...Object.entries(TERRAIN_FILLS).map(([word, fill]) => `${word} : fill=${fill}`),
   ...Object.entries(PATH_STROKES).map(
     ([word, s]) => `${word} : stroke=${s.stroke}${s.dash ? ` dash=${s.dash.replace(" ", ",")}` : ""}`,

@@ -17,3 +17,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0005](0005-open-vocabulary-archetypes.md) | The language knows no nouns: closed archetypes, open vocabulary, usage inference, theme-owned appearance | Accepted |
 | [0006](0006-battlemap-primitives-decisions.md) | No bestiary; elevation as emergent terraces; orthogonal footprints with renderer smoothing | Accepted |
 | [0007](0007-typescript-stack.md) | The reference implementation is TypeScript | Accepted |
+| [0008](0008-open-structures-declared.md) | Unroofed structures are declared with the `open` flag, not derived from the level stack | Accepted |

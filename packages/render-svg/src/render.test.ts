@@ -342,6 +342,32 @@ describe("levels (spec 06 §8)", () => {
     expect(gm).toContain(">alarm</text>"); // gm range entities stay zones
   });
 
+  it("open structures read as outdoor ground (spec 06 §3, ADR 0008)", () => {
+    const { svg, diagnostics } = renderSource(example("fairwater-manor"), { level: "ground" });
+    expect(svg).toContain('fill="#e3ddc2"'); // the courtyard's building.open fill
+    expect(svg).toContain('fill="#efe9da"'); // roofed rooms keep the interior tone
+    expect(diagnostics.filter((d) => d.severity === "warning" && d.message.includes("open"))).toEqual([]);
+  });
+
+  it("a floor above open ground warns (open wants air above)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 6x6",
+      "levels: top base",
+      "level: base",
+      "[structures]",
+      'building yard "The Yard" : A1..D4 open',
+      "[terrain top]",
+      "air : area A1..F6",
+      "roof : area A1..B2 difficult",
+    ].join("\n");
+    const { diagnostics } = renderSource(source, {});
+    const warning = diagnostics.find((d) => d.severity === "warning" && d.message.includes("open to the sky"));
+    expect(warning?.message).toContain("The Yard");
+    expect(warning?.message).toContain("roof");
+    expect(warning?.message).toContain("A1");
+  });
+
   it("room labels dodge the pieces (the kitchen label clears its table)", () => {
     const { svg } = renderSource(example("fairwater-manor"), { level: "ground" });
     const m = /<text x="[\d.]+" y="([\d.]+)"[^>]*>Kitchen<\/text>/.exec(svg);

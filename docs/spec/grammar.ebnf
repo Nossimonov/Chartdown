@@ -115,8 +115,9 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
                | compass ;
 
 (* ---- reserved generic parameters and flags (usable on any content line) ----
-   flags:  hidden, nolabel, difficult, seen, unexplored, ruined, overturned (state flags per vocab)
-   pairs:  gm=, link=, detail=, facing=, size=, side=, width=, light=, elevation=, key=
+   flags:  hidden, nolabel, difficult, seen, unexplored, ruined, overturned (state flags per vocab),
+           drop (fall-edge boundary, spec 06 §5), open (unroofed structure, spec 06 §3)
+   pairs:  gm=, link=, detail=, facing=, size=, side=, width=, light=, elevation=, key=, level=, to=, at=
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
    non-resolving subject with placement = new GM-only entity; otherwise error. *)
 

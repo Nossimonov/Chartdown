@@ -6,13 +6,13 @@
  * Runtime dependencies: @chartdown/core only (ADR 0007).
  */
 
-import { parse, type Diagnostic, type DocumentNode, type ParseOptions } from "@chartdown/core";
-import { battlemapFrame, renderBattlemap } from "./battlemap";
+import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type ParseOptions, type Placement } from "@chartdown/core";
+import { battlemapFrame, colLetters, renderBattlemap } from "./battlemap";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildModel, type RenderMode } from "./model";
 import { renderRegion } from "./region";
 import { INK, PAPER, Theme } from "./theme";
-import { el, fmt, text } from "./util";
+import { colToNumber, el, fmt, text } from "./util";
 
 export interface RenderOptions {
   /** Fail-closed default per spec 01 §6. */
@@ -44,6 +44,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const levels = doc.levels.length > 0 ? doc.levels : [doc.defaultLevel];
     const selected = options.level !== undefined ? levels.filter((l) => l === options.level) : levels;
     const panelLevels = selected.length > 0 ? selected : levels;
+    if (levels.length > 1) warnFlooredOpenStructures(model, levels, diagnostics);
     const GAP = 18;
     w = frame.w;
     h = panelLevels.length * frame.h + (panelLevels.length - 1) * GAP;
@@ -115,6 +116,72 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     body.join("") +
     `</svg>`;
   return { svg, diagnostics };
+}
+
+/** Cells an entity's placements cover, as "col:row" keys (addresses, ranges, and area shapes). */
+function cellKeys(e: EntityNode): Set<string> {
+  const keys = new Set<string>();
+  const walk = (ps: Placement[]): void => {
+    for (const p of ps) {
+      if (p.kind === "address") {
+        keys.add(`${colToNumber(p.col)}:${p.row}`);
+      } else if (p.kind === "range") {
+        addRange(p);
+      } else if (p.kind === "shape" && p.shape === "area") {
+        walk(p.args);
+      }
+    }
+  };
+  const addRange = (r: AddressRange): void => {
+    const c1 = Math.min(colToNumber(r.from.col), colToNumber(r.to.col));
+    const c2 = Math.max(colToNumber(r.from.col), colToNumber(r.to.col));
+    const r1 = Math.min(r.from.row, r.to.row);
+    const r2 = Math.max(r.from.row, r.to.row);
+    for (let c = c1; c <= c2; c++) for (let row = r1; row <= r2; row++) keys.add(`${c}:${row}`);
+  };
+  walk(e.placements);
+  return keys;
+}
+
+/**
+ * Spec 06 §3 (issue #33): an `open` structure's sky cells — its footprint minus
+ * sibling structures on its own level — must see `air` on the level above.
+ * A floor above open ground is a contradiction worth flagging, not fixing.
+ */
+function warnFlooredOpenStructures(
+  model: { entities: EntityNode[]; chainOf(word: string | null): string[] },
+  levels: string[],
+  diagnostics: Diagnostic[],
+): void {
+  for (const e of model.entities) {
+    if (e.archetype !== "structure" || !e.flags.includes("open")) continue;
+    const li = levels.indexOf(e.level ?? "");
+    if (li <= 0) continue; // topmost level: nothing but sky above
+    const above = levels[li - 1]!;
+    const sky = cellKeys(e);
+    for (const sib of model.entities) {
+      if (sib === e || sib.level !== e.level || sib.archetype !== "structure") continue;
+      for (const c of cellKeys(sib)) sky.delete(c);
+    }
+    for (const other of model.entities) {
+      if (other.level !== above) continue;
+      const floors =
+        other.archetype === "structure" ||
+        (other.section === "terrain" && !model.chainOf(other.typeWord).includes("air"));
+      if (!floors) continue;
+      const cells = cellKeys(other);
+      const hit = [...sky].find((c) => cells.has(c));
+      if (hit === undefined) continue;
+      const [col, row] = hit.split(":").map(Number) as [number, number];
+      const openName = e.name ?? e.ids[0] ?? e.typeWord ?? "structure";
+      const floorName = other.name ?? other.ids[0] ?? other.typeWord ?? "entity";
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `'${openName}' is open to the sky, but '${floorName}' floors it over on level ${above} (first at ${colLetters(col)}${row}) — open ground wants air above (spec 06 §3)`,
+      });
+    }
+  }
 }
 
 export interface RenderSourceResult {

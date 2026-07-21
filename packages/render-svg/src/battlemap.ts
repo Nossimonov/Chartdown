@@ -620,7 +620,11 @@ export function renderBattlemap(
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
     if (!range) return;
     const r = rangeRect(range);
-    const parts: string[] = [titleEl, el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "#efe9da", opacity: 0.8 })];
+    // The `open` flag (spec 06 §3, #33): walls without a ceiling. The interior
+    // reads as outdoor ground, themable as a state (`building.open : fill=…`).
+    const open = e.flags.includes("open");
+    const fill = model.theme.prop(model.chainOf(e.typeWord), "fill", open ? { state: "open" } : {}) ?? "#efe9da";
+    const parts: string[] = [titleEl, el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.8 })];
 
     const ruinedSides = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
     const sides: Record<string, { x1: number; y1: number; x2: number; y2: number }> = {
@@ -875,7 +879,7 @@ function extendToFrame(pts: XY[], addresses: Address[], frame: Frame): void {
   fix(-1);
 }
 
-function colLetters(n: number): string {
+export function colLetters(n: number): string {
   let s = "";
   while (n > 0) {
     const rem = (n - 1) % 26;

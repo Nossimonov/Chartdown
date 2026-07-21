@@ -16,7 +16,7 @@ forest : area A1..B12
 grass : area X1..Z12
 
 [structures]
-building courtyard "The Courtyard" : D2..V10 nolabel
+building courtyard "The Courtyard" : D2..V10 open nolabel
   door : M10.s
 ; the manor block: hall, solar, and barracks share party walls along the
 ; north range; the kitchen tucks under the hall against the west wall
