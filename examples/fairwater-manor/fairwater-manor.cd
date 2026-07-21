@@ -5,6 +5,8 @@ chartdown: 0.1
 grid: square 26x20          ; columns A-Z, rows 1-20
 scale: 5ft
 numbers: on
+levels: upper ground cellar  ; physical order, topmost first
+level: ground                ; unqualified sections are the ground floor
 
 [terrain]
 river fairwater "The Fairwater" : path A14 H14 P15 Z15 width=2
@@ -37,8 +39,19 @@ building gatehouse "The Gatehouse" : L11..N12
   window : L11.w
   window : N11.e
 
+[structures upper]
+building chambers "The Lord's Chambers" : D2..L6
+  door : L4.e                ; onto the wall-walk landing
+  window : D3.w
+  window : D6.w
+
+[structures cellar]
+building undercroft "The Undercroft" : E7..K10
+
 [features]
 campfire hearth : F4 light=25ft
+stairs : K3 to=upper         ; up from the hall
+ladder : F9 to=cellar        ; down from the kitchen
 lantern gatelamp : N12 light=15ft
 well : N8
 statue : K8
@@ -47,6 +60,21 @@ table : F8
 barrel : E9
 chest strongbox : P3
 crates : T4
+
+[vocab]
+ladder : stairs              ; a themable connector kind of its own
+
+[features upper]
+lantern : J4 light=15ft
+table : E3
+
+[features cellar]
+barrel : G8
+barrel : H9
+crates : J8
+
+[tokens cellar]
+prisoner "Old Merek" : I9 hidden
 
 [tokens]
 guards g1 g2 : M12 M16 side=foe
@@ -59,3 +87,4 @@ party start : K19..O20
 trigger alarm : L10..N10 "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds."
 strongbox : "Locked (DC 15). Deeds to the mill, 120 gp, and a letter naming the Whisper's employer."
 "Lord Fairwater" : "Knows he is a target; will bargain."
+"Old Merek" : "The old steward, locked away for what he saw. Knows the Whisper's face."

@@ -95,6 +95,8 @@ export interface EntityNode {
   texts: string[];
   details: DetailNode[];
   gmOnly: boolean;
+  /** Resolved level (spec 06 §8): `level=` param > section qualifier > default. */
+  level: string;
   line: number;
 }
 
@@ -165,6 +167,8 @@ export type EntryNode =
 export interface SectionNode {
   kind: "section";
   name: string;
+  /** Level qualifier (spec 01 §3 / spec 06 §8): `[structures upper]`. */
+  level: string | null;
   known: boolean;
   entries: EntryNode[];
   line: number;
@@ -191,5 +195,9 @@ export interface DocumentNode {
   mapType: string;
   header: HeaderEntry[];
   grid: GridSpec | null;
+  /** Declared levels, physical order topmost first (spec 06 §8); empty = single implicit level. */
+  levels: string[];
+  /** The default level for unqualified content ("" when no levels are declared). */
+  defaultLevel: string;
   sections: SectionNode[];
 }

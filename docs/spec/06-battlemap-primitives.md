@@ -111,7 +111,16 @@ ford : on redford on tollroad difficult
 
 At battlemap scale, table legibility outranks self-description: **fallback word-labels render as hover tooltips**, not visible text (spec 04 §4's chain-terminal label is satisfied by the tooltip). Visible text labels are reserved for display names, token identifiers, and zones; `nolabel` opts any of those out. Region-scale conduct is unchanged — an anonymous generic marker there carries its word as text (spec 04 §4).
 
-## 8. Export note (non-normative)
+## 8. Levels
+
+*(Added from proposal [#31](https://github.com/Nossimonov/Chartdown/issues/31).)* Multi-level structures are **discrete floors**, not continuous height (`elevation=` remains terraces *within* a level):
+
+- **`levels:`** declares the floors in **physical order, topmost first**: `levels: upper ground cellar`. The optional **`level:`** header names the default level for unqualified content (else the first listed). Documents without `levels:` are single-level; nothing changes.
+- **Section qualifiers place whole blocks**: `[structures upper]`, `[tokens cellar]`; the generic parameter `level=<word>` overrides per entity. Undeclared level words fail loud, as does a qualifier in a document with no `levels:`.
+- **Connectors**: *any feature carrying `to=<level>`* connects levels — `stairs` and `ramp` are ordinary stdlib words, and `ladder : stairs` (or any word at all) works identically. Landings default to the same cell; `at=<cell>` places a differing landing. The destination panel shows the reciprocal landing automatically unless an explicit connector is declared at that cell. Connectors expose the **reserved auto-states `up` and `down`** (derived from level order) to themes — `ladder.up : glyph=…` — through the ordinary spec 08 machinery. A `to=` naming an undeclared level fails loud.
+- **Rendering**: one panel per level in `levels:` order (topmost first — the module floor-plan sheet), each titled with its level word, sharing the document's grid. Light, visibility, crossings, and the GM/player split compute per level. Connector annotations (direction and destination) are navigational and render even under `labels: none`. Renderer/CLI options select a single level.
+
+## 9. Export note (non-normative)
 
 The archetype facets map 1:1 onto Universal VTT: barrier and wall geometry → `line_of_sight`; `opening` with its `passes`/`sight` facets → `portals` (closed state, window-ness); `light=` → `lights`; grid and `scale:` → `resolution`. Elevation flattens on UVTT export (ledges bake into the rendered image; walls are unaffected); richer multi-level export targets (e.g. Foundry scene levels) are ecosystem-phase work. This mapping is why the triad is modeled first-class: export is a transform, not an interpretation.
 

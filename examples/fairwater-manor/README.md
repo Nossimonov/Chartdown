@@ -6,9 +6,11 @@
 
 A walled manor on the King's Road where it bridges the Fairwater. The road ends at the gatehouse — two doors, so it's a killing box — which opens into a walled courtyard holding four distinct rooms: the Great Hall (hearth-light striping out of its western windows), the Kitchen below it, the Solar, and the Barracks. Guards on the bridge and at the gate; Lord Fairwater at his high table; and in GM view, an assassin already in the Solar, an alarm trigger inside the gate, and what's really in that locked strongbox.
 
+And it's three stories: the Lord's Chambers above the Great Hall (stairs up from the hall), and the Undercroft below the kitchen (a `ladder : stairs` derivation — themable as its own connector kind) — where, in GM view, the old steward Old Merek is locked away with what he knows.
+
 ## What this map flexes
 
-Nearly the whole battlemap vocabulary in ~45 lines: a **derived bridge** (`bridge : on fairwater on kingsroad` — the road carried over the water at their computed intersection, first rendered use of the bridge branch), nested structures (courtyard enclosing hall and wing, gatehouse straddling the road with doors north *and* south), windows, declared mud banks, visibility-clipped lights (the hearth glows through the hall's doorway, not its walls), grid coordinates, token sides, a staging zone, and the fail-closed GM layer (hidden assassin, trigger zone, attachment notes on the chest and the lord).
+Nearly the whole battlemap vocabulary, including **multi-level structures** (spec 06 §8: `levels:` in physical order, section qualifiers like `[structures upper]`, connectors via `to=` with automatic reciprocal landings, one panel per floor) plus: a **derived bridge** (`bridge : on fairwater on kingsroad` — the road carried over the water at their computed intersection, first rendered use of the bridge branch), nested structures (courtyard enclosing hall and wing, gatehouse straddling the road with doors north *and* south), windows, declared mud banks, visibility-clipped lights (the hearth glows through the hall's doorway, not its walls), grid coordinates, token sides, a staging zone, and the fail-closed GM layer (hidden assassin, trigger zone, attachment notes on the chest and the lord).
 
 ## Renders
 

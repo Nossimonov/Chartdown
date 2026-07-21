@@ -285,6 +285,50 @@ describe("elevation ledges (spec 06 §5)", () => {
   });
 });
 
+describe("levels (spec 06 §8)", () => {
+  it("the manor renders three titled panels", () => {
+    const { svg, diagnostics } = renderSource(example("fairwater-manor"), { mode: "gm" });
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(svg).toContain("— upper —");
+    expect(svg).toContain("— ground —");
+    expect(svg).toContain("— cellar —");
+  });
+
+  it("connectors annotate direction and destination; landings render reciprocally", () => {
+    const { svg } = renderSource(example("fairwater-manor"));
+    expect(svg).toContain("▲ upper");
+    expect(svg).toContain("▼ cellar");
+    expect(svg).toContain("▼ ground"); // reciprocal landing on the upper panel
+    expect(svg).toContain("▲ ground"); // reciprocal landing on the cellar panel
+  });
+
+  it("the GM/player split computes per level", () => {
+    const player = renderSource(example("fairwater-manor"), { mode: "player" }).svg;
+    const gm = renderSource(example("fairwater-manor"), { mode: "gm" }).svg;
+    expect(player).not.toContain("Old Merek");
+    expect(gm).toContain("Old Merek");
+  });
+
+  it("undeclared levels fail loud", () => {
+    const src = "map: battlemap\ngrid: square 8x8\nscale: 5ft\nlevels: upper ground\n[features attic]\ncrates : B2\n";
+    const { diagnostics } = renderSource(src);
+    expect(diagnostics.map((d) => d.message).join()).toMatch(/unknown level 'attic'/);
+  });
+
+  it("qualifiers and to= without levels: fail loud", () => {
+    const qualified = "map: battlemap\ngrid: square 8x8\nscale: 5ft\n[features upper]\ncrates : B2\n";
+    expect(renderSource(qualified).diagnostics.map((d) => d.message).join()).toMatch(/requires a levels: declaration/);
+    const connector = "map: battlemap\ngrid: square 8x8\nscale: 5ft\n[features]\nstairs : B2 to=cellar\n";
+    expect(renderSource(connector).diagnostics.map((d) => d.message).join()).toMatch(/requires a levels: declaration/);
+  });
+
+  it("themes can restyle connector kinds and directions (ladder.down)", () => {
+    const theme = "[theme]\nladder.down : glyph=rungs\n[glyphs]\nrungs : \"M-5,-8 L-5,8 M5,-8 L5,8 M-5,-3 L5,-3 M-5,3 L5,3\"\n";
+    const { svg } = renderSource(example("fairwater-manor"), { theme });
+    expect(svg).toContain("M-5,-8 L-5,8");
+  });
+});
+
 describe("snapshots", () => {
   for (const name of ["redford-crossing", "brenmark", "vessany", "gumdrop-vale"]) {
     it(`${name} SVG snapshot is stable`, () => {

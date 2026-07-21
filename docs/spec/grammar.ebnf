@@ -21,13 +21,16 @@ map-type       = "battlemap" | "hexcrawl" | "region" ;
 header-line    = header-key , ":" , predicate , EOL ;
 header-key     = "chartdown" | "id" | "grid" | "scale" | "extent" | "seed"
                | "use" | "theme" | "labels" | "legend" | "scale-bar"
-               | "compass" | "numbers" ;             (* "use" is repeatable; unknown keys warn *)
+               | "compass" | "numbers" | "levels" | "level" ;
+                 (* "use" is repeatable; unknown keys warn.
+                    levels: physical order topmost first; level: the default *)
 
-section        = "[" , section-name , "]" , EOL , { content-line } ;
+section        = "[" , section-name , [ " " , word ] , "]" , EOL , { content-line } ;
 section-name   = word ;                              (* known names per map type, spec 05/06/07;
                                                         universal: vocab, gm, labels;
                                                         x- prefix = silent extension namespace;
-                                                        otherwise unknown warns *)
+                                                        otherwise unknown warns.
+                                                        optional qualifier token = level (spec 06 §8) *)
 content-line   = line | detail-line | hex-ledger-line | vocab-line | label-line ;
 line           = subject , ":" , predicate , EOL ;
 detail-line    = INDENT , line ;                     (* structure details only — spec 06 §3 *)

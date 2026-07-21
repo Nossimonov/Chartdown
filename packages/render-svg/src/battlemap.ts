@@ -47,7 +47,20 @@ function measureToCells(measure: string, model: Model): number {
   return measureToNumber(measure) / scale;
 }
 
-export function renderBattlemap(model: Model, body: string[], frame: Frame, diagnostics: Diagnostic[]): void {
+export interface LevelContext {
+  level: string;
+  allEntities: EntityNode[];
+  /** Physical order, topmost first (spec 06 §8). */
+  levels: string[];
+}
+
+export function renderBattlemap(
+  model: Model,
+  body: string[],
+  frame: Frame,
+  diagnostics: Diagnostic[],
+  levelCtx?: LevelContext,
+): void {
   const layers = {
     areas: [] as string[], paths: [] as string[], crossings: [] as string[], grid: [] as string[],
     structures: [] as string[], openings: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
@@ -186,6 +199,26 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
   }
 
   for (const pending of pendingCrossings) renderCrossing(pending);
+
+  // Reciprocal landings (spec 06 §8): connectors on other levels targeting
+  // this one show their landing here automatically, unless an explicit
+  // connector already occupies the cell.
+  if (levelCtx) {
+    for (const source of levelCtx.allEntities) {
+      const to = pairOf(source.pairs, "to");
+      if (to !== levelCtx.level || source.level === levelCtx.level) continue;
+      const atValue = pairOf(source.pairs, "at");
+      const landing = atValue ? parseCell(atValue) : source.placements.find((p): p is Address => p.kind === "address");
+      if (!landing) continue;
+      const occupied = model.entities.some(
+        (e) => pairOf(e.pairs, "to") !== undefined &&
+          e.placements.some((p) => p.kind === "address" && p.col === landing.col && p.row === landing.row),
+      );
+      if (occupied) continue;
+      const c = cellCenter(landing);
+      renderConnector(source, model.chainOf(source.typeWord), c, source.level, [], layers.features, undefined);
+    }
+  }
 
   // Implied-crossing warnings (spec 06 §6): water × road overlap with no crossing.
   for (const water of pathRecords.filter((p) => p.isWater)) {
@@ -422,6 +455,53 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     return `${colLetters(col)}${row}`;
   }
 
+  function parseCell(value: string): Address | null {
+    const m = /^([A-Z]+)(\d+)$/.exec(value);
+    return m ? { kind: "address", col: m[1]!, row: Number(m[2]!) } : null;
+  }
+
+  /**
+   * A level connector (spec 06 §8): themed via the word's chain with the
+   * reserved up/down auto-state (`ladder.up : glyph=…`); default render is a
+   * stair glyph. The direction/destination annotation is navigational and
+   * renders even under labels: none.
+   */
+  function renderConnector(
+    e: EntityNode,
+    chain: string[],
+    c: XY,
+    to: string,
+    parts: string[],
+    into: string[],
+    anchor: string | undefined,
+  ): void {
+    if (!levelCtx) return;
+    const currentIdx = levelCtx.levels.indexOf(levelCtx.level);
+    const targetIdx = levelCtx.levels.indexOf(to);
+    const up = targetIdx !== -1 && targetIdx < currentIdx;
+    const ink = model.theme.surface("ink", "fill", INK);
+    const themed =
+      model.theme.glyphFor(chain, c.x, c.y, { state: up ? "up" : "down" }) ?? model.theme.glyphFor(chain, c.x, c.y);
+    if (themed) {
+      parts.push(
+        `<path d="${themed}" transform="translate(${fmt(c.x)} ${fmt(c.y)}) scale(0.9)" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`,
+      );
+    } else {
+      // Default stair glyph: three treads narrowing toward the destination.
+      for (let i = 0; i < 3; i++) {
+        const half = 10 - i * 3;
+        const y = c.y + (up ? 6 - i * 6 : -6 + i * 6);
+        parts.push(el("line", { x1: c.x - half, y1: y, x2: c.x + half, y2: y, stroke: ink, "stroke-width": 2.2 }));
+      }
+    }
+    parts.push(
+      text(`${up ? "▲" : "▼"} ${to}`, {
+        x: c.x, y: c.y + CELL * 0.72, "font-size": 7.5, fill: ink, "text-anchor": "middle", "font-family": "sans-serif",
+      }),
+    );
+    into.push(el("g", { id: anchor }, ...parts));
+  }
+
   /** A path band as clipPath geometry: one quad per segment (butt caps). */
   function bandQuads(record: PathRecord): string {
     const half = record.width / 2;
@@ -582,6 +662,13 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     if (!address) return;
     const c = cellCenter(address);
     const parts: string[] = [titleEl];
+
+    // Level connectors (spec 06 §8): any feature with to=<level>.
+    const to = pairOf(e.pairs, "to");
+    if (to !== undefined && levelCtx) {
+      renderConnector(e, model.chainOf(e.typeWord), c, to, parts, into, anchor);
+      return;
+    }
     const light = pairOf(e.pairs, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;

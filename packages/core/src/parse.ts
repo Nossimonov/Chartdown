@@ -43,6 +43,7 @@ const MAP_TYPES = new Set(["battlemap", "hexcrawl", "region"]);
 const KNOWN_HEADER_KEYS = new Set([
   "map", "chartdown", "id", "grid", "scale", "extent", "seed",
   "use", "theme", "labels", "legend", "scale-bar", "compass", "numbers",
+  "levels", "level",
 ]);
 const UNIVERSAL_SECTIONS = new Set(["vocab", "gm", "labels"]);
 const SECTIONS_BY_TYPE: Record<string, Set<string>> = {
@@ -197,6 +198,8 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     mapType: "",
     header: [],
     grid: null,
+    levels: [],
+    defaultLevel: "",
     sections: [],
   };
 
@@ -253,12 +256,28 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       }
     } else if (key === "id") {
       document.docId = value;
+    } else if (key === "levels") {
+      document.levels = value.split(/\s+/).filter(Boolean);
+      if (document.levels.length < 2) diagnostics.push(error(raw.line, "levels: declares at least two levels, physical order topmost first (spec 06 §8)"));
+    } else if (key === "level") {
+      document.defaultLevel = value;
     } else if (!KNOWN_HEADER_KEYS.has(key)) {
       diagnostics.push(warning(raw.line, `unknown header key '${key}'`));
     }
   }
   if (!sawMap) diagnostics.push(error(lines[0]?.line ?? 1, "missing required 'map:' header line"));
   if (document.docId === "document" && document.title) document.docId = slugify(document.title);
+
+  // Level defaults and validation (spec 06 §8).
+  if (document.levels.length > 0) {
+    if (document.defaultLevel === "") document.defaultLevel = document.levels[0]!;
+    else if (!document.levels.includes(document.defaultLevel)) {
+      diagnostics.push(error(document.header.find((h) => h.key === "level")?.line ?? 1, `default level '${document.defaultLevel}' is not declared in levels:`));
+    }
+  } else if (document.defaultLevel !== "") {
+    diagnostics.push(error(document.header.find((h) => h.key === "level")?.line ?? 1, "level: requires a levels: declaration"));
+  }
+  const validLevel = (word: string): boolean => document.levels.includes(word);
 
   const knownSections = SECTIONS_BY_TYPE[document.mapType] ?? new Set<string>();
 
@@ -278,13 +297,23 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const sectionMatch = /^\[(.+)\]$/.exec(raw.text);
     if (sectionMatch) {
       finishSection();
-      const name = sectionMatch[1]!;
+      const words = sectionMatch[1]!.trim().split(/\s+/);
+      const name = words[0]!;
+      const qualifier = words[1] ?? null;
+      if (words.length > 2) diagnostics.push(error(raw.line, "a section header takes at most one qualifier token (spec 01 §3)"));
+      if (qualifier !== null) {
+        if (document.levels.length === 0) {
+          diagnostics.push(error(raw.line, `section qualifier '${qualifier}' requires a levels: declaration (spec 06 §8)`));
+        } else if (!validLevel(qualifier)) {
+          diagnostics.push(error(raw.line, `unknown level '${qualifier}' — declared levels: ${document.levels.join(" ")}`));
+        }
+      }
       const known = knownSections.has(name) || UNIVERSAL_SECTIONS.has(name);
       skippingUnknown = !known;
       if (!known && !name.startsWith("x-")) {
         diagnostics.push(warning(raw.line, `unknown section [${name}] — contents ignored`));
       }
-      section = { kind: "section", name, known, entries: [], line: raw.line };
+      section = { kind: "section", name, level: qualifier, known, entries: [], line: raw.line };
       continue;
     }
     if (!section) {
@@ -364,6 +393,16 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       archetypeSource = inferred.source;
     }
 
+    // Level resolution and validation (spec 06 §8).
+    const levelParam = predicate.pairs.find((p) => p.key === "level")?.value;
+    const toParam = predicate.pairs.find((p) => p.key === "to")?.value;
+    if (levelParam !== undefined && !validLevel(levelParam)) {
+      diags.push(error(raw.line, document.levels.length === 0 ? "level= requires a levels: declaration (spec 06 §8)" : `unknown level '${levelParam}' — declared levels: ${document.levels.join(" ")}`));
+    }
+    if (toParam !== undefined && !validLevel(toParam)) {
+      diags.push(error(raw.line, document.levels.length === 0 ? "to= requires a levels: declaration (spec 06 §8)" : `unknown level '${toParam}' — declared levels: ${document.levels.join(" ")}`));
+    }
+
     const entity: EntityNode = {
       kind: "entity",
       section: into.name,
@@ -378,6 +417,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       texts: predicate.texts,
       details: [],
       gmOnly: gmOnly || predicate.flags.includes("hidden"),
+      level: levelParam ?? into.level ?? document.defaultLevel,
       line: raw.line,
     };
     table.add(subject.ids, subject.name, raw.line, diags);

@@ -19,6 +19,8 @@ export interface RenderOptions {
   mode?: RenderMode;
   /** Theme document source(s), layered over the default in order (spec 08 §5). */
   theme?: string | string[];
+  /** Render a single level of a multi-level battlemap (spec 06 §8). */
+  level?: string;
 }
 
 export interface RenderResult {
@@ -39,10 +41,24 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
 
   if (doc.mapType === "battlemap") {
     const frame = battlemapFrame(model);
+    const levels = doc.levels.length > 0 ? doc.levels : [doc.defaultLevel];
+    const selected = options.level !== undefined ? levels.filter((l) => l === options.level) : levels;
+    const panelLevels = selected.length > 0 ? selected : levels;
+    const GAP = 18;
     w = frame.w;
-    h = frame.h;
+    h = panelLevels.length * frame.h + (panelLevels.length - 1) * GAP;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
-    renderBattlemap(model, body, frame, diagnostics);
+    panelLevels.forEach((level, index) => {
+      const panelModel = { ...model, entities: model.entities.filter((e) => e.level === level) };
+      const panelBody: string[] = [];
+      renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, levels });
+      if (panelLevels.length > 1) {
+        panelBody.push(
+          text(`— ${level} —`, { x: frame.w - 14, y: 18, "font-size": 11, "font-style": "italic", fill: INK, "text-anchor": "end", "font-family": "sans-serif" }),
+        );
+      }
+      body.push(`<g transform="translate(0 ${fmt(index * (frame.h + GAP))})">${panelBody.join("")}</g>`);
+    });
   } else if (doc.mapType === "hexcrawl") {
     const frame = hexFrame(model);
     w = frame.w;
