@@ -53,20 +53,31 @@ Note the `ford` line: it never states a position. It's placed `on` the river and
 
 ## Try it
 
+**No install** — the [playground](https://nossimonov.github.io/Chartdown/) runs entirely in your browser.
+
+**CLI** ([`@chartdown/cli`](https://www.npmjs.com/package/@chartdown/cli) on npm):
+
 ```sh
-git clone https://github.com/Nossimonov/Chartdown.git && cd Chartdown
-npm install
-npm run build
-
-# Render an example battlemap (player view), then the GM view with secrets:
-node packages/cli/dist/cli.js render examples/redford-crossing/redford-crossing.cd -o redford.svg
-node packages/cli/dist/cli.js render examples/redford-crossing/redford-crossing.cd --mode gm -o redford-gm.svg
-
-# Validate a document (fail-loud diagnostics, exit 1 on errors):
-node packages/cli/dist/cli.js check examples/vessany/vessany.cd
+npx @chartdown/cli render map.cd -o map.svg              # player view
+npx @chartdown/cli render map.cd --mode gm -o map-gm.svg # with GM secrets
+npx @chartdown/cli check map.cd                          # fail-loud validation
 ```
 
-For the embedding path — the one this project exists for — open [demo/index.html](demo/index.html) after building: a plain HTML page whose fenced ` ```chartdown ` block renders in place via one script tag.
+**Embed in any web page** — the path this project exists for. One script tag renders every fenced ` ```chartdown ` block in place, entirely client-side:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@chartdown/browser@0.1/dist/chartdown.browser.js" defer></script>
+```
+
+**As a library** ([`@chartdown/core`](https://www.npmjs.com/package/@chartdown/core) + [`@chartdown/render-svg`](https://www.npmjs.com/package/@chartdown/render-svg), ESM with TypeScript types, zero runtime dependencies):
+
+```js
+import { renderSource } from "@chartdown/render-svg";
+
+const { svg, diagnostics } = renderSource(source, { mode: "gm" });
+```
+
+Working from a clone instead: `npm install && npm run build`, then `node packages/cli/dist/cli.js …` — [demo/index.html](demo/index.html) shows the embed against the local build.
 
 ## Project status
 
@@ -78,7 +89,7 @@ For the embedding path — the one this project exists for — open [demo/index.
 - **Themes as Chartdown documents**: appearance lives in swappable theme files, not in the map
 - **Tooling**: a CLI (`render`, `check`), a browser embed that renders fenced ` ```chartdown ` blocks in place, and the [client-side playground](https://nossimonov.github.io/Chartdown/)
 
-Not yet: npm packages (coming — currently build from source), UVTT export, editor integrations. See the [roadmap](docs/roadmap.md) for the plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
+All four packages are [on npm under `@chartdown`](https://www.npmjs.com/org/chartdown). Not yet: UVTT export, editor integrations (Obsidian, remark/markdown-it). See the [roadmap](docs/roadmap.md) for the plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
 
 ## Repository layout
 
