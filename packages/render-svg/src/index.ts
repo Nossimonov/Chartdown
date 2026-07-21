@@ -6,7 +6,7 @@
  * Runtime dependencies: @chartdown/core only (ADR 0007).
  */
 
-import { parse, type DocumentNode, type ParseOptions } from "@chartdown/core";
+import { parse, type Diagnostic, type DocumentNode, type ParseOptions } from "@chartdown/core";
 import { battlemapFrame, renderBattlemap } from "./battlemap";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildModel, type RenderMode } from "./model";
@@ -19,10 +19,17 @@ export interface RenderOptions {
   mode?: RenderMode;
 }
 
-export function render(doc: DocumentNode, options: RenderOptions = {}): string {
+export interface RenderResult {
+  svg: string;
+  /** Render-time diagnostics (e.g. the implied-crossing warning, spec 06 §6). */
+  diagnostics: Diagnostic[];
+}
+
+export function render(doc: DocumentNode, options: RenderOptions = {}): RenderResult {
   const mode = options.mode ?? "player";
   const model = buildModel(doc, mode);
   const body: string[] = [];
+  const diagnostics: Diagnostic[] = [];
 
   let w = 860;
   let h = 620;
@@ -32,7 +39,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): string {
     w = frame.w;
     h = frame.h;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: PAPER }));
-    renderBattlemap(model, body, frame);
+    renderBattlemap(model, body, frame, diagnostics);
   } else if (doc.mapType === "hexcrawl") {
     const frame = hexFrame(model);
     w = frame.w;
@@ -84,23 +91,25 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): string {
     }
   }
 
-  return (
+  const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fmt(w)} ${fmt(h)}" width="${fmt(w)}" height="${fmt(h)}" font-family="sans-serif">` +
     body.join("") +
-    `</svg>`
-  );
+    `</svg>`;
+  return { svg, diagnostics };
 }
 
 export interface RenderSourceResult {
   svg: string;
   document: DocumentNode;
-  diagnostics: ReturnType<typeof parse>["diagnostics"];
+  /** Parse diagnostics followed by render diagnostics. */
+  diagnostics: Diagnostic[];
 }
 
 /** Convenience: parse + render in one call (best-effort on parse errors). */
 export function renderSource(source: string, options: RenderOptions & ParseOptions = {}): RenderSourceResult {
-  const { document, diagnostics } = parse(source, options.libraries ? { libraries: options.libraries } : {});
-  return { svg: render(document, options.mode ? { mode: options.mode } : {}), document, diagnostics };
+  const parsed = parse(source, options.libraries ? { libraries: options.libraries } : {});
+  const rendered = render(parsed.document, options.mode ? { mode: options.mode } : {});
+  return { svg: rendered.svg, document: parsed.document, diagnostics: [...parsed.diagnostics, ...rendered.diagnostics] };
 }
 
 export type { RenderMode } from "./model";

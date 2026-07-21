@@ -90,6 +90,40 @@ describe("furniture and grid (spec 07 §4)", () => {
   });
 });
 
+describe("crossings and layering (spec 06 §6)", () => {
+  const base = [
+    "map: battlemap",
+    "grid: square 10x10",
+    "scale: 5ft",
+    "[terrain]",
+    "river : path A5 J5 width=1",
+    "road : path E1 E10",
+  ];
+
+  it("a road×river overlap with no crossing warns about the implied bridge", () => {
+    const { diagnostics } = renderSource(base.join("\n"));
+    expect(diagnostics.map((d) => d.message).join()).toMatch(/crosses 'river' at E5 with no ford or bridge/);
+  });
+
+  it("a ford covering the overlap silences the warning and draws above the road", () => {
+    const src = [...base, "ford : E5 difficult"].join("\n");
+    const { svg, diagnostics } = renderSource(src);
+    expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+    expect(svg.indexOf("#c3a878")).toBeLessThan(svg.indexOf("#c2d4dc")); // road stroke before ford cells
+  });
+
+  it("a bridge also satisfies the crossing rule", () => {
+    const src = [...base, "bridge : E5"].join("\n");
+    const { diagnostics } = renderSource(src);
+    expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+  });
+
+  it("the corpus renders warning-free (Redford's ford covers its crossing)", () => {
+    const { diagnostics } = renderSource(example("redford-crossing"), { mode: "gm" });
+    expect(diagnostics).toEqual([]);
+  });
+});
+
 describe("elevation ledges (spec 06 §5)", () => {
   it("an elevated zone renders as a ledge", () => {
     const src = [

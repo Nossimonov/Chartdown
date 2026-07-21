@@ -58,7 +58,8 @@ if (command === "check") {
   process.exit(hasErrors ? 1 : 0);
 }
 
-const svg = render(document, { mode });
+const { svg, diagnostics: renderDiagnostics } = render(document, { mode });
+for (const d of renderDiagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
 const outPath = out ?? `${file.replace(/\.cd$/, "")}.svg`;
 writeFileSync(outPath, svg);
 console.error(`${hasErrors ? "rendered with errors" : "rendered"}: ${outPath}`);

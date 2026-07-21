@@ -1143,7 +1143,7 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
                   "from": {
                     "col": "H",
                     "kind": "address",
-                    "row": 11,
+                    "row": 10,
                   },
                   "kind": "range",
                   "to": {

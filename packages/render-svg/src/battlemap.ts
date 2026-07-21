@@ -4,7 +4,7 @@
  * emergent-elevation ledges, and the GM/player split.
  */
 
-import type { Address, AddressRange, EntityNode, Placement } from "@chartdown/core";
+import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
 import { GRID_LINE, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
 import { colToNumber, el, fmt, measureToNumber, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
@@ -47,11 +47,21 @@ function measureToCells(measure: string, model: Model): number {
   return measureToNumber(measure) / scale;
 }
 
-export function renderBattlemap(model: Model, body: string[], frame: Frame): void {
+export function renderBattlemap(model: Model, body: string[], frame: Frame, diagnostics: Diagnostic[]): void {
   const layers = {
-    terrain: [] as string[], grid: [] as string[], structures: [] as string[],
-    features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
+    areas: [] as string[], paths: [] as string[], crossings: [] as string[], grid: [] as string[],
+    structures: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
   };
+
+  // Course-line cells of rendered paths, for crossing composition (spec 06 §6).
+  interface PathRecord {
+    e: EntityNode;
+    cells: Set<string>;
+    isWater: boolean;
+    isRoad: boolean;
+  }
+  const pathRecords: PathRecord[] = [];
+  const crossingCells = new Set<string>();
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
@@ -91,7 +101,12 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
     const elevation = pairOf(e.pairs, "elevation");
 
     if (e.section === "terrain") {
-      renderTerrain(e, layers.terrain, titleEl, anchor);
+      const chain = model.chainOf(e.typeWord);
+      if (chain.includes("ford") || chain.includes("bridge")) {
+        renderCrossing(e, chain, titleEl, anchor);
+      } else {
+        renderTerrain(e, titleEl, anchor);
+      }
       continue;
     }
     if (e.archetype === "structure") {
@@ -128,24 +143,99 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
     }
   }
 
-  body.push(...layers.terrain, ...layers.grid, ...layers.structures, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels);
+  // Implied-crossing warnings (spec 06 §6): water × road overlap with no crossing.
+  for (const water of pathRecords.filter((p) => p.isWater)) {
+    for (const road of pathRecords.filter((p) => p.isRoad)) {
+      const uncovered = [...water.cells].filter((c) => road.cells.has(c) && !crossingCells.has(c));
+      if (uncovered.length > 0) {
+        const [col, row] = uncovered[0]!.split(":").map(Number) as [number, number];
+        const waterName = water.e.name ?? water.e.typeWord ?? "water";
+        const roadName = road.e.name ?? road.e.typeWord ?? "road";
+        diagnostics.push({
+          severity: "warning",
+          line: road.e.line,
+          message: `'${roadName}' crosses '${waterName}' at ${colLetters(col)}${row} with no ford or bridge — the render implies one (spec 06 §6)`,
+        });
+      }
+    }
+  }
+
+  body.push(
+    ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
+    ...layers.structures, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
+  );
 
   // ---------- helpers ----------
 
-  function renderTerrain(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
+  function cellsAlong(pts: XY[]): Set<string> {
+    const cells = new Set<string>();
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i]!;
+      const b = pts[i + 1]!;
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (CELL / 4)));
+      for (let s = 0; s <= steps; s++) {
+        const x = a.x + ((b.x - a.x) * s) / steps;
+        const y = a.y + ((b.y - a.y) * s) / steps;
+        const col = Math.floor((x - MARGIN) / CELL) + 1;
+        const row = Math.floor((y - MARGIN) / CELL) + 1;
+        if (col >= 1 && col <= frame.cols && row >= 1 && row <= frame.rows) cells.add(`${col}:${row}`);
+      }
+    }
+    return cells;
+  }
+
+  function entityCells(e: EntityNode): { col: number; row: number }[] {
+    const out: { col: number; row: number }[] = [];
+    for (const p of e.placements) {
+      if (p.kind === "address") out.push({ col: colToNumber(p.col), row: p.row });
+      else if (p.kind === "range") {
+        const c1 = colToNumber(p.from.col);
+        const c2 = colToNumber(p.to.col);
+        for (let col = Math.min(c1, c2); col <= Math.max(c1, c2); col++) {
+          for (let row = Math.min(p.from.row, p.to.row); row <= Math.max(p.from.row, p.to.row); row++) {
+            out.push({ col, row });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Crossings (spec 06 §6): drawn above the paths they join, shaped to their cells. */
+  function renderCrossing(e: EntityNode, chain: string[], titleEl: string, anchor: string | undefined): void {
+    const isBridge = chain.includes("bridge");
+    const parts: string[] = [titleEl];
+    for (const { col, row } of entityCells(e)) {
+      crossingCells.add(`${col}:${row}`);
+      const x = MARGIN + (col - 1) * CELL;
+      const y = MARGIN + (row - 1) * CELL;
+      if (isBridge) {
+        parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "#a8763e", opacity: 0.95 }));
+        parts.push(el("line", { x1: x, y1: y + 2, x2: x + CELL, y2: y + 2, stroke: "#6b4a26", "stroke-width": 2 }));
+        parts.push(el("line", { x1: x, y1: y + CELL - 2, x2: x + CELL, y2: y + CELL - 2, stroke: "#6b4a26", "stroke-width": 2 }));
+      } else {
+        parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "#c2d4dc", opacity: 0.95 }));
+        if (e.flags.includes("difficult")) parts.push(el("rect", { x, y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+      }
+    }
+    layers.crossings.push(el("g", { id: anchor }, ...parts));
+  }
+
+  function renderTerrain(e: EntityNode, titleEl: string, anchor: string | undefined): void {
     const chain = model.chainOf(e.typeWord);
     const fill = terrainFillFor(chain);
-    const parts: string[] = [titleEl];
+    const areaParts: string[] = [];
+    const pathParts: string[] = [];
     for (const p of e.placements) {
       if (p.kind === "shape" && p.shape === "area") {
         for (const arg of p.args) {
           if (arg.kind === "range") {
             const r = rangeRect(arg);
-            parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill }));
-            if (e.flags.includes("difficult")) parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
+            areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill }));
+            if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
-            parts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
+            areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
           }
         }
       } else if (p.kind === "shape" && p.shape === "path") {
@@ -154,17 +244,19 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
         extendToFrame(pts, addresses, frame);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = pathStrokeFor(chain);
-        parts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road") });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
-        parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
-        if (e.flags.includes("difficult")) parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
+        areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
+        if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
       } else if (p.kind === "address") {
         const o = cellOrigin(p);
-        parts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
+        areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
       }
     }
-    into.push(el("g", { id: anchor }, ...parts));
+    if (areaParts.length > 0) layers.areas.push(el("g", { id: pathParts.length === 0 ? anchor : undefined }, titleEl, ...areaParts));
+    if (pathParts.length > 0) layers.paths.push(el("g", { id: anchor }, titleEl, ...pathParts));
   }
 
   function renderStructure(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
