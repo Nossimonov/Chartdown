@@ -1,0 +1,22 @@
+{
+  "name": "chartdown-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Chartdown reference implementation workspace — see ADR 0007",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p packages/core"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

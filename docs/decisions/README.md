@@ -16,3 +16,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0004](0004-identity-and-references.md) | Explicit ids and display names are both reference keys; anonymous entities are unreferenceable; resolution is fail-loud | Accepted |
 | [0005](0005-open-vocabulary-archetypes.md) | The language knows no nouns: closed archetypes, open vocabulary, usage inference, theme-owned appearance | Accepted |
 | [0006](0006-battlemap-primitives-decisions.md) | No bestiary; elevation as emergent terraces; orthogonal footprints with renderer smoothing | Accepted |
+| [0007](0007-typescript-stack.md) | The reference implementation is TypeScript | Accepted |

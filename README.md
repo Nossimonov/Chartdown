@@ -46,12 +46,7 @@ party start : J14..L15
 
 ## Project status
 
-**Pre-spec / design phase.** Nothing is implemented yet. Right now the work is:
-
-1. Studying prior art and defining precise use cases
-2. Writing example documents *first* — the maps we wish we could write — and letting the syntax fall out of them
-3. Drafting the v0.1 specification
-4. Building a reference parser and SVG renderer
+**Spec draft complete; implementation beginning.** The v0.1 specification is drafted ([sections 01–07](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)), every example in [examples/](examples/) is valid under it, and the reference implementation — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — is under construction in [packages/](packages/). Nothing renders *yet*.
 
 See the [roadmap](docs/roadmap.md) for the full plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
 
@@ -64,6 +59,7 @@ See the [roadmap](docs/roadmap.md) for the full plan and the [issue tracker](htt
 | [docs/spec/](docs/spec/) | The Chartdown language specification (drafts live here) |
 | [docs/decisions/](docs/decisions/) | Architecture Decision Records — why things are the way they are |
 | [examples/](examples/) | Example Chartdown documents, written spec-first |
+| [packages/](packages/) | Reference implementation (TypeScript): `core` parser/AST; renderer and CLI to follow |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Issue-tracking rules and the syntax-proposal process |
 
 ## Contributing

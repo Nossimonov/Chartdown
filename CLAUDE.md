@@ -34,5 +34,5 @@ These come from CONTRIBUTING.md; follow them even when the user doesn't mention 
 
 - When designing syntax, start from `examples/` — write the document a GM would want to write, then derive grammar. Never design grammar in the abstract.
 - Readability of source text is the top design value (see `docs/vision.md` guiding principles). Prefer syntax a human can skim unrendered.
-- No implementation stack has been chosen yet; do not assume TypeScript/Node until the ADR choosing a stack exists.
+- Stack (ADR 0007): TypeScript npm-workspace monorepo under `packages/` (`@chartdown/core` = parser/AST). **`packages/core` and the renderer must stay free of runtime dependencies** — dev-deps are unconstrained. Commands: `npm test`, `npm run typecheck`; CI runs both on push/PR.
 - Commit messages: imperative mood, reference issues. Don't commit or push without being asked.

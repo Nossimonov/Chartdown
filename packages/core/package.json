@@ -1,0 +1,14 @@
+{
+  "name": "@chartdown/core",
+  "version": "0.0.0",
+  "description": "Chartdown parser and AST — runtime-dependency-free by rule (ADR 0007)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "dist"
+  ]
+}
