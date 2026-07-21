@@ -60,10 +60,17 @@ export interface Endpoint {
 }
 
 export type Relational =
-  | { kind: "relational"; form: "at"; target: Point | Address }
+  | { kind: "relational"; form: "at"; target: Point | Address | AddressRange | Edge }
   | { kind: "relational"; form: "offset-of"; measure: string; compass: string; ref: Ref }
   | { kind: "relational"; form: "side-of"; compass: string; ref: Ref }
-  | { kind: "relational"; form: "on"; ref: Ref; point?: Point }
+  /**
+   * `on <ref>` with an optional `at` payload. A point payload is the gridless
+   * form (`on coast at (160,470)`). A cell/range/edge payload is interpreted
+   * in the REFERENT's frame (spec 02 §7, issue #34): a structure's frame is
+   * its footprint grid (NW cell = A1), a path's frame is the document grid
+   * (the crossing chooser, spec 06 §6).
+   */
+  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge }
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
   | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }

@@ -152,6 +152,17 @@ export function colToNumber(col: string): number {
   return n;
 }
 
+/** 1-indexed number → column letters: 1=A, 26=Z, 27=AA. */
+export function colLetters(n: number): string {
+  let s = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 export function measureToNumber(measure: string): number {
   const m = /^(\d+(?:\.\d+)?)/.exec(measure);
   return m ? Number(m[1]) : 0;

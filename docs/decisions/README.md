@@ -18,3 +18,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0006](0006-battlemap-primitives-decisions.md) | No bestiary; elevation as emergent terraces; orthogonal footprints with renderer smoothing | Accepted |
 | [0007](0007-typescript-stack.md) | The reference implementation is TypeScript | Accepted |
 | [0008](0008-open-structures-declared.md) | Unroofed structures are declared with the `open` flag, not derived from the level stack | Accepted |
+| [0009](0009-relative-placement-referent-frames.md) | Relative placement rides `on … at`: the `at` payload is interpreted in the referent's frame | Accepted |

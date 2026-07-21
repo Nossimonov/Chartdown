@@ -342,6 +342,26 @@ describe("levels (spec 06 §8)", () => {
     expect(gm).toContain(">alarm</text>"); // gm range entities stay zones
   });
 
+  it("relative placement: on <structure> at <local> resolves in the footprint frame (#34)", () => {
+    const { svg, diagnostics } = renderSource(example("fairwater-manor"), { level: "ground" });
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // the resolved absolute address surfaces as a tooltip (DM frame stays absolute)
+    expect(svg).toContain("C2..D2 of Kitchen = F8..G8");
+    // parent-frame detail: door : at E2.e = H8.e (an east door segment at x=280)
+    expect(svg).toMatch(/line x1="280" y1="248" x2="280" y2="280"[^/]*stroke="#a8763e"/);
+  });
+
+  it("relative placement fails loud: outside the footprint, and frameless referents", () => {
+    const base = ["map: battlemap", "grid: square 8x8", "[structures]", 'building shed "Shed" : B2..D4'];
+    const outside = renderSource([...base, "[features]", "table : on shed at F1"].join("\n"), {});
+    expect(outside.diagnostics.some((d) => d.severity === "error" && d.message.includes("outside"))).toBe(true);
+    const frameless = renderSource(
+      ["map: battlemap", "grid: square 8x8", "[terrain]", "river r : path A4 H4 width=1", "[features]", "table : on r at B2"].join("\n"),
+      {},
+    );
+    expect(frameless.diagnostics.some((d) => d.severity === "error" && d.message.includes("footprint"))).toBe(true);
+  });
+
   it("open structures read as outdoor ground (spec 06 §3, ADR 0008)", () => {
     const { svg, diagnostics } = renderSource(example("fairwater-manor"), { level: "ground" });
     expect(svg).toContain('fill="#e3ddc2"'); // the courtyard's building.open fill
@@ -375,6 +395,14 @@ describe("levels (spec 06 §8)", () => {
     const y = Number(m![1]);
     // the kitchen table F8..G8 spans y 248..280; the label picks a clear row
     expect(y < 244 || y > 284).toBe(true);
+  });
+
+  it("the title gets its own band above the column letters (numbers: on)", () => {
+    const { svg } = renderSource(example("fairwater-manor"), { level: "ground" });
+    // letters row shifts below the 20px title band: baseline 17 → inside a translate(0 20)
+    expect(svg).toContain('transform="translate(0 20)"');
+    const withoutTitle = renderSource(example("fairwater-manor").replace("# Fairwater Manor\n", ""), { level: "ground" });
+    expect(withoutTitle.svg).toContain('transform="translate(0 0)"');
   });
 
   it("route labels sit at the course's arc-length midpoint, sliding along when crowded", () => {

@@ -26,8 +26,10 @@ building hall "The Great Hall" : D2..L6
   door : F6.s                ; down to the Kitchen
   window : D4.w
   window : D5.w
+; the kitchen is arranged by the kitchen (spec 02 §7): local cells, NW = A1 —
+; move the room and the door, table, barrel, and ladder all move with it
 building kitchen "Kitchen" : D7..H10
-  door : H8.e
+  door : at E2.e
 building solar "The Solar" : M2..Q6
   door : O6.s
 building barracks "Barracks" : R2..V6
@@ -62,13 +64,13 @@ building undercroft "The Undercroft" : E7..K10
 [features]
 campfire hearth : F4 light=25ft
 stairs : K3 to=upper         ; up from the hall
-ladder : F9 to=cellar        ; down from the kitchen
+ladder : on kitchen at C3 to=cellar   ; down from the kitchen (kitchen-local C3 = F9)
 lantern gatelamp : N12 light=15ft
 well : N8
 statue : K8
 table hightable : G3..I3     ; the high table, long as a high table should be
-table : F8..G8
-barrel : E9
+table : on kitchen at C2..D2
+barrel : on kitchen at B3
 chest strongbox : P3
 crates : T4
 

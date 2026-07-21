@@ -52,7 +52,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `<measure> <compass> of <ref>` | `town "Merrow's Rest" : 70mi north of "Argenport"` |
 | `<compass> of <ref>` — half-plane / general direction | `realm "Khar" : east of "The Serpent's Spine"` |
 | `on <ref>` | `village "Gull Landing" : on "Gull Bay"` |
-| `on <ref> at <point>` — nearest point on ref | `city "Argenport" : on coast at (160,470)` |
+| `on <ref> at <point\|local>` — placement in the referent's frame | `city "Argenport" : on coast at (160,470)` · `table : on kitchen at C2..D2` |
 | `<compass> edge of <ref>` | `town "Dunmere" : south edge of "Thornwood"` |
 | `near <ref \| point>` | `near (720,240)` |
 | `from <endpoint> [via <points>] to <endpoint>` — paths | `river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"` |
@@ -61,6 +61,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 - `<ref>` is a bare id word or quoted display name; resolution is defined by [03 — Identity, References, and Links](03-identity-and-links.md).
 - **Multiple relational placements constrain jointly**: `on coast 70mi north of argenport` means both hold. In particular, two `on` references to path entities place the entity at the **intersection of their bands** — the idiom for crossings (`ford : on redford on tollroad`), whose location is thereby derived rather than restated; see spec 06 §6. If the constraints are satisfiable in more than one place, the placement is ambiguous — a fail-loud error — and an `at <cell|point>` *chooses* among the candidates without redefining extent.
 - `<endpoint>` is `<ref>`, `<point>`, or `<ref> at <point>`.
+- **The `at` payload of `on` is interpreted in the referent's frame** *(from proposal [#34](https://github.com/Nossimonov/Chartdown/issues/34))*. A point is the gridless form (nearest point on the referent). A **cell, range, or edge token** is a *local* address: a structure's frame is its own footprint grid — bounding rect of the cell-union, **NW cell = A1**, axes as the document grid — so `table : on kitchen at C2..D2` arranges the kitchen by the kitchen, and moving the kitchen moves its contents (live anchors, §8.4). A path's frame is the document grid itself (paths have no local grid) — which is exactly the crossing chooser of spec 06 §6. A local address outside the referent's footprint, a referent with no footprint frame, or a referent on another level is an error. **Relative placement is the author's choice per line, never a mode**: absolute placement remains legal everywhere and both idioms coexist in one document — the designer arranges rooms in room coordinates while the table plays in absolute ones, so renderers surface the resolved absolute address (tooltip or equivalent) for relatively-placed entities.
 - `<compass>` is the 8-wind set — `n s e w ne nw se sw`, full words equally legal (`north`, `northwest`).
 - `<measure>` is a number with optional unit (`70mi`, `12`).
 

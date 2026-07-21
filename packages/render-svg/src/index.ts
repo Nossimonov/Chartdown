@@ -7,12 +7,12 @@
  */
 
 import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type ParseOptions, type Placement } from "@chartdown/core";
-import { battlemapFrame, colLetters, renderBattlemap } from "./battlemap";
+import { battlemapFrame, renderBattlemap } from "./battlemap";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildModel, type RenderMode } from "./model";
 import { renderRegion } from "./region";
 import { INK, PAPER, Theme } from "./theme";
-import { colToNumber, el, fmt, text } from "./util";
+import { colLetters, colToNumber, el, fmt, text } from "./util";
 
 export interface RenderOptions {
   /** Fail-closed default per spec 01 §6. */
@@ -33,7 +33,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
   const mode = options.mode ?? "player";
   const diagnostics: Diagnostic[] = [];
   const theme = Theme.resolve(options.theme, diagnostics);
-  const model = buildModel(doc, mode, theme);
+  const model = buildModel(doc, mode, theme, diagnostics);
   const body: string[] = [];
 
   let w = 860;
@@ -46,19 +46,23 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const panelLevels = selected.length > 0 ? selected : levels;
     if (levels.length > 1) warnFlooredOpenStructures(model, levels, diagnostics);
     const GAP = 18;
+    // With `numbers: on` the column letters occupy the top margin band; the
+    // document title gets its own band above them instead of overprinting A-D.
+    const titleBand = doc.title && model.header.get("numbers") === "on" ? 20 : 0;
     w = frame.w;
-    h = panelLevels.length * frame.h + (panelLevels.length - 1) * GAP;
+    h = panelLevels.length * frame.h + (panelLevels.length - 1) * GAP + titleBand;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     panelLevels.forEach((level, index) => {
       const panelModel = { ...model, entities: model.entities.filter((e) => e.level === level) };
       const panelBody: string[] = [];
       renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, levels });
       if (panelLevels.length > 1) {
+        // Bottom-right of the panel — the top margin belongs to the column letters.
         panelBody.push(
-          text(`— ${level} —`, { x: frame.w - 14, y: 18, "font-size": 11, "font-style": "italic", fill: INK, "text-anchor": "end", "font-family": "sans-serif" }),
+          text(`— ${level} —`, { x: frame.w - 14, y: frame.h - 8, "font-size": 11, "font-style": "italic", fill: INK, "text-anchor": "end", "font-family": "sans-serif" }),
         );
       }
-      body.push(`<g transform="translate(0 ${fmt(index * (frame.h + GAP))})">${panelBody.join("")}</g>`);
+      body.push(`<g transform="translate(0 ${fmt(titleBand + index * (frame.h + GAP))})">${panelBody.join("")}</g>`);
     });
   } else if (doc.mapType === "hexcrawl") {
     const frame = hexFrame(model);

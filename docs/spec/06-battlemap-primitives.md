@@ -76,6 +76,7 @@ building tollhouse "Ruined Toll House" : N3..Q6
 ```
 
 - **Side words** (`north east south west`) address whole walls of the footprint; **edge tokens** (spec 02 §5) address specific cell edges. Wall-state lines mark sides or edges; opening lines place doors/windows/gates on the perimeter.
+- **Detail addresses may be parent-local** *(from proposal [#34](https://github.com/Nossimonov/Chartdown/issues/34))*: an `at`-prefixed placement (`door : at E2.e`) is interpreted in the parent structure's frame (footprint NW = A1, spec 02 §7) and moves with the parent. A bare address stays absolute — the two idioms coexist per line, same as entity-level relative placement.
 - Details are anonymous by default and may take ids like any line (`door back-door : Q5.e`).
 - **Footprints** are a rect range (`N3..Q6`) or a cell list — the union of the listed cells and ranges. Odd *orthogonal* shapes are therefore fully in scope: an L-shaped hall is `building : K5..M8 K9..K12`, perimeter derived. Only **non-axis-aligned geometry** (diagonal walls, curved keep walls, corner-point-traced footprints) is deferred beyond v0.1.
 - **Smoothing note** *(non-normative)*: an angled wall is representable today as a saw-tooth of cells at the appropriate angle, and a renderer MAY render stair-stepped footprints and wall runs as clean diagonals or curves — provided movement and occupancy semantics follow the declared cells. The syntax conveys cells; appearance is the renderer's.

@@ -7,7 +7,7 @@
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
-import { colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 
 const CELL = 32;
 const MARGIN = 24;
@@ -175,7 +175,9 @@ export function renderBattlemap(
 
   for (const e of model.entities) {
     const anchor = anchorAttr(model, e);
-    const title = gmTitleFor(model, e);
+    // Relatively-placed entities surface their resolved absolute address (#34):
+    // the DM-facing frame is always absolute, whatever frame the author chose.
+    const title = [gmTitleFor(model, e), model.resolvedNotes.get(e)].filter(Boolean).join(" — ");
     const titleEl = title ? el("title", {}, title) : "";
     const elevation = pairOf(e.pairs, "elevation");
 
@@ -362,9 +364,13 @@ export function renderBattlemap(
     const onRefs = e.placements.filter(
       (p): p is Extract<Placement, { kind: "relational"; form: "on" }> => p.kind === "relational" && p.form === "on",
     );
-    const atCell = e.placements.find(
-      (p): p is Extract<Placement, { kind: "relational"; form: "at" }> => p.kind === "relational" && p.form === "at",
-    )?.target;
+    // The chooser cell arrives either standalone (`… at K9` after both bands)
+    // or bound to an `on` ref (#34's greedy at-clause) — a path's frame is
+    // the document grid, so both spell the same global cell.
+    const atCell =
+      e.placements.find(
+        (p): p is Extract<Placement, { kind: "relational"; form: "at" }> => p.kind === "relational" && p.form === "at",
+      )?.target ?? onRefs.map((p) => p.at).find((a) => a?.kind === "address");
 
     let cells: { col: number; row: number }[] = [];
     let host: PathRecord | undefined;
@@ -877,14 +883,4 @@ function extendToFrame(pts: XY[], addresses: Address[], frame: Frame): void {
   };
   fix(0);
   fix(-1);
-}
-
-export function colLetters(n: number): string {
-  let s = "";
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    s = String.fromCharCode(65 + rem) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
 }

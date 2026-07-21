@@ -53,9 +53,9 @@ point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) , { placement | pair } ;
 
-relational     = ( "at" , ( point | address ) )
+relational     = ( "at" , ( point | address | range | edge ) )
                | ( [ measure ] , compass , "of" , ref )
-               | ( "on" , ref , [ "at" , point ] )
+               | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] )
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
@@ -63,6 +63,10 @@ relational     = ( "at" , ( point | address ) )
                  (* closed grammar — no other relational forms exist.
                     multiple relational placements constrain jointly; two "on"
                     path refs = band intersection (crossings, spec 06 §6).
+                    "on <ref> at <address|range|edge>" is LOCAL to the
+                    referent's frame (structure footprint, NW = A1; a path's
+                    frame is the document grid) — spec 02 §7, issue #34.
+                    detail lines: "at"-prefixed placement = parent frame.
                     resolution: order-bounded, deterministic (seeded),
                     fail-loud, live anchors — spec 02 §8 *)
 endpoint       = ( ref , [ "at" , point ] ) | point ;

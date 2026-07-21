@@ -162,9 +162,9 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     if (c === "at") {
       i++;
       const targetText = chunkText(peek());
-      const target = targetText ? (parsePoint(targetText) ?? parseAddress(targetText)) : null;
-      if (!target) {
-        diagnostics.push(error(line, "expected a point or cell after 'at'"));
+      const target = targetText ? parsePositional(targetText) : null;
+      if (!target || target.kind === "point-range") {
+        diagnostics.push(error(line, "expected a point, cell, range, or edge after 'at'"));
         continue;
       }
       i++;
@@ -176,19 +176,27 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       i++;
       const ref = takeRef("on");
       if (!ref) continue;
+      // An `at` clause binds to the `on` (spec 02 §7, #34): a point is the
+      // gridless form; a cell/range/edge is interpreted in the referent's
+      // frame (structure footprint, or the document grid for paths — the
+      // crossing chooser of spec 06 §6 rides this same form).
       let point: Point | undefined;
-      // Consume an `at` clause only when a point follows (`on coast at (160,470)`);
-      // an `at <cell>` stays standalone — e.g. the crossing chooser, spec 06 §6.
+      let at: Address | AddressRange | Edge | undefined;
       if (chunkText(peek()) === "at") {
         const after = chunkText(peek(1));
-        const parsed = after ? parsePoint(after) : null;
-        if (parsed) {
+        const parsed = after ? parsePositional(after) : null;
+        if (parsed?.kind === "point") {
           point = parsed;
+          i += 2;
+        } else if (parsed && parsed.kind !== "point-range") {
+          at = parsed;
           i += 2;
         }
       }
       result.placements.push(
-        point ? { kind: "relational", form: "on", ref, point } : { kind: "relational", form: "on", ref },
+        point ? { kind: "relational", form: "on", ref, point }
+        : at ? { kind: "relational", form: "on", ref, at }
+        : { kind: "relational", form: "on", ref },
       );
       continue;
     }
