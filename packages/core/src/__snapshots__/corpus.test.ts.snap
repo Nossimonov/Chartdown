@@ -936,7 +936,7 @@ exports[`example corpus > gumdrop-vale > AST snapshot is stable 1`] = `
         },
         {
           "archetype": "feature",
-          "archetypeSource": "inferred-shape",
+          "archetypeSource": "inferred-section",
           "details": [],
           "flags": [],
           "gmOnly": false,
@@ -1448,8 +1448,8 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
           "typeWord": "goblin-archers",
         },
         {
-          "archetype": "feature",
-          "archetypeSource": "inferred-shape",
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
           "details": [],
           "flags": [
             "hidden",

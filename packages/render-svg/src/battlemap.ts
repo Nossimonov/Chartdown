@@ -6,7 +6,7 @@
 
 import type { Address, AddressRange, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
-import { GRID_LINE, INK, pathStroke, sideColor, terrainFill } from "./theme";
+import { GRID_LINE, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
 import { colToNumber, el, fmt, measureToNumber, pointsAttr, text, type XY } from "./util";
 
 const CELL = 32;
@@ -108,7 +108,8 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
   // ---------- helpers ----------
 
   function renderTerrain(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
-    const fill = terrainFill(e.typeWord ?? "");
+    const chain = model.chainOf(e.typeWord);
+    const fill = terrainFillFor(chain);
     const parts: string[] = [titleEl];
     for (const p of e.placements) {
       if (p.kind === "shape" && p.shape === "area") {
@@ -125,8 +126,8 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
       } else if (p.kind === "shape" && p.shape === "path") {
         const pts = p.args.filter((a): a is Address => a.kind === "address").map(cellCenter);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
-        const stroke = pathStroke(e.typeWord ?? "");
-        parts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: e.typeWord === "river" ? terrainFill("sea") : stroke.stroke, "stroke-width": width, "stroke-linecap": "round", "stroke-linejoin": "round" }));
+        const stroke = pathStrokeFor(chain);
+        parts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "round", "stroke-linejoin": "round" }));
       } else if (p.kind === "range") {
         const r = rangeRect(p);
         parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));

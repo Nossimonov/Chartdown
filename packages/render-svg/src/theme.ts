@@ -23,6 +23,12 @@ const TERRAIN_FILLS: Record<string, string> = {
 
 export const terrainFill = (word: string): string => TERRAIN_FILLS[word] ?? "#d8d3c5";
 
+/** Chain-aware lookups (spec 04 §4): walk the derivation chain until a themed word. */
+export const terrainFillFor = (chain: string[]): string => {
+  for (const word of chain) if (TERRAIN_FILLS[word]) return TERRAIN_FILLS[word];
+  return "#d8d3c5";
+};
+
 const PATH_STROKES: Record<string, { stroke: string; dash?: string }> = {
   river: { stroke: "#7fa8cf" }, stream: { stroke: "#7fa8cf" }, canal: { stroke: "#7fa8cf" },
   road: { stroke: "#c3a878" }, trail: { stroke: "#c3a878", dash: "6 4" },
@@ -33,6 +39,11 @@ const PATH_STROKES: Record<string, { stroke: string; dash?: string }> = {
 
 export const pathStroke = (word: string): { stroke: string; dash?: string } =>
   PATH_STROKES[word] ?? { stroke: "#9a917e" };
+
+export const pathStrokeFor = (chain: string[]): { stroke: string; dash?: string } => {
+  for (const word of chain) if (PATH_STROKES[word]) return PATH_STROKES[word];
+  return { stroke: "#9a917e" };
+};
 
 /** Settlement tiers control glyph radius and label size (spec 07 §1). */
 const TIERS: Record<string, { r: number; font: number; weight: string }> = {
@@ -46,6 +57,11 @@ const TIERS: Record<string, { r: number; font: number; weight: string }> = {
 
 export const tierOf = (word: string | null): { r: number; font: number; weight: string } =>
   (word && TIERS[word]) || { r: 3, font: 10, weight: "normal" };
+
+export const tierFor = (chain: string[]): { r: number; font: number; weight: string } => {
+  for (const word of chain) if (TIERS[word]) return TIERS[word]!;
+  return { r: 3, font: 10, weight: "normal" };
+};
 
 export const SIDE_COLORS: Record<string, string> = {
   party: "#4a7ab5",

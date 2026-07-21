@@ -6,6 +6,6 @@
  */
 
 export { parse, slugify, SPEC_VERSION, type ParseOptions, type ParseResult } from "./parse";
-export { STDLIB_SOURCE, ARCHETYPES } from "./vocab";
+export { STDLIB_SOURCE, ARCHETYPES, VocabTable, loadStdlib, parseVocabDocument } from "./vocab";
 export type { Diagnostic, Severity } from "./diagnostics";
 export type * from "./ast";

@@ -154,6 +154,21 @@ export class VocabTable {
     return null;
   }
 
+  /**
+   * The derivation chain for theme fallback (spec 04 §4): the word itself,
+   * then each base word, ending before the archetype. `licorice-forest` →
+   * ["licorice-forest", "forest"] — a theme walks it until a word it knows.
+   */
+  chain(word: string): string[] {
+    const out: string[] = [word];
+    let current = this.entries.get(word);
+    while (current && !current.baseIsArchetype) {
+      out.push(current.base);
+      current = this.entries.get(current.base);
+    }
+    return out;
+  }
+
   has(word: string): boolean {
     return this.entries.has(word);
   }
@@ -238,7 +253,12 @@ const SECTION_ARCHETYPE: Record<string, string> = {
   regions: "zone",
 };
 
-/** Usage inference for unknown words (spec 04 §3, as amended by #21's errata). */
+/**
+ * Usage inference for unknown words (spec 04 §3, as amended by #21/#22 errata):
+ * explicit shape/path phrases are the strongest signal; the section the author
+ * filed the entity under comes next; the lone point/cell rule applies only in
+ * sections that carry no archetype (a solo creature in [tokens] stays a token).
+ */
 export function inferArchetype(
   placements: Placement[],
   section: string,
@@ -254,10 +274,10 @@ export function inferArchetype(
       return { archetype: "path", source: "inferred-shape" };
     }
   }
+  const bySection = SECTION_ARCHETYPE[section];
+  if (bySection) return { archetype: bySection, source: "inferred-section" };
   if (placements.length === 1 && (placements[0]!.kind === "point" || placements[0]!.kind === "address")) {
     return { archetype: "feature", source: "inferred-shape" };
   }
-  const bySection = SECTION_ARCHETYPE[section];
-  if (bySection) return { archetype: bySection, source: "inferred-section" };
   return { archetype: "feature", source: "default" };
 }

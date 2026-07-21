@@ -6,8 +6,9 @@
 
 import type { Address, AddressRange, EntityNode, HexLineNode } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
+import { LabelPlacer } from "./labels";
 import { gmTitleFor, pairOf, type Model } from "./model";
-import { FOG, GRID_LINE, INK, pathStroke, terrainFill, tierOf } from "./theme";
+import { FOG, GRID_LINE, INK, pathStrokeFor, terrainFillFor, tierOf } from "./theme";
 import { colToNumber, el, fmt, pointsAttr, text, type XY } from "./util";
 
 const R = 24;
@@ -107,6 +108,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
   const labelLayer: string[] = [];
   const numbersOn = model.header.get("numbers") === "on";
   const gmMode = model.mode === "gm";
+  const placer = new LabelPlacer();
 
   for (let row = 1; row <= rows; row++) {
     for (let col = 1; col <= cols; col++) {
@@ -117,7 +119,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
       const fogged = !cell || foggedForPlayer;
       const seen = !gmMode && !!cell && cell.flags.includes("seen");
 
-      const fill = fogged ? FOG : terrainFill(cell!.terrain);
+      const fill = fogged ? FOG : terrainFillFor(model.chainOf(cell!.terrain));
       const parts: string[] = [];
       if (gmMode && cell?.gm) parts.push(el("title", {}, cell.gm));
       parts.push(el("polygon", { points: poly, fill, stroke: GRID_LINE, "stroke-width": 1 }));
@@ -127,13 +129,16 @@ export function renderHexcrawl(model: Model, body: string[]): void {
           contentLayer.push(text("?", { x: c.x, y: c.y + 4, "font-size": 11, fill: "#8a8272", "text-anchor": "middle", "font-family": "sans-serif" }));
         } else {
           cell.contents.forEach((word, idx) => {
-            contentLayer.push(glyph(word, { x: c.x, y: c.y + idx * 8 }));
+            const at = { x: c.x, y: c.y - 3 + idx * 9 };
+            placer.block(at.x - 5, at.y - 5, 10, 10);
+            contentLayer.push(glyph(word, at));
           });
           if (cell.name) {
             const anchorId = `cd-${model.doc.docId}-${slugify(cell.name)}`;
+            const y = placer.place(c.x, c.y + R * 0.62, cell.name, 7.5, "middle");
             labelLayer.push(
               el("g", { id: anchorId },
-                text(cell.name, { x: c.x, y: c.y + R - 6, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }),
+                text(cell.name, { x: c.x, y, "font-size": 7.5, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }),
               ),
             );
           }
@@ -143,7 +148,8 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         }
       }
       if (numbersOn && !fogged) {
-        labelLayer.push(text(`${colLetters(col)}${row}`, { x: c.x, y: c.y - R + 9, "font-size": 6.5, fill: "#8a8272", opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif" }));
+        // Top-left corner, small and faint — clear of content glyphs and names.
+        labelLayer.push(text(`${colLetters(col)}${row}`, { x: c.x - hexW * 0.26, y: c.y - R * 0.45, "font-size": 6, fill: "#8a8272", opacity: 0.75, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       hexLayer.push(el("g", {}, ...parts));
     }
@@ -156,17 +162,19 @@ export function renderHexcrawl(model: Model, body: string[]): void {
     if (e.section === "routes") {
       const pts = e.placements.filter((p): p is Address => p.kind === "address").map((a) => center(colToNumber(a.col), a.row));
       if (pts.length < 2) continue;
-      const stroke = pathStroke(e.typeWord ?? "");
+      const chain = model.chainOf(e.typeWord);
+      const stroke = pathStrokeFor(chain);
       const title = gmTitleFor(model, e);
       routeLayer.push(
         el("g", { id: e.name ? `cd-${model.doc.docId}-${slugify(e.name)}` : undefined },
           title ? el("title", {}, title) : "",
-          el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stroke.stroke, "stroke-width": e.typeWord === "river" ? 4 : 3, "stroke-dasharray": stroke.dash ?? (e.typeWord === "road" ? "8 4" : undefined), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.85 }),
+          el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stroke.stroke, "stroke-width": chain.includes("river") ? 4 : 3, "stroke-dasharray": stroke.dash ?? (chain.includes("road") ? "8 4" : undefined), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.85 }),
         ),
       );
       if (e.name) {
-        const mid = pts[Math.floor(pts.length / 2)]!;
-        labelLayer.push(text(e.name, { x: mid.x, y: mid.y - 6, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
+        const start = pts[0]!;
+        const y = placer.place(start.x, start.y - R * 0.9, e.name, 8, "middle");
+        labelLayer.push(text(e.name, { x: start.x, y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       continue;
     }
@@ -181,8 +189,8 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         const c = center(col, row);
         const cs = corners(c);
         const neighborDirs = neighborDeltas(shifted(row, parity));
-        // corner pairs (k,k+1) face: SE,SW,W,NW,NE,E
-        const faceOrder: (keyof typeof neighborDirs)[] = ["se", "sw", "w", "nw", "ne", "e"];
+        // Corners start at -30°: corner pair (k,k+1) faces E,SE,SW,W,NW,NE in order.
+        const faceOrder: (keyof typeof neighborDirs)[] = ["e", "se", "sw", "w", "nw", "ne"];
         faceOrder.forEach((face, k) => {
           const d = neighborDirs[face]!;
           if (!set.has(keyOf(col + d.x, row + d.y))) {
@@ -194,16 +202,22 @@ export function renderHexcrawl(model: Model, body: string[]): void {
       }
       regionLayer.push(el("g", { id: e.name ? `cd-${model.doc.docId}-${slugify(e.name)}` : undefined }, ...edges));
       if (e.name && set.size > 0) {
+        // Label sits above the region's topmost hexes, clear of their contents.
         let sx = 0;
-        let sy = 0;
+        let minY = Infinity;
+        let count = 0;
         for (const key of set) {
           const [col, row] = key.split(":").map(Number) as [number, number];
           const c = center(col, row);
           sx += c.x;
-          sy += c.y;
+          count++;
+          if (c.y < minY) minY = c.y;
         }
+        const labelText = e.name.toUpperCase();
+        const width = labelText.length * (11 * 0.58 + 3);
+        const y = placer.place(sx / count, minY - R * 1.35, labelText, 11, "middle", width);
         labelLayer.push(
-          text(e.name.toUpperCase(), { x: sx / set.size, y: sy / set.size - R * 1.6, "font-size": 11, "letter-spacing": 3, fill: "#7a5aa0", opacity: 0.85, "text-anchor": "middle", "font-family": "sans-serif" }),
+          text(e.name.toUpperCase(), { x: sx / count, y, "font-size": 11, "letter-spacing": 3, fill: "#7a5aa0", opacity: 0.85, "text-anchor": "middle", "font-family": "sans-serif" }),
         );
       }
     }

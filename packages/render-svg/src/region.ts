@@ -6,8 +6,9 @@
 
 import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
+import { LabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, pairOf, type Model } from "./model";
-import { INK, pathStroke, terrainFill, tierOf } from "./theme";
+import { INK, pathStrokeFor, terrainFill, terrainFillFor, tierFor } from "./theme";
 import {
   blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
   nearestOnPolyline, pointsAttr, polylineBetween, rng, text, type XY,
@@ -150,6 +151,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     );
 
   const layers = { areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
+  const placer = new LabelPlacer();
 
   for (const e of model.entities) {
     const r = resolveEntity(e);
@@ -160,7 +162,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
     const titleEl = title ? el("title", {}, title) : "";
-    const wordFill = terrainFill(e.typeWord ?? "");
+    const chain = model.chainOf(e.typeWord);
+    const wordFill = terrainFillFor(chain);
 
     if (r.halfPlane) {
       const poly = halfPlanePolygon(r.halfPlane, w, h);
@@ -198,7 +201,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
 
     if (r.polyline) {
-      const stroke = pathStroke(e.typeWord ?? "");
+      const stroke = pathStrokeFor(chain);
       if (r.ridge) {
         layers.lines.push(
           el("g", { id: anchor }, titleEl,
@@ -219,18 +222,20 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
         const mid = r.polyline[Math.floor(r.polyline.length / 2)]!;
+        const y = placer.place(mid.x + 4, mid.y - 4, e.name, 10, "start");
         layers.labels.push(
-          text(e.name, { x: mid.x + 4, y: mid.y - 4, "font-size": 10, fill: INK, opacity: 0.75, "font-style": "italic", "font-family": "sans-serif" }),
+          text(e.name, { x: mid.x + 4, y, "font-size": 10, fill: INK, opacity: 0.75, "font-style": "italic", "font-family": "sans-serif" }),
         );
       }
       continue;
     }
 
     if (r.point) {
-      const tier = tierOf(e.typeWord);
+      const tier = tierFor(chain);
+      placer.block(r.point.x - tier.r, r.point.y - tier.r, tier.r * 2, tier.r * 2);
       layers.points.push(
         el("g", { id: anchor }, titleEl,
-          e.typeWord === "capital"
+          chain.includes("capital")
             ? el("rect", {
                 x: r.point.x - tier.r, y: r.point.y - tier.r, width: tier.r * 2, height: tier.r * 2,
                 fill: INK, transform: `rotate(45 ${fmt(r.point.x)} ${fmt(r.point.y)})`,
@@ -240,8 +245,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
       const label = e.name ?? (e.archetypeSource !== "vocab" ? e.typeWord : null) ?? (e.typeWord === "note" ? e.texts[0] ?? null : null);
       if (label && !e.flags.includes("nolabel") && !overridden(e)) {
+        const y = placer.place(r.point.x + tier.r + 3, r.point.y + 4, label, tier.font, "start");
         layers.labels.push(
-          text(label, { x: r.point.x + tier.r + 3, y: r.point.y + 4, "font-size": tier.font, "font-weight": tier.weight, fill: INK, "font-family": "sans-serif" }),
+          text(label, { x: r.point.x + tier.r + 3, y, "font-size": tier.font, "font-weight": tier.weight, fill: INK, "font-family": "sans-serif" }),
         );
       }
     }

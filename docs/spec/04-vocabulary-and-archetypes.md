@@ -45,9 +45,10 @@ Vocabulary comes from three sources; later **shadows** earlier, silently and del
 
 A type word with no vocabulary entry anywhere is **legal**. Its archetype is inferred from usage, checking in order:
 
-1. **Shape or path phrase in the predicate**: `area` or `blob` → `terrain`; `path`, `ridge`, or a `from…to` phrase → `path`; a placement that is only a lone point or cell → `feature`. Bare ranges carry no shape hint — they fall through to section context, so an unknown word in `[tokens]` with an area placement stays a `token` (cf. staging zones, spec 06 §4).
-2. **Section context**: `[tokens]` → `token`; `[structures]` → `structure`; `[terrain]` → `terrain`; and correspondingly for other primitives-defined sections.
-3. **Otherwise** → `feature`.
+1. **Shape or path phrase in the predicate**: `area` or `blob` → `terrain`; `path`, `ridge`, or a `from…to` phrase → `path`. Bare ranges and lone points carry no shape hint.
+2. **Section context**: `[tokens]` → `token`; `[structures]` → `structure`; `[terrain]` → `terrain`; and correspondingly for other primitives-defined sections. Section context outranks placement shape-lessness: a solo unknown creature at a single cell in `[tokens]` is a `token`, and an unknown word with an area placement in `[tokens]` is a staging zone (spec 06 §4), never terrain.
+3. **A lone point or cell** (in sections carrying no archetype, e.g. `[gm]`) → `feature`.
+4. **Otherwise** → `feature`.
 
 The word itself is **never inspected** — there is no suffix or morphology matching. `zorbleflax : (8,7)` renders as a generic labeled glyph; renaming it changes nothing but the label. Renderers MUST NOT warn on unknown words by default; an opt-in strict mode MAY.
 

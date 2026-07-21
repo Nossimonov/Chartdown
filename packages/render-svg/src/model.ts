@@ -9,7 +9,7 @@ import type {
   Pair,
   Ref,
 } from "@chartdown/core";
-import { slugify } from "@chartdown/core";
+import { loadStdlib, slugify, VocabTable, type Diagnostic } from "@chartdown/core";
 
 export type RenderMode = "player" | "gm";
 
@@ -23,6 +23,14 @@ export interface Model {
   gmNotes: Map<string, string[]>;
   header: Map<string, string>;
   seed: number;
+  /**
+   * Theme fallback chain for a word (spec 04 §4): the word, then its
+   * derivation bases — a theme lookup walks it until a word it knows.
+   * Built from the standard library plus the document's [vocab] entries.
+   * (`use:` library vocab is resolved by the parser for archetypes; theme
+   * chains for library-defined derivations are a known gap until #20.)
+   */
+  chainOf(word: string | null): string[];
 }
 
 export const pairOf = (pairs: Pair[], key: string): string | undefined =>
@@ -75,7 +83,18 @@ export function buildModel(doc: DocumentNode, mode: RenderMode): Model {
 
   const header = new Map(doc.header.map((h) => [h.key, h.value]));
   const seed = Number(header.get("seed") ?? 0) || 0;
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed };
+
+  const vocab = new VocabTable();
+  loadStdlib(vocab);
+  const scratch: Diagnostic[] = [];
+  for (const section of doc.sections) {
+    for (const entry of section.entries) {
+      if (entry.kind === "vocab-entry") vocab.add(entry, scratch);
+    }
+  }
+  const chainOf = (word: string | null): string[] => (word ? vocab.chain(word) : []);
+
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, chainOf };
 }
 
 export const anchorAttr = (model: Model, e: { ids: string[]; name: string | null }): string | undefined => {

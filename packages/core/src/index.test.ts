@@ -47,9 +47,15 @@ describe("archetype inference (spec 04 §3)", () => {
     expect(e.archetype).toBe("path");
   });
 
-  it("a lone point infers feature", () => {
-    const e = firstEntity("map: region\nextent: 10x10mi\n[terrain]\nzorbleflax : (8,7)\n");
-    expect(e.archetype).toBe("feature");
+  it("a lone point infers feature only when the section carries no archetype", () => {
+    const gm = firstEntity('map: region\nextent: 10x10mi\n[gm]\nzorbleflax : (8,7) "a mystery"\n');
+    expect(gm.archetype).toBe("feature");
+  });
+
+  it("section context outranks the lone-cell rule — a solo creature in [tokens] is a token", () => {
+    const e = firstEntity("map: battlemap\ngrid: square 20x15\n[tokens]\nogre \"Gruk\" : G9 size=2\n");
+    expect(e.archetype).toBe("token");
+    expect(e.archetypeSource).toBe("inferred-section");
   });
 
   it("a bare range falls through to section context — staging zones stay tokens", () => {
