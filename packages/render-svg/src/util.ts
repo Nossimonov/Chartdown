@@ -142,3 +142,41 @@ export function measureToNumber(measure: string): number {
   const m = /^(\d+(?:\.\d+)?)/.exec(measure);
   return m ? Number(m[1]) : 0;
 }
+
+export interface Segment {
+  a: XY;
+  b: XY;
+}
+
+/** Distance along a ray (origin o, unit dir d) to a segment, or null if missed. */
+function raySegment(o: XY, d: XY, seg: Segment): number | null {
+  const sx = seg.b.x - seg.a.x;
+  const sy = seg.b.y - seg.a.y;
+  const denom = d.x * sy - d.y * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const ox = seg.a.x - o.x;
+  const oy = seg.a.y - o.y;
+  const t = (ox * sy - oy * sx) / denom;
+  const s = (ox * d.y - oy * d.x) / denom;
+  if (t >= 0 && s >= -1e-9 && s <= 1 + 1e-9) return t;
+  return null;
+}
+
+/**
+ * Visibility polygon for light (spec 06: openings/barriers carry sight
+ * semantics): fixed 180-ray angular sweep — deterministic, no randomness.
+ */
+export function visibilityPolygon(center: XY, radius: number, blockers: Segment[], steps = 180): XY[] {
+  const pts: XY[] = [];
+  for (let k = 0; k < steps; k++) {
+    const angle = (2 * Math.PI * k) / steps;
+    const d = { x: Math.cos(angle), y: Math.sin(angle) };
+    let reach = radius;
+    for (const seg of blockers) {
+      const t = raySegment(center, d, seg);
+      if (t !== null && t < reach) reach = t;
+    }
+    pts.push({ x: center.x + d.x * reach, y: center.y + d.y * reach });
+  }
+  return pts;
+}

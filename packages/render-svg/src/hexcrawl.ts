@@ -160,9 +160,24 @@ export function renderHexcrawl(model: Model, body: string[]): void {
   const regionLayer: string[] = [];
   for (const e of model.entities) {
     if (e.section === "routes") {
-      const pts = e.placements.filter((p): p is Address => p.kind === "address").map((a) => center(colToNumber(a.col), a.row));
+      const addresses = e.placements.filter((p): p is Address => p.kind === "address");
+      const pts = addresses.map((a) => center(colToNumber(a.col), a.row));
       if (pts.length < 2) continue;
       const chain = model.chainOf(e.typeWord);
+      // A route ending in a water hex stops at that hex's edge — a river
+      // discharges at the coast; it doesn't run to the middle of the sea.
+      const isWaterHex = (a: Address): boolean => {
+        const cell = cells.get(keyOf(colToNumber(a.col), a.row));
+        const terrainChain = cell ? model.chainOf(cell.terrain) : [];
+        return terrainChain.some((word) => word === "sea" || word === "lake" || word === "water");
+      };
+      if (isWaterHex(addresses[0]!)) {
+        pts[0] = { x: (pts[0]!.x + pts[1]!.x) / 2, y: (pts[0]!.y + pts[1]!.y) / 2 };
+      }
+      if (isWaterHex(addresses[addresses.length - 1]!)) {
+        const n = pts.length;
+        pts[n - 1] = { x: (pts[n - 1]!.x + pts[n - 2]!.x) / 2, y: (pts[n - 1]!.y + pts[n - 2]!.y) / 2 };
+      }
       const stroke = pathStrokeFor(chain);
       const title = gmTitleFor(model, e);
       routeLayer.push(
@@ -172,9 +187,10 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         ),
       );
       if (e.name) {
-        const start = pts[0]!;
-        const y = placer.place(start.x, start.y - R * 0.9, e.name, 8, "middle");
-        labelLayer.push(text(e.name, { x: start.x, y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
+        // Mid-course labeling names the whole line, not an endpoint.
+        const mid = pts[Math.floor(pts.length / 2)]!;
+        const y = placer.place(mid.x, mid.y - R * 0.55, e.name, 8, "middle");
+        labelLayer.push(text(e.name, { x: mid.x, y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       continue;
     }

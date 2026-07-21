@@ -7,7 +7,7 @@
 import type { Address, AddressRange, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
 import { GRID_LINE, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
-import { colToNumber, el, fmt, measureToNumber, pointsAttr, text, type XY } from "./util";
+import { colToNumber, el, fmt, measureToNumber, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 
 const CELL = 32;
 const MARGIN = 24;
@@ -52,6 +52,31 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
     terrain: [] as string[], grid: [] as string[], structures: [] as string[],
     features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
   };
+
+  // Sight-blocking segments for light (spec 06: solid walls and closed doors
+  // block sight; windows pass it; ruined walls are collapsed and pass).
+  const sightBlockers: Segment[] = [];
+  for (const e of model.entities) {
+    if (e.archetype === "structure") {
+      const range = e.placements.find((p): p is AddressRange => p.kind === "range");
+      if (!range) continue;
+      const r = rangeRect(range);
+      const ruined = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
+      const sides: Record<string, Segment> = {
+        north: { a: { x: r.x, y: r.y }, b: { x: r.x + r.w, y: r.y } },
+        south: { a: { x: r.x, y: r.y + r.h }, b: { x: r.x + r.w, y: r.y + r.h } },
+        west: { a: { x: r.x, y: r.y }, b: { x: r.x, y: r.y + r.h } },
+        east: { a: { x: r.x + r.w, y: r.y }, b: { x: r.x + r.w, y: r.y + r.h } },
+      };
+      for (const [side, seg] of Object.entries(sides)) {
+        if (!ruined.has(side) && !ruined.has(side[0]!)) sightBlockers.push(seg);
+      }
+    } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
+      for (const p of e.placements) {
+        if (p.kind === "edge") sightBlockers.push(edgeSegment(p.at, p.dir));
+      }
+    }
+  }
 
   // hatch pattern for difficult terrain
   body.push(
@@ -124,10 +149,12 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
           }
         }
       } else if (p.kind === "shape" && p.shape === "path") {
-        const pts = p.args.filter((a): a is Address => a.kind === "address").map(cellCenter);
+        const addresses = p.args.filter((a): a is Address => a.kind === "address");
+        const pts = addresses.map(cellCenter);
+        extendToFrame(pts, addresses, frame);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = pathStrokeFor(chain);
-        parts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "round", "stroke-linejoin": "round" }));
+        parts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
       } else if (p.kind === "range") {
         const r = rangeRect(p);
         parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
@@ -238,7 +265,12 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
     const light = pairOf(e.pairs, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;
-      parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: "#ffd98a", opacity: 0.22 }));
+      if (sightBlockers.length > 0) {
+        const poly = visibilityPolygon(c, radius, sightBlockers);
+        parts.push(el("polygon", { points: pointsAttr(poly), fill: "#ffd98a", opacity: 0.22 }));
+      } else {
+        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: "#ffd98a", opacity: 0.22 }));
+      }
     }
     const word = e.typeWord ?? "";
     if (word === "campfire" || word === "torch" || word === "brazier" || word === "lantern") {
@@ -267,6 +299,35 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame): voi
 
 function hasOnlyRange(e: EntityNode): boolean {
   return e.placements.length > 0 && e.placements.every((p: Placement) => p.kind === "range");
+}
+
+function edgeSegment(at: Address, dir: string): Segment {
+  const o = cellOrigin(at);
+  switch (dir) {
+    case "n": return { a: { x: o.x, y: o.y }, b: { x: o.x + CELL, y: o.y } };
+    case "s": return { a: { x: o.x, y: o.y + CELL }, b: { x: o.x + CELL, y: o.y + CELL } };
+    case "w": return { a: { x: o.x, y: o.y }, b: { x: o.x, y: o.y + CELL } };
+    default: return { a: { x: o.x + CELL, y: o.y }, b: { x: o.x + CELL, y: o.y + CELL } };
+  }
+}
+
+/**
+ * Paths whose terminal cells touch the map boundary extend to the frame edge,
+ * so a road that runs off-map reads as continuing rather than stopping short.
+ */
+function extendToFrame(pts: XY[], addresses: Address[], frame: Frame): void {
+  if (pts.length < 2 || addresses.length < 2) return;
+  const fix = (index: 0 | -1): void => {
+    const address = index === 0 ? addresses[0]! : addresses[addresses.length - 1]!;
+    const point = index === 0 ? pts[0]! : pts[pts.length - 1]!;
+    const col = colToNumber(address.col);
+    if (address.row === 1) point.y = MARGIN;
+    else if (address.row === frame.rows) point.y = MARGIN + frame.rows * CELL;
+    else if (col === 1) point.x = MARGIN;
+    else if (col === frame.cols) point.x = MARGIN + frame.cols * CELL;
+  };
+  fix(0);
+  fix(-1);
 }
 
 function colLetters(n: number): string {
