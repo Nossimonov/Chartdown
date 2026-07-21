@@ -8,6 +8,7 @@
 
 import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type ParseOptions, type Placement } from "@chartdown/core";
 import { battlemapFrame, renderBattlemap } from "./battlemap";
+import { titleBand } from "./grid";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildModel, type RenderMode } from "./model";
 import { renderRegion } from "./region";
@@ -48,9 +49,9 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const GAP = 18;
     // With `numbers: on` the column letters occupy the top margin band; the
     // document title gets its own band above them instead of overprinting A-D.
-    const titleBand = doc.title && model.header.get("numbers") === "on" ? 20 : 0;
+    const band = titleBand(doc, model.header);
     w = frame.w;
-    h = panelLevels.length * frame.h + (panelLevels.length - 1) * GAP + titleBand;
+    h = panelLevels.length * frame.h + (panelLevels.length - 1) * GAP + band;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     panelLevels.forEach((level, index) => {
       const panelModel = { ...model, entities: model.entities.filter((e) => e.level === level) };
@@ -62,7 +63,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
           text(`— ${level} —`, { x: frame.w - 14, y: frame.h - 8, "font-size": 11, "font-style": "italic", fill: INK, "text-anchor": "end", "font-family": "sans-serif" }),
         );
       }
-      body.push(`<g transform="translate(0 ${fmt(titleBand + index * (frame.h + GAP))})">${panelBody.join("")}</g>`);
+      body.push(`<g transform="translate(0 ${fmt(band + index * (frame.h + GAP))})">${panelBody.join("")}</g>`);
     });
   } else if (doc.mapType === "hexcrawl") {
     const frame = hexFrame(model);
@@ -207,3 +208,4 @@ export function renderSource(source: string, options: RenderOptions & ParseOptio
 }
 
 export type { RenderMode } from "./model";
+export { exportUvtt, exportUvttSource, type UvttOptions, type UvttResult, type UvttSourceResult } from "./uvtt";

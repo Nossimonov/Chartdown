@@ -1,11 +1,14 @@
 /**
- * Obsidian plugin entry (issue #38): registers the `chartdown` code-block
- * processor and one setting — GM mode. Default is the player view, fail-closed
- * per spec 01 §6: secrets render only when the vault owner opts in.
+ * Obsidian plugin entry (issues #38/#41): registers the `chartdown`
+ * code-block processor — each block mounts with a toolbar (GM/player toggle,
+ * SVG and UVTT export) — and one setting: the DEFAULT view for newly
+ * rendered blocks. Default player, fail-closed per spec 01 §6.
  */
 
-import { Plugin, PluginSettingTab, Setting, type App } from "obsidian";
-import { renderChartdownBlock, type RenderMode } from "./render";
+import { Notice, Plugin, PluginSettingTab, Setting, type App } from "obsidian";
+import { parse } from "@chartdown/core";
+import { mountChartdownBlock } from "./block";
+import type { RenderMode } from "./render";
 
 interface ChartdownSettings {
   mode: RenderMode;
@@ -13,13 +16,54 @@ interface ChartdownSettings {
 
 const DEFAULT_SETTINGS: ChartdownSettings = { mode: "player" };
 
+/** Rasterize a region of an SVG to base64 PNG via an offscreen canvas. */
+async function rasterize(
+  svg: string,
+  region: { x: number; y: number; w: number; h: number },
+  outW: number,
+  outH: number,
+): Promise<string> {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("could not rasterize the map SVG"));
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no 2d canvas available");
+    ctx.drawImage(img, region.x, region.y, region.w, region.h, 0, 0, outW, outH);
+    return canvas.toDataURL("image/png").split(",")[1] ?? "";
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export default class ChartdownPlugin extends Plugin {
   settings: ChartdownSettings = DEFAULT_SETTINGS;
 
   override async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<ChartdownSettings> | null) };
-    this.registerMarkdownCodeBlockProcessor("chartdown", (source, el) => {
-      renderChartdownBlock(source, el, this.settings.mode);
+    this.registerMarkdownCodeBlockProcessor("chartdown", (source, el, ctx) => {
+      const slash = ctx.sourcePath.lastIndexOf("/");
+      const folder = slash >= 0 ? ctx.sourcePath.slice(0, slash + 1) : "";
+      mountChartdownBlock(source, el, {
+        initialMode: this.settings.mode,
+        baseName: parse(source).document.docId,
+        io: {
+          writeFile: async (name, contents) => {
+            await this.app.vault.adapter.write(folder + name, contents);
+          },
+          notify: (message) => {
+            new Notice(message);
+          },
+          rasterize,
+        },
+      });
     });
     this.addSettingTab(new ChartdownSettingTab(this.app, this));
   }
@@ -40,11 +84,11 @@ class ChartdownSettingTab extends PluginSettingTab {
   override display(): void {
     this.containerEl.empty();
     new Setting(this.containerEl)
-      .setName("GM mode")
+      .setName("Default to GM view")
       .setDesc(
-        "Render GM secrets: hidden tokens, [gm] notes, and triggers. " +
-          "Off, maps show the player view — secrets are stripped fail-closed. " +
-          "Re-open affected notes after changing this.",
+        "New map blocks start in GM view (hidden tokens, [gm] notes, triggers). " +
+          "Each map also has its own toolbar toggle. Off, maps start as the " +
+          "player view — secrets stripped fail-closed.",
       )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.mode === "gm").onChange(async (value) => {

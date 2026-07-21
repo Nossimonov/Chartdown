@@ -135,9 +135,18 @@ At battlemap scale, table legibility outranks self-description: **fallback word-
 - **Connectors**: *any feature carrying `to=<level>`* connects levels — `stairs` and `ramp` are ordinary stdlib words, and `ladder : stairs` (or any word at all) works identically. Landings default to the same cell; `at=<cell>` places a differing landing. The destination panel shows the reciprocal landing automatically unless an explicit connector is declared at that cell. Connectors expose the **reserved auto-states `up` and `down`** (derived from level order) to themes — `ladder.up : glyph=…` — through the ordinary spec 08 machinery. A `to=` naming an undeclared level fails loud.
 - **Rendering**: one panel per level in `levels:` order (topmost first — the module floor-plan sheet), each titled with its level word, sharing the document's grid. Light, visibility, crossings, and the GM/player split compute per level. Connector annotations (direction and destination) are navigational and render even under `labels: none`. Renderer/CLI options select a single level.
 
-## 9. Export note (non-normative)
+## 9. UVTT export
 
-The archetype facets map 1:1 onto Universal VTT: barrier and wall geometry → `line_of_sight`; `opening` with its `passes`/`sight` facets → `portals` (closed state, window-ness); `light=` → `lights`; grid and `scale:` → `resolution`. Elevation flattens on UVTT export (ledges bake into the rendered image; walls are unaffected), and so does the `open` flag — UVTT's vocabulary has no open/enclosed concept; richer multi-level and roof-aware export targets (e.g. Foundry scene levels) are ecosystem-phase work. This mapping is why the triad is modeled first-class: export is a transform, not an interpretation.
+*(Normative since issue [#40](https://github.com/Nossimonov/Chartdown/issues/40); previously a non-normative note.)* A battlemap exports to Universal VTT (`.dd2vtt`/`.uvtt`/`.df2vtt`) as a **pure transform of the parsed document** — export is a transform, not an interpretation, which is why the structures triad is modeled first-class. One file per level; coordinates in grid units:
+
+- **`line_of_sight`** — structure perimeter walls (per cell edge, minus `ruined` sides, coincident edges deduplicated per §3) minus **every opening edge**, plus freestanding non-fence barriers. Portals own their edges' occlusion.
+- **`portals`** — every door/gate/window/arrow-slit edge: `closed` from the `passes` facet (doors default closed; windows never pass). **Window-ness is the combination**: a hole in `line_of_sight` (sight and light pass) plus a shut portal (movement doesn't) — UVTT has no sight facet, but the pair models it.
+- **`lights`** — every entity carrying `light=`, positioned at its placement's center, range converted to grid units via `scale:`.
+- **`resolution`** — grid dimensions as `map_size`; `pixels_per_grid` records the raster density of the accompanying image.
+- **The render mode applies before export**: a player-mode export carries no GM secrets. **Not exported**: tokens (play-state is the VTT's, vision non-goal), fences (`sight=all`; UVTT has no movement-only blocker), and elevation/`open`, which flatten into the image.
+- **`image`** — a raster of the level's playable grid region. The reference exporter emits geometry plus the matching SVG and its grid-aligned pixel region; the **caller supplies the raster** (the renderer stays runtime-dependency-free — ADR 0010).
+
+Richer multi-level and roof-aware targets (e.g. Foundry scene levels) remain ecosystem-phase work.
 
 ---
 
