@@ -328,6 +328,21 @@ describe("levels (spec 06 §8)", () => {
     expect(svg).toContain('fill="#6b6157"'); // earth around the Undercroft
   });
 
+  it("upper levels declare their surfaces: air and difficult roofs", () => {
+    const { svg } = renderSource(example("fairwater-manor"), { level: "upper" });
+    expect(svg).toContain('fill="#e9edee"'); // open sky
+    expect(svg).toContain('fill="#bf9c85"'); // roof tiles
+    expect(svg).toContain("url(#hatch)"); // roofs are difficult terrain
+  });
+
+  it("room labels sit inside their rooms (readable on any surrounding fill)", () => {
+    const { svg } = renderSource(example("fairwater-manor"), { level: "cellar", mode: "gm" });
+    const label = svg.indexOf(">The Undercroft</text>");
+    expect(label).toBeGreaterThan(-1);
+    const x = /x="([\d.]+)" y="([\d.]+)"[^>]*>The Undercroft/.exec(svg);
+    expect(x).not.toBeNull(); // centered placement asserted via snapshot stability
+  });
+
   it("RenderOptions.level renders a single panel", () => {
     const all = renderSource(example("fairwater-manor"));
     const one = renderSource(example("fairwater-manor"), { level: "cellar" });

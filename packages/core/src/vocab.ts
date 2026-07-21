@@ -100,6 +100,8 @@ ramp : feature
 slope : terrain
 earth : terrain
 terrace : terrain
+roof : terrain
+air : terrain
 wagon : feature states=overturned
 crates : feature
 barrel : feature

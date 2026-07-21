@@ -626,8 +626,15 @@ export function renderBattlemap(
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
+    // Room labels sit in the middle of the rooms they label (module convention;
+    // also keeps them on the room's light fill rather than e.g. dark earth).
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
-      layers.labels.push(text(e.name, { x: r.x + r.w / 2, y: r.y - 5, "font-size": 10, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+      layers.labels.push(
+        text(e.name, {
+          x: r.x + r.w / 2, y: r.y + r.h / 2 - 8, "font-size": 10, fill: INK,
+          opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
+        }),
+      );
     }
   }
 

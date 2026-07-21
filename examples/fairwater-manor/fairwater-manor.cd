@@ -46,7 +46,12 @@ building chambers "The Lord's Chambers" : D2..L6
   window : D6.w
 
 [terrain upper]
-terrace walkway "The Wall-walk" : area M2..V3 drop   ; open to the sky; the edge is a fall
+air : area A1..Z20          ; open sky — everything unfloored is a fall
+terrace walkway "The Wall-walk" : area M2..V3 drop   ; the edge is a fall
+roof : area D7..H10 difficult    ; the Kitchen's tiles — climbable, not walkable
+roof : area M4..Q6 difficult     ; the Solar's
+roof : area R4..V6 difficult     ; the Barracks'
+roof : area L11..N12 difficult   ; the Gatehouse's
 
 [terrain cellar]
 earth : area A1..Z20        ; solid ground — there is nothing to break through to

@@ -23,6 +23,8 @@ const TERRAIN_FILLS: Record<string, string> = {
   rubble: "#cfc8bc", slope: "#d9d0bd",
   ford: "#cfd4b8",
   earth: "#6b6157",
+  roof: "#bf9c85",
+  air: "#e9edee",
   terrace: "#e3ddcc",
 };
 
