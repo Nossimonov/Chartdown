@@ -1,0 +1,41 @@
+# Publishes all four @chartdown packages when a version tag (v0.x.y) is pushed.
+# Auth is npm OIDC trusted publishing (issue #37): each package on npmjs.com
+# names this workflow file as its trusted publisher — no tokens, no OTP, and
+# provenance attestations come for free. The tag must equal every package
+# version, so a release is: bump versions, commit, tag, push the tag.
+name: Release to npm
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write # the OIDC exchange with npm
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - name: Tag must match every package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          for p in core render-svg cli browser; do
+            V=$(node -p "require('./packages/$p/package.json').version")
+            if [ "$V" != "$TAG" ]; then
+              echo "packages/$p is $V but the tag says $TAG" >&2
+              exit 1
+            fi
+          done
+      - run: npm publish -w @chartdown/core -w @chartdown/render-svg -w @chartdown/cli -w @chartdown/browser

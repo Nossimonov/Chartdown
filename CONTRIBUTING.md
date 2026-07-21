@@ -57,3 +57,19 @@ Proposals are decided by discussion on the issue. Acceptance means: an ADR is wr
 ## ADRs (Architecture Decision Records)
 
 Live in [docs/decisions/](docs/decisions/), numbered sequentially (`0001-...md`, `0002-...md`). Copy [0000-template.md](docs/decisions/0000-template.md). ADRs are immutable once accepted — a reversal is a *new* ADR that supersedes the old one.
+
+## Branches, deploys, and releases
+
+Three lanes (issue #37):
+
+- **`preview`** — the staging branch. Pushes deploy a staging playground at [/Chartdown/preview/](https://nossimonov.github.io/Chartdown/preview/) so features can be exercised live before they reach `main`. CI runs here too.
+- **`main`** — production. Pushes deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit.
+- **Version tags** — the npm release lane. Publishing is *never* triggered by a branch push. To release: bump all four `packages/*/package.json` versions to the same number, commit, then tag and push the tag:
+
+  ```sh
+  git tag v0.1.1 && git push origin v0.1.1
+  ```
+
+  The [release workflow](.github/workflows/release.yml) builds, typechecks, tests, refuses to publish unless the tag equals every package version, and publishes `@chartdown/{core,render-svg,cli,browser}` via **npm OIDC trusted publishing** — no tokens or OTPs; provenance attestations are automatic. Each package on npmjs.com names `release.yml` in this repo as its trusted publisher.
+
+Both `preview` and `main` are protected against force-pushes and deletion.

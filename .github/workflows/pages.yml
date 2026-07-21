@@ -1,8 +1,12 @@
+# One Pages site, two lanes (issue #37): main builds the production playground
+# at the site root; the preview branch builds a staging playground at /preview.
+# A push to either branch redeploys BOTH from their current tips, since a Pages
+# deploy replaces the whole site.
 name: Deploy playground
 
 on:
   push:
-    branches: [main]
+    branches: [main, preview]
   workflow_dispatch:
 
 permissions:
@@ -22,15 +26,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          path: preview
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+      - name: Build production playground (main)
+        working-directory: main
+        run: |
+          npm ci
+          npm run build
+      - name: Build staging playground (preview branch)
+        working-directory: preview
+        run: |
+          npm ci
+          npm run build
+      - name: Assemble site (production at /, staging at /preview)
+        run: |
+          mkdir -p site
+          cp -r main/playground/. site/
+          mkdir -p site/preview
+          cp -r preview/playground/. site/preview/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: playground
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
