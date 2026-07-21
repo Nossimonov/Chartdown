@@ -461,6 +461,27 @@ export function renderBattlemap(
   }
 
   /**
+   * The `drop` flag (spec 06 §5): an area's boundary is a fall edge, rendered
+   * as the classic ticked cliff line — boundary stroke plus short outward ticks.
+   */
+  function dropEdge(r: { x: number; y: number; w: number; h: number }): string {
+    const ink = model.theme.surface("ledge", "stroke", "#6b5d4a");
+    const parts: string[] = [
+      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, "stroke-width": 2, class: "drop" }),
+    ];
+    const tick = 4;
+    for (let x = r.x + 5; x < r.x + r.w; x += 9) {
+      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, "stroke-width": 1.2 }));
+      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, "stroke-width": 1.2 }));
+    }
+    for (let y = r.y + 5; y < r.y + r.h; y += 9) {
+      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, "stroke-width": 1.2 }));
+      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, "stroke-width": 1.2 }));
+    }
+    return el("g", {}, ...parts);
+  }
+
+  /**
    * A level connector (spec 06 §8): themed via the word's chain with the
    * reserved up/down auto-state (`ladder.up : glyph=…`); default render is a
    * stair glyph. The direction/destination annotation is navigational and
@@ -540,6 +561,7 @@ export function renderBattlemap(
             const r = rangeRect(arg);
             areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill }));
             if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
+            if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
             areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
@@ -557,6 +579,7 @@ export function renderBattlemap(
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
         if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
+        if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
       } else if (p.kind === "address") {
         const o = cellOrigin(p);
         areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));

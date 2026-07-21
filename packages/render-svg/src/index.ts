@@ -130,6 +130,7 @@ export function renderSource(source: string, options: RenderOptions & ParseOptio
   const renderOptions: RenderOptions = {};
   if (options.mode) renderOptions.mode = options.mode;
   if (options.theme) renderOptions.theme = options.theme;
+  if (options.level !== undefined) renderOptions.level = options.level;
   const rendered = render(parsed.document, renderOptions);
   return { svg: rendered.svg, document: parsed.document, diagnostics: [...parsed.diagnostics, ...rendered.diagnostics] };
 }

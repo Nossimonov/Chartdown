@@ -98,6 +98,8 @@ water : terrain states=difficult
 rubble : terrain states=difficult
 ramp : feature
 slope : terrain
+earth : terrain
+terrace : terrain
 wagon : feature states=overturned
 crates : feature
 barrel : feature

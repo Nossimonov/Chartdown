@@ -22,6 +22,8 @@ const TERRAIN_FILLS: Record<string, string> = {
   wasteland: "#d4c8b8", mud: "#c8b294", sand: "#ecdfb8", grass: "#dde5b8",
   rubble: "#cfc8bc", slope: "#d9d0bd",
   ford: "#cfd4b8",
+  earth: "#6b6157",
+  terrace: "#e3ddcc",
 };
 
 const PATH_STROKES: Record<string, { stroke: string; dash?: string }> = {

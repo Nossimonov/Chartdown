@@ -33,6 +33,10 @@ rubble : terrain states=difficult
 ramp : feature
 slope : terrain
 
+; level ground-truth (spec 06 §5, §8)
+earth : terrain             ; solid ground — underground levels declare it around their rooms
+terrace : terrain           ; walkable raised ground (wall-walks, balconies)
+
 ; props
 wagon : feature states=overturned
 crates : feature
@@ -88,6 +92,7 @@ A token-archetype word with an **area placement** renders as a staging zone: `pa
 - **Ledges are emergent, not drawn**: wherever adjacent placements' elevations differ, the renderer draws a theme-styled edge, and the drop is the difference — precisely the number the table asks for. There is no cliff-tracing grammar.
 - **Transitions are vocabulary**: `stairs`, `ramp`, and `slope` are traversable connections, placed spanning a boundary.
 - **Tokens carry no elevation** — a creature's altitude is play-state, which is VTT territory (vision non-goal: Chartdown is not a VTT).
+- **The `drop` flag** marks an area's boundary as a **fall edge**, rendered as the ticked cliff line: `terrace walkway "The Wall-walk" : area M2..V3 drop`. On an upper level (§8) it bounds walkable ground against open air; on any level it is the treacherous edge the table asks about. The reverse case — underground levels — declares solid ground explicitly: `earth : area A1..Z20` in a `[terrain cellar]` section fills everything outside the rooms with rock; extent is declared, never derived.
 
 ## 6. Crossings and terrain layering
 

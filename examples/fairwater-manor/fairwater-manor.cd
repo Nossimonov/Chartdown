@@ -41,9 +41,15 @@ building gatehouse "The Gatehouse" : L11..N12
 
 [structures upper]
 building chambers "The Lord's Chambers" : D2..L6
-  door : L4.e                ; onto the wall-walk landing
+  door : L3.e                ; onto the wall-walk
   window : D3.w
   window : D6.w
+
+[terrain upper]
+terrace walkway "The Wall-walk" : area M2..V3 drop   ; open to the sky; the edge is a fall
+
+[terrain cellar]
+earth : area A1..Z20        ; solid ground — there is nothing to break through to
 
 [structures cellar]
 building undercroft "The Undercroft" : E7..K10

@@ -28,12 +28,50 @@ const diagnosticsEl = $<HTMLPreElement>("diagnostics");
 const statusEl = $<HTMLSpanElement>("status");
 const exampleSelect = $<HTMLSelectElement>("example");
 const themeSelect = $<HTMLSelectElement>("theme");
+const levelsEl = $<HTMLSpanElement>("levels");
 
 let mode: RenderMode = "player";
+/** Selected level for multi-level maps; "all" = the stacked floor-plan sheet. */
+let selectedLevel: string | "all" = "all";
+let knownLevels = "";
+
+function syncLevelButtons(levels: string[], defaultLevel: string): void {
+  const signature = levels.join(" ");
+  if (signature === knownLevels) return;
+  knownLevels = signature;
+  levelsEl.innerHTML = "";
+  if (levels.length === 0) {
+    levelsEl.hidden = true;
+    selectedLevel = "all";
+    return;
+  }
+  // Default to the document's default level (the ground floor), not the long scroll.
+  selectedLevel = defaultLevel;
+  for (const value of [...levels, "all"]) {
+    const button = document.createElement("button");
+    button.dataset["level"] = value;
+    button.textContent = value === "all" ? "All floors" : value;
+    button.setAttribute("aria-pressed", String(value === selectedLevel));
+    button.addEventListener("click", () => {
+      selectedLevel = value;
+      for (const b of levelsEl.querySelectorAll("button")) {
+        b.setAttribute("aria-pressed", String(b === button));
+      }
+      renderNow();
+    });
+    levelsEl.append(button);
+  }
+  levelsEl.hidden = false;
+}
 
 function renderNow(): void {
   const theme = themeSelect.value === "candyworld" ? candyworld : undefined;
-  const { svg, diagnostics } = renderSource(editor.value, theme ? { mode, theme } : { mode });
+  const first = renderSource(editor.value, theme ? { mode, theme } : { mode });
+  syncLevelButtons(first.document.levels, first.document.defaultLevel);
+  const useLevel = first.document.levels.length > 0 && selectedLevel !== "all";
+  const { svg, diagnostics } = useLevel
+    ? renderSource(editor.value, { mode, level: selectedLevel, ...(theme ? { theme } : {}) })
+    : first;
   preview.innerHTML = svg;
   const errors = diagnostics.filter((d) => d.severity === "error").length;
   const warnings = diagnostics.length - errors;

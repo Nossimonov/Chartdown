@@ -322,6 +322,20 @@ describe("levels (spec 06 §8)", () => {
     expect(renderSource(connector).diagnostics.map((d) => d.message).join()).toMatch(/requires a levels: declaration/);
   });
 
+  it("the drop flag renders a ticked fall edge; earth fills the underground", () => {
+    const { svg } = renderSource(example("fairwater-manor"));
+    expect(svg).toContain('class="drop"');
+    expect(svg).toContain('fill="#6b6157"'); // earth around the Undercroft
+  });
+
+  it("RenderOptions.level renders a single panel", () => {
+    const all = renderSource(example("fairwater-manor"));
+    const one = renderSource(example("fairwater-manor"), { level: "cellar" });
+    expect(one.svg.length).toBeLessThan(all.svg.length);
+    expect(one.svg).not.toContain("— upper —");
+    expect(one.svg).toContain("The Undercroft");
+  });
+
   it("themes can restyle connector kinds and directions (ladder.down)", () => {
     const theme = "[theme]\nladder.down : glyph=rungs\n[glyphs]\nrungs : \"M-5,-8 L-5,8 M5,-8 L5,8 M-5,-3 L5,-3 M-5,3 L5,3\"\n";
     const { svg } = renderSource(example("fairwater-manor"), { theme });
