@@ -12,7 +12,7 @@ import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, pairOf, type Model } from "./model";
-import { INK, pathStrokeFor, terrainFill, terrainFillFor, tierFor } from "./theme";
+import { hasTierGlyph, INK, pathStrokeFor, terrainFill, terrainFillFor, tierFor } from "./theme";
 import {
   blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
   nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
@@ -293,7 +293,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             : el("circle", { cx: r.point.x, cy: r.point.y, r: tier.r, fill: INK, stroke: "#fff", "stroke-width": 1 }),
         ),
       );
-      const label = e.name ?? (e.archetypeSource !== "vocab" ? e.typeWord : null) ?? (e.typeWord === "note" ? e.texts[0] ?? null : null);
+      // Fallback-chain terminal (spec 04 §4): a marker with no meaningful
+      // glyph anywhere along its chain carries its word as the label.
+      const label =
+        e.name ??
+        (e.typeWord === "note" ? e.texts[0] ?? null : null) ??
+        (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e)) {
         const spot = placer.placeBeside(r.point.x + tier.r + 3, r.point.x - tier.r - 3, r.point.y + 4, label, tier.font);
         layers.labels.push(

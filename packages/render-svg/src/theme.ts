@@ -64,6 +64,14 @@ export const tierFor = (chain: string[]): { r: number; font: number; weight: str
   return { r: 3, font: 10, weight: "normal" };
 };
 
+/** Does the default theme give this chain a meaningful region-scale glyph? */
+export const hasTierGlyph = (chain: string[]): boolean => chain.some((word) => Boolean(TIERS[word]));
+
+/** Battlemap words the default theme draws distinctly (glyph speaks; no word label needed). */
+const BATTLEMAP_GLYPHS = new Set(["campfire", "torch", "lantern", "brazier", "wagon"]);
+
+export const hasBattlemapGlyph = (chain: string[]): boolean => chain.some((word) => BATTLEMAP_GLYPHS.has(word));
+
 export const SIDE_COLORS: Record<string, string> = {
   party: "#4a7ab5",
   ally: "#4a9a6a",

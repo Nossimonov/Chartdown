@@ -6,7 +6,7 @@
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
-import { GRID_LINE, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
+import { GRID_LINE, hasBattlemapGlyph, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
 import { colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 
 const CELL = 32;
@@ -575,7 +575,9 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
       parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: "#8f8474", stroke: INK, "stroke-width": 1 }));
     }
     into.push(el("g", { id: anchor }, ...parts));
-    const label = e.name ?? (e.archetypeSource !== "vocab" ? e.typeWord : null);
+    // Fallback-chain terminal (spec 04 §4): generic glyphs carry their word.
+    const chain2 = model.chainOf(e.typeWord);
+    const label = e.name ?? (hasBattlemapGlyph(chain2) ? null : e.typeWord);
     if (label && !e.flags.includes("nolabel")) {
       labels.push(text(label, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
     }

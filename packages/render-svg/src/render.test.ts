@@ -147,6 +147,21 @@ describe("crossings and layering (spec 06 §6)", () => {
   });
 });
 
+describe("fallback-chain terminal labels (spec 04 §4)", () => {
+  it("vocab-defined words with no themed glyph carry their word as label", () => {
+    const { svg } = renderSource(example("gumdrop-vale"));
+    expect(svg).toContain(">sugar-silo</text>");
+    expect(svg).toContain(">hovercart</text>");
+    expect(svg).toContain(">zorbleflax</text>");
+  });
+
+  it("tiered settlement glyphs speak for themselves — named only", () => {
+    const src = "map: region\nextent: 100x100mi\n[settlements]\nvillage : (50,50)\n";
+    const { svg } = renderSource(src);
+    expect(svg).not.toContain(">village</text>");
+  });
+});
+
 describe("elevation ledges (spec 06 §5)", () => {
   it("an elevated zone renders as a ledge", () => {
     const src = [
