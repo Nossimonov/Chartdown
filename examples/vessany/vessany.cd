@@ -15,11 +15,6 @@ mountains "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
 forest "Thornwood" : blob (430,170) size=90mi
 hills "The Vess Downs" : blob (520,400) size=120mi
 
-[paths]
-river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"
-road "Coast Road" : "Argenport" to "Merrow's Rest" along coast
-road "King's Way" : highkeep to "Argenport"
-
 [settlements]
 capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
 city "Argenport" : on coast at (160,470)
@@ -27,6 +22,11 @@ town "Merrow's Rest" : on coast 70mi north of "Argenport"
 town "Dunmere" : south edge of "Thornwood"
 village "Gull Landing" : on "Gull Bay"
 village "Sparrowdown" : 40mi east of highkeep
+
+[paths]
+river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"
+road "Coast Road" : from "Argenport" to "Merrow's Rest" along coast
+road "King's Way" : from highkeep to "Argenport"
 
 [realms]
 realm "Vessany" : west of "The Serpent's Spine"

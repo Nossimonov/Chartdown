@@ -276,6 +276,14 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       continue;
     }
 
+    if (RELATIONAL_KEYWORDS.has(c)) {
+      // The relational grammar is closed (spec 02 §7): a keyword outside its
+      // form is a syntax error, never a silent flag ("X to Y" without `from`).
+      diagnostics.push(error(line, `misplaced relational keyword '${c}' — the closed placement grammar defines only the nine forms of spec 02 §7`));
+      i++;
+      continue;
+    }
+
     result.flags.push(c);
     i++;
   }

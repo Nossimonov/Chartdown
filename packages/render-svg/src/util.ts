@@ -1,0 +1,144 @@
+/** SVG building, deterministic PRNG, and geometry helpers. */
+
+export interface XY {
+  x: number;
+  y: number;
+}
+
+/** Fixed-precision formatting keeps output byte-identical across runs. */
+export const fmt = (n: number): string => {
+  const rounded = Math.round(n * 100) / 100;
+  return Object.is(rounded, -0) ? "0" : String(rounded);
+};
+
+export const esc = (text: string): string =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+export type Attrs = Record<string, string | number | undefined>;
+
+export function el(name: string, attrs: Attrs, ...children: string[]): string {
+  const attrText = Object.entries(attrs)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => ` ${k}="${typeof v === "number" ? fmt(v) : esc(String(v))}"`)
+    .join("");
+  const body = children.join("");
+  return body ? `<${name}${attrText}>${body}</${name}>` : `<${name}${attrText}/>`;
+}
+
+export const text = (content: string, attrs: Attrs): string =>
+  `<text${Object.entries(attrs)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => ` ${k}="${typeof v === "number" ? fmt(v) : esc(String(v))}"`)
+    .join("")}>${esc(content)}</text>`;
+
+export const pointsAttr = (pts: XY[]): string => pts.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(" ");
+
+/** mulberry32 — small, fast, deterministic. */
+export function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Organic finishing: midpoint-displacement jitter of a polyline (two rounds). */
+export function meander(points: XY[], amount: number, random: () => number): XY[] {
+  let current = points;
+  for (let round = 0; round < 2; round++) {
+    const next: XY[] = [];
+    for (let i = 0; i < current.length - 1; i++) {
+      const a = current[i]!;
+      const b = current[i + 1]!;
+      next.push(a);
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const off = (random() - 0.5) * amount * (round === 0 ? 1 : 0.5);
+      next.push({ x: mx + (-dy / len) * off, y: my + (dx / len) * off });
+    }
+    next.push(current[current.length - 1]!);
+    current = next;
+  }
+  return current;
+}
+
+/** Organic blob: radial jitter around a center. */
+export function blob(center: XY, radius: number, random: () => number, segments = 14): XY[] {
+  const pts: XY[] = [];
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const r = radius * (0.78 + random() * 0.4);
+    pts.push({ x: center.x + Math.cos(angle) * r, y: center.y + Math.sin(angle) * r });
+  }
+  return pts;
+}
+
+export function nearestOnPolyline(pts: XY[], target: XY): XY {
+  let best: XY = pts[0]!;
+  let bestDist = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i]!;
+    const b = pts[i + 1]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / lenSq));
+    const p = { x: a.x + t * dx, y: a.y + t * dy };
+    const d = Math.hypot(p.x - target.x, p.y - target.y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/** Sub-polyline between the params nearest to two targets (for `along` paths). */
+export function polylineBetween(pts: XY[], a: XY, b: XY): XY[] {
+  const indexNearest = (target: XY): number => {
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.hypot(pts[i]!.x - target.x, pts[i]!.y - target.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+  let i = indexNearest(a);
+  let j = indexNearest(b);
+  if (i > j) [i, j] = [j, i];
+  const slice = pts.slice(i, j + 1);
+  return slice.length >= 2 ? slice : [a, b];
+}
+
+export const COMPASS_VECTORS: Record<string, XY> = {
+  n: { x: 0, y: -1 }, north: { x: 0, y: -1 },
+  s: { x: 0, y: 1 }, south: { x: 0, y: 1 },
+  e: { x: 1, y: 0 }, east: { x: 1, y: 0 },
+  w: { x: -1, y: 0 }, west: { x: -1, y: 0 },
+  ne: { x: 0.707, y: -0.707 }, northeast: { x: 0.707, y: -0.707 },
+  nw: { x: -0.707, y: -0.707 }, northwest: { x: -0.707, y: -0.707 },
+  se: { x: 0.707, y: 0.707 }, southeast: { x: 0.707, y: 0.707 },
+  sw: { x: -0.707, y: 0.707 }, southwest: { x: -0.707, y: 0.707 },
+};
+
+/** Column letters → 1-indexed number: A=1, Z=26, AA=27. */
+export function colToNumber(col: string): number {
+  let n = 0;
+  for (const ch of col) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+}
+
+export function measureToNumber(measure: string): number {
+  const m = /^(\d+(?:\.\d+)?)/.exec(measure);
+  return m ? Number(m[1]) : 0;
+}

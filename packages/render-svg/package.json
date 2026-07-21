@@ -1,0 +1,17 @@
+{
+  "name": "@chartdown/render-svg",
+  "version": "0.0.0",
+  "description": "Chartdown SVG renderer — deterministic, seeded, runtime-dependency-free beyond @chartdown/core (ADR 0007)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "dependencies": {
+    "@chartdown/core": "0.0.0"
+  }
+}

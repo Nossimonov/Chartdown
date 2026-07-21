@@ -1858,107 +1858,6 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
     {
       "entries": [
         {
-          "archetype": "path",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "line": 19,
-          "name": "The Vess",
-          "pairs": [],
-          "placements": [
-            {
-              "form": "from-to",
-              "from": {
-                "at": {
-                  "form": "name",
-                  "kind": "ref",
-                  "value": "The Serpent's Spine",
-                },
-                "point": {
-                  "kind": "point",
-                  "x": 720,
-                  "y": 240,
-                },
-              },
-              "kind": "relational",
-              "to": {
-                "at": {
-                  "form": "name",
-                  "kind": "ref",
-                  "value": "Gull Bay",
-                },
-              },
-              "via": [],
-            },
-          ],
-          "section": "paths",
-          "texts": [],
-          "typeWord": "river",
-        },
-        {
-          "archetype": "path",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [
-            "to",
-          ],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "line": 20,
-          "name": "Coast Road",
-          "pairs": [],
-          "placements": [
-            {
-              "form": "along",
-              "kind": "relational",
-              "ref": {
-                "form": "id",
-                "kind": "ref",
-                "value": "coast",
-              },
-            },
-          ],
-          "section": "paths",
-          "texts": [
-            "Argenport",
-            "Merrow's Rest",
-          ],
-          "typeWord": "road",
-        },
-        {
-          "archetype": "path",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [
-            "highkeep",
-            "to",
-          ],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "line": 21,
-          "name": "King's Way",
-          "pairs": [],
-          "placements": [],
-          "section": "paths",
-          "texts": [
-            "Argenport",
-          ],
-          "typeWord": "road",
-        },
-      ],
-      "kind": "section",
-      "known": true,
-      "line": 18,
-      "name": "paths",
-    },
-    {
-      "entries": [
-        {
           "archetype": "feature",
           "archetypeSource": "vocab",
           "details": [],
@@ -1968,7 +1867,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
             "highkeep",
           ],
           "kind": "entity",
-          "line": 24,
+          "line": 19,
           "name": "Highkeep",
           "pairs": [
             {
@@ -1995,7 +1894,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 25,
+          "line": 20,
           "name": "Argenport",
           "pairs": [],
           "placements": [
@@ -2026,7 +1925,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 26,
+          "line": 21,
           "name": "Merrow's Rest",
           "pairs": [],
           "placements": [
@@ -2063,7 +1962,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 27,
+          "line": 22,
           "name": "Dunmere",
           "pairs": [],
           "placements": [
@@ -2090,7 +1989,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 28,
+          "line": 23,
           "name": "Gull Landing",
           "pairs": [],
           "placements": [
@@ -2116,7 +2015,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 29,
+          "line": 24,
           "name": "Sparrowdown",
           "pairs": [],
           "placements": [
@@ -2139,8 +2038,138 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
       ],
       "kind": "section",
       "known": true,
-      "line": 23,
+      "line": 18,
       "name": "settlements",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 27,
+          "name": "The Vess",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "The Serpent's Spine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 720,
+                  "y": 240,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Gull Bay",
+                },
+              },
+              "via": [],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 28,
+          "name": "Coast Road",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Argenport",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Merrow's Rest",
+                },
+              },
+              "via": [],
+            },
+            {
+              "form": "along",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "coast",
+              },
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "road",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 29,
+          "name": "King's Way",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "highkeep",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Argenport",
+                },
+              },
+              "via": [],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "road",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 26,
+      "name": "paths",
     },
     {
       "entries": [

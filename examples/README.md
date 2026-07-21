@@ -7,6 +7,7 @@ Chartdown documents live here — **written before the syntax exists**. This is 
 - One directory per example: `examples/<slug>/`
   - `<slug>.cd` — the Chartdown source (aspirational until the spec catches up)
   - `README.md` — what map this describes, and a sketch/image of the intended render if available
+  - `<slug>.svg` / `<slug>-gm.svg` — **generated** player/GM renders from the reference renderer (`@chartdown/render-svg`); regenerate rather than edit. The CLI (issue #23) will make this a command.
 - Each example declares its status at the top of its README:
   - **aspirational** — not yet valid under any spec draft; exists to drive syntax design
   - **spec-aligned** — valid under the current spec draft

@@ -10,7 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p packages/core"
+    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

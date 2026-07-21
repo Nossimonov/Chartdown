@@ -47,6 +47,11 @@ describe("coordinates and grids (spec 02)", () => {
     expect(errorsOf("map: hexcrawl\ngrid: hex 8x9\n").join()).toMatch(/orientation .* offset parity/);
   });
 
+  it("the relational grammar is closed — bare 'X to Y' without 'from' is rejected", () => {
+    const src = 'map: region\nextent: 9x9mi\n[paths]\nroad "Sneaky" : "A" to "B"\n';
+    expect(errorsOf(src).join()).toMatch(/misplaced relational keyword 'to'/);
+  });
+
   it("forward references are errors", () => {
     const src = [
       "map: region",
