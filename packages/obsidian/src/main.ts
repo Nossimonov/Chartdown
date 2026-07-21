@@ -54,12 +54,18 @@ export default class ChartdownPlugin extends Plugin {
       mountChartdownBlock(source, el, {
         initialMode: this.settings.mode,
         baseName: parse(source).document.docId,
+        folderLabel: folder,
         io: {
           writeFile: async (name, contents) => {
             await this.app.vault.adapter.write(folder + name, contents);
           },
           notify: (message) => {
-            new Notice(message);
+            new Notice(message, 8000);
+          },
+          reveal: (name) => {
+            // Desktop API; opens the system file explorer with the file
+            // selected — the "get it out as a file" affordance.
+            (this.app as unknown as { showInFolder?: (path: string) => void }).showInFolder?.(folder + name);
           },
           rasterize,
         },
