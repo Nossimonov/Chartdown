@@ -18,3 +18,17 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+
+  # Required check on main (issue #37 lanes): changes reach main only by PR
+  # from the preview branch — no direct development against production.
+  gatekeeper:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: PRs into main must come from preview
+        run: |
+          if [ "${{ github.base_ref }}" = "main" ] && [ "${{ github.head_ref }}" != "preview" ]; then
+            echo "Changes reach main via PR from the preview branch, not from '${{ github.head_ref }}'" >&2
+            exit 1
+          fi
+          echo "ok"

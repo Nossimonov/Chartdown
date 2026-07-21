@@ -63,7 +63,7 @@ Live in [docs/decisions/](docs/decisions/), numbered sequentially (`0001-...md`,
 Three lanes (issue #37):
 
 - **`preview`** — the staging branch. Pushes deploy a staging playground at [/Chartdown/preview/](https://nossimonov.github.io/Chartdown/preview/) so features can be exercised live before they reach `main`. CI runs here too.
-- **`main`** — production. Pushes deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit.
+- **`main`** — production. Merges deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit. **Direct pushes are rejected — including for admins**: changes reach `main` only by pull request from `preview`, with CI (`test`) and the source-branch check (`gatekeeper`) required to pass.
 - **Version tags** — the npm release lane. Publishing is *never* triggered by a branch push. To release: move the `[Unreleased]` items in [CHANGELOG.md](CHANGELOG.md) into a new `## [x.y.z]` section, bump all four `packages/*/package.json` versions to the same number, commit, then tag and push the tag:
 
   ```sh
@@ -72,4 +72,4 @@ Three lanes (issue #37):
 
   The [release workflow](.github/workflows/release.yml) builds, typechecks, tests, refuses to publish unless the tag equals every package version **and** has a matching changelog section, publishes `@chartdown/{core,render-svg,cli,browser}` via **npm OIDC trusted publishing** — no tokens or OTPs; provenance attestations are automatic — and creates the GitHub Release with that changelog section as its notes. Each package on npmjs.com names `release.yml` in this repo as its trusted publisher.
 
-Both `preview` and `main` are protected against force-pushes and deletion.
+Both `preview` and `main` are protected against force-pushes and deletion; `main` additionally requires the PR flow above (`enforce_admins` is on, so owner credentials — human or agent — get no bypass).
