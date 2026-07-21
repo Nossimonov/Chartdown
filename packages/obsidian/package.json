@@ -5,6 +5,6 @@
   "description": "Obsidian plugin: render chartdown fenced blocks in place. Not published to npm — distributed as an Obsidian community plugin.",
   "license": "MIT",
   "devDependencies": {
-    "obsidian": "^1.7.2"
+    "obsidian": "^1.13.1"
   }
 }

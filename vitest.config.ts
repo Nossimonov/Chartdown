@@ -11,4 +11,9 @@ export default defineConfig({
       "@chartdown/render-svg": fileURLToPath(new URL("packages/render-svg/src/index.ts", import.meta.url)),
     },
   },
+  test: {
+    // Obsidian DOM helper stand-ins for the plugin's happy-dom suites
+    // (self-guarded no-op in node-environment suites).
+    setupFiles: ["packages/obsidian/src/obsidian-dom-shim.ts"],
+  },
 });
