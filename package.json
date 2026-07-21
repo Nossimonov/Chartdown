@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "node build.mjs",
+    "build": "node build.mjs && tsc -p packages/core/tsconfig.build.json && tsc -p packages/render-svg/tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser && tsc --noEmit -p playground"

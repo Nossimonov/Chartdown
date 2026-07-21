@@ -1,14 +1,41 @@
 {
   "name": "@chartdown/core",
-  "version": "0.0.0",
-  "description": "Chartdown parser and AST — runtime-dependency-free by rule (ADR 0007)",
+  "version": "0.1.0",
+  "description": "Chartdown parser and AST — a plain-text, Markdown-inspired language for TTRPG maps. Runtime-dependency-free by rule (ADR 0007).",
   "license": "MIT",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
-    "src",
     "dist"
-  ]
+  ],
+  "keywords": [
+    "chartdown",
+    "ttrpg",
+    "map",
+    "battlemap",
+    "hexcrawl",
+    "markdown",
+    "plain-text",
+    "parser"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nossimonov/Chartdown.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://nossimonov.github.io/Chartdown/",
+  "bugs": "https://github.com/Nossimonov/Chartdown/issues",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

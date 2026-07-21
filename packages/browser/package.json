@@ -1,14 +1,36 @@
 {
   "name": "@chartdown/browser",
-  "version": "0.0.0",
-  "description": "Chartdown browser entry — renders ```chartdown fenced blocks in place",
+  "version": "0.1.0",
+  "description": "Chartdown browser embed — one script tag renders ```chartdown fenced blocks in place. Self-contained bundle, zero runtime dependencies.",
   "license": "MIT",
   "type": "module",
+  "main": "./dist/chartdown.browser.js",
+  "unpkg": "./dist/chartdown.browser.js",
+  "jsdelivr": "./dist/chartdown.browser.js",
   "files": [
     "dist"
   ],
-  "dependencies": {
-    "@chartdown/core": "0.0.0",
-    "@chartdown/render-svg": "0.0.0"
+  "keywords": [
+    "chartdown",
+    "ttrpg",
+    "map",
+    "battlemap",
+    "hexcrawl",
+    "svg",
+    "browser",
+    "embed"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nossimonov/Chartdown.git",
+    "directory": "packages/browser"
+  },
+  "homepage": "https://nossimonov.github.io/Chartdown/",
+  "bugs": "https://github.com/Nossimonov/Chartdown/issues",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
