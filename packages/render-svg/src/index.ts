@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @chartdown/render-svg — deterministic SVG rendering for Chartdown documents.
  *
  * Determinism contract (spec 02 §8.2): output is a pure function of
@@ -11,12 +11,14 @@ import { battlemapFrame, renderBattlemap } from "./battlemap";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildModel, type RenderMode } from "./model";
 import { renderRegion } from "./region";
-import { INK, PAPER } from "./theme";
+import { INK, PAPER, Theme } from "./theme";
 import { el, fmt, text } from "./util";
 
 export interface RenderOptions {
   /** Fail-closed default per spec 01 §6. */
   mode?: RenderMode;
+  /** Theme document source(s), layered over the default in order (spec 08 §5). */
+  theme?: string | string[];
 }
 
 export interface RenderResult {
@@ -27,9 +29,10 @@ export interface RenderResult {
 
 export function render(doc: DocumentNode, options: RenderOptions = {}): RenderResult {
   const mode = options.mode ?? "player";
-  const model = buildModel(doc, mode);
-  const body: string[] = [];
   const diagnostics: Diagnostic[] = [];
+  const theme = Theme.resolve(options.theme, diagnostics);
+  const model = buildModel(doc, mode, theme);
+  const body: string[] = [];
 
   let w = 860;
   let h = 620;
@@ -38,13 +41,13 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const frame = battlemapFrame(model);
     w = frame.w;
     h = frame.h;
-    body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: PAPER }));
+    body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderBattlemap(model, body, frame, diagnostics);
   } else if (doc.mapType === "hexcrawl") {
     const frame = hexFrame(model);
     w = frame.w;
     h = frame.h;
-    body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: PAPER }));
+    body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderHexcrawl(model, body);
   } else {
     const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
@@ -53,7 +56,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const scale = 820 / unitsW;
     w = 820;
     h = unitsH * scale;
-    body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: PAPER }));
+    body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderRegion(model, body, { w, h, scale });
   }
 
@@ -108,7 +111,10 @@ export interface RenderSourceResult {
 /** Convenience: parse + render in one call (best-effort on parse errors). */
 export function renderSource(source: string, options: RenderOptions & ParseOptions = {}): RenderSourceResult {
   const parsed = parse(source, options.libraries ? { libraries: options.libraries } : {});
-  const rendered = render(parsed.document, options.mode ? { mode: options.mode } : {});
+  const renderOptions: RenderOptions = {};
+  if (options.mode) renderOptions.mode = options.mode;
+  if (options.theme) renderOptions.theme = options.theme;
+  const rendered = render(parsed.document, renderOptions);
   return { svg: rendered.svg, document: parsed.document, diagnostics: [...parsed.diagnostics, ...rendered.diagnostics] };
 }
 

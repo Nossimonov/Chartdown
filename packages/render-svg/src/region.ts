@@ -12,7 +12,7 @@ import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, pairOf, type Model } from "./model";
-import { hasTierGlyph, INK, pathStrokeFor, terrainFill, terrainFillFor, tierFor } from "./theme";
+import { hasTierGlyph, INK, tierFor } from "./theme";
 import {
   blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
   nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
@@ -29,6 +29,8 @@ interface Resolved {
 
 export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }): void {
   const { w, h, scale } = size;
+  const theme = model.theme;
+  const ink = theme.surface("ink", "fill", INK);
   const random = rng(model.seed + 7);
   const resolved = new Map<string, Resolved>();
   const byName = new Map<string, string>();
@@ -211,14 +213,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
     const titleEl = title ? el("title", {}, title) : "";
-    const wordFill = terrainFillFor(chain);
+    const wordFill = theme.terrainFill(chain);
 
     if (r.halfPlane) {
       const poly = halfPlanePolygon(r.halfPlane, w, h);
       const isWater = e.section === "water";
       layers.areas.push(
         el("g", { id: anchor }, titleEl,
-          el("polygon", { points: pointsAttr(poly), fill: isWater ? terrainFill("sea") : wordFill, opacity: isWater ? 1 : 0.14 }),
+          el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.14 }),
         ),
       );
       if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
@@ -236,16 +238,26 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
 
     if (r.polygon) {
-      layers.areas.push(
-        el("g", { id: anchor }, titleEl,
-          el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, stroke: shade(wordFill), "stroke-width": 1 }),
-        ),
-      );
+      const areaParts: string[] = [titleEl];
+      const edgeFill = theme.prop(chain, "fill", { zone: "edge" });
+      if (edgeFill) {
+        // Edge zone (spec 08 §2): boundary band in the edge style, interior in core.
+        const edgeW = theme.edgeWidth(chain) ?? 4;
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: edgeFill, stroke: shade(edgeFill), "stroke-width": 1 }));
+        areaParts.push(el("polygon", { points: pointsAttr(shrinkPolygon(r.polygon, edgeW * 2)), fill: wordFill }));
+      } else {
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, stroke: shade(wordFill), "stroke-width": 1 }));
+      }
+      const glyphName = theme.prop(chain, "glyph");
+      if (glyphName) {
+        areaParts.push(...scatterGlyphs(r.polygon, glyphName, theme, ink));
+      }
+      layers.areas.push(el("g", { id: anchor }, ...areaParts));
       if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
         const c = r.point ?? centroid(r.polygon);
         const y = placer.place(c.x, c.y, e.name, 11, "middle");
         layers.labels.push(
-          text(e.name, { x: c.x, y, "font-size": 11, fill: INK, opacity: 0.8, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+          text(e.name, { x: c.x, y, "font-size": 11, fill: ink, opacity: 0.8, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
         );
       }
       continue;
@@ -260,22 +272,32 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           ),
         );
       } else {
-        const stroke = pathStrokeFor(chain);
+        const stroke = theme.pathStroke(chain);
         const width = Number(pairOf(e.pairs, "width") ?? 2);
-        layers.lines.push(
-          el("g", { id: anchor }, titleEl,
+        const lineParts: string[] = [titleEl];
+        const edgeW = theme.edgeWidth(chain);
+        if (edgeW) {
+          const edgeStroke = theme.prop(chain, "stroke", { zone: "edge" }) ?? theme.prop(chain, "fill", { zone: "edge" }) ?? stroke.stroke;
+          lineParts.push(
             el("polyline", {
-              points: pointsAttr(r.polyline), fill: "none", stroke: stroke.stroke,
-              "stroke-width": width, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
+              points: pointsAttr(r.polyline), fill: "none", stroke: edgeStroke,
+              "stroke-width": width + 2 * edgeW, "stroke-linejoin": "round", "stroke-linecap": "round",
             }),
-          ),
+          );
+        }
+        lineParts.push(
+          el("polyline", {
+            points: pointsAttr(r.polyline), fill: "none", stroke: stroke.stroke,
+            "stroke-width": width, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
+          }),
         );
+        layers.lines.push(el("g", { id: anchor }, ...lineParts));
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
         const mid = r.polyline[Math.floor(r.polyline.length / 2)]!;
         const y = placer.place(mid.x + 4, mid.y - 4, e.name, 10, "start");
         layers.labels.push(
-          text(e.name, { x: mid.x + 4, y, "font-size": 10, fill: INK, opacity: 0.75, "font-style": "italic", "font-family": "sans-serif" }),
+          text(e.name, { x: mid.x + 4, y, "font-size": 10, fill: ink, opacity: 0.75, "font-style": "italic", "font-family": "sans-serif" }),
         );
       }
       continue;
@@ -283,14 +305,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
 
     if (r.point) {
       const tier = tierFor(chain);
+      const glyphPath = theme.glyphFor(chain, r.point.x, r.point.y);
       layers.points.push(
         el("g", { id: anchor }, titleEl,
-          chain.includes("capital")
-            ? el("rect", {
-                x: r.point.x - tier.r, y: r.point.y - tier.r, width: tier.r * 2, height: tier.r * 2,
-                fill: INK, transform: `rotate(45 ${fmt(r.point.x)} ${fmt(r.point.y)})`,
-              })
-            : el("circle", { cx: r.point.x, cy: r.point.y, r: tier.r, fill: INK, stroke: "#fff", "stroke-width": 1 }),
+          glyphPath
+            ? glyphEl(glyphPath, r.point.x, r.point.y, 0.7, ink)
+            : chain.includes("capital")
+              ? el("rect", {
+                  x: r.point.x - tier.r, y: r.point.y - tier.r, width: tier.r * 2, height: tier.r * 2,
+                  fill: ink, transform: `rotate(45 ${fmt(r.point.x)} ${fmt(r.point.y)})`,
+                })
+              : el("circle", { cx: r.point.x, cy: r.point.y, r: tier.r, fill: ink, stroke: "#fff", "stroke-width": 1 }),
         ),
       );
       // Fallback-chain terminal (spec 04 §4): a marker with no meaningful
@@ -302,7 +327,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (label && !e.flags.includes("nolabel") && !overridden(e)) {
         const spot = placer.placeBeside(r.point.x + tier.r + 3, r.point.x - tier.r - 3, r.point.y + 4, label, tier.font);
         layers.labels.push(
-          text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: INK, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),
+          text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),
         );
       }
     }
@@ -326,12 +351,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
     } else if (o.hint.kind === "at" && o.hint.target.kind === "point") {
       const p = toXY(o.hint.target);
-      layers.labels.push(text(name, { x: p.x, y: p.y, "font-size": 11, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+      layers.labels.push(text(name, { x: p.x, y: p.y, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
     } else if (o.hint.kind === "side") {
       const base = resolved.get(key)?.point;
       if (base) {
         const vec = COMPASS_VECTORS[o.hint.compass]!;
-        layers.labels.push(text(name, { x: base.x + vec.x * 16, y: base.y + vec.y * 16, "font-size": 11, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+        layers.labels.push(text(name, { x: base.x + vec.x * 16, y: base.y + vec.y * 16, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
     }
   }
@@ -363,7 +388,59 @@ function centroid(pts: XY[]): XY {
 }
 
 function shade(hex: string): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
   const n = parseInt(hex.slice(1), 16);
   const dim = (v: number): number => Math.max(0, Math.round(v * 0.8));
   return `#${(((dim((n >> 16) & 255)) << 16) | ((dim((n >> 8) & 255)) << 8) | dim(n & 255)).toString(16).padStart(6, "0")}`;
+}
+
+/** A glyph path in its 24×24 unit box, placed and scaled (spec 08 §4). */
+function glyphEl(pathData: string, x: number, y: number, scale: number, ink: string): string {
+  return `<path d="${pathData}" transform="translate(${fmt(x)} ${fmt(y)}) scale(${fmt(scale)})" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`;
+}
+
+function shrinkPolygon(pts: XY[], by: number): XY[] {
+  const c = centroid(pts);
+  return pts.map((p) => {
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const k = Math.max(0.1, (d - by) / d);
+    return { x: c.x + dx * k, y: c.y + dy * k };
+  });
+}
+
+function pointInPolygon(p: XY, poly: XY[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** Deterministic glyph scatter across an area (position-hash jitter, no RNG sequence). */
+function scatterGlyphs(poly: XY[], glyphValue: string, theme: import("./theme").Theme, ink: string): string[] {
+  const xs = poly.map((p) => p.x);
+  const ys = poly.map((p) => p.y);
+  const out: string[] = [];
+  const spacing = 30;
+  for (let gy = Math.ceil(Math.min(...ys) / spacing) * spacing; gy < Math.max(...ys); gy += spacing) {
+    for (let gx = Math.ceil(Math.min(...xs) / spacing) * spacing; gx < Math.max(...xs); gx += spacing) {
+      let h = 2166136261;
+      for (const n of [gx, gy]) {
+        h ^= n;
+        h = Math.imul(h, 16777619);
+      }
+      const jx = gx + ((h >>> 3) % 13) - 6;
+      const jy = gy + ((h >>> 7) % 13) - 6;
+      const p = { x: jx, y: jy };
+      if (!pointInPolygon(p, poly)) continue;
+      const chosen = theme.pickVariant(glyphValue, jx, jy);
+      const path = theme.glyphs[chosen];
+      if (path) out.push(glyphEl(path, jx, jy, 0.55, ink));
+    }
+  }
+  return out;
 }

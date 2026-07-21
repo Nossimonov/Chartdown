@@ -1,0 +1,20 @@
+# Candyworld
+; The lollipop test (spec 08): restyle Gumdrop Vale without touching its source.
+use: default
+
+[theme]
+paper : fill=#fdf1f5
+ink : fill=#5a3a48
+forest : fill=#a8d894 glyph=lollipop,lollipop-swirl
+gumdrop-hills : fill=#e8b4c8
+gumdrop-hills.edge : fill=#f2d4e0 edge=6
+river : stroke=#e88ab0
+river.edge : stroke=#c9628f edge=3
+hovercart : glyph=cart
+sugar-silo : glyph=silo
+
+[glyphs]
+lollipop : "M0,-3 a5,5 0 1,1 0.1,0 M0,2 L0,10"
+lollipop-swirl : "M0,-3 a5,5 0 1,1 0.1,0 M0,-3 a2,2 0 1,0 0.1,0 M0,2 L0,10"
+cart : "M-8,2 L8,2 L6,-4 L-6,-4 Z M-5,5 a2,2 0 1,0 0.1,0 M5,5 a2,2 0 1,0 0.1,0"
+silo : "M-5,9 L-5,-3 A5,7 0 0,1 5,-3 L5,9 Z M-5,1 L5,1"

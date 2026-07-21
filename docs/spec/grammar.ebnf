@@ -89,6 +89,19 @@ archetype      = "terrain" | "path" | "feature" | "structure" | "barrier"
                     unknown words never fail: archetype inferred from
                     shape token, else section, else feature — spec 04 §3 *)
 
+(* ---- themes, [theme]/[glyphs] sections — spec 08 ----
+   theme documents contain only these sections; no map: header required. *)
+
+theme-line     = theme-subject , ":" , { pair } , EOL ;
+theme-subject  = word , [ "." , word ]                (* word / word.state / word.core / word.edge *)
+               | "side" , "." , word
+               | surface-word ;
+surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge" ;
+                 (* pair keys (closed): fill stroke width dash opacity glyph asset edge;
+                    glyph= and asset= values may be comma-separated variant pools,
+                    chosen by deterministic position hash *)
+glyph-line     = word , ":" , string , EOL ;          (* SVG path data, 24x24 box centered on origin *)
+
 (* ---- labels, [labels] section — spec 07 ---- *)
 
 label-line     = ( ref , ":" , label-hint )          (* override — subject MUST resolve *)

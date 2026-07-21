@@ -10,6 +10,7 @@ import type {
   Ref,
 } from "@chartdown/core";
 import { loadStdlib, slugify, VocabTable, type Diagnostic } from "@chartdown/core";
+import type { Theme } from "./theme";
 
 export type RenderMode = "player" | "gm";
 
@@ -23,6 +24,7 @@ export interface Model {
   gmNotes: Map<string, string[]>;
   header: Map<string, string>;
   seed: number;
+  theme: Theme;
   /**
    * Theme fallback chain for a word (spec 04 §4): the word, then its
    * derivation bases — a theme lookup walks it until a word it knows.
@@ -43,7 +45,7 @@ export function entityAnchor(e: { ids: string[]; name: string | null }): string 
   return null;
 }
 
-export function buildModel(doc: DocumentNode, mode: RenderMode): Model {
+export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme): Model {
   const entities: EntityNode[] = [];
   const hexLines: HexLineNode[] = [];
   const labelOverrides: LabelOverrideNode[] = [];
@@ -94,7 +96,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode): Model {
   }
   const chainOf = (word: string | null): string[] => (word ? vocab.chain(word) : []);
 
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, chainOf };
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, chainOf };
 }
 
 export const anchorAttr = (model: Model, e: { ids: string[]; name: string | null }): string | undefined => {

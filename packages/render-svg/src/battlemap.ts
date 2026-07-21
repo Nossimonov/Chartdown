@@ -6,7 +6,7 @@
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
-import { GRID_LINE, hasBattlemapGlyph, INK, pathStrokeFor, sideColor, terrainFillFor } from "./theme";
+import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
 import { colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 
 const CELL = 32;
@@ -138,11 +138,11 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
   const f = frame;
   for (let c = 0; c <= f.cols; c++) {
     const x = MARGIN + c * CELL;
-    layers.grid.push(el("line", { x1: x, y1: MARGIN, x2: x, y2: MARGIN + f.rows * CELL, stroke: GRID_LINE, "stroke-width": 0.6 }));
+    layers.grid.push(el("line", { x1: x, y1: MARGIN, x2: x, y2: MARGIN + f.rows * CELL, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 0.6 }));
   }
   for (let r = 0; r <= f.rows; r++) {
     const y = MARGIN + r * CELL;
-    layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: GRID_LINE, "stroke-width": 0.6 }));
+    layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 0.6 }));
   }
   if (model.header.get("numbers") === "on") {
     for (let c = 1; c <= f.cols; c++) {
@@ -416,7 +416,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
 
   function renderTerrain(e: EntityNode, titleEl: string, anchor: string | undefined): void {
     const chain = model.chainOf(e.typeWord);
-    const fill = terrainFillFor(chain);
+    const fill = model.theme.terrainFill(chain);
     const areaParts: string[] = [];
     const pathParts: string[] = [];
     for (const p of e.placements) {
@@ -436,8 +436,8 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
         const pts = addresses.map(cellCenter);
         extendToFrame(pts, addresses, frame);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
-        const stroke = pathStrokeFor(chain);
-        pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? terrainFillFor(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        const stroke = model.theme.pathStroke(chain);
+        pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
@@ -518,7 +518,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
 
   function renderToken(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined): void {
     const size = Number(pairOf(e.pairs, "size") ?? 1) || 1;
-    const fill = sideColor(pairOf(e.pairs, "side"));
+    const fill = model.theme.side(pairOf(e.pairs, "side"));
     const addresses = e.placements.filter((p): p is Address => p.kind === "address");
     addresses.forEach((a, idx) => {
       const base = cellCenter(a);
@@ -552,13 +552,20 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
       const radius = measureToCells(light, model) * CELL;
       if (sightBlockers.length > 0) {
         const poly = visibilityPolygon(c, radius, sightBlockers);
-        parts.push(el("polygon", { points: pointsAttr(poly), fill: "#ffd98a", opacity: 0.22 }));
+        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
       } else {
-        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: "#ffd98a", opacity: 0.22 }));
+        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
       }
     }
     const word = e.typeWord ?? "";
-    if (word === "campfire" || word === "torch" || word === "brazier" || word === "lantern") {
+    const chain = model.chainOf(e.typeWord);
+    const themedGlyph = model.theme.glyphFor(chain, c.x, c.y);
+    if (themedGlyph) {
+      const ink = model.theme.surface("ink", "fill", INK);
+      parts.push(
+        `<path d="${themedGlyph}" transform="translate(${fmt(c.x)} ${fmt(c.y)}) scale(0.9)" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`,
+      );
+    } else if (word === "campfire" || word === "torch" || word === "brazier" || word === "lantern") {
       parts.push(el("circle", { cx: c.x, cy: c.y, r: 5, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
     } else if (word === "wagon") {
       const facing = pairOf(e.pairs, "facing");
@@ -576,8 +583,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     }
     into.push(el("g", { id: anchor }, ...parts));
     // Fallback-chain terminal (spec 04 §4): generic glyphs carry their word.
-    const chain2 = model.chainOf(e.typeWord);
-    const label = e.name ?? (hasBattlemapGlyph(chain2) ? null : e.typeWord);
+    const label = e.name ?? (hasBattlemapGlyph(chain) || themedGlyph ? null : e.typeWord);
     if (label && !e.flags.includes("nolabel")) {
       labels.push(text(label, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
     }

@@ -49,4 +49,16 @@ describe("chartdown CLI", () => {
   it.skipIf(!built)("check exits 0 on the corpus", () => {
     execFileSync(process.execPath, [cliPath, "check", example]);
   });
+
+  it.skipIf(!built)("--theme restyles output (the lollipop test, CLI edition)", () => {
+    const gumdrop = join(root, "examples", "gumdrop-vale", "gumdrop-vale.cd");
+    const themePath = join(root, "examples", "gumdrop-vale", "candyworld.theme.cd");
+    const outDir = mkdtempSync(join(tmpdir(), "chartdown-"));
+    const themed = join(outDir, "themed.svg");
+    const plain = join(outDir, "plain.svg");
+    execFileSync(process.execPath, [cliPath, "render", gumdrop, "-o", themed, "--theme", themePath]);
+    execFileSync(process.execPath, [cliPath, "render", gumdrop, "-o", plain]);
+    expect(readFileSync(themed, "utf8")).toContain("#fdf1f5");
+    expect(readFileSync(plain, "utf8")).not.toContain("#fdf1f5");
+  });
 });

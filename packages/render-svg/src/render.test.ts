@@ -147,6 +147,43 @@ describe("crossings and layering (spec 06 §6)", () => {
   });
 });
 
+describe("themes (spec 08)", () => {
+  const candyworld = readFileSync(join(examplesDir, "gumdrop-vale", "candyworld.theme.cd"), "utf8");
+
+  it("the lollipop test: candyworld restyles Gumdrop Vale without touching its source", () => {
+    const src = example("gumdrop-vale");
+    const themed = renderSource(src, { theme: candyworld });
+    const plain = renderSource(src);
+    expect(themed.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(themed.svg).not.toBe(plain.svg);
+    expect(themed.svg).toContain('fill="#fdf1f5"'); // candy paper
+    expect(themed.svg).toContain("a5,5 0 1,1"); // scattered lollipops over the licorice forest
+    expect(themed.svg).toContain('fill="#f2d4e0"'); // gumdrop-hills edge zone
+  });
+
+  it("zone edging renders an under-stroke on the river band", () => {
+    const { svg } = renderSource(example("gumdrop-vale"), { theme: candyworld });
+    expect(svg.indexOf("#c9628f")).toBeLessThan(svg.indexOf("#e88ab0")); // edge beneath core
+  });
+
+  it("theme lookups walk derivation chains", () => {
+    // licorice-forest : forest — themed forest fill applies to the derived word.
+    const { svg } = renderSource(example("gumdrop-vale"), { theme: candyworld });
+    expect(svg).toContain('fill="#a8d894"');
+  });
+
+  it("themes are deterministic: same theme, same output", () => {
+    const src = example("gumdrop-vale");
+    expect(renderSource(src, { theme: candyworld }).svg).toBe(renderSource(src, { theme: candyworld }).svg);
+  });
+
+  it("unknown theme properties warn (closed appearance vocabulary)", () => {
+    const bad = "[theme]\nforest : font=Papyrus\n";
+    const { diagnostics } = renderSource(example("gumdrop-vale"), { theme: bad });
+    expect(diagnostics.map((d) => d.message).join()).toMatch(/unknown theme property 'font'/);
+  });
+});
+
 describe("fallback-chain terminal labels (spec 04 §4)", () => {
   it("vocab-defined words with no themed glyph carry their word as label", () => {
     const { svg } = renderSource(example("gumdrop-vale"));

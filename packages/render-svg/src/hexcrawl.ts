@@ -8,7 +8,7 @@ import type { Address, AddressRange, EntityNode, HexLineNode } from "@chartdown/
 import { slugify } from "@chartdown/core";
 import { LabelPlacer } from "./labels";
 import { gmTitleFor, pairOf, type Model } from "./model";
-import { FOG, GRID_LINE, INK, pathStrokeFor, terrainFillFor, tierOf } from "./theme";
+import { FOG, GRID_LINE, INK, tierOf } from "./theme";
 import { colToNumber, el, fmt, pointsAttr, text, type XY } from "./util";
 
 const R = 24;
@@ -119,7 +119,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
       const fogged = !cell || foggedForPlayer;
       const seen = !gmMode && !!cell && cell.flags.includes("seen");
 
-      const fill = fogged ? FOG : terrainFillFor(model.chainOf(cell!.terrain));
+      const fill = fogged ? model.theme.surface("fog", "fill", FOG) : model.theme.terrainFill(model.chainOf(cell!.terrain));
       const parts: string[] = [];
       if (gmMode && cell?.gm) parts.push(el("title", {}, cell.gm));
       parts.push(el("polygon", { points: poly, fill, stroke: GRID_LINE, "stroke-width": 1 }));
@@ -178,7 +178,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         const n = pts.length;
         pts[n - 1] = { x: (pts[n - 1]!.x + pts[n - 2]!.x) / 2, y: (pts[n - 1]!.y + pts[n - 2]!.y) / 2 };
       }
-      const stroke = pathStrokeFor(chain);
+      const stroke = model.theme.pathStroke(chain);
       const title = gmTitleFor(model, e);
       routeLayer.push(
         el("g", { id: e.name ? `cd-${model.doc.docId}-${slugify(e.name)}` : undefined },

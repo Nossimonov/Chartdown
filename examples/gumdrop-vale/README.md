@@ -18,3 +18,7 @@ A survey map of a candy planet in the year 3742 — gumdrop hills, a licorice fo
 ## Intended render
 
 With no theme: generic-but-legible — organic blob and polygon terrain in default fills, a meandering river, labeled point glyphs. With a candyworld theme: same geometry, gumdrop and lollipop motifs. The render never blocks on either.
+
+## The lollipop test (spec 08)
+
+[candyworld.theme.cd](candyworld.theme.cd) is the shipped proof of the theme format: it restyles this map — lollipop glyphs scattered over the licorice forest (variant pool, position-hashed), edge-zoned gumdrop hills, a candy-banked river, custom cart/silo glyphs — **without touching `gumdrop-vale.cd`**. Rendered output: [gumdrop-vale-candy.svg](gumdrop-vale-candy.svg), or `chartdown render gumdrop-vale.cd --theme candyworld.theme.cd`.

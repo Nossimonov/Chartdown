@@ -66,6 +66,10 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 
 Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`).
 
+## Themes (spec 08)
+
+A theme is a Chartdown document of `[theme]` + `[glyphs]` sections (no `map:`). `[theme]` lines: `<subject> : <pairs>` where subject = vocabulary word (chain-resolved) · `word.state` · zone `word.core`/`word.edge` (reserved; band margins / area boundary — foothills are `mountains.edge`) · `side.<word>` · surface (`paper grid fog ink light ledge`). Closed pairs: `fill stroke width dash opacity glyph asset edge`. `[glyphs]`: `name : "SVG path"` in a 24×24 origin-centered box. `glyph=`/`asset=` take comma-separated variant pools chosen by deterministic position hash. Inheritance: `use:` + shadowing (`use: default` = built-in). A map's `theme:` is a suggestion; the renderer/user wins.
+
 ## Few-shot micro-corpus
 
 ```chartdown

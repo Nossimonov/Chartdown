@@ -11,7 +11,7 @@ import { parse } from "@chartdown/core";
 import { render, type RenderMode } from "@chartdown/render-svg";
 
 const USAGE = [
-  "usage: chartdown render <file.cd> [-o out.svg] [--mode player|gm]",
+  "usage: chartdown render <file.cd> [-o out.svg] [--mode player|gm] [--theme theme.cd]",
   "       chartdown check <file.cd>",
 ].join("\n");
 
@@ -28,6 +28,7 @@ const file = args[1] ?? fail("missing input file");
 
 let out: string | null = null;
 let mode: RenderMode = "player";
+let themePath: string | null = null;
 for (let i = 2; i < args.length; i++) {
   const arg = args[i]!;
   if (arg === "-o" || arg === "--out") out = args[++i] ?? fail("missing value for -o");
@@ -35,7 +36,23 @@ for (let i = 2; i < args.length; i++) {
     const value = args[++i];
     if (value !== "player" && value !== "gm") fail("--mode must be player or gm");
     mode = value;
-  } else fail(`unknown option '${arg}'`);
+  } else if (arg === "--theme") themePath = args[++i] ?? fail("missing value for --theme");
+  else fail(`unknown option '${arg}'`);
+}
+
+// Theme sources (spec 08 §5): the theme file plus its use: imports from disk,
+// in order ('default' is implicit and skipped — the renderer always layers it first).
+const themeSources: string[] = [];
+if (themePath) {
+  const themeSource = readFileSync(themePath, "utf8");
+  for (const match of themeSource.matchAll(/^use:\s*(.+?)\s*(?:;.*)?$/gm)) {
+    const value = match[1]!.trim();
+    if (value === "default") continue;
+    const usePath = resolve(dirname(themePath), value);
+    if (existsSync(usePath)) themeSources.push(readFileSync(usePath, "utf8"));
+    else console.error(`${themePath}: warning: theme import '${value}' not found`);
+  }
+  themeSources.push(themeSource);
 }
 
 const source = readFileSync(file, "utf8");
@@ -58,7 +75,10 @@ if (command === "check") {
   process.exit(hasErrors ? 1 : 0);
 }
 
-const { svg, diagnostics: renderDiagnostics } = render(document, { mode });
+const { svg, diagnostics: renderDiagnostics } = render(
+  document,
+  themeSources.length > 0 ? { mode, theme: themeSources } : { mode },
+);
 for (const d of renderDiagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
 const outPath = out ?? `${file.replace(/\.cd$/, "")}.svg`;
 writeFileSync(outPath, svg);
