@@ -236,6 +236,22 @@ describe("windows pass light (spec 06 §2 facets)", () => {
     expect(a).not.toBe(b); // the light escapes westward through the window
   });
 
+  it("openings paint above all walls — a door on a shared wall survives the sibling's stroke", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "scale: 5ft",
+      "[structures]",
+      "building hall : D2..H5",
+      "  door : F5.s",
+      "building kitchen : D6..H8",   // north wall coincides with the hall's south
+    ].join("\n");
+    const { svg } = renderSource(src);
+    const doorAt = svg.indexOf("#a8763e");
+    const lastWallGroup = svg.lastIndexOf('stroke="#3d3629" stroke-width="3"');
+    expect(doorAt).toBeGreaterThan(lastWallGroup); // door renders after every wall
+  });
+
   it("coincident walls are one wall — a window opens the shared edge (spec 06 §3)", () => {
     const shared = [
       "map: battlemap",

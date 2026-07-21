@@ -50,7 +50,7 @@ function measureToCells(measure: string, model: Model): number {
 export function renderBattlemap(model: Model, body: string[], frame: Frame, diagnostics: Diagnostic[]): void {
   const layers = {
     areas: [] as string[], paths: [] as string[], crossings: [] as string[], grid: [] as string[],
-    structures: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
+    structures: [] as string[], openings: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
   };
 
   // Course-line cells of rendered paths, for crossing composition (spec 06 §6).
@@ -204,9 +204,11 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     }
   }
 
+  // Openings render above ALL structure walls: a door on a shared wall must
+  // not be overpainted by the sibling structure's coincident wall line.
   body.push(
     ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
-    ...layers.structures, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
+    ...layers.structures, ...layers.openings, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
   );
 
   // ---------- helpers ----------
@@ -510,10 +512,11 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
           : p.dir === "s" ? { x1: o.x, y1: o.y + CELL, x2: o.x + CELL, y2: o.y + CELL }
           : p.dir === "w" ? { x1: o.x, y1: o.y, x2: o.x, y2: o.y + CELL }
           : { x1: o.x + CELL, y1: o.y, x2: o.x + CELL, y2: o.y + CELL };
+        // Openings go to their own layer, above every structure's walls (spec 06 §3).
         if (d.typeWord === "door" || d.typeWord === "gate") {
-          parts.push(el("line", { ...seg, stroke: "#a8763e", "stroke-width": 5 }));
+          layers.openings.push(el("line", { ...seg, stroke: "#a8763e", "stroke-width": 5 }));
         } else if (d.typeWord === "window" || d.typeWord === "arrow-slit") {
-          parts.push(el("line", { ...seg, stroke: "#6fa8c9", "stroke-width": 2.5 }));
+          layers.openings.push(el("line", { ...seg, stroke: "#6fa8c9", "stroke-width": 2.5 }));
         } else {
           parts.push(el("line", { ...seg, stroke: INK, "stroke-width": 3 }));
         }
