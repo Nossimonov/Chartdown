@@ -1,0 +1,17 @@
+{
+  "name": "@chartdown/cli",
+  "version": "0.0.0",
+  "description": "Chartdown CLI — render .cd documents to SVG",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "chartdown": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@chartdown/core": "0.0.0",
+    "@chartdown/render-svg": "0.0.0"
+  }
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chartdown — fenced-block demo</title>
+  <style>
+    body { font-family: Georgia, serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #3a3226; }
+    figure.chartdown { margin: 1.5rem 0; }
+    figure.chartdown svg { width: 100%; height: auto; border: 1px solid #cbc2ad; }
+    pre.chartdown-errors { background: #f6e2dd; padding: 0.6rem; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>Session notes — Wednesday</h1>
+  <p>
+    This page is ordinary HTML with a fenced Chartdown code block, the way a
+    Markdown renderer would emit it. The script tag at the bottom finds it and
+    renders it in place — zero configuration. (Build first: <code>npm run build</code>.)
+  </p>
+  <p>The party escorts the wagon north. When it reaches the ford:</p>
+<pre><code class="language-chartdown"># Ambush at the Ford
+
+map: battlemap
+grid: square 12x9
+scale: 5ft
+
+[terrain]
+river : path A5 F5 L5 width=2
+ford : F5..G5 difficult
+
+[structures]
+building shed "Old Shed" : I2..K3
+  door : J3.s
+
+[features]
+campfire : J4 light=15ft
+
+[tokens]
+goblins g1 g2 : C3 D6
+party start : E8..G9
+</code></pre>
+  <p>Roll initiative.</p>
+  <script src="../packages/browser/dist/chartdown.browser.js"></script>
+</body>
+</html>

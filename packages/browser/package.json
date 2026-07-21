@@ -1,0 +1,14 @@
+{
+  "name": "@chartdown/browser",
+  "version": "0.0.0",
+  "description": "Chartdown browser entry — renders ```chartdown fenced blocks in place",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@chartdown/core": "0.0.0",
+    "@chartdown/render-svg": "0.0.0"
+  }
+}

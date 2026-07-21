@@ -44,6 +44,23 @@ party start : J14..L15
 
 …rendering to a gridded battlemap with terrain, features, and labeled tokens.
 
+## Try it
+
+```sh
+git clone https://github.com/Nossimonov/Chartdown.git && cd Chartdown
+npm install
+npm run build
+
+# Render an example battlemap (player view), then the GM view with secrets:
+node packages/cli/dist/cli.js render examples/redford-crossing/redford-crossing.cd -o redford.svg
+node packages/cli/dist/cli.js render examples/redford-crossing/redford-crossing.cd --mode gm -o redford-gm.svg
+
+# Validate a document (fail-loud diagnostics, exit 1 on errors):
+node packages/cli/dist/cli.js check examples/vessany/vessany.cd
+```
+
+For the embedding path — the one this project exists for — open [demo/index.html](demo/index.html) after building: a plain HTML page whose fenced ` ```chartdown ` block renders in place via one script tag.
+
 ## Project status
 
 **Spec draft complete; implementation beginning.** The v0.1 specification is drafted ([sections 01–07](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)), every example in [examples/](examples/) is valid under it, and the reference implementation — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — is under construction in [packages/](packages/). Nothing renders *yet*.
@@ -59,7 +76,8 @@ See the [roadmap](docs/roadmap.md) for the full plan and the [issue tracker](htt
 | [docs/spec/](docs/spec/) | The Chartdown language specification (drafts live here) |
 | [docs/decisions/](docs/decisions/) | Architecture Decision Records — why things are the way they are |
 | [examples/](examples/) | Example Chartdown documents, written spec-first |
-| [packages/](packages/) | Reference implementation (TypeScript): `core` parser/AST; renderer and CLI to follow |
+| [packages/](packages/) | Reference implementation (TypeScript): `core` (parser/AST), `render-svg`, `cli`, `browser` |
+| [demo/](demo/) | Plain-HTML fenced-block rendering demo |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Issue-tracking rules and the syntax-proposal process |
 
 ## Contributing

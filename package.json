@@ -8,12 +8,14 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "node build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg"
+    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "esbuild": "^0.28.1",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },
