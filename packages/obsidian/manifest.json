@@ -1,0 +1,10 @@
+{
+  "id": "chartdown",
+  "name": "Chartdown",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Render Chartdown map blocks (battlemaps, hex charts, region maps) as SVG, right in your notes.",
+  "author": "Kevin King",
+  "authorUrl": "https://github.com/Nossimonov/Chartdown",
+  "isDesktopOnly": false
+}
