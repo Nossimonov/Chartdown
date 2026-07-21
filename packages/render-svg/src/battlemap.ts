@@ -63,7 +63,7 @@ export function renderBattlemap(
 ): void {
   const layers = {
     areas: [] as string[], paths: [] as string[], crossings: [] as string[], grid: [] as string[],
-    structures: [] as string[], openings: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
+    structures: [] as string[], openings: [] as string[], roomLabels: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
   };
 
   // Course-line cells of rendered paths, for crossing composition (spec 06 §6).
@@ -168,8 +168,11 @@ export function renderBattlemap(
       renderStructure(e, layers.structures, titleEl, anchor);
       continue;
     }
-    if (e.archetype === "zone" || hasOnlyRange(e)) {
-      renderZone(e, layers.zones, layers.labels, titleEl, anchor, elevation);
+    // Range-only entities: zones for zone/token archetypes, gm triggers, and
+    // elevated areas; a range-only FEATURE is a footprint (the high table).
+    const zoneLike = e.archetype === "zone" || (hasOnlyRange(e) && (e.archetype === "token" || e.gmOnly || elevation !== undefined));
+    if (zoneLike) {
+      renderZone(e, layers.zones, layers.roomLabels, titleEl, anchor, elevation);
       continue;
     }
     if (e.archetype === "token") {
@@ -241,7 +244,7 @@ export function renderBattlemap(
   // not be overpainted by the sibling structure's coincident wall line.
   body.push(
     ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
-    ...layers.structures, ...layers.openings, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
+    ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
   );
 
   // ---------- helpers ----------
@@ -627,9 +630,10 @@ export function renderBattlemap(
     }
     into.push(el("g", { id: anchor }, ...parts));
     // Room labels sit in the middle of the rooms they label (module convention;
-    // also keeps them on the room's light fill rather than e.g. dark earth).
+    // also keeps them on the room's light fill rather than e.g. dark earth) —
+    // and BELOW features and tokens: floor-plan text never occludes the pieces.
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
-      layers.labels.push(
+      layers.roomLabels.push(
         text(e.name, {
           x: r.x + r.w / 2, y: r.y + r.h / 2 - 8, "font-size": 10, fill: INK,
           opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
@@ -689,8 +693,45 @@ export function renderBattlemap(
 
   function renderFeature(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined): void {
     const address = e.placements.find((p): p is Address => p.kind === "address");
-    if (!address) return;
-    const c = cellCenter(address);
+    const range = e.placements.find((p): p is AddressRange => p.kind === "range");
+    if (!address && !range) return;
+
+    // A range placement is a feature's footprint (spec 06 §2): the high table
+    // spans G3..I3 — dimensions are declared as placement, like everything else.
+    if (!address && range) {
+      const r = rangeRect(range);
+      const chainR = model.chainOf(e.typeWord);
+      const center = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      const footprintParts: string[] = [titleEl];
+      if (!e.name && !titleEl && e.typeWord) footprintParts.unshift(el("title", {}, e.typeWord));
+      const light = pairOf(e.pairs, "light");
+      if (light) {
+        const radius = measureToCells(light, model) * CELL;
+        footprintParts.push(
+          sightBlockers.length > 0
+            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 })
+            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }),
+        );
+      }
+      footprintParts.push(
+        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: "#8f8474", stroke: INK, "stroke-width": 1.2, rx: 2 }),
+      );
+      const themed = model.theme.glyphFor(chainR, center.x, center.y);
+      if (themed) {
+        const ink = model.theme.surface("ink", "fill", INK);
+        const scale = (Math.min(r.w, r.h) / 24) * 0.7;
+        footprintParts.push(
+          `<path d="${themed}" transform="translate(${fmt(center.x)} ${fmt(center.y)}) scale(${fmt(scale)})" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`,
+        );
+      }
+      into.push(el("g", { id: anchor }, ...footprintParts));
+      if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
+        labels.push(text(e.name, { x: center.x, y: r.y + r.h + 10, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+      }
+      return;
+    }
+
+    const c = cellCenter(address!);
     const parts: string[] = [titleEl];
 
     // Level connectors (spec 06 §8): any feature with to=<level>.

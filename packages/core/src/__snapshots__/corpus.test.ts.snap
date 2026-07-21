@@ -2019,9 +2019,17 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "pairs": [],
           "placements": [
             {
-              "col": "H",
-              "kind": "address",
-              "row": 4,
+              "from": {
+                "col": "G",
+                "kind": "address",
+                "row": 3,
+              },
+              "kind": "range",
+              "to": {
+                "col": "I",
+                "kind": "address",
+                "row": 3,
+              },
             },
           ],
           "section": "features",
@@ -2042,9 +2050,17 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "pairs": [],
           "placements": [
             {
-              "col": "F",
-              "kind": "address",
-              "row": 8,
+              "from": {
+                "col": "F",
+                "kind": "address",
+                "row": 8,
+              },
+              "kind": "range",
+              "to": {
+                "col": "G",
+                "kind": "address",
+                "row": 8,
+              },
             },
           ],
           "section": "features",

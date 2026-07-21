@@ -66,8 +66,8 @@ ladder : F9 to=cellar        ; down from the kitchen
 lantern gatelamp : N12 light=15ft
 well : N8
 statue : K8
-table hightable : H4
-table : F8
+table hightable : G3..I3     ; the high table, long as a high table should be
+table : F8..G8
 barrel : E9
 chest strongbox : P3
 crates : T4

@@ -118,6 +118,10 @@ ford : on redford on tollroad difficult
 
 At battlemap scale, table legibility outranks self-description: **fallback word-labels render as hover tooltips**, not visible text (spec 04 §4's chain-terminal label is satisfied by the tooltip). Visible text labels are reserved for display names, token identifiers, and zones; `nolabel` opts any of those out. Region-scale conduct is unchanged — an anonymous generic marker there carries its word as text (spec 04 §4).
 
+**Z-order**: room and zone labels are floor-plan text and render **beneath features and tokens** — a guard in a doorway occludes "The Gatehouse," never the reverse. Labels attached to the pieces themselves (token identifiers, feature names, connector annotations) render above.
+
+**Feature footprints**: a feature MAY take a **range placement** as its footprint — `table hightable : G3..I3` — dimensions declared as placement, like every other extent in the language (no size metadata; asymmetric X/Y comes free). Single-cell features remain points; range-only *zones*, gm entities, and elevated areas keep their zone rendering.
+
 ## 8. Levels
 
 *(Added from proposal [#31](https://github.com/Nossimonov/Chartdown/issues/31).)* Multi-level structures are **discrete floors**, not continuous height (`elevation=` remains terraces *within* a level):

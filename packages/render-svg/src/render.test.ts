@@ -335,6 +335,21 @@ describe("levels (spec 06 §8)", () => {
     expect(svg).toContain("url(#hatch)"); // roofs are difficult terrain
   });
 
+  it("feature footprints span their declared range (the high table)", () => {
+    const { svg } = renderSource(example("fairwater-manor"), { level: "ground" });
+    expect(svg).toContain('width="90"'); // 3 cells minus insets
+    const gm = renderSource(example("fairwater-manor"), { mode: "gm", level: "ground" }).svg;
+    expect(gm).toContain(">alarm</text>"); // gm range entities stay zones
+  });
+
+  it("room labels render beneath features and tokens (z-order)", () => {
+    const { svg } = renderSource(example("fairwater-manor"), { level: "ground" });
+    const roomLabel = svg.indexOf(">The Great Hall</text>");
+    const firstToken = svg.indexOf('cd-fairwater-manor-g1');
+    expect(roomLabel).toBeGreaterThan(-1);
+    expect(firstToken).toBeGreaterThan(roomLabel);
+  });
+
   it("room labels sit inside their rooms (readable on any surrounding fill)", () => {
     const { svg } = renderSource(example("fairwater-manor"), { level: "cellar", mode: "gm" });
     const label = svg.indexOf(">The Undercroft</text>");
