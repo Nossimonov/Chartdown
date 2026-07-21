@@ -143,6 +143,30 @@ export function renderBattlemap(
     }
   }
 
+  // Cells the pieces occupy — features, footprints, connectors, tokens — so
+  // room labels can dodge them (they render BELOW the pieces; a label that
+  // starts under a table would be unreadable forever, since neither moves).
+  const labelObstructions: { x: number; y: number; w: number; h: number }[] = [];
+  for (const e of model.entities) {
+    if (e.archetype === "feature") {
+      for (const p of e.placements) {
+        if (p.kind === "address") {
+          const o = cellOrigin(p);
+          labelObstructions.push({ x: o.x, y: o.y, w: CELL, h: CELL });
+        } else if (p.kind === "range" && !e.gmOnly && pairOf(e.pairs, "elevation") === undefined) {
+          labelObstructions.push(rangeRect(p));
+        }
+      }
+    } else if (e.archetype === "token" && !hasOnlyRange(e)) {
+      const size = Number(pairOf(e.pairs, "size") ?? 1) || 1;
+      for (const p of e.placements) {
+        if (p.kind !== "address") continue;
+        const o = cellOrigin(p);
+        labelObstructions.push({ x: o.x, y: o.y, w: CELL * size, h: CELL * size });
+      }
+    }
+  }
+
   // hatch pattern for difficult terrain
   body.push(
     `<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse">` +
@@ -632,14 +656,46 @@ export function renderBattlemap(
     // Room labels sit in the middle of the rooms they label (module convention;
     // also keeps them on the room's light fill rather than e.g. dark earth) —
     // and BELOW features and tokens: floor-plan text never occludes the pieces.
+    // Since the label can't win a z-fight, it dodges instead: among the room's
+    // cell rows, prefer the one nearest center whose span is clear of pieces.
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
+      const at = placeRoomLabel(e.name, r);
       layers.roomLabels.push(
         text(e.name, {
-          x: r.x + r.w / 2, y: r.y + r.h / 2 - 8, "font-size": 10, fill: INK,
+          x: at.x, y: at.y, "font-size": 10, fill: INK,
           opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
         }),
       );
     }
+  }
+
+  /**
+   * Room-label position: candidate baselines at each cell-row center inside the
+   * footprint, scored by overlap with the pieces' cells plus a small pull
+   * toward the room's center. A clear row near center wins; a fully cluttered
+   * room degrades to the least-covered row.
+   */
+  function placeRoomLabel(name: string, r: { x: number; y: number; w: number; h: number }): XY {
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const w = name.length * 10 * 0.58;
+    let best: XY = { x: cx, y: cy - 8 };
+    let bestScore = Infinity;
+    for (let rowY = r.y + CELL / 2; rowY < r.y + r.h; rowY += CELL) {
+      const box = { x: cx - w / 2, y: rowY - 5, w, h: 10 };
+      let overlap = 0;
+      for (const o of labelObstructions) {
+        const ox = Math.max(0, Math.min(box.x + box.w, o.x + o.w) - Math.max(box.x, o.x));
+        const oy = Math.max(0, Math.min(box.y + box.h, o.y + o.h) - Math.max(box.y, o.y));
+        overlap += ox * oy;
+      }
+      const score = overlap + Math.abs(rowY - cy) * 0.5;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: cx, y: rowY + 3.5 };
+      }
+    }
+    return best;
   }
 
   function renderZone(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined, elevation: string | undefined): void {

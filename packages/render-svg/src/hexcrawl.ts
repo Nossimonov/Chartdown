@@ -187,10 +187,16 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         ),
       );
       if (e.name && labelsOn(model)) {
-        // Mid-course labeling names the whole line, not an endpoint.
-        const mid = pts[Math.floor(pts.length / 2)]!;
-        const y = placer.place(mid.x, mid.y - R * 0.55, e.name, 8, "middle");
-        labelLayer.push(text(e.name, { x: mid.x, y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
+        // Mid-course labeling names the whole line, not an endpoint — measured
+        // by arc length of the RENDERED course (after coast clipping), not by
+        // point index, which lands near the terminus on clipped rivers. When
+        // mid-course is crowded, slide ALONG the course rather than off it.
+        const candidates = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74].map((t) => {
+          const p = arcPoint(pts, t);
+          return { x: p.x, y: p.y - R * 0.55 };
+        });
+        const at = placer.placeAlong(candidates, e.name, 8, "middle");
+        labelLayer.push(text(e.name, { x: at.x, y: at.y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       continue;
     }
@@ -240,6 +246,22 @@ export function renderHexcrawl(model: Model, body: string[]): void {
   }
 
   body.push(...hexLayer, ...routeLayer, ...regionLayer, ...contentLayer, ...labelLayer);
+}
+
+/** Point at fraction t (0..1) of the polyline's total arc length. */
+function arcPoint(pts: XY[], t: number): XY {
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y);
+  let want = total * t;
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y);
+    if (want <= d && d > 0) {
+      const f = want / d;
+      return { x: pts[i - 1]!.x + (pts[i]!.x - pts[i - 1]!.x) * f, y: pts[i - 1]!.y + (pts[i]!.y - pts[i - 1]!.y) * f };
+    }
+    want -= d;
+  }
+  return pts[pts.length - 1]!;
 }
 
 function glyph(word: string, at: XY): string {

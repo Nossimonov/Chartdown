@@ -39,6 +39,21 @@ export class LabelPlacer {
     this.boxes.push(this.boxFor(x, y, textStr, fontSize, anchor, widthPx));
   }
 
+  /**
+   * Line-feature labels: candidates are points ALONG the feature (mid-course
+   * first, sliding outward); the first free one wins. Sliding along the line
+   * keeps the label attached to what it names — a vertical nudge off a road
+   * reads as labeling the neighbor. Falls back to vertical nudges at the
+   * first candidate only when the whole course is crowded.
+   */
+  placeAlong(candidates: { x: number; y: number }[], textStr: string, fontSize: number, anchor: Anchor): { x: number; y: number } {
+    for (const c of candidates) {
+      if (this.tryClaim(c.x, c.y, textStr, fontSize, anchor)) return c;
+    }
+    const first = candidates[0]!;
+    return { x: first.x, y: this.place(first.x, first.y, textStr, fontSize, anchor) };
+  }
+
   /** Returns the chosen y (x is never moved — horizontal shifts read as errors on maps). */
   place(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): number {
     const h = fontSize * 1.1;

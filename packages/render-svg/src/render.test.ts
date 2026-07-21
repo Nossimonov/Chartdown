@@ -342,6 +342,24 @@ describe("levels (spec 06 §8)", () => {
     expect(gm).toContain(">alarm</text>"); // gm range entities stay zones
   });
 
+  it("room labels dodge the pieces (the kitchen label clears its table)", () => {
+    const { svg } = renderSource(example("fairwater-manor"), { level: "ground" });
+    const m = /<text x="[\d.]+" y="([\d.]+)"[^>]*>Kitchen<\/text>/.exec(svg);
+    expect(m).toBeTruthy();
+    const y = Number(m![1]);
+    // the kitchen table F8..G8 spans y 248..280; the label picks a clear row
+    expect(y < 244 || y > 284).toBe(true);
+  });
+
+  it("route labels sit at the course's arc-length midpoint, sliding along when crowded", () => {
+    const { svg } = renderSource(example("brenmark"), {});
+    const bren = /<text x="([\d.]+)" y="([\d.]+)"[^>]*>The Bren<\/text>/.exec(svg);
+    expect(bren).toBeTruthy();
+    // course F1..A4 clipped at the coast: mid-course is near D3 (x ≈ 160-200),
+    // not the C4/B4 tail (x ≈ 155 was the old index-midpoint terminus read)
+    expect(Number(bren![2])).toBeLessThan(140); // y near row 3, not row 4+
+  });
+
   it("room labels render beneath features and tokens (z-order)", () => {
     const { svg } = renderSource(example("fairwater-manor"), { level: "ground" });
     const roomLabel = svg.indexOf(">The Great Hall</text>");
