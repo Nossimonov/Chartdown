@@ -106,7 +106,11 @@ ford : on redford on tollroad difficult
 - **Implied-crossing warning**: a water-path × road overlap not covered by any crossing's cells produces a renderer warning naming both entities and the cell — the render would otherwise imply a bridge nobody declared.
 - **Layering**: within `[terrain]`, area terrain renders beneath path bands, and paths beneath crossings; declaration order breaks ties within a kind. Consequently, a declared terrain cell grazed by a river's band reads as its bank (mud shows through at the water's edge). *Extent is always declared, never derived*: a "fill to the river" mechanic was considered and rejected — geometric fill would make tactical cells depend on renderer finishing, and cell-space fill would make one entity's extent silently track another's edits. Authors declare the bank cells they mean.
 
-## 7. Export note (non-normative)
+## 7. Label conduct
+
+At battlemap scale, table legibility outranks self-description: **fallback word-labels render as hover tooltips**, not visible text (spec 04 §4's chain-terminal label is satisfied by the tooltip). Visible text labels are reserved for display names, token identifiers, and zones; `nolabel` opts any of those out. Region-scale conduct is unchanged — an anonymous generic marker there carries its word as text (spec 04 §4).
+
+## 8. Export note (non-normative)
 
 The archetype facets map 1:1 onto Universal VTT: barrier and wall geometry → `line_of_sight`; `opening` with its `passes`/`sight` facets → `portals` (closed state, window-ness); `light=` → `lights`; grid and `scale:` → `resolution`. Elevation flattens on UVTT export (ledges bake into the rendered image; walls are unaffected); richer multi-level export targets (e.g. Foundry scene levels) are ecosystem-phase work. This mapping is why the triad is modeled first-class: export is a transform, not an interpretation.
 

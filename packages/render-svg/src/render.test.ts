@@ -197,6 +197,31 @@ describe("fallback-chain terminal labels (spec 04 §4)", () => {
     const { svg } = renderSource(src);
     expect(svg).not.toContain(">village</text>");
   });
+
+  it("battlemap label conduct (spec 06 §7): fallback words are tooltips, not text", () => {
+    const src = "map: battlemap\ngrid: square 8x8\nscale: 5ft\n[features]\ncrates : B2\n";
+    const { svg } = renderSource(src);
+    expect(svg).not.toContain(">crates</text>");
+    expect(svg).toContain("<title>crates</title>");
+  });
+});
+
+describe("windows pass light (spec 06 §2 facets)", () => {
+  it("a window opens a gap in the visibility polygon", () => {
+    const walled = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "scale: 5ft",
+      "[structures]",
+      "building shed : D4..F6",
+      "[features]",
+      "campfire : E5 light=20ft",
+    ].join("\n");
+    const windowed = walled.replace("building shed : D4..F6", "building shed : D4..F6\n  window : D5.w");
+    const a = renderSource(walled).svg;
+    const b = renderSource(windowed).svg;
+    expect(a).not.toBe(b); // the light escapes westward through the window
+  });
 });
 
 describe("elevation ledges (spec 06 §5)", () => {

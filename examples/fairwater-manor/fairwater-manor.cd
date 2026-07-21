@@ -2,53 +2,56 @@
 
 map: battlemap
 chartdown: 0.1
-grid: square 24x18          ; columns A-X, rows 1-18
+grid: square 26x20          ; columns A-Z, rows 1-20
 scale: 5ft
 numbers: on
 
 [terrain]
-river fairwater "The Fairwater" : path A12 G12 N13 X13 width=2
-mud : area E13..G14 difficult
-road kingsroad "King's Road" : path L18 L11 L1
+river fairwater "The Fairwater" : path A14 H14 P15 Z15 width=2
+road kingsroad "King's Road" : path M20 M13
 bridge : on fairwater on kingsroad
-forest : area A1..C9
-grass : area T1..X10
+forest : area A1..B12
+grass : area X1..Z12
 
 [structures]
-building courtyard "The Courtyard" : C2..S8
-  door : L8.s
-building hall "The Great Hall" : E3..K6
-  door : H6.s
+building courtyard "The Courtyard" : D2..V10
+  door : M10.s
+building hall "The Great Hall" : E3..L6
+  door : J6.s
   window : E4.w
   window : E5.w
-building wing "East Wing" : N3..R6
-  door : N6.s
-  window : R4.e
-building gatehouse "The Gatehouse" : K9..M10
-  door : L9.n
-  door : L10.s
-  window : K9.w
-  window : M9.e
+building kitchen "Kitchen" : E7..H9
+  door : H8.e
+building solar "The Solar" : N3..Q5
+  door : O5.s
+  window : Q4.e
+building barracks "Barracks" : S3..U7
+  door : S5.w
+building gatehouse "The Gatehouse" : L11..N12
+  door : M11.n
+  door : M12.s
+  window : L11.w
+  window : N11.e
 
 [features]
 campfire hearth : F4 light=25ft
-lantern : M8 light=15ft
-lantern gatelamp : M10 light=15ft
-well : N7
-statue : I7
-table : G5
-chest strongbox : Q4
-crates : D3
-barrel : D7
+lantern gatelamp : N12 light=15ft
+well : N8
+statue : K8
+table : G8
+table hightable : H4
+chest strongbox : P4
+crates : T4
+barrel : F8
 
 [tokens]
-guards g1 g2 : L9 L12 side=foe
-guard g3 : D8 side=foe
-lord "Lord Fairwater" : H4
-assassin "The Whisper" : Q5 hidden side=foe
-party start : J17..N18
+guards g1 g2 : M12 M16 side=foe
+guard g3 : R8 side=foe
+lord "Lord Fairwater" : I4
+assassin "The Whisper" : P5 hidden side=foe
+party start : K19..O20
 
 [gm]
-trigger alarm : K8..M8 "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds."
+trigger alarm : L10..N10 "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds."
 strongbox : "Locked (DC 15). Deeds to the mill, 120 gp, and a letter naming the Whisper's employer."
 "Lord Fairwater" : "Knows he is a target; will bargain."

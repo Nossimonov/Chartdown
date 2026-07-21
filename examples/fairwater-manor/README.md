@@ -4,7 +4,7 @@
 
 ## The scene
 
-A walled manor on the King's Road where it bridges the Fairwater. The road runs north through the gatehouse — two doors, so it's a killing box — into a courtyard holding the Great Hall (hearth blazing) and the East Wing. Guards on the bridge and at the gate; Lord Fairwater by his fire; and in GM view, an assassin already inside, an alarm trigger at the gate, and what's really in that locked chest.
+A walled manor on the King's Road where it bridges the Fairwater. The road ends at the gatehouse — two doors, so it's a killing box — which opens into a walled courtyard holding four distinct rooms: the Great Hall (hearth-light striping out of its western windows), the Kitchen below it, the Solar, and the Barracks. Guards on the bridge and at the gate; Lord Fairwater at his high table; and in GM view, an assassin already in the Solar, an alarm trigger inside the gate, and what's really in that locked strongbox.
 
 ## What this map flexes
 

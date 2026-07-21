@@ -75,21 +75,41 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
+  // Built per cell-edge so a window opens a gap in its wall.
   const sightBlockers: Segment[] = [];
   for (const e of model.entities) {
     if (e.archetype === "structure") {
       const range = e.placements.find((p): p is AddressRange => p.kind === "range");
       if (!range) continue;
-      const r = rangeRect(range);
       const ruined = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
-      const sides: Record<string, Segment> = {
-        north: { a: { x: r.x, y: r.y }, b: { x: r.x + r.w, y: r.y } },
-        south: { a: { x: r.x, y: r.y + r.h }, b: { x: r.x + r.w, y: r.y + r.h } },
-        west: { a: { x: r.x, y: r.y }, b: { x: r.x, y: r.y + r.h } },
-        east: { a: { x: r.x + r.w, y: r.y }, b: { x: r.x + r.w, y: r.y + r.h } },
+      const windowEdges = new Set(
+        e.details
+          .filter((d) => model.chainOf(d.typeWord).includes("window"))
+          .flatMap((d) => d.placements.filter((p): p is Extract<Placement, { kind: "edge" }> => p.kind === "edge"))
+          .map((p) => `${p.at.col}${p.at.row}.${p.dir}`),
+      );
+      const c1 = Math.min(colToNumber(range.from.col), colToNumber(range.to.col));
+      const c2 = Math.max(colToNumber(range.from.col), colToNumber(range.to.col));
+      const r1 = Math.min(range.from.row, range.to.row);
+      const r2 = Math.max(range.from.row, range.to.row);
+      const sideCells: Record<string, { col: number; row: number; dir: "n" | "s" | "e" | "w" }[]> = {
+        north: [], south: [], west: [], east: [],
       };
-      for (const [side, seg] of Object.entries(sides)) {
-        if (!ruined.has(side) && !ruined.has(side[0]!)) sightBlockers.push(seg);
+      for (let col = c1; col <= c2; col++) {
+        sideCells["north"]!.push({ col, row: r1, dir: "n" });
+        sideCells["south"]!.push({ col, row: r2, dir: "s" });
+      }
+      for (let row = r1; row <= r2; row++) {
+        sideCells["west"]!.push({ col: c1, row, dir: "w" });
+        sideCells["east"]!.push({ col: c2, row, dir: "e" });
+      }
+      for (const [side, cells] of Object.entries(sideCells)) {
+        if (ruined.has(side) || ruined.has(side[0]!)) continue;
+        for (const cell of cells) {
+          const address: Address = { kind: "address", col: colLetters(cell.col), row: cell.row };
+          if (windowEdges.has(`${address.col}${address.row}.${cell.dir}`)) continue; // sight=all: light passes
+          sightBlockers.push(edgeSegment(address, cell.dir));
+        }
       }
     } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
       for (const p of e.placements) {
@@ -581,11 +601,14 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
     } else {
       parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: "#8f8474", stroke: INK, "stroke-width": 1 }));
     }
+    // Label conduct (spec 06 §7): at battlemap scale, fallback word-labels are
+    // tooltips — visible text is reserved for display names, tokens, and zones.
+    if (!e.name && !hasBattlemapGlyph(chain) && !themedGlyph && !titleEl && e.typeWord) {
+      parts.unshift(el("title", {}, e.typeWord));
+    }
     into.push(el("g", { id: anchor }, ...parts));
-    // Fallback-chain terminal (spec 04 §4): generic glyphs carry their word.
-    const label = e.name ?? (hasBattlemapGlyph(chain) || themedGlyph ? null : e.typeWord);
-    if (label && !e.flags.includes("nolabel")) {
-      labels.push(text(label, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+    if (e.name && !e.flags.includes("nolabel")) {
+      labels.push(text(e.name, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
 }
