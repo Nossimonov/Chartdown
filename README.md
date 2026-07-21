@@ -2,7 +2,7 @@
 
 **A plain-text, Markdown-inspired syntax for describing maps and charts — rendered into visuals.**
 
-**▶ [Try it in the playground](https://nossimonov.github.io/Chartdown/)** — type Chartdown, see the map, share a link. Everything runs in your browser.
+**▶ [Try it in the playground](https://nossimonov.github.io/Chartdown/)** — type Chartdown, see the map, share a link. Everything runs in your browser. (Curious what's coming? The [preview playground](https://nossimonov.github.io/Chartdown/preview/) runs the in-development `preview` branch.)
 
 Chartdown aims to do for maps what Markdown did for documents and what Mermaid did for diagrams: let you *write* a map as readable text, keep it in version control, diff it, and render it anywhere. The initial version targets tabletop roleplaying games:
 
