@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chartdown Playground</title>
+  <style>
+    :root {
+      --ground: #ece5d4; --ink: #3a3226; --muted: #7a7060; --line: #cbc2ad;
+      --plate: #f9f5ea; --accent: #9c5a48; --code-bg: #f2ecdc; --err: #a03a2e; --warn: #8a6a1e; --ok: #4a7a4e;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--ground); color: var(--ink); font-family: Georgia, "Iowan Old Style", serif; }
+    header {
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+      padding: 12px 18px; border-bottom: 2px solid var(--ink);
+    }
+    header h1 { font-size: 20px; margin: 0; letter-spacing: 0.5px; }
+    header .tag { color: var(--muted); font-size: 13px; }
+    header a { color: var(--accent); font-size: 13px; margin-left: auto; }
+    main { display: grid; grid-template-columns: minmax(320px, 2fr) 3fr; gap: 0; height: calc(100vh - 51px); }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } .pane { min-height: 45vh; } }
+    .pane { display: flex; flex-direction: column; min-width: 0; }
+    .pane.editor-pane { border-right: 1px solid var(--line); }
+    .toolbar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.25);
+    }
+    .toolbar label { font-size: 12px; color: var(--muted); }
+    select, button {
+      font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+      background: var(--plate); color: var(--ink); border: 1px solid var(--line);
+      border-radius: 3px; padding: 5px 10px; cursor: pointer;
+    }
+    button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .modes { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+    .modes button { border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+    .modes button[aria-pressed="true"] { background: var(--accent); color: var(--plate); }
+    #editor {
+      flex: 1; width: 100%; resize: none; border: 0; padding: 14px;
+      font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.55;
+      background: var(--code-bg); color: var(--ink); tab-size: 4;
+    }
+    #diagnostics {
+      margin: 0; padding: 10px 14px; max-height: 30%; overflow: auto;
+      font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.5;
+      color: var(--err); background: #f6e4de; border-top: 1px solid var(--line); white-space: pre-wrap;
+    }
+    #status { font-size: 12px; font-family: ui-monospace, Consolas, monospace; margin-left: auto; }
+    #status[data-level="ok"] { color: var(--ok); }
+    #status[data-level="warning"] { color: var(--warn); }
+    #status[data-level="error"] { color: var(--err); }
+    #preview { flex: 1; overflow: auto; padding: 16px; }
+    #preview svg { width: 100%; height: auto; border: 1px solid var(--line); box-shadow: 0 2px 10px rgba(30,24,12,0.15); background: #fff; }
+    #flash {
+      position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 8px);
+      background: var(--ink); color: var(--plate); font-size: 12.5px; padding: 8px 16px;
+      border-radius: 3px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+    }
+    #flash.show { opacity: 1; transform: translate(-50%, 0); }
+    @media (prefers-reduced-motion: reduce) { #flash { transition: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chartdown Playground</h1>
+    <span class="tag">plain-text maps for tabletop games — everything runs in your browser</span>
+    <a href="https://github.com/Nossimonov/Chartdown">source &amp; spec ↗</a>
+  </header>
+  <main>
+    <section class="pane editor-pane" aria-label="Editor">
+      <div class="toolbar">
+        <label for="example">Example</label>
+        <select id="example"></select>
+        <span id="status" data-level="ok">ok</span>
+      </div>
+      <textarea id="editor" spellcheck="false" aria-label="Chartdown source"></textarea>
+      <pre id="diagnostics" hidden></pre>
+    </section>
+    <section class="pane" aria-label="Preview">
+      <div class="toolbar">
+        <span class="modes" role="group" aria-label="Render mode">
+          <button data-mode="player" aria-pressed="true">Player</button>
+          <button data-mode="gm" aria-pressed="false">GM</button>
+        </span>
+        <label for="theme">Theme</label>
+        <select id="theme">
+          <option value="default">Default</option>
+          <option value="candyworld">Candyworld</option>
+        </select>
+        <button id="share">Share link</button>
+        <button id="download">Download SVG</button>
+      </div>
+      <div id="preview"></div>
+    </section>
+  </main>
+  <span id="flash" role="status"></span>
+  <script src="./dist/playground.js"></script>
+</body>
+</html>

@@ -19,3 +19,12 @@ await build({
   outfile: "packages/browser/dist/chartdown.browser.js",
   logLevel: "info",
 });
+
+await build({
+  entryPoints: ["playground/src/playground.ts"],
+  bundle: true,
+  format: "iife",
+  loader: { ".cd": "text" },
+  outfile: "playground/dist/playground.js",
+  logLevel: "info",
+});

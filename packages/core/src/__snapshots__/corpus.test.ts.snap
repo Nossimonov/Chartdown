@@ -625,6 +625,1094 @@ exports[`example corpus > brenmark > AST snapshot is stable 1`] = `
 }
 `;
 
+exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
+{
+  "docId": "fairwater-manor",
+  "grid": {
+    "cols": 24,
+    "kind": "square",
+    "rows": 18,
+  },
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "battlemap",
+    },
+    {
+      "key": "chartdown",
+      "line": 4,
+      "value": "0.1",
+    },
+    {
+      "key": "grid",
+      "line": 5,
+      "value": "square 24x18",
+    },
+    {
+      "key": "scale",
+      "line": 6,
+      "value": "5ft",
+    },
+    {
+      "key": "numbers",
+      "line": 7,
+      "value": "on",
+    },
+  ],
+  "kind": "document",
+  "mapType": "battlemap",
+  "sections": [
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "fairwater",
+          ],
+          "kind": "entity",
+          "line": 10,
+          "name": "The Fairwater",
+          "pairs": [
+            {
+              "key": "width",
+              "value": "2",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "col": "A",
+                  "kind": "address",
+                  "row": 12,
+                },
+                {
+                  "col": "G",
+                  "kind": "address",
+                  "row": 12,
+                },
+                {
+                  "col": "N",
+                  "kind": "address",
+                  "row": 13,
+                },
+                {
+                  "col": "X",
+                  "kind": "address",
+                  "row": 13,
+                },
+              ],
+              "kind": "shape",
+              "shape": "path",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [
+            "difficult",
+          ],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 11,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "from": {
+                    "col": "E",
+                    "kind": "address",
+                    "row": 13,
+                  },
+                  "kind": "range",
+                  "to": {
+                    "col": "G",
+                    "kind": "address",
+                    "row": 14,
+                  },
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "mud",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "kingsroad",
+          ],
+          "kind": "entity",
+          "line": 12,
+          "name": "King's Road",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "col": "L",
+                  "kind": "address",
+                  "row": 18,
+                },
+                {
+                  "col": "L",
+                  "kind": "address",
+                  "row": 11,
+                },
+                {
+                  "col": "L",
+                  "kind": "address",
+                  "row": 1,
+                },
+              ],
+              "kind": "shape",
+              "shape": "path",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "road",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 13,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "fairwater",
+              },
+            },
+            {
+              "form": "on",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "kingsroad",
+              },
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "bridge",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 14,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "from": {
+                    "col": "A",
+                    "kind": "address",
+                    "row": 1,
+                  },
+                  "kind": "range",
+                  "to": {
+                    "col": "C",
+                    "kind": "address",
+                    "row": 9,
+                  },
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "forest",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 15,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "from": {
+                    "col": "T",
+                    "kind": "address",
+                    "row": 1,
+                  },
+                  "kind": "range",
+                  "to": {
+                    "col": "X",
+                    "kind": "address",
+                    "row": 10,
+                  },
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "grass",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 9,
+      "name": "terrain",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 19,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "L",
+                    "kind": "address",
+                    "row": 8,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "courtyard",
+          ],
+          "kind": "entity",
+          "line": 18,
+          "name": "The Courtyard",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "C",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "S",
+                "kind": "address",
+                "row": 8,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 21,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "H",
+                    "kind": "address",
+                    "row": 6,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 22,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "E",
+                    "kind": "address",
+                    "row": 4,
+                  },
+                  "dir": "w",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 23,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "E",
+                    "kind": "address",
+                    "row": 5,
+                  },
+                  "dir": "w",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "hall",
+          ],
+          "kind": "entity",
+          "line": 20,
+          "name": "The Great Hall",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "E",
+                "kind": "address",
+                "row": 3,
+              },
+              "kind": "range",
+              "to": {
+                "col": "K",
+                "kind": "address",
+                "row": 6,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 25,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "N",
+                    "kind": "address",
+                    "row": 6,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 26,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "R",
+                    "kind": "address",
+                    "row": 4,
+                  },
+                  "dir": "e",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "wing",
+          ],
+          "kind": "entity",
+          "line": 24,
+          "name": "East Wing",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "N",
+                "kind": "address",
+                "row": 3,
+              },
+              "kind": "range",
+              "to": {
+                "col": "R",
+                "kind": "address",
+                "row": 6,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 28,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "L",
+                    "kind": "address",
+                    "row": 9,
+                  },
+                  "dir": "n",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 29,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "L",
+                    "kind": "address",
+                    "row": 10,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 30,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "K",
+                    "kind": "address",
+                    "row": 9,
+                  },
+                  "dir": "w",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 31,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "M",
+                    "kind": "address",
+                    "row": 9,
+                  },
+                  "dir": "e",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "gatehouse",
+          ],
+          "kind": "entity",
+          "line": 27,
+          "name": "The Gatehouse",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "K",
+                "kind": "address",
+                "row": 9,
+              },
+              "kind": "range",
+              "to": {
+                "col": "M",
+                "kind": "address",
+                "row": 10,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 17,
+      "name": "structures",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "hearth",
+          ],
+          "kind": "entity",
+          "line": 34,
+          "name": null,
+          "pairs": [
+            {
+              "key": "light",
+              "value": "25ft",
+            },
+          ],
+          "placements": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "campfire",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 35,
+          "name": null,
+          "pairs": [
+            {
+              "key": "light",
+              "value": "15ft",
+            },
+          ],
+          "placements": [
+            {
+              "col": "M",
+              "kind": "address",
+              "row": 8,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "lantern",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "gatelamp",
+          ],
+          "kind": "entity",
+          "line": 36,
+          "name": null,
+          "pairs": [
+            {
+              "key": "light",
+              "value": "15ft",
+            },
+          ],
+          "placements": [
+            {
+              "col": "M",
+              "kind": "address",
+              "row": 10,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "lantern",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 37,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "N",
+              "kind": "address",
+              "row": 7,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "well",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 38,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "I",
+              "kind": "address",
+              "row": 7,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "statue",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 39,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "G",
+              "kind": "address",
+              "row": 5,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "table",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "strongbox",
+          ],
+          "kind": "entity",
+          "line": 40,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "Q",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "chest",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 41,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 3,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "crates",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 42,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 7,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "barrel",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 33,
+      "name": "features",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "g1",
+            "g2",
+          ],
+          "kind": "entity",
+          "line": 45,
+          "name": null,
+          "pairs": [
+            {
+              "key": "side",
+              "value": "foe",
+            },
+          ],
+          "placements": [
+            {
+              "col": "L",
+              "kind": "address",
+              "row": 9,
+            },
+            {
+              "col": "L",
+              "kind": "address",
+              "row": 12,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "guards",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "g3",
+          ],
+          "kind": "entity",
+          "line": 46,
+          "name": null,
+          "pairs": [
+            {
+              "key": "side",
+              "value": "foe",
+            },
+          ],
+          "placements": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 8,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "guard",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 47,
+          "name": "Lord Fairwater",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "H",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "lord",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [
+            "hidden",
+          ],
+          "gmOnly": true,
+          "ids": [],
+          "kind": "entity",
+          "line": 48,
+          "name": "The Whisper",
+          "pairs": [
+            {
+              "key": "side",
+              "value": "foe",
+            },
+          ],
+          "placements": [
+            {
+              "col": "Q",
+              "kind": "address",
+              "row": 5,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "assassin",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "start",
+          ],
+          "kind": "entity",
+          "line": 49,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "J",
+                "kind": "address",
+                "row": 17,
+              },
+              "kind": "range",
+              "to": {
+                "col": "N",
+                "kind": "address",
+                "row": 18,
+              },
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "party",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 44,
+      "name": "tokens",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "default",
+          "details": [],
+          "flags": [],
+          "gmOnly": true,
+          "ids": [
+            "alarm",
+          ],
+          "kind": "entity",
+          "line": 52,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "K",
+                "kind": "address",
+                "row": 8,
+              },
+              "kind": "range",
+              "to": {
+                "col": "M",
+                "kind": "address",
+                "row": 8,
+              },
+            },
+          ],
+          "section": "gm",
+          "texts": [
+            "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds.",
+          ],
+          "typeWord": "trigger",
+        },
+        {
+          "flags": [],
+          "kind": "gm-attachment",
+          "line": 53,
+          "pairs": [],
+          "target": {
+            "form": "id",
+            "kind": "ref",
+            "value": "strongbox",
+          },
+          "texts": [
+            "Locked (DC 15). Deeds to the mill, 120 gp, and a letter naming the Whisper's employer.",
+          ],
+        },
+        {
+          "flags": [],
+          "kind": "gm-attachment",
+          "line": 54,
+          "pairs": [],
+          "target": {
+            "form": "name",
+            "kind": "ref",
+            "value": "Lord Fairwater",
+          },
+          "texts": [
+            "Knows he is a target; will bargain.",
+          ],
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "line": 51,
+      "name": "gm",
+    },
+  ],
+  "title": "Fairwater Manor",
+}
+`;
+
 exports[`example corpus > gumdrop-vale > AST snapshot is stable 1`] = `
 {
   "docId": "gumdrop-vale-sigma-5-5",

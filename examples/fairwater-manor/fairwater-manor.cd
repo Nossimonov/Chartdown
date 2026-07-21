@@ -1,0 +1,54 @@
+# Fairwater Manor
+
+map: battlemap
+chartdown: 0.1
+grid: square 24x18          ; columns A-X, rows 1-18
+scale: 5ft
+numbers: on
+
+[terrain]
+river fairwater "The Fairwater" : path A12 G12 N13 X13 width=2
+mud : area E13..G14 difficult
+road kingsroad "King's Road" : path L18 L11 L1
+bridge : on fairwater on kingsroad
+forest : area A1..C9
+grass : area T1..X10
+
+[structures]
+building courtyard "The Courtyard" : C2..S8
+  door : L8.s
+building hall "The Great Hall" : E3..K6
+  door : H6.s
+  window : E4.w
+  window : E5.w
+building wing "East Wing" : N3..R6
+  door : N6.s
+  window : R4.e
+building gatehouse "The Gatehouse" : K9..M10
+  door : L9.n
+  door : L10.s
+  window : K9.w
+  window : M9.e
+
+[features]
+campfire hearth : F4 light=25ft
+lantern : M8 light=15ft
+lantern gatelamp : M10 light=15ft
+well : N7
+statue : I7
+table : G5
+chest strongbox : Q4
+crates : D3
+barrel : D7
+
+[tokens]
+guards g1 g2 : L9 L12 side=foe
+guard g3 : D8 side=foe
+lord "Lord Fairwater" : H4
+assassin "The Whisper" : Q5 hidden side=foe
+party start : J17..N18
+
+[gm]
+trigger alarm : K8..M8 "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds."
+strongbox : "Locked (DC 15). Deeds to the mill, 120 gp, and a letter naming the Whisper's employer."
+"Lord Fairwater" : "Knows he is a target; will bargain."
