@@ -99,25 +99,39 @@ export function nearestOnPolyline(pts: XY[], target: XY): XY {
   return best;
 }
 
-/** Sub-polyline between the params nearest to two targets (for `along` paths). */
-export function polylineBetween(pts: XY[], a: XY, b: XY): XY[] {
-  const indexNearest = (target: XY): number => {
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < pts.length; i++) {
-      const d = Math.hypot(pts[i]!.x - target.x, pts[i]!.y - target.y);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
+/**
+ * Sub-polyline between the exact projections of two points — for `A to B
+ * along X`: the returned guide starts and ends where a and b meet the line,
+ * so callers can connect real endpoint markers to it.
+ */
+export function subPolylineBetween(pts: XY[], a: XY, b: XY): XY[] {
+  const param = (target: XY): { d: number; i: number; t: number; p: XY } => {
+    let best = { d: Infinity, i: 0, t: 0, p: pts[0]! };
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i]!;
+      const p2 = pts[i + 1]!;
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const lenSq = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((target.x - p1.x) * dx + (target.y - p1.y) * dy) / lenSq));
+      const p = { x: p1.x + t * dx, y: p1.y + t * dy };
+      const d = Math.hypot(p.x - target.x, p.y - target.y);
+      if (d < best.d) best = { d, i, t, p };
     }
     return best;
   };
-  let i = indexNearest(a);
-  let j = indexNearest(b);
-  if (i > j) [i, j] = [j, i];
-  const slice = pts.slice(i, j + 1);
-  return slice.length >= 2 ? slice : [a, b];
+  let pa = param(a);
+  let pb = param(b);
+  let reversed = false;
+  if (pa.i > pb.i || (pa.i === pb.i && pa.t > pb.t)) {
+    [pa, pb] = [pb, pa];
+    reversed = true;
+  }
+  const out: XY[] = [pa.p];
+  for (let i = pa.i + 1; i <= pb.i; i++) out.push(pts[i]!);
+  out.push(pb.p);
+  if (reversed) out.reverse();
+  return out;
 }
 
 export const COMPASS_VECTORS: Record<string, XY> = {

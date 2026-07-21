@@ -15,7 +15,7 @@ import { anchorAttr, entityAnchor, gmTitleFor, pairOf, type Model } from "./mode
 import { INK, pathStrokeFor, terrainFill, terrainFillFor, tierFor } from "./theme";
 import {
   blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
-  nearestOnPolyline, pointsAttr, polylineBetween, rng, text, type XY,
+  nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
 } from "./util";
 
 interface Resolved {
@@ -140,9 +140,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const line = lookup(p.ref)?.polyline;
             if (line) {
               if (out.polyline) {
+                // `A to B along X`: anchor at both endpoint markers and follow
+                // X's shape between their projections — nudged landward so a
+                // coast road runs beside the shoreline, not on it.
                 const first = out.polyline[0]!;
                 const last = out.polyline[out.polyline.length - 1]!;
-                out.polyline = polylineBetween(line, first, last);
+                let guide = subPolylineBetween(line, first, last);
+                if (waterVector) {
+                  const vec = waterVector;
+                  guide = guide.map((pt) => ({ x: pt.x - vec.x * 4, y: pt.y - vec.y * 4 }));
+                }
+                out.polyline = [first, ...guide, last];
               } else {
                 out.polyline = line.map((pt) => ({ ...pt }));
               }
