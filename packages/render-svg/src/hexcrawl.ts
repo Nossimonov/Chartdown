@@ -7,7 +7,7 @@
 import type { Address, AddressRange, EntityNode, HexLineNode } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { LabelPlacer } from "./labels";
-import { gmTitleFor, pairOf, type Model } from "./model";
+import { gmTitleFor, labelsOn, pairOf, type Model } from "./model";
 import { FOG, GRID_LINE, INK, tierOf } from "./theme";
 import { colToNumber, el, fmt, pointsAttr, text, type XY } from "./util";
 
@@ -133,7 +133,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
             placer.block(at.x - 5, at.y - 5, 10, 10);
             contentLayer.push(glyph(word, at));
           });
-          if (cell.name) {
+          if (cell.name && labelsOn(model)) {
             const anchorId = `cd-${model.doc.docId}-${slugify(cell.name)}`;
             const y = placer.place(c.x, c.y + R * 0.62, cell.name, 7.5, "middle");
             labelLayer.push(
@@ -186,7 +186,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
           el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stroke.stroke, "stroke-width": chain.includes("river") ? 4 : 3, "stroke-dasharray": stroke.dash ?? (chain.includes("road") ? "8 4" : undefined), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.85 }),
         ),
       );
-      if (e.name) {
+      if (e.name && labelsOn(model)) {
         // Mid-course labeling names the whole line, not an endpoint.
         const mid = pts[Math.floor(pts.length / 2)]!;
         const y = placer.place(mid.x, mid.y - R * 0.55, e.name, 8, "middle");
@@ -217,7 +217,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         });
       }
       regionLayer.push(el("g", { id: e.name ? `cd-${model.doc.docId}-${slugify(e.name)}` : undefined }, ...edges));
-      if (e.name && set.size > 0) {
+      if (e.name && set.size > 0 && labelsOn(model)) {
         // Label sits above the region's topmost hexes, clear of their contents.
         let sx = 0;
         let minY = Infinity;

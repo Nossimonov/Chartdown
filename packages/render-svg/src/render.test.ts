@@ -198,6 +198,19 @@ describe("fallback-chain terminal labels (spec 04 §4)", () => {
     expect(svg).not.toContain(">village</text>");
   });
 
+  it("labels: none silences derived labels map-wide (spec 07 §3)", () => {
+    const src = example("fairwater-manor").replace("numbers: on", "numbers: on\nlabels: none");
+    const { svg } = renderSource(src);
+    expect(svg).not.toContain(">The Great Hall</text>");
+    expect(svg).not.toContain(">Lord Fairwater</text>");
+  });
+
+  it("nolabel silences one entity (the manor's courtyard uses it)", () => {
+    const { svg } = renderSource(example("fairwater-manor"));
+    expect(svg).not.toContain(">The Courtyard</text>");
+    expect(svg).toContain(">The Great Hall</text>");
+  });
+
   it("battlemap label conduct (spec 06 §7): fallback words are tooltips, not text", () => {
     const src = "map: battlemap\ngrid: square 8x8\nscale: 5ft\n[features]\ncrates : B2\n";
     const { svg } = renderSource(src);

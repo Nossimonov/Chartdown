@@ -8,25 +8,29 @@ numbers: on
 
 [terrain]
 river fairwater "The Fairwater" : path A14 H14 P15 Z15 width=2
-road kingsroad "King's Road" : path M20 M13
+road kingsroad "King's Road" : path M20 M12
 bridge : on fairwater on kingsroad
 forest : area A1..B12
 grass : area X1..Z12
 
 [structures]
-building courtyard "The Courtyard" : D2..V10
+building courtyard "The Courtyard" : D2..V10 nolabel
   door : M10.s
-building hall "The Great Hall" : E3..L6
+; the manor block: hall, solar, and barracks share party walls along the
+; north range; the kitchen tucks under the hall against the west wall
+building hall "The Great Hall" : D2..L6
   door : J6.s
-  window : E4.w
-  window : E5.w
-building kitchen "Kitchen" : E7..H9
+  door : L4.e                ; into the Solar
+  door : F6.s                ; down to the Kitchen
+  window : D4.w
+  window : D5.w
+building kitchen "Kitchen" : D7..H10
   door : H8.e
-building solar "The Solar" : N3..Q5
-  door : O5.s
-  window : Q4.e
-building barracks "Barracks" : S3..U7
-  door : S5.w
+building solar "The Solar" : M2..Q6
+  door : O6.s
+building barracks "Barracks" : R2..V6
+  door : T6.s
+  window : V4.e
 building gatehouse "The Gatehouse" : L11..N12
   door : M11.n
   door : M12.s
@@ -38,17 +42,17 @@ campfire hearth : F4 light=25ft
 lantern gatelamp : N12 light=15ft
 well : N8
 statue : K8
-table : G8
 table hightable : H4
-chest strongbox : P4
+table : F8
+barrel : E9
+chest strongbox : P3
 crates : T4
-barrel : F8
 
 [tokens]
 guards g1 g2 : M12 M16 side=foe
 guard g3 : R8 side=foe
 lord "Lord Fairwater" : I4
-assassin "The Whisper" : P5 hidden side=foe
+assassin "The Whisper" : O4 hidden side=foe
 party start : K19..O20
 
 [gm]

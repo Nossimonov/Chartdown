@@ -739,7 +739,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
                 {
                   "col": "M",
                   "kind": "address",
-                  "row": 13,
+                  "row": 12,
                 },
               ],
               "kind": "shape",
@@ -891,7 +891,9 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "typeWord": "door",
             },
           ],
-          "flags": [],
+          "flags": [
+            "nolabel",
+          ],
           "gmOnly": false,
           "ids": [
             "courtyard",
@@ -927,7 +929,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 20,
+              "line": 22,
               "name": null,
               "pairs": [],
               "placements": [
@@ -948,13 +950,55 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 21,
+              "line": 23,
               "name": null,
               "pairs": [],
               "placements": [
                 {
                   "at": {
-                    "col": "E",
+                    "col": "L",
+                    "kind": "address",
+                    "row": 4,
+                  },
+                  "dir": "e",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 24,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "F",
+                    "kind": "address",
+                    "row": 6,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 25,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "D",
                     "kind": "address",
                     "row": 4,
                   },
@@ -969,13 +1013,13 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 22,
+              "line": 26,
               "name": null,
               "pairs": [],
               "placements": [
                 {
                   "at": {
-                    "col": "E",
+                    "col": "D",
                     "kind": "address",
                     "row": 5,
                   },
@@ -993,15 +1037,15 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "hall",
           ],
           "kind": "entity",
-          "line": 19,
+          "line": 21,
           "name": "The Great Hall",
           "pairs": [],
           "placements": [
             {
               "from": {
-                "col": "E",
+                "col": "D",
                 "kind": "address",
-                "row": 3,
+                "row": 2,
               },
               "kind": "range",
               "to": {
@@ -1023,7 +1067,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 24,
+              "line": 28,
               "name": null,
               "pairs": [],
               "placements": [
@@ -1047,13 +1091,13 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "kitchen",
           ],
           "kind": "entity",
-          "line": 23,
+          "line": 27,
           "name": "Kitchen",
           "pairs": [],
           "placements": [
             {
               "from": {
-                "col": "E",
+                "col": "D",
                 "kind": "address",
                 "row": 7,
               },
@@ -1061,7 +1105,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "to": {
                 "col": "H",
                 "kind": "address",
-                "row": 9,
+                "row": 10,
               },
             },
           ],
@@ -1077,7 +1121,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 26,
+              "line": 30,
               "name": null,
               "pairs": [],
               "placements": [
@@ -1085,7 +1129,61 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
                   "at": {
                     "col": "O",
                     "kind": "address",
-                    "row": 5,
+                    "row": 6,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "solar",
+          ],
+          "kind": "entity",
+          "line": 29,
+          "name": "The Solar",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "M",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "Q",
+                "kind": "address",
+                "row": 6,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 32,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "T",
+                    "kind": "address",
+                    "row": 6,
                   },
                   "dir": "s",
                   "kind": "edge",
@@ -1098,13 +1196,13 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 27,
+              "line": 33,
               "name": null,
               "pairs": [],
               "placements": [
                 {
                   "at": {
-                    "col": "Q",
+                    "col": "V",
                     "kind": "address",
                     "row": 4,
                   },
@@ -1119,78 +1217,24 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "flags": [],
           "gmOnly": false,
           "ids": [
-            "solar",
-          ],
-          "kind": "entity",
-          "line": 25,
-          "name": "The Solar",
-          "pairs": [],
-          "placements": [
-            {
-              "from": {
-                "col": "N",
-                "kind": "address",
-                "row": 3,
-              },
-              "kind": "range",
-              "to": {
-                "col": "Q",
-                "kind": "address",
-                "row": 5,
-              },
-            },
-          ],
-          "section": "structures",
-          "texts": [],
-          "typeWord": "building",
-        },
-        {
-          "archetype": "structure",
-          "archetypeSource": "vocab",
-          "details": [
-            {
-              "flags": [],
-              "ids": [],
-              "kind": "detail",
-              "line": 29,
-              "name": null,
-              "pairs": [],
-              "placements": [
-                {
-                  "at": {
-                    "col": "S",
-                    "kind": "address",
-                    "row": 5,
-                  },
-                  "dir": "w",
-                  "kind": "edge",
-                },
-              ],
-              "texts": [],
-              "typeWord": "door",
-            },
-          ],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [
             "barracks",
           ],
           "kind": "entity",
-          "line": 28,
+          "line": 31,
           "name": "Barracks",
           "pairs": [],
           "placements": [
             {
               "from": {
-                "col": "S",
+                "col": "R",
                 "kind": "address",
-                "row": 3,
+                "row": 2,
               },
               "kind": "range",
               "to": {
-                "col": "U",
+                "col": "V",
                 "kind": "address",
-                "row": 7,
+                "row": 6,
               },
             },
           ],
@@ -1206,7 +1250,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 31,
+              "line": 35,
               "name": null,
               "pairs": [],
               "placements": [
@@ -1227,7 +1271,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 32,
+              "line": 36,
               "name": null,
               "pairs": [],
               "placements": [
@@ -1248,7 +1292,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 33,
+              "line": 37,
               "name": null,
               "pairs": [],
               "placements": [
@@ -1269,7 +1313,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
               "flags": [],
               "ids": [],
               "kind": "detail",
-              "line": 34,
+              "line": 38,
               "name": null,
               "pairs": [],
               "placements": [
@@ -1293,7 +1337,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "gatehouse",
           ],
           "kind": "entity",
-          "line": 30,
+          "line": 34,
           "name": "The Gatehouse",
           "pairs": [],
           "placements": [
@@ -1333,7 +1377,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "hearth",
           ],
           "kind": "entity",
-          "line": 37,
+          "line": 41,
           "name": null,
           "pairs": [
             {
@@ -1362,7 +1406,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "gatelamp",
           ],
           "kind": "entity",
-          "line": 38,
+          "line": 42,
           "name": null,
           "pairs": [
             {
@@ -1389,7 +1433,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 39,
+          "line": 43,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1411,7 +1455,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 40,
+          "line": 44,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1431,33 +1475,11 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "line": 41,
-          "name": null,
-          "pairs": [],
-          "placements": [
-            {
-              "col": "G",
-              "kind": "address",
-              "row": 8,
-            },
-          ],
-          "section": "features",
-          "texts": [],
-          "typeWord": "table",
-        },
-        {
-          "archetype": "feature",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
           "ids": [
             "hightable",
           ],
           "kind": "entity",
-          "line": 42,
+          "line": 45,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1477,18 +1499,62 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 46,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 8,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "table",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "line": 47,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "E",
+              "kind": "address",
+              "row": 9,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "barrel",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
           "ids": [
             "strongbox",
           ],
           "kind": "entity",
-          "line": 43,
+          "line": 48,
           "name": null,
           "pairs": [],
           "placements": [
             {
               "col": "P",
               "kind": "address",
-              "row": 4,
+              "row": 3,
             },
           ],
           "section": "features",
@@ -1503,7 +1569,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 44,
+          "line": 49,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1517,32 +1583,10 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "texts": [],
           "typeWord": "crates",
         },
-        {
-          "archetype": "feature",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "line": 45,
-          "name": null,
-          "pairs": [],
-          "placements": [
-            {
-              "col": "F",
-              "kind": "address",
-              "row": 8,
-            },
-          ],
-          "section": "features",
-          "texts": [],
-          "typeWord": "barrel",
-        },
       ],
       "kind": "section",
       "known": true,
-      "line": 36,
+      "line": 40,
       "name": "features",
     },
     {
@@ -1558,7 +1602,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "g2",
           ],
           "kind": "entity",
-          "line": 48,
+          "line": 52,
           "name": null,
           "pairs": [
             {
@@ -1592,7 +1636,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "g3",
           ],
           "kind": "entity",
-          "line": 49,
+          "line": 53,
           "name": null,
           "pairs": [
             {
@@ -1619,7 +1663,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
-          "line": 50,
+          "line": 54,
           "name": "Lord Fairwater",
           "pairs": [],
           "placements": [
@@ -1643,7 +1687,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           "gmOnly": true,
           "ids": [],
           "kind": "entity",
-          "line": 51,
+          "line": 55,
           "name": "The Whisper",
           "pairs": [
             {
@@ -1653,9 +1697,9 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
           ],
           "placements": [
             {
-              "col": "P",
+              "col": "O",
               "kind": "address",
-              "row": 5,
+              "row": 4,
             },
           ],
           "section": "tokens",
@@ -1672,7 +1716,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "start",
           ],
           "kind": "entity",
-          "line": 52,
+          "line": 56,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1697,7 +1741,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
       ],
       "kind": "section",
       "known": true,
-      "line": 47,
+      "line": 51,
       "name": "tokens",
     },
     {
@@ -1712,7 +1756,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
             "alarm",
           ],
           "kind": "entity",
-          "line": 55,
+          "line": 59,
           "name": null,
           "pairs": [],
           "placements": [
@@ -1739,7 +1783,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
         {
           "flags": [],
           "kind": "gm-attachment",
-          "line": 56,
+          "line": 60,
           "pairs": [],
           "target": {
             "form": "id",
@@ -1753,7 +1797,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
         {
           "flags": [],
           "kind": "gm-attachment",
-          "line": 57,
+          "line": 61,
           "pairs": [],
           "target": {
             "form": "name",
@@ -1767,7 +1811,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
       ],
       "kind": "section",
       "known": true,
-      "line": 54,
+      "line": 58,
       "name": "gm",
     },
   ],

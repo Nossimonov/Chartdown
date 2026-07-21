@@ -5,7 +5,7 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
-import { anchorAttr, gmTitleFor, pairOf, type Model } from "./model";
+import { anchorAttr, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
 import { colToNumber, el, fmt, measureToNumber, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 
@@ -508,7 +508,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
-    if (e.name && !e.flags.includes("nolabel")) {
+    if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
       layers.labels.push(text(e.name, { x: r.x + r.w / 2, y: r.y - 5, "font-size": 10, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
@@ -531,7 +531,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
       ),
     );
     const label = e.name ?? e.ids[0] ?? e.typeWord;
-    if (label && !e.flags.includes("nolabel")) {
+    if (label && !e.flags.includes("nolabel") && labelsOn(model)) {
       labels.push(text(elevation ? `${label} (${elevation})` : label, { x: r.x + r.w / 2, y: r.y + 12, "font-size": 9, fill: stroke, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
@@ -556,7 +556,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
           }),
         ),
       );
-      if (!e.flags.includes("nolabel")) {
+      if (!e.flags.includes("nolabel") && labelsOn(model)) {
         labels.push(text(label, { x: center.x, y: center.y + radius + 10, "font-size": 9, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
     });
@@ -607,7 +607,7 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
       parts.unshift(el("title", {}, e.typeWord));
     }
     into.push(el("g", { id: anchor }, ...parts));
-    if (e.name && !e.flags.includes("nolabel")) {
+    if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
       labels.push(text(e.name, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }

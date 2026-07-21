@@ -11,7 +11,7 @@
 import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
-import { anchorAttr, entityAnchor, gmTitleFor, pairOf, type Model } from "./model";
+import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor } from "./theme";
 import {
   blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
@@ -223,7 +223,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.14 }),
         ),
       );
-      if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
+      if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const c = centroid(poly);
         const labelText = e.name.toUpperCase();
         const y = placer.place(c.x, c.y, labelText, 18, "middle", labelText.length * (18 * 0.58 + 6));
@@ -253,7 +253,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         areaParts.push(...scatterGlyphs(r.polygon, glyphName, theme, ink));
       }
       layers.areas.push(el("g", { id: anchor }, ...areaParts));
-      if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
+      if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const c = r.point ?? centroid(r.polygon);
         const y = placer.place(c.x, c.y, e.name, 11, "middle");
         layers.labels.push(
@@ -293,7 +293,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         );
         layers.lines.push(el("g", { id: anchor }, ...lineParts));
       }
-      if (e.name && !e.flags.includes("nolabel") && !overridden(e)) {
+      if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const mid = r.polyline[Math.floor(r.polyline.length / 2)]!;
         const y = placer.place(mid.x + 4, mid.y - 4, e.name, 10, "start");
         layers.labels.push(
@@ -324,7 +324,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         e.name ??
         (e.typeWord === "note" ? e.texts[0] ?? null : null) ??
         (hasTierGlyph(chain) ? null : e.typeWord);
-      if (label && !e.flags.includes("nolabel") && !overridden(e)) {
+      if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {
         const spot = placer.placeBeside(r.point.x + tier.r + 3, r.point.x - tier.r - 3, r.point.y + 4, label, tier.font);
         layers.labels.push(
           text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),

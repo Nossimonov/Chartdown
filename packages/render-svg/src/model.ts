@@ -25,6 +25,8 @@ export interface Model {
   header: Map<string, string>;
   seed: number;
   theme: Theme;
+  /** `labels:` header (spec 07 §3): derived labels render only in "names" mode. */
+  labelsMode: "names" | "none";
   /**
    * Theme fallback chain for a word (spec 04 §4): the word, then its
    * derivation bases — a theme lookup walks it until a word it knows.
@@ -96,7 +98,13 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme): M
   }
   const chainOf = (word: string | null): string[] => (word ? vocab.chain(word) : []);
 
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, chainOf };
+  const labelsMode: "names" | "none" = header.get("labels") === "none" ? "none" : "names";
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, chainOf };
+}
+
+/** Derived-label gate (spec 07 §3): `labels: none` silences everything except `note` free text. */
+export function labelsOn(model: Model, e?: { typeWord?: string | null }): boolean {
+  return model.labelsMode !== "none" || e?.typeWord === "note";
 }
 
 export const anchorAttr = (model: Model, e: { ids: string[]; name: string | null }): string | undefined => {
