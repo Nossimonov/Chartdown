@@ -235,6 +235,22 @@ describe("windows pass light (spec 06 §2 facets)", () => {
     const b = renderSource(windowed).svg;
     expect(a).not.toBe(b); // the light escapes westward through the window
   });
+
+  it("coincident walls are one wall — a window opens the shared edge (spec 06 §3)", () => {
+    const shared = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "scale: 5ft",
+      "[structures]",
+      "building yard : D2..H8",
+      "building room : D2..F5",       // shares the yard's west wall
+      "  window : D4.w",
+      "[features]",
+      "campfire : E4 light=20ft",
+    ].join("\n");
+    const sealed = shared.replace("\n  window : D4.w", "");
+    expect(renderSource(shared).svg).not.toBe(renderSource(sealed).svg); // light escapes past BOTH walls
+  });
 });
 
 describe("elevation ledges (spec 06 §5)", () => {

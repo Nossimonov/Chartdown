@@ -73,6 +73,7 @@ building tollhouse "Ruined Toll House" : N3..Q6
 - Details are anonymous by default and may take ids like any line (`door back-door : Q5.e`).
 - **Footprints** are a rect range (`N3..Q6`) or a cell list — the union of the listed cells and ranges. Odd *orthogonal* shapes are therefore fully in scope: an L-shaped hall is `building : K5..M8 K9..K12`, perimeter derived. Only **non-axis-aligned geometry** (diagonal walls, curved keep walls, corner-point-traced footprints) is deferred beyond v0.1.
 - **Smoothing note** *(non-normative)*: an angled wall is representable today as a saw-tooth of cells at the appropriate angle, and a renderer MAY render stair-stepped footprints and wall runs as clean diagonals or curves — provided movement and occupancy semantics follow the declared cells. The syntax conveys cells; appearance is the renderer's.
+- **Coincident walls are one wall**: when structures share a wall line (a room built against the courtyard's wall, adjoining rooms' party wall), the coincident edges form a single wall — an opening declared in *either* structure opens the shared edge for sight, light, and passage.
 - Freestanding walls need no parent: `wall : K5.e K6.e K7.e` (edge runs, spec 02 §5), with `ruined` available as a state.
 
 ## 4. Tokens — no bestiary, by design

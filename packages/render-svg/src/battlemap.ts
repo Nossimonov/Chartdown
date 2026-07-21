@@ -75,19 +75,30 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
-  // Built per cell-edge so a window opens a gap in its wall.
+  // Built per cell-edge so a window opens a gap in its wall — and window
+  // edges are keyed geometrically, so coincident walls from different
+  // structures (a room sharing the courtyard's wall) form ONE wall: a
+  // window in either opens the shared edge.
+  const segKey = (s: Segment): string => {
+    const pts = [s.a, s.b].sort((p, q) => p.x - q.x || p.y - q.y);
+    return `${Math.round(pts[0]!.x)},${Math.round(pts[0]!.y)}|${Math.round(pts[1]!.x)},${Math.round(pts[1]!.y)}`;
+  };
+  const windowSegments = new Set<string>();
+  for (const e of model.entities) {
+    if (e.archetype !== "structure") continue;
+    for (const d of e.details) {
+      if (!model.chainOf(d.typeWord).includes("window")) continue;
+      for (const p of d.placements) {
+        if (p.kind === "edge") windowSegments.add(segKey(edgeSegment(p.at, p.dir)));
+      }
+    }
+  }
   const sightBlockers: Segment[] = [];
   for (const e of model.entities) {
     if (e.archetype === "structure") {
       const range = e.placements.find((p): p is AddressRange => p.kind === "range");
       if (!range) continue;
       const ruined = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
-      const windowEdges = new Set(
-        e.details
-          .filter((d) => model.chainOf(d.typeWord).includes("window"))
-          .flatMap((d) => d.placements.filter((p): p is Extract<Placement, { kind: "edge" }> => p.kind === "edge"))
-          .map((p) => `${p.at.col}${p.at.row}.${p.dir}`),
-      );
       const c1 = Math.min(colToNumber(range.from.col), colToNumber(range.to.col));
       const c2 = Math.max(colToNumber(range.from.col), colToNumber(range.to.col));
       const r1 = Math.min(range.from.row, range.to.row);
@@ -107,8 +118,9 @@ export function renderBattlemap(model: Model, body: string[], frame: Frame, diag
         if (ruined.has(side) || ruined.has(side[0]!)) continue;
         for (const cell of cells) {
           const address: Address = { kind: "address", col: colLetters(cell.col), row: cell.row };
-          if (windowEdges.has(`${address.col}${address.row}.${cell.dir}`)) continue; // sight=all: light passes
-          sightBlockers.push(edgeSegment(address, cell.dir));
+          const segment = edgeSegment(address, cell.dir);
+          if (windowSegments.has(segKey(segment))) continue; // sight=all: light passes, whoever's wall it is
+          sightBlockers.push(segment);
         }
       }
     } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
