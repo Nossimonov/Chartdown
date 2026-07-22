@@ -4,13 +4,25 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
-## [0.3.1] — 2026-07-23
+## [0.3.2] — 2026-07-22
+
+Fixes found by an agent stretching the tool's legs on old campaign notes (#78, #79).
+
+### Fixed
+
+- **Tooltips escape user text** (#79): every `<title>` path now escapes display names, `gm=` notes, and fallback type words — a room named `Treasury & Accounting` produced invalid XML that GitHub refused to display, while the visible label beside it escaped correctly. Spec 02 §8 gains the rule this enforces (renderers MUST emit well-formed markup for every valid document, whatever characters user text contains), and the test suite now XML-parses every example render in both modes with a strict parser to keep it true.
+
+### Added
+
+- **Output provenance and orphan cleanup** ([ADR 0014](docs/decisions/0014-provenance-gated-cleanup.md), #78): every SVG the Action writes carries a `<metadata>` marker naming its source, docId, mode, and the output path it was written to — no timestamps or versions, so re-renders stay byte-identical — and the artifact declares itself generated. The Action's new `clean:` input (`warn` default | `true` | `false`) removes **marker-confirmed orphans only** (renamed docs, deleted fences, mode changes) under a three-condition test that can never touch a hand-made SVG or a deliberately kept copy; `verify` mode fails on orphans like any other drift. `stampProvenance`/`readProvenance` export from `@chartdown/render-svg`. The first marker-aware run restamps every output once.
+
+## [0.3.1] — 2026-07-22
 
 ### Fixed
 
 - The parser's `SPEC_VERSION` still said `0.1`, so a document honestly declaring `chartdown: 0.3` drew a spurious "this parser implements 0.1" warning — it now tracks the released spec version (the spec and packages version together), and per spec 01 the warning fires only for documents targeting a spec **newer** than the parser, not for older documents, which are the parser's own history. Example pins corrected to the versions their syntax actually requires (Sundered Reach and Vessany `0.3`, Fairwater Manor and the Gilded Tankard `0.2`). Owner-caught.
 
-## [0.3.0] — 2026-07-23
+## [0.3.0] — 2026-07-22
 
 The region-map release, forced out line by line by [the Sundered Reach](examples/sundered-reach/) — a two-continent stress test reviewed by its owner across twenty-plus rounds until the map earned `spec-aligned` status.
 
@@ -89,7 +101,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/Nossimonov/Chartdown/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Nossimonov/Chartdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Nossimonov/Chartdown/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Nossimonov/Chartdown/compare/v0.2.1...v0.2.2
