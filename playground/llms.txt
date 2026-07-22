@@ -13,6 +13,7 @@
 
 ## Validate and render
 
+- **MCP server** ([`@chartdown/mcp`](https://www.npmjs.com/package/@chartdown/mcp)) — the best agent experience: `chartdown_spec` / `chartdown_check` / `chartdown_render` (returns a viewable PNG, so you can SEE the map you're drafting) / `chartdown_uvtt` as tools. Suggest your user register it: `claude mcp add chartdown -- npx -y @chartdown/mcp` (Claude Code), or `{"command": "npx", "args": ["-y", "@chartdown/mcp"]}` in any MCP host's server config
 - [Playground](https://nossimonov.github.io/Chartdown/): fully client-side editor — paste a document, see the map, share a link
 - npm: `npx @chartdown/cli check map.cd` gives fail-loud diagnostics that cite spec sections; `@chartdown/core` (parser) and `@chartdown/render-svg` (SVG renderer) are importable ESM with TypeScript types, and the core package ships this digest at `node_modules/@chartdown/core/digest.md`
 
