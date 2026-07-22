@@ -1,6 +1,6 @@
 {
   "name": "@chartdown/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Chartdown MCP server — check, render, and spec tools so AI agents can draft, validate, and visually verify plain-text TTRPG maps.",
   "license": "MIT",
   "type": "module",

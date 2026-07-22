@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-07-22
+
 ### Fixed
 
 - Freestanding `wall`/`fence` edge runs and `pillar` cells now render (they always blocked light; now they're visible — #62, found by an agent dogfooding the MCP server)
@@ -49,6 +51,7 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Nossimonov/Chartdown/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Nossimonov/Chartdown/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Nossimonov/Chartdown/releases/tag/v0.1.0
