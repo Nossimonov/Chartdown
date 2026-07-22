@@ -6582,14 +6582,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
             "range": {
               "from": {
                 "kind": "point",
-                "x": 770,
-                "y": 110,
+                "x": 790,
+                "y": 150,
               },
               "kind": "point-range",
               "to": {
                 "kind": "point",
-                "x": 800,
-                "y": 330,
+                "x": 790,
+                "y": 900,
               },
             },
           },

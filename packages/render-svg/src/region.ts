@@ -288,8 +288,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         placer.block(pt.x - 10, pt.y - 10, 20, 20);
       }
     } else {
-      for (let i = 0; i < r.polyline.length; i += 3) {
-        const pt = r.polyline[i]!;
+      // Every sample point: gap-free, so parallel-line labels can't slip
+      // through holes between obstacle boxes (the Deepflow/Deep Road pair).
+      for (const pt of r.polyline) {
         placer.block(pt.x - 3, pt.y - 3, 6, 6);
       }
     }
@@ -368,17 +369,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
           const c = centroid(r.polygon);
-          const size = isLake ? 10 : 14;
           const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
           const labelText = keyedLbl ?? e.name.toUpperCase();
-          const width = labelText.length * (size * 0.58 + (isLake ? 2 : 4));
-          // Clamp into the viewport — an edge-hugging ocean's centroid can sit
-          // half off-map.
+          // Text fits its water: the font shrinks until the name fits the
+          // polygon's width (no label is too big to exist on the map).
+          const bboxW = Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x));
+          const { size, spacing } = fitLabel(labelText, bboxW * 0.85, isLake ? 10 : 14, isLake ? 2 : 4);
+          const width = labelText.length * (size * 0.58 + spacing);
           const cx = Math.min(Math.max(c.x, width / 2 + 10), w - width / 2 - 10);
           const y = placer.place(cx, c.y, labelText, size, "middle", width);
           layers.labels.push(
             text(labelText, {
-              x: cx, y, "font-size": size, "letter-spacing": isLake ? 2 : 4,
+              x: cx, y, "font-size": size, "letter-spacing": spacing,
               fill: "#5a7a96", opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
             }),
           );
@@ -397,10 +399,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           const c = centroid(r.polygon);
           const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
           const labelText = keyedLbl ?? e.name.toUpperCase();
-          const y = placer.place(c.x, c.y, labelText, 15, "middle", labelText.length * (15 * 0.58 + 5));
+          // A small realm gets a small name — the label fits its territory.
+          const bboxW = Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x));
+          const { size, spacing } = fitLabel(labelText, bboxW * 0.8, 15, 5);
+          const y = placer.place(c.x, c.y, labelText, size, "middle", labelText.length * (size * 0.58 + spacing));
           layers.labels.push(
             text(labelText, {
-              x: c.x, y, "font-size": 15, "letter-spacing": 5, fill: "#6b5d4a",
+              x: c.x, y, "font-size": size, "letter-spacing": spacing, fill: "#6b5d4a",
               opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
             }),
           );
@@ -573,9 +578,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const b = toXY(o.hint.range.to);
       const cx = (a.x + b.x) / 2;
       const cy = (a.y + b.y) / 2;
+      // The author DECLARED this box — the text fits it, whatever it takes:
+      // an oversized sprawl must never overflow the map or its neighbors.
+      const spanLen = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 40);
+      const upper = name.toUpperCase();
+      const { size, spacing } = fitLabel(upper, spanLen, 16, 8);
       layers.labels.push(
-        text(name.toUpperCase(), {
-          x: cx, y: cy, "font-size": 16, "letter-spacing": 8, fill: "#5a7a96", opacity: 0.85,
+        text(upper, {
+          x: cx, y: cy, "font-size": size, "letter-spacing": spacing, fill: "#5a7a96", opacity: 0.85,
           "text-anchor": "middle", "font-family": "sans-serif",
           transform: Math.abs(b.y - a.y) > Math.abs(b.x - a.x) ? `rotate(90 ${fmt(cx)} ${fmt(cy)})` : undefined,
         }),
@@ -593,6 +603,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   }
 
   body.push(...layers.water, ...layers.realms, ...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
+}
+
+/**
+ * Shrink a letter-spaced label until it fits `maxPx` (floor 8px, spacing
+ * scaled proportionally) — no label is too big to exist on the map.
+ */
+function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing: number): { size: number; spacing: number } {
+  const widthAt = (size: number, spacing: number): number => textStr.length * (size * 0.58 + spacing);
+  let size = baseSize;
+  let spacing = baseSpacing;
+  while (size > 8 && widthAt(size, spacing) > maxPx) {
+    size -= 1;
+    spacing = Math.max(0.5, (baseSpacing * size) / baseSize);
+  }
+  return { size, spacing };
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {

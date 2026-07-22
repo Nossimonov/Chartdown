@@ -84,6 +84,17 @@ export class LabelPlacer {
     return { x: first.x, y: this.place(first.x, first.y, textStr, fontSize, anchor) };
   }
 
+  protected overlapArea(box: Box): number {
+    let area = 0;
+    for (const b of this.boxes) {
+      const ox = Math.max(0, Math.min(box.x + box.w, b.x + b.w) - Math.max(box.x, b.x));
+      const oy = Math.max(0, Math.min(box.y + box.h, b.y + b.h) - Math.max(box.y, b.y));
+      area += ox * oy;
+    }
+    if (!this.inBounds(box)) area += 1e6;
+    return area;
+  }
+
   /** Returns the chosen y (x is never moved — horizontal shifts read as errors on maps). */
   place(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): number {
     const h = fontSize * 1.1;
@@ -92,11 +103,19 @@ export class LabelPlacer {
     for (const dy of offsets) {
       if (this.tryClaim(x, y + dy, textStr, fontSize, anchor, widthPx)) return y + dy;
     }
-    // Everything overlaps: take the last candidate anyway, registered, so
-    // later labels at least avoid *this* one.
-    const last = offsets[offsets.length - 1]!;
-    this.claim(x, y + last, textStr, fontSize, anchor, widthPx);
-    return y + last;
+    // Everything overlaps: LEAST-BAD candidate (minimum overlap, in-bounds
+    // strongly preferred) — never an arbitrary far slot on top of other text.
+    let best = 0;
+    let bestScore = Infinity;
+    for (const dy of offsets) {
+      const score = this.overlapArea(this.boxFor(x, y + dy, textStr, fontSize, anchor, widthPx));
+      if (score < bestScore) {
+        bestScore = score;
+        best = dy;
+      }
+    }
+    this.claim(x, y + best, textStr, fontSize, anchor, widthPx);
+    return y + best;
   }
 }
 
@@ -114,21 +133,33 @@ export class SideLabelPlacer extends LabelPlacer {
    */
   placeBeside(rightX: number, leftX: number, y: number, textStr: string, fontSize: number): SidePlacement {
     const step = fontSize * 1.1 + 2;
+    const midX = (rightX + leftX) / 2;
     const candidates: SidePlacement[] = [
       { x: rightX, y, anchor: "start" },
       { x: leftX, y, anchor: "end" },
+      { x: midX, y: y - step, anchor: "middle" },
+      { x: midX, y: y + step + 4, anchor: "middle" },
       { x: rightX, y: y + step, anchor: "start" },
       { x: leftX, y: y + step, anchor: "end" },
       { x: rightX, y: y - step, anchor: "start" },
       { x: leftX, y: y - step, anchor: "end" },
-      { x: rightX, y: y + 2 * step, anchor: "start" },
     ];
     for (const c of candidates) {
       if (this.tryClaim(c.x, c.y, textStr, fontSize, c.anchor)) return c;
     }
-    const last = candidates[candidates.length - 1]!;
-    this.claim(last.x, last.y, textStr, fontSize, last.anchor);
-    return last;
+    // Least-bad, never far-and-overlapping: minimum-overlap candidate among
+    // the NEAR slots only (distance is worse than a slight brush).
+    let best = candidates[0]!;
+    let bestScore = Infinity;
+    for (const c of candidates) {
+      const score = this.overlapArea(this.boxFor(c.x, c.y, textStr, fontSize, c.anchor));
+      if (score < bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    this.claim(best.x, best.y, textStr, fontSize, best.anchor);
+    return best;
   }
 }
 
