@@ -80,6 +80,16 @@ Known sections: `[water]`, `[terrain]`, `[paths]`, `[settlements]`, `[features]`
 
 **Water and coastlines.** Water bodies are ordinary terrain areas; `coastline` is an ordinary path. A water area placed with the half-plane form — `coastline coast : from …` then `sea "The Argen Sea" : west of coast` — fills the map extent on the stated side of the referenced path, clipped to it. (Per spec 03, the coastline carries an explicit id because things reference it.) There are no winding-order conventions: the sea is on whichever side the author says, which is what the line reads as.
 
+**Terrain kinds** (ADR 0013). Terrain facts come in three geometric kinds, each with its idiom:
+
+- **Patches** — forests, marshes, wealds: things with an outline sitting *on* the ground. `blob`/`area`, the paint-on-parchment model, unchanged.
+- **Belts** — ranges following a spine with breadth: `ridge <points> width=<measure>` (spec 02 §9).
+- **Zones** — climatic terrain (tundra, desert, icecap) defined by a **frontier, not an outline**, using the same half-plane form as seas and realms: `frostline "The Frostline" : path (…)` then `tundra "The White Reach" : north of "The Frostline"`. Beyond the frontier the land IS that terrain to the map edge; renderers give zonal terrain honest terrain fill (painted beneath water, so seas win where they overlap) — never the washed zone tint.
+
+**Named ground.** The optional region header key `ground: <terrain-word>` states what unmarked land is (`ground: plains`); the theme paints the base accordingly. Unstated, the ground is unspecified open land — the parchment.
+
+**Mountains: crest and extent coexist; refinement is additive** (ADR 0013). `ridge (…)` declares the crest and sketches the extent (the belt). Adding `area (…)` *on the same entity* refines the extent while the crest remains — `along <ref>` always means the declared crest, so references never break under refinement. An area-only mountain entity (a plateau, a highland waste) has **no crest**: a line-needing reference to it is ambiguous and fails loud, resolved by naming a face — `along south edge of <ref>` (spec 02 §7). All political outcomes are authorable and none is a representational default: border on the divide (`along <ref>`), a no-man's march (each realm to its near face), or a whole-range claim (boundary along the far face).
+
 **Political boundaries** (ADR 0012, superseding the original border-as-path idiom). A realm's boundary is its own geometry, and a border names a **relationship**, never a location:
 
 - **Realm edges may follow features.** Inside an `area` point list, `along <ref>` between two vertices makes the boundary trace the referenced feature's rendered curve between the projections of those vertices (the same feature-following as `from A to B along X`, spec 02 §7): `realm valemark "Valemark" : area (110,240) along westspine (552,540) …`. One definition — moving the feature moves the border.

@@ -62,7 +62,7 @@ relational     = ( "at" , ( point | address | range | edge ) )
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
-               | ( "along" , ref ) ;
+               | ( "along" , [ compass , "edge" , "of" ] , ref ) ;
                  (* closed grammar — no other relational forms exist.
                     multiple relational placements constrain jointly; two "on"
                     path refs = band intersection (crossings, spec 06 §6).

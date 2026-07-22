@@ -391,6 +391,33 @@ describe("levels (spec 06 §8)", () => {
     expect(svg.indexOf("#b9d3e6")).toBeLessThan(realmAt);
   });
 
+  it("terrain kinds: named ground, zonal terrain, massif areas, aspect adaptation (ADR 0013)", () => {
+    const source = [
+      "map: region",
+      "extent: 400x300mi",
+      "ground: plains",
+      "[terrain]",
+      'frostline "The Frost" : path (0,80) (200,60) (400,90)',
+      'tundra "The Waste" : north of "The Frost"',
+      'mountains high "The High Reach" : area (100,150) (200,140) (220,220) (120,230)',
+      "[realms]",
+      'realm "South" : area (40,180) along "The High Reach" (300,260) (60,270)',
+      'realm "North" : area (60,40) along south edge of "The High Reach" (350,120) (320,40)',
+    ].join("\n");
+    const { svg, diagnostics } = renderSource(source, {});
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // aspect adaptation: `along` a crestless AREA fails loud without a face…
+    const ambiguous = diagnostics.filter((d) => d.severity === "warning" && /ambiguous/.test(d.message));
+    expect(ambiguous).toHaveLength(1);
+    expect(ambiguous[0]!.message).toMatch(/edge of/);
+    // …and the face-qualified form resolves silently.
+    // named ground: a second full-canvas rect over the paper
+    expect((svg.match(/<rect /g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // massif area: the merged-massif group with peak chevrons inside
+    expect(svg).toMatch(/<g opacity="0.55">/);
+    expect(svg).toMatch(/<path d="M[^"]+L[^"]+L[^"]+M/);
+  });
+
   it("glyphless words tint deterministically; legend samples match the map (#71)", () => {
     const source = [
       "map: battlemap",

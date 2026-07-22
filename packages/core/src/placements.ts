@@ -100,6 +100,18 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     return null;
   };
 
+  // `along [<compass> edge of] <ref>` — the face qualifier names WHICH line
+  // of an areal feature the boundary follows (ADR 0013): a crestless
+  // mountain area offers two faces, and the language never guesses.
+  const takeAlongFace = (): string | undefined => {
+    const a = chunkText(peek());
+    if (a && isCompass(a) && chunkText(peek(1)) === "edge" && chunkText(peek(2)) === "of") {
+      i += 3;
+      return a;
+    }
+    return undefined;
+  };
+
   const takeEndpoint = (): Endpoint | null => {
     const t = tokens[i];
     if (t?.kind === "chunk") {
@@ -153,8 +165,9 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
         // two vertices makes the boundary trace the feature's curve there.
         if (c === "area" && ((next.kind === "chunk" && next.text === "along"))) {
           i++;
+          const face = takeAlongFace();
           const ref = takeRef("along");
-          if (ref) args.push({ kind: "relational", form: "along", ref });
+          if (ref) args.push(face ? { kind: "relational", form: "along", ref, face } : { kind: "relational", form: "along", ref });
           continue;
         }
         if (next.kind !== "chunk") break;
@@ -225,8 +238,9 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
 
     if (c === "along") {
       i++;
+      const face = takeAlongFace();
       const ref = takeRef("along");
-      if (ref) result.placements.push({ kind: "relational", form: "along", ref });
+      if (ref) result.placements.push(face ? { kind: "relational", form: "along", ref, face } : { kind: "relational", form: "along", ref });
       continue;
     }
 

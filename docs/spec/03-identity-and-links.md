@@ -22,6 +22,14 @@ A reference (`<ref>` in spec 02 §7, `[gm]` attachment subjects, and future cons
 
 Resolution is **fail-loud**: a reference that matches nothing, or a quoted reference that matches more than one entity, is an author-facing error naming the line. Duplicate display names are legal right up until something references them ambiguously — at which point the fix is promoting the intended target to an explicit id.
 
+**Aspect adaptation** (ADR 0013). A reference names the *thing*, not its geometry class, and the referencing form adapts to whatever geometry the thing currently has:
+
+- a form needing a **point** takes the entity's point, else its line's midpoint, else its area's centroid;
+- a form needing a **line** (`along`, path endpoints) takes its polyline — for a range, the declared crest, which survives area refinement — else its area's boundary (a river ending at a lake stops at the shore);
+- a form needing an **area** takes its polygon, else a ridge's belt footprint.
+
+Adaptation never guesses between *multiple meaningful* resolutions: a line-needing reference to a crestless areal feature (which offers two faces) is a fail-loud ambiguity, resolved by the face qualifier — `along south edge of <ref>` (spec 02 §7). This is what makes representation refinement safe: geometry class may change; references keep meaning the thing.
+
 > *Non-normative — why both forms:* quoted-name references keep simple descriptive maps simple ("The Serpent's Spine" is unique on your map; say so). But names are natural keys, and natural keys exhaust — there are nineteen Edgewoods in the United States, because proximity to woods is just what distinguishes a place. When your map grows its second Edgewood, the error tells you exactly where to add an id. Give an explicit id up front to anything you intend to link to from prose.
 
 ## 3. Anchors: prose → map

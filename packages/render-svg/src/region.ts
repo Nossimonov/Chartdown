@@ -31,10 +31,15 @@ interface Resolved {
   alongSpans?: { ref: string; start: number; end: number }[];
 }
 
-export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }): void {
+export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
   const { w, h, scale } = size;
   const theme = model.theme;
   const ink = theme.surface("ink", "fill", INK);
+  // Named ground (ADR 0013): the author states what unmarked land IS —
+  // the parchment stops being an assumption.
+  const groundWord = model.header.get("ground")?.trim();
+  const groundFill = groundWord ? theme.terrainFill(groundWord.split(/\s+/)) : null;
+  if (groundFill) body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: groundFill }));
   // No shared noise stream: every organic shape keys on its OWN geometry
   // (owner review caught the defect — one stream meant adding a forest
   // reshaped every blob and river declared after it).
@@ -103,6 +108,64 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return out;
   };
 
+  /**
+   * The two arcs of a polygon ring between the projections of a and b; the
+   * face word picks which (ADR 0013): `along south edge of X` takes the arc
+   * lying furthest toward that compass — deterministic, author-stated.
+   */
+  const ringPathBetween = (ring: XY[], a: XY, b: XY, face: string): XY[] => {
+    const closed = [...ring, ring[0]!];
+    const param = (target: XY): { i: number; p: XY } => {
+      let best = { d: Infinity, i: 0, p: closed[0]! };
+      for (let i = 0; i < closed.length - 1; i++) {
+        const p1 = closed[i]!;
+        const p2 = closed[i + 1]!;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const lenSq = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((target.x - p1.x) * dx + (target.y - p1.y) * dy) / lenSq));
+        const p = { x: p1.x + t * dx, y: p1.y + t * dy };
+        const d = Math.hypot(p.x - target.x, p.y - target.y);
+        if (d < best.d) best = { d, i, p };
+      }
+      return best;
+    };
+    const pa = param(a);
+    const pb = param(b);
+    const n = ring.length;
+    const walk = (forward: boolean): XY[] => {
+      const out: XY[] = [pa.p];
+      let i = pa.i;
+      while (i !== pb.i) {
+        i = forward ? (i + 1) % n : (i - 1 + n) % n;
+        out.push(ring[forward ? i : (i + 1) % n]!);
+        if (out.length > n + 2) break;
+      }
+      out.push(pb.p);
+      return out;
+    };
+    const arcs = [walk(true), walk(false)];
+    const vec = COMPASS_VECTORS[face] ?? { x: 0, y: -1 };
+    const score = (arc: XY[]): number => arc.reduce((s, p) => s + p.x * vec.x + p.y * vec.y, 0) / arc.length;
+    return score(arcs[0]!) >= score(arcs[1]!) ? arcs[0]! : arcs[1]!;
+  };
+
+  /**
+   * Aspect adaptation (ADR 0013): a reference names the THING; line-needing
+   * forms take its polyline (the crest, which survives area refinement), a
+   * face-qualified ring arc otherwise — and never silently guess between an
+   * area's faces.
+   */
+  const lineAspect = (ref: Ref, face: string | undefined, a: XY | null, b: XY | null, line: number): XY[] | null => {
+    const target = lookup(ref);
+    if (face && target?.polygon && a && b) return ringPathBetween(target.polygon, a, b, face);
+    if (target?.polyline) return a && b ? subPolylineBetween(target.polyline, a, b) : target.polyline;
+    if (target?.polygon) {
+      diagnostics.push({ severity: "warning", line, message: `along ${ref.value} is ambiguous: it is an area with no crest line — name a face: along <compass> edge of ${ref.value} (ADR 0013)` });
+    }
+    return null;
+  };
+
   const resolveEntity = (e: EntityNode): Resolved => {
     const chain = model.chainOf(e.typeWord);
     const out: Resolved = {};
@@ -142,7 +205,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               continue;
             }
             if (arg.kind !== "relational" || arg.form !== "along") continue;
-            const line = lookup(arg.ref)?.polyline;
             const prev = spliced[spliced.length - 1];
             let next: XY | null = null;
             for (let m = k + 1; m < p.args.length; m++) {
@@ -153,10 +215,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               }
             }
             next ??= spliced[0] ?? null; // trailing `along` follows through the closing edge
-            if (line && prev && next) {
-              const seg = subPolylineBetween(line, prev, next);
-              spans.push({ ref: arg.ref.value, start: spliced.length - 1, end: spliced.length + seg.length });
-              spliced.push(...seg);
+            if (prev && next) {
+              const seg = lineAspect(arg.ref, arg.face, prev, next, e.line);
+              if (seg) {
+                spans.push({ ref: arg.ref.value, start: spliced.length - 1, end: spliced.length + seg.length });
+                spliced.push(...seg);
+              }
             }
           }
           if (spans.length) out.alongSpans = spans;
@@ -245,23 +309,23 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             break;
           }
           case "along": {
-            const line = lookup(p.ref)?.polyline;
-            if (line) {
-              if (out.polyline) {
-                // `A to B along X`: anchor at both endpoint markers and follow
-                // X's shape between their projections — nudged landward so a
-                // coast road runs beside the shoreline, not on it.
-                const first = out.polyline[0]!;
-                const last = out.polyline[out.polyline.length - 1]!;
-                let guide = subPolylineBetween(line, first, last);
+            if (out.polyline) {
+              // `A to B along X`: anchor at both endpoint markers and follow
+              // X's shape between their projections — nudged landward so a
+              // coast road runs beside the shoreline, not on it.
+              const first = out.polyline[0]!;
+              const last = out.polyline[out.polyline.length - 1]!;
+              let guide = lineAspect(p.ref, p.face, first, last, e.line);
+              if (guide) {
                 if (waterVector) {
                   const vec = waterVector;
                   guide = guide.map((pt) => ({ x: pt.x - vec.x * 4, y: pt.y - vec.y * 4 }));
                 }
                 out.polyline = [first, ...guide, last];
-              } else {
-                out.polyline = line.map((pt) => ({ ...pt }));
               }
+            } else {
+              const line = lineAspect(p.ref, p.face, null, null, e.line);
+              if (line) out.polyline = line.map((pt) => ({ ...pt }));
             }
             break;
           }
@@ -424,12 +488,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     if (r.halfPlane) {
       const poly = halfPlanePolygon(r.halfPlane, w, h);
       const isWater = e.section === "water";
-      (isWater ? layers.water : e.archetype === "zone" ? layers.realms : layers.areas).push(
-        el("g", { id: anchor }, titleEl,
-          el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.2 }),
-        ),
-      );
-      if (!isWater && e.archetype === "zone") realmInfos.push({ e, key: keyOf(e), poly, spans: [], fill: wordFill, frame: true });
+      const isZone = !isWater && e.archetype === "zone";
+      if (isWater) {
+        layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: theme.terrainFill(["sea"]) })));
+      } else if (isZone) {
+        layers.realms.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: wordFill, opacity: 0.2 })));
+        realmInfos.push({ e, key: keyOf(e), poly, spans: [], fill: wordFill, frame: true });
+      } else {
+        // Zonal terrain (ADR 0013): tundra, desert, icecap — defined by a
+        // FRONTIER, not an outline. Honest terrain fill, painted before
+        // the seas so water always wins where they overlap: beyond the
+        // frontier the land IS this, all the way to the edge.
+        layers.water.unshift(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: wordFill })));
+      }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         deferLabel(4, () => {
           const c = centroid(poly);
@@ -527,13 +598,52 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         }
         continue;
       }
+      // Massif areas (ADR 0013): specific mountainous terrain — the massif
+      // visual language (fill + peaks scattered inside the footprint), not
+      // the generic patch look. With `ridge (…) area (…)` on one entity the
+      // area REFINES the extent while the crest survives for references.
+      if (chain.includes("mountains")) {
+        const poly = r.polygon;
+        const xs = poly.map((pt) => pt.x);
+        const ys = poly.map((pt) => pt.y);
+        const x0 = Math.min(...xs);
+        const y0 = Math.min(...ys);
+        const x1 = Math.max(...xs);
+        const y1 = Math.max(...ys);
+        const step = 24;
+        const peaks: string[] = [];
+        for (let gy = 0; y0 + gy * step * 0.85 <= y1; gy++) {
+          for (let gx = 0; x0 + gx * step <= x1; gx++) {
+            const px = x0 + (gx + (gy % 2) * 0.5) * step;
+            const py = y0 + gy * step * 0.85;
+            if (!pip({ x: px, y: py }, poly)) continue;
+            const s = (gx + gy) % 3 === 0 ? 6.5 : 5;
+            peaks.push(`M${fmt(px - s)} ${fmt(py + s * 0.7)}L${fmt(px)} ${fmt(py - s)}L${fmt(px + s)} ${fmt(py + s * 0.7)}`);
+          }
+        }
+        massifs.push({ anchor, titleEl, poly, peaks: peaks.join(""), fill: wordFill });
+        if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+          deferLabel(3, () => {
+            const c = r.point ?? centroid(poly);
+            const lbl = labelTextFor(model, e) ?? e.name!;
+            const bw = x1 - x0;
+            const spot = placer.placeOrDrop(c.x, c.y, lbl, 11, "middle", [0, -bw / 5, bw / 5]);
+            if (!spot) return;
+            labelBuckets[3]!.push(
+              text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.8, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+            );
+          });
+        }
+        continue;
+      }
+
       // Islands are LAND (owner round three): paper surface and a coastline
       // stroke, exactly like the continents — not a tinted blob.
       if (chain.includes("island")) {
         const coast = theme.pathStroke(["coastline"]);
         layers.areas.push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 1.2, "stroke-linejoin": "round" }),
+            el("polygon", { points: pointsAttr(r.polygon), fill: groundFill ?? theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 1.2, "stroke-linejoin": "round" }),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
