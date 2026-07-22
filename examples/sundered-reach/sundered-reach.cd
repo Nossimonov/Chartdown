@@ -26,9 +26,9 @@ sea "The Dawnwater" : area (1600,0) (1540,0) (1500,280) (1560,540) (1490,800) (1
 ; ONE broken range on ONE line (240,170)->(1345,795): the Spine of Aum
 ; dies at the western tear, the drowned crest carries the line through
 ; the strait, and the Broken Spine rises from the eastern tear
-mountains westspine "The Spine of Aum" : ridge (240,170) (410,265) (588,368)
-mountains eastspine "The Broken Spine" : ridge (1030,618) (1185,706) (1345,795)
-mountains spur "The Vakh Teeth" : ridge (170,120) (290,180) (410,150)
+mountains westspine "The Spine of Aum" : ridge (240,170) (410,265) (588,368) width=70mi
+mountains eastspine "The Broken Spine" : ridge (1030,618) (1185,706) (1345,795) width=70mi
+mountains spur "The Vakh Teeth" : ridge (170,120) (290,180) (410,150) width=45mi
 ; the drowned crest - the elvish archipelago, colinear with both spines
 island "Skarnholt" : blob (655,406) size=32mi
 island : blob (722,444) size=22mi

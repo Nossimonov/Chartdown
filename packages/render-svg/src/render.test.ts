@@ -383,7 +383,7 @@ describe("levels (spec 06 §8)", () => {
     // the island rises above it as LAND: paper surface, coastline stroke
     expect(svg).toMatch(/fill="#f9f5ea" stroke="#8fa8b8"/);
     // realm tint paints beneath terrain: its dashed boundary appears before the forest fill
-    const realmAt = svg.indexOf('stroke-dasharray="10 6"');
+    const realmAt = svg.indexOf('stroke-dasharray="9 4 2 4"');
     const forestAt = svg.indexOf("#a9c79c");
     expect(realmAt).toBeGreaterThan(-1);
     expect(forestAt).toBeGreaterThan(realmAt);

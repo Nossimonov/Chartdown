@@ -11,7 +11,7 @@ sea "The Argen Sea" : west of coast
 bay "Gull Bay" : on coast at (120,390)
 
 [terrain]
-mountains "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
+mountains "The Serpent's Spine" : ridge (700,60) (740,280) (690,530) width=60mi
 forest "Thornwood" : blob (430,170) size=90mi
 hills "The Vess Downs" : blob (520,400) size=120mi
 

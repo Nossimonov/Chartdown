@@ -85,7 +85,7 @@ Shape tokens whose geometry the renderer finishes organically (deterministically
 | `area` | `area <range \| cell/point list>` | polygon or block |
 | `path` | `path <cell/point sequence> [width=N]` | polyline |
 | `blob` | `blob <point \| cell> size=<measure>` | organic mass around a center |
-| `ridge` | `ridge <point sequence>` | elongated organic mass along a spine |
+| `ridge` | `ridge <point sequence> [width=<measure>]` | elongated organic mass along a spine; `width=` declares the mass's breadth — the belt, not the centerline, is the feature's footprint (a mountain range is terrain with dimensions, not a string of peaks) |
 
 ## 10. Grammar sketch additions
 

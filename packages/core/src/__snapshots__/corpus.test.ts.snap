@@ -4631,7 +4631,12 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "level": "",
           "line": 29,
           "name": "The Spine of Aum",
-          "pairs": [],
+          "pairs": [
+            {
+              "key": "width",
+              "value": "70mi",
+            },
+          ],
           "placements": [
             {
               "args": [
@@ -4672,7 +4677,12 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "level": "",
           "line": 30,
           "name": "The Broken Spine",
-          "pairs": [],
+          "pairs": [
+            {
+              "key": "width",
+              "value": "70mi",
+            },
+          ],
           "placements": [
             {
               "args": [
@@ -4713,7 +4723,12 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "level": "",
           "line": 31,
           "name": "The Vakh Teeth",
-          "pairs": [],
+          "pairs": [
+            {
+              "key": "width",
+              "value": "45mi",
+            },
+          ],
           "placements": [
             {
               "args": [
@@ -6810,7 +6825,12 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "level": "",
           "line": 14,
           "name": "The Serpent's Spine",
-          "pairs": [],
+          "pairs": [
+            {
+              "key": "width",
+              "value": "60mi",
+            },
+          ],
           "placements": [
             {
               "args": [

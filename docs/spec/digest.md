@@ -26,7 +26,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 - **Cells, all grids**: chess-style `K11`, `C4` (columns A..Z, AA…; 1-indexed; row 1 = north). Ranges `A11..F15` (rect / hex run / hex block). Lists: `C12 E13`.
 - **Edges/corners**: `O6.s` (n/e/s/w), `K5.nw` (corners). Wall runs: `wall : K5.e K6.e K7.e`.
 - **Gridless points**: `(x,y)` in extent units from NW origin; point ranges `(x1,y1)..(x2,y2)`.
-- **Shapes** (renderer finishes organically, deterministically — finishing is not inventing; give major paths generous `via` points): `area <cells|points|range>` · `path <seq> width=N` · `blob <center> size=<measure>` · `ridge <seq>`.
+- **Shapes** (renderer finishes organically, deterministically — finishing is not inventing; give major paths generous `via` points): `area <cells|points|range>` · `path <seq> width=N` · `blob <center> size=<measure>` · `ridge <seq> width=<measure>` (an elongated MASS along a spine — `width=` is its breadth; the belt is the footprint, not the centerline).
 - **Relational placement — closed grammar, only these nine forms**:
   `at (x,y)` · `70mi north of <ref>` · `east of <ref>` (half-plane) · `on <ref>` · `on <ref> at <point|local>` · `south edge of <ref>` · `near <ref|point>` · `from <ep> via (p) (p) to <ep>` · `along <ref>`. Endpoints: ref, point, or `ref at (point)`.
 - **Referent-frame `at` payloads (#34)**: `on kitchen at C2..D2` — a cell/range/edge after `at` is LOCAL to the referent (structure footprint frame, NW cell = A1; moving the structure moves its contents). A path's frame is the document grid (= the crossing chooser). Detail lines use `at`-prefixed placements for the implicit parent frame: `door : at E2.e`. Absolute placement stays legal everywhere — author's choice per line, never a mode; renderers surface the resolved absolute address (tooltips). Outside-footprint local, frameless referent, or cross-level referent = error.
@@ -120,7 +120,7 @@ compass: on
 coastline coast : from (210,0) via (150,130) (120,390) to (140,600)
 sea "The Argen Sea" : west of coast
 [terrain]
-mountains spine "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
+mountains spine "The Serpent's Spine" : ridge (700,60) (740,280) (690,530) width=60mi
 [settlements]
 capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
 city "Argenport" : on coast at (160,470)

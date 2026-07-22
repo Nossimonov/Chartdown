@@ -24,6 +24,8 @@ interface Resolved {
   polygon?: XY[];
   radius?: number;
   ridge?: boolean;
+  /** Massif breadth in px (from `width=`, a measure) — a ridge is a BELT, not a centerline. */
+  beltW?: number;
   halfPlane?: { compass: string; of: XY[] };
   /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
   alongSpans?: { ref: string; start: number; end: number }[];
@@ -163,6 +165,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // The TRUE curve: a spline through the declared points, no noise.
           out.polyline = catmullRom(pts, 8);
           out.ridge = p.shape === "ridge";
+          if (out.ridge) {
+            const declared = pairOf(e.pairs, "width");
+            out.beltW = declared ? measureToNumber(declared) * scale : 28;
+          }
           if (chain.includes("coastline")) coastCurves.push({ raw: pts, finished: out.polyline });
         }
       } else if (p.kind === "relational") {
@@ -316,9 +322,24 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   for (const { r } of items) {
     if (!r.polyline) continue;
     if (r.ridge) {
-      for (let i = 0; i < r.polyline.length; i += 2) {
-        const pt = r.polyline[i]!;
-        placer.block(pt.x - 10, pt.y - 10, 20, 20);
+      // Low weight: the belt is soft terrain, not a wall — labels prefer
+      // to stay off it but a feature ON the range keeps its name (shrunk)
+      // rather than dropping it. Blocks are arc-spaced so their weighted
+      // overlaps don't SUM past the drop threshold for on-belt labels.
+      const half = (r.beltW ?? 28) / 2 + 3;
+      let acc = 0;
+      let lastAt = -Infinity;
+      for (let i = 0; i < r.polyline.length; i++) {
+        if (i > 0) {
+          const a = r.polyline[i - 1]!;
+          const b = r.polyline[i]!;
+          acc += Math.hypot(b.x - a.x, b.y - a.y);
+        }
+        if (acc - lastAt >= half * 1.6) {
+          const pt = r.polyline[i]!;
+          placer.block(pt.x - half, pt.y - half, half * 2, half * 2, 0.3);
+          lastAt = acc;
+        }
       }
     } else {
       // Every sample point: gap-free, so parallel-line labels can't slip
@@ -555,10 +576,30 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
 
     if (r.polyline) {
       if (r.ridge) {
+        // A mountain range is TERRAIN with dimensions (owner review): the
+        // belt — breadth from width= — is the navigational footprint, with
+        // peak marks along the crest. Not a centerline of peaks.
+        const beltW = r.beltW ?? 28;
+        const lp = r.polyline;
+        let total = 0;
+        for (let i = 0; i < lp.length - 1; i++) total += Math.hypot(lp[i + 1]!.x - lp[i]!.x, lp[i + 1]!.y - lp[i]!.y);
+        const count = Math.max(2, Math.floor(total / Math.max(14, beltW * 0.55)));
+        const peaks: string[] = [];
+        for (let i = 0; i <= count; i++) {
+          const { p, dir } = alongAt(lp, i / count);
+          // Deterministic stagger: peaks alternate off-crest so the belt
+          // reads as a massif, not beads on a string.
+          const side = i % 2 === 0 ? 1 : -1;
+          const offAmt = (i % 3 === 0 ? 0 : beltW * 0.16) * side;
+          const px = p.x + dir.y * offAmt;
+          const py = p.y - dir.x * offAmt;
+          const s = beltW * (i % 3 === 1 ? 0.16 : 0.22);
+          peaks.push(`M${fmt(px - s)} ${fmt(py + s * 0.7)}L${fmt(px)} ${fmt(py - s)}L${fmt(px + s)} ${fmt(py + s * 0.7)}`);
+        }
         layers.lines.push(
           el("g", { id: anchor }, titleEl,
-            el("polyline", { points: pointsAttr(r.polyline), fill: "none", stroke: "#a99a85", "stroke-width": 14, opacity: 0.5, "stroke-linejoin": "round", "stroke-linecap": "round" }),
-            el("polyline", { points: pointsAttr(r.polyline), fill: "none", stroke: "#8d8171", "stroke-width": 2.5, "stroke-linejoin": "round" }),
+            el("polyline", { points: pointsAttr(lp), fill: "none", stroke: wordFill, "stroke-width": beltW, opacity: 0.55, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+            el("path", { d: peaks.join(""), fill: "none", stroke: shade(wordFill), "stroke-width": 1.4, opacity: 0.85, "stroke-linejoin": "round", "stroke-linecap": "round" }),
           ),
         );
       } else {
@@ -617,7 +658,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // paint. Offsets clear the line's OWN obstacles (±3px thin, ±10px
           // ridge band): a label never self-rejects against the feature it
           // names, but DOES reject any OTHER line in the corridor.
-          const off = r.ridge ? 17 : 9.5;
+          const off = r.ridge ? (r.beltW ?? 28) / 2 + 13 : 9.5;
           // Fine tiling (~12px per box): coarse boxes on a diagonal leave
           // diagonal gaps another diagonal label can slip through unnoticed
           // (the Broken Spine × Understone Way cross).
@@ -679,7 +720,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         labelBuckets[2]!.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
             `<text font-size="${pick!.size}" fill="${ink}" opacity="0.75" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
-            `<textPath href="#${pid}" startOffset="${fmt(pick!.offset * 100)}%"><tspan dy="${pick!.above ? (r.ridge ? -14 : -5) : r.ridge ? 20 : 12}">${safe}</tspan></textPath></text>`,
+            `<textPath href="#${pid}" startOffset="${fmt(pick!.offset * 100)}%"><tspan dy="${fmt(pick!.above ? (r.ridge ? -((r.beltW ?? 28) / 2 + 10) : -5) : r.ridge ? (r.beltW ?? 28) / 2 + 16 : 12)}">${safe}</tspan></textPath></text>`,
         );
         });
       }
@@ -850,8 +891,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             ),
           );
         } else if (!info.frame) {
+          // Same visual language as stated seams (owner: ONE grammar for
+          // borders) — the atlas dash-dot, just lighter and bandless.
           layers.realms.push(
-            el("polyline", { points: pointsAttr(pts), fill: "none", stroke: shade(info.fill), "stroke-width": 1, "stroke-dasharray": "10 6", "stroke-opacity": 0.5, "stroke-linejoin": "round" }),
+            el("polyline", { points: pointsAttr(pts), fill: "none", stroke: shade(info.fill), "stroke-width": 1.2, "stroke-dasharray": "9 4 2 4", "stroke-opacity": 0.55, "stroke-linejoin": "round" }),
           );
         }
         i = j + 1;
