@@ -434,6 +434,22 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return inside;
   };
 
+  // Name homes (owner: the ROAD's label dodges the forest's name, never
+  // the reverse): each named area reserves its natural centroid label spot
+  // BEFORE curve labels claim, and the reservation is released before area
+  // names actually place — so a road crossing a forest flips its label to
+  // the far side, and the forest keeps its name at home.
+  const nameHomes: object[] = [];
+  for (const { e, r, chain } of items) {
+    if (!r.polygon || !e.name || e.flags.includes("nolabel") || overridden(e) || !labelsOn(model)) continue;
+    if (e.archetype === "zone") continue;
+    const watery = e.section === "water" || chain.some((word) => word === "sea" || word === "water");
+    if (watery && !chain.includes("lake")) continue;
+    const c = r.point ?? centroid(r.polygon);
+    const wpx = e.name.length * 11 * 0.58;
+    nameHomes.push(placer.tempBlock(c.x - wpx / 2, c.y - 11, wpx, 13, 0.6));
+  }
+
   /** Point at fraction t of a polyline's arc length, with local direction. */
   const alongAt = (pts: XY[], t: number): { p: XY; dir: XY } => {
     let total = 0;
@@ -469,6 +485,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const labelBuckets: string[][] = [[], [], [], [], []];
   const labelJobs: { priority: number; run: () => void }[] = [];
   const deferLabel = (priority: number, run: () => void): void => void labelJobs.push({ priority, run });
+  // Homes release between curve labels (2) and area names (3).
+  if (nameHomes.length) deferLabel(2.5, () => nameHomes.forEach((b) => placer.release(b)));
 
   // Massif belts collected across the loop and emitted as ONE group per
   // terrain fill with group-level opacity: overlapping ranges (the Vakh
@@ -696,7 +714,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           const c = r.point ?? centroid(r.polygon!);
           const lbl = labelTextFor(model, e) ?? e.name!;
           const bw = Math.max(...r.polygon!.map((p) => p.x)) - Math.min(...r.polygon!.map((p) => p.x));
-          const spot = placer.placeOrDrop(c.x, c.y, lbl, 11, "middle", [0, -bw / 5, bw / 5]);
+          // The ladder reaches a third of the area each way — a forest name
+          // swaps fully to the far side of a road crossing it rather than
+          // brushing the road's label (the Kingswood vs the Kingsway).
+          const spot = placer.placeOrDrop(c.x, c.y, lbl, 11, "middle", [0, -bw / 5, bw / 5, -bw / 3, bw / 3]);
           if (!spot) return; // omit before overwriting (spec 07 §5)
           labelBuckets[3]!.push(
             text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
@@ -809,7 +830,30 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // no phantom boxes behind; shrink (floor 8px) before accepting any
         // overlap; least-bad below a road beats free-but-far — and a label
         // that would mostly cover other text is dropped, not scrawled.
-        type Cand = { offset: number; above: boolean; size: number; boxes: { cx: number; top: number }[]; wpx: number };
+        type Cand = { offset: number; above: boolean; size: number; boxes: { cx: number; top: number }[]; wpx: number; penalty: number };
+        // Curvature penalty: textPath glyphs mush together on the INSIDE of
+        // a bend (the Vakh Teeth's "The" became a sigil) — candidates prefer
+        // straight stretches, and the outside of whatever bend remains.
+        const bendOf = (offset: number, halfFrac: number, above: boolean): number => {
+          const ts = [-1, -0.5, 0, 0.5, 1].map((f) => Math.min(1, Math.max(0, offset + f * halfFrac)));
+          const angs = ts.map((t) => {
+            const d = alongAt(lp, t).dir;
+            return Math.atan2(d.y, d.x);
+          });
+          let sum = 0;
+          let signed = 0;
+          for (let i = 1; i < angs.length; i++) {
+            let dA = angs[i]! - angs[i - 1]!;
+            while (dA > Math.PI) dA -= 2 * Math.PI;
+            while (dA < -Math.PI) dA += 2 * Math.PI;
+            sum += Math.abs(dA);
+            signed += dA;
+          }
+          const inside = (above && signed < 0) || (!above && signed > 0);
+          // Weighted to beat slot-order bias and belt brushes: a mushed
+          // label is worse than an off-center or on-belt one.
+          return sum * 80 + (inside ? Math.abs(signed) * 120 : 0);
+        };
         const candidatesAt = (size: number): Cand[] => {
           const wpx = lbl.length * size * 0.58;
           const halfFrac = Math.min(0.45, wpx / 2 / Math.max(pathLen, 1));
@@ -840,7 +884,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
                 const t = offset - halfFrac + ((i + 0.5) / n) * 2 * halfFrac;
                 boxes.push(boxAt(Math.min(1, Math.max(0, t))));
               }
-              out.push({ offset, above, size, wpx, boxes });
+              out.push({ offset, above, size, wpx, boxes, penalty: bendOf(offset, halfFrac, above) });
             }
           }
           return out;
@@ -848,7 +892,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const costOf = (c: Cand): number => c.boxes.reduce((sum, b) => sum + placer.boxCost(b.cx, b.top, c.wpx / c.boxes.length, 9), 0);
         let pick: Cand | null = null;
         for (let size = 10; size >= 8 && !pick; size--) {
-          pick = candidatesAt(size).find((c) => costOf(c) === 0) ?? null;
+          // Among FREE candidates, the least-bent wins (stable on ties).
+          let best: Cand | null = null;
+          for (const c of candidatesAt(size)) {
+            if (costOf(c) !== 0) continue;
+            if (!best || c.penalty < best.penalty) best = c;
+          }
+          pick = best;
         }
         if (!pick) {
           // A big label brushing an obstacle beats a shrunken migrated one:
@@ -859,7 +909,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             let best = finalists[0]!;
             let bestScore = Infinity;
             finalists.forEach((c, i) => {
-              const score = costOf(c) + i * size;
+              const score = costOf(c) + c.penalty + i * size;
               if (score < bestScore) {
                 bestScore = score;
                 best = c;
@@ -875,6 +925,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const b = leastBad(8);
             if (b.score > b.c.wpx * 9 * 0.5) return; // omit before overwriting
             pick = b.c;
+          }
+        }
+        // A label too bent to read is not a label (the Vakh Teeth's "The"
+        // became a sigil — the name spanned 60% of a sharply-bent spur, so
+        // NO slot could straighten it). Past a bend threshold, abandon the
+        // textPath and set the name straight beside the feature instead.
+        if (pick!.penalty >= 60) {
+          const midp = alongAt(lp, 0.5).p;
+          const lift = r.ridge ? (r.beltW ?? 28) / 2 + 8 : 14;
+          const spot = placer.placeOrDrop(midp.x, midp.y - lift, lbl, 10, "middle");
+          if (spot) {
+            labelBuckets[2]!.push(
+              text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.75, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+            );
+            return;
           }
         }
         for (const b of pick!.boxes) placer.claimBox(b.cx, b.top, pick!.wpx / pick!.boxes.length, 9);
@@ -1230,16 +1295,26 @@ function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing:
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {
+  // The boundary line's ends extend laterally to the viewport edges before
+  // the polygon closes on the compass side — a half-plane spans the FULL
+  // map beyond the frontier, not just the stretch the line happens to
+  // cover (a frostline trimmed to the coasts still freezes the corners).
   const line = hp.of;
   const first = line[0]!;
   const last = line[line.length - 1]!;
   const c = hp.compass;
   if ((c.includes("n") || c.includes("s")) && !c.includes("e") && !c.includes("w")) {
     const edgeY = c.includes("n") ? 0 : h;
-    return [...line, { x: last.x, y: edgeY }, { x: first.x, y: edgeY }];
+    const ltr = first.x <= last.x;
+    const x0 = ltr ? 0 : w;
+    const x1 = ltr ? w : 0;
+    return [{ x: x0, y: first.y }, ...line, { x: x1, y: last.y }, { x: x1, y: edgeY }, { x: x0, y: edgeY }];
   }
   const edgeX = c.includes("w") ? 0 : w;
-  return [...line, { x: edgeX, y: last.y }, { x: edgeX, y: first.y }];
+  const ttb = first.y <= last.y;
+  const y0 = ttb ? 0 : h;
+  const y1 = ttb ? h : 0;
+  return [{ x: first.x, y: y0 }, ...line, { x: last.x, y: y1 }, { x: edgeX, y: y1 }, { x: edgeX, y: y0 }];
 }
 
 function centroid(pts: XY[]): XY {

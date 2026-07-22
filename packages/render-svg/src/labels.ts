@@ -37,6 +37,18 @@ export class LabelPlacer {
     this.boxes.push({ x, y, w, h, weight });
   }
 
+  /** A removable obstacle: reserve now, release later (name homes — a spot held for a label that hasn't placed yet). */
+  tempBlock(x: number, y: number, w: number, h: number, weight = 1): object {
+    const box: Box = { x, y, w, h, weight };
+    this.boxes.push(box);
+    return box;
+  }
+
+  release(handle: object): void {
+    const i = this.boxes.indexOf(handle as Box);
+    if (i >= 0) this.boxes.splice(i, 1);
+  }
+
   protected boxFor(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): Box {
     const w = widthPx ?? textStr.length * fontSize * 0.58;
     const h = fontSize * 1.1;
