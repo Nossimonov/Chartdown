@@ -5,11 +5,11 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, rangeRect } from "./grid";
+import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
 import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
-import { collectWalls } from "./walls";
+import { collectWalls, SIDE_NAME } from "./walls";
 
 interface Frame {
   cols: number;
@@ -548,25 +548,40 @@ export function renderBattlemap(
   }
 
   function renderStructure(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
-    const range = e.placements.find((p): p is AddressRange => p.kind === "range");
-    if (!range) return;
-    const r = rangeRect(range);
+    // Cell-union footprint (spec 06 §3, #45): the union of ranges and cells,
+    // with the perimeter DERIVED — an L-shaped hall is `K5..M8 K9..K12`.
+    const cells = structureCells(e);
+    if (cells.size === 0) return;
     // The `open` flag (spec 06 §3, #33): walls without a ceiling. The interior
     // reads as outdoor ground, themable as a state (`building.open : fill=…`).
     const open = e.flags.includes("open");
     const fill = model.theme.prop(model.chainOf(e.typeWord), "fill", open ? { state: "open" } : {}) ?? "#efe9da";
-    const parts: string[] = [titleEl, el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.8 })];
 
+    let colMin = Infinity, colMax = -Infinity, rowMin = Infinity, rowMax = -Infinity;
+    for (const c of cells.values()) {
+      colMin = Math.min(colMin, c.col); colMax = Math.max(colMax, c.col);
+      rowMin = Math.min(rowMin, c.row); rowMax = Math.max(rowMax, c.row);
+    }
+    const isRect = cells.size === (colMax - colMin + 1) * (rowMax - rowMin + 1);
+    const parts: string[] = [titleEl];
+    if (isRect) {
+      const r = { x: MARGIN + (colMin - 1) * CELL, y: MARGIN + (rowMin - 1) * CELL, w: (colMax - colMin + 1) * CELL, h: (rowMax - rowMin + 1) * CELL };
+      parts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.8 }));
+    } else {
+      // One path of per-cell squares: nonzero fill merges interior seams.
+      const d = [...cells.values()]
+        .sort((a, b) => a.row - b.row || a.col - b.col)
+        .map((c) => `M${fmt(MARGIN + (c.col - 1) * CELL)} ${fmt(MARGIN + (c.row - 1) * CELL)}h${CELL}v${CELL}h-${CELL}Z`)
+        .join("");
+      parts.push(el("path", { d, fill, opacity: 0.8 }));
+    }
+
+    // Walls: merged perimeter runs; a `ruined` side word selects runs FACING
+    // that direction (whole-side semantics generalized to unions).
     const ruinedSides = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
-    const sides: Record<string, { x1: number; y1: number; x2: number; y2: number }> = {
-      north: { x1: r.x, y1: r.y, x2: r.x + r.w, y2: r.y },
-      south: { x1: r.x, y1: r.y + r.h, x2: r.x + r.w, y2: r.y + r.h },
-      west: { x1: r.x, y1: r.y, x2: r.x, y2: r.y + r.h },
-      east: { x1: r.x + r.w, y1: r.y, x2: r.x + r.w, y2: r.y + r.h },
-    };
-    for (const [side, seg] of Object.entries(sides)) {
-      const ruined = ruinedSides.has(side) || ruinedSides.has(side[0]!);
-      parts.push(el("line", { ...seg, stroke: INK, "stroke-width": 3, "stroke-dasharray": ruined ? "5 6" : undefined, opacity: ruined ? 0.7 : 1 }));
+    for (const run of mergeEdgeRuns(perimeterEdges(cells))) {
+      const ruined = ruinedSides.has(SIDE_NAME[run.dir]) || ruinedSides.has(run.dir);
+      parts.push(el("line", { x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2, stroke: INK, "stroke-width": 3, "stroke-dasharray": ruined ? "5 6" : undefined, opacity: ruined ? 0.7 : 1 }));
     }
     for (const d of e.details) {
       for (const p of d.placements) {
@@ -594,7 +609,7 @@ export function renderBattlemap(
     // Since the label can't win a z-fight, it dodges instead: among the room's
     // cell rows, prefer the one nearest center whose span is clear of pieces.
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
-      const at = placeRoomLabel(e.name, r);
+      const at = placeRoomLabel(e.name, cells);
       layers.roomLabels.push(
         text(e.name, {
           x: at.x, y: at.y, "font-size": 10, fill: INK,
@@ -605,29 +620,57 @@ export function renderBattlemap(
   }
 
   /**
-   * Room-label position: candidate baselines at each cell-row center inside the
-   * footprint, scored by overlap with the pieces' cells plus a small pull
-   * toward the room's center. A clear row near center wins; a fully cluttered
+   * Room-label position: candidate baselines at the center of each cell-row's
+   * contiguous runs WITHIN the footprint union (an L-shape's bounding-rect
+   * center can lie outside the room), scored by overlap with the pieces'
+   * cells, a small pull toward the room's centroid, and a penalty for runs
+   * narrower than the label. A clear row near center wins; a fully cluttered
    * room degrades to the least-covered row.
    */
-  function placeRoomLabel(name: string, r: { x: number; y: number; w: number; h: number }): XY {
-    const cx = r.x + r.w / 2;
-    const cy = r.y + r.h / 2;
+  function placeRoomLabel(name: string, cells: Map<string, Cell>): XY {
+    let sx = 0, sy = 0;
+    const rows = new Map<number, number[]>();
+    for (const c of cells.values()) {
+      sx += MARGIN + (c.col - 0.5) * CELL;
+      sy += MARGIN + (c.row - 0.5) * CELL;
+      const list = rows.get(c.row) ?? [];
+      list.push(c.col);
+      rows.set(c.row, list);
+    }
+    const cx = sx / cells.size;
+    const cy = sy / cells.size;
     const w = name.length * 10 * 0.58;
     let best: XY = { x: cx, y: cy - 8 };
     let bestScore = Infinity;
-    for (let rowY = r.y + CELL / 2; rowY < r.y + r.h; rowY += CELL) {
-      const box = { x: cx - w / 2, y: rowY - 5, w, h: 10 };
+    const candidates: { x: number; rowY: number; runW: number }[] = [];
+    for (const [row, cols] of rows) {
+      cols.sort((a, b) => a - b);
+      const rowY = MARGIN + (row - 0.5) * CELL;
+      let start = cols[0]!;
+      let prev = cols[0]!;
+      const flush = (end: number): void =>
+        void candidates.push({ x: MARGIN + ((start + end) / 2 - 0.5) * CELL, rowY, runW: (end - start + 1) * CELL });
+      for (const col of cols.slice(1)) {
+        if (col !== prev + 1) {
+          flush(prev);
+          start = col;
+        }
+        prev = col;
+      }
+      flush(prev);
+    }
+    for (const { x, rowY, runW } of candidates) {
+      const box = { x: x - w / 2, y: rowY - 5, w, h: 10 };
       let overlap = 0;
       for (const o of labelObstructions) {
         const ox = Math.max(0, Math.min(box.x + box.w, o.x + o.w) - Math.max(box.x, o.x));
         const oy = Math.max(0, Math.min(box.y + box.h, o.y + o.h) - Math.max(box.y, o.y));
         overlap += ox * oy;
       }
-      const score = overlap + Math.abs(rowY - cy) * 0.5;
+      const score = overlap + Math.abs(rowY - cy) * 0.5 + Math.abs(x - cx) * 0.1 + Math.max(0, w - runW) * 2;
       if (score < bestScore) {
         bestScore = score;
-        best = { x: cx, y: rowY + 3.5 };
+        best = { x, y: rowY + 3.5 };
       }
     }
     return best;

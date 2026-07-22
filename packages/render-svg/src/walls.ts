@@ -11,10 +11,12 @@
  *   carry their own occlusion state in the VTT (spec 06 §9).
  */
 
-import type { Address, AddressRange } from "@chartdown/core";
-import { colLetters, colToNumber, type Segment } from "./util";
-import { edgeSegment, segKey } from "./grid";
+import type { Address } from "@chartdown/core";
+import { colLetters, type Segment } from "./util";
+import { edgeSegment, perimeterEdges, segKey, structureCells, type EdgeFacing } from "./grid";
 import { pairOf, type Model } from "./model";
+
+export const SIDE_NAME: Record<EdgeFacing, string> = { n: "north", s: "south", w: "west", e: "east" };
 
 export interface Portal {
   seg: Segment;
@@ -61,30 +63,16 @@ export function collectWalls(model: Model): WallGeometry {
 
   for (const e of model.entities) {
     if (e.archetype === "structure") {
-      const range = e.placements.find((p): p is AddressRange => p.kind === "range");
-      if (!range) continue;
+      // Cell-union footprint with a DERIVED perimeter (spec 06 §3, #45); a
+      // `ruined` side word selects the perimeter edges FACING that direction —
+      // for a plain rectangle that is exactly the historical whole-side rule.
+      const cells = structureCells(e);
+      if (cells.size === 0) continue;
       const ruined = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
-      const c1 = Math.min(colToNumber(range.from.col), colToNumber(range.to.col));
-      const c2 = Math.max(colToNumber(range.from.col), colToNumber(range.to.col));
-      const r1 = Math.min(range.from.row, range.to.row);
-      const r2 = Math.max(range.from.row, range.to.row);
-      const sideCells: Record<string, { col: number; row: number; dir: "n" | "s" | "e" | "w" }[]> = {
-        north: [], south: [], west: [], east: [],
-      };
-      for (let col = c1; col <= c2; col++) {
-        sideCells["north"]!.push({ col, row: r1, dir: "n" });
-        sideCells["south"]!.push({ col, row: r2, dir: "s" });
-      }
-      for (let row = r1; row <= r2; row++) {
-        sideCells["west"]!.push({ col: c1, row, dir: "w" });
-        sideCells["east"]!.push({ col: c2, row, dir: "e" });
-      }
-      for (const [side, cells] of Object.entries(sideCells)) {
-        if (ruined.has(side) || ruined.has(side[0]!)) continue;
-        for (const cell of cells) {
-          const address: Address = { kind: "address", col: colLetters(cell.col), row: cell.row };
-          push(edgeSegment(address, cell.dir));
-        }
+      for (const pe of perimeterEdges(cells)) {
+        if (ruined.has(SIDE_NAME[pe.dir]) || ruined.has(pe.dir)) continue;
+        const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+        push(edgeSegment(address, pe.dir));
       }
     } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
       for (const p of e.placements) {

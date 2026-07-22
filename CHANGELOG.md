@@ -6,6 +6,7 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ### Added
 
+- **Irregular room shapes**: cell-union structure footprints (`building : K5..M8 K9..K12`) now render with a fully derived perimeter — L-shapes, notches, and reentrant corners get correct walls, light, coincident-wall and opening semantics, UVTT `line_of_sight`, and room labels that stay inside the bent room. `ruined` side words select perimeter edges by facing. The manor's kitchen gained a scullery corner to show it off.
 - **UVTT export** (`exportUvtt` / `exportUvttSource` in `@chartdown/render-svg`): battlemaps export to Universal VTT one file per level — walls minus opening edges → `line_of_sight`, openings → `portals` (closed per the `passes` facet; a window is a los hole plus a shut portal), `light=` → `lights`, grid → `resolution`. Geometry shared with the light engine so export can never disagree with the render; the caller supplies the raster image (ADR 0010). Player-mode exports carry no secrets.
 - **Obsidian plugin** (in-repo at `packages/obsidian`; community-store submission pending): chartdown fences render in place with a per-map toolbar — GM/player toggle, SVG export, UVTT export with the image rasterized in-app. Exports land next to the note, name their path, and reveal in the system file explorer.
 

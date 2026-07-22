@@ -27,8 +27,10 @@ building hall "The Great Hall" : D2..L6
   window : D4.w
   window : D5.w
 ; the kitchen is arranged by the kitchen (spec 02 §7): local cells, NW = A1 —
-; move the room and the door, table, barrel, and ladder all move with it
-building kitchen "Kitchen" : D7..H10
+; move the room and the door, table, barrel, and ladder all move with it.
+; the scullery corner makes it L-shaped: a cell-union footprint whose
+; perimeter is derived (spec 06 §3)
+building kitchen "Kitchen" : D7..H10 I9..J10
   door : at E2.e
 building solar "The Solar" : M2..Q6
   door : O6.s
