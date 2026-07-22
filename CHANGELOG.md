@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-21
+
 ### Added
 
 - **Irregular room shapes**: cell-union structure footprints (`building : K5..M8 K9..K12`) now render with a fully derived perimeter — L-shapes, notches, and reentrant corners get correct walls, light, coincident-wall and opening semantics, UVTT `line_of_sight`, and room labels that stay inside the bent room. `ruined` side words select perimeter edges by facing. The manor's kitchen gained a scullery corner to show it off.
@@ -36,5 +38,6 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Nossimonov/Chartdown/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Nossimonov/Chartdown/releases/tag/v0.1.0
