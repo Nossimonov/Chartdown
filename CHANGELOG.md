@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-07-22
+
 ### Added
 
 - **GitHub Action** ([`Nossimonov/chartdown-action@v1`](https://github.com/Nossimonov/chartdown-action)): renders `.cd` files and ` ```chartdown ` fences in Markdown to SVGs committed beside them — campaign repos show maps natively on GitHub. `verify` mode diffs instead of writing; this repo dogfoods it in CI to guarantee committed example SVGs never drift from sources.
@@ -60,7 +62,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/Nossimonov/Chartdown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Nossimonov/Chartdown/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Nossimonov/Chartdown/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Nossimonov/Chartdown/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 {
   "name": "@chartdown/browser",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Chartdown browser embed — one script tag renders ```chartdown fenced blocks in place. Self-contained bundle, zero runtime dependencies.",
   "license": "MIT",
   "type": "module",
