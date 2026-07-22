@@ -1,7 +1,7 @@
 # The Sundered Reach
 
 map: region
-chartdown: 0.1
+chartdown: 0.3
 extent: 1600x1000mi
 compass: on
 scale-bar: on

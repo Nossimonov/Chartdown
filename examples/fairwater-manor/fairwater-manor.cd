@@ -1,7 +1,7 @@
 # Fairwater Manor
 
 map: battlemap
-chartdown: 0.1
+chartdown: 0.2
 grid: square 26x20          ; columns A-Z, rows 1-20
 scale: 5ft
 numbers: on

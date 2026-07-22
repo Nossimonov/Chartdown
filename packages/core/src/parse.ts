@@ -27,7 +27,9 @@ import { splitLines, tokenize, type RawLine, type Token } from "./lex";
 import { isCompass, parsePositional, parsePredicate } from "./placements";
 import { inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
-export const SPEC_VERSION = "0.1";
+// The spec and the packages version together (see CHANGELOG): a release's
+// major.minor IS the spec version its documents may target.
+export const SPEC_VERSION = "0.3";
 
 export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
@@ -244,7 +246,10 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     } else if (key === "grid") {
       document.grid = parseGrid(value, raw.line, diagnostics);
     } else if (key === "chartdown") {
-      if (value !== SPEC_VERSION) {
+      // Spec 01: warn only when the document targets a NEWER spec than this
+      // parser implements (render best-effort anyway); older targets are
+      // this parser's own history and parse silently.
+      if (parseFloat(value) > parseFloat(SPEC_VERSION)) {
         diagnostics.push(warning(raw.line, `document targets spec ${value}; this parser implements ${SPEC_VERSION}`));
       }
     } else if (key === "use") {

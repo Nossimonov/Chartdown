@@ -1,6 +1,6 @@
 {
   "name": "@chartdown/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Chartdown CLI — render plain-text .cd map documents to SVG, and check them fail-loud. Self-contained bundle, zero runtime dependencies.",
   "license": "MIT",
   "type": "module",
