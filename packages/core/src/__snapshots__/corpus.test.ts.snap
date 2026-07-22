@@ -6136,7 +6136,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 83,
+          "line": 86,
           "name": "Valemark",
           "pairs": [],
           "placements": [
@@ -6148,19 +6148,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                   "y": 240,
                 },
                 {
-                  "kind": "point",
-                  "x": 240,
-                  "y": 170,
-                },
-                {
-                  "kind": "point",
-                  "x": 410,
-                  "y": 265,
-                },
-                {
-                  "kind": "point",
-                  "x": 588,
-                  "y": 368,
+                  "form": "along",
+                  "kind": "relational",
+                  "ref": {
+                    "form": "id",
+                    "kind": "ref",
+                    "value": "westspine",
+                  },
                 },
                 {
                   "kind": "point",
@@ -6200,7 +6194,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 84,
+          "line": 87,
           "name": "Carrowen",
           "pairs": [],
           "placements": [
@@ -6264,7 +6258,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 85,
+          "line": 88,
           "name": "Ghor Vakh",
           "pairs": [],
           "placements": [
@@ -6286,19 +6280,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                   "y": 165,
                 },
                 {
-                  "kind": "point",
-                  "x": 410,
-                  "y": 150,
-                },
-                {
-                  "kind": "point",
-                  "x": 290,
-                  "y": 180,
-                },
-                {
-                  "kind": "point",
-                  "x": 170,
-                  "y": 120,
+                  "form": "along",
+                  "kind": "relational",
+                  "ref": {
+                    "form": "id",
+                    "kind": "ref",
+                    "value": "spur",
+                  },
                 },
                 {
                   "kind": "point",
@@ -6323,7 +6311,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 86,
+          "line": 89,
           "name": "Khundrum",
           "pairs": [],
           "placements": [
@@ -6350,19 +6338,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                   "y": 535,
                 },
                 {
-                  "kind": "point",
-                  "x": 1345,
-                  "y": 790,
-                },
-                {
-                  "kind": "point",
-                  "x": 1185,
-                  "y": 706,
-                },
-                {
-                  "kind": "point",
-                  "x": 1032,
-                  "y": 620,
+                  "form": "along",
+                  "kind": "relational",
+                  "ref": {
+                    "form": "id",
+                    "kind": "ref",
+                    "value": "eastspine",
+                  },
                 },
                 {
                   "kind": "point",
@@ -6387,7 +6369,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 87,
+          "line": 90,
           "name": "Sathriss",
           "pairs": [],
           "placements": [
@@ -6399,14 +6381,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                   "y": 762,
                 },
                 {
-                  "kind": "point",
-                  "x": 1150,
-                  "y": 780,
-                },
-                {
-                  "kind": "point",
-                  "x": 1345,
-                  "y": 798,
+                  "form": "along",
+                  "kind": "relational",
+                  "ref": {
+                    "form": "id",
+                    "kind": "ref",
+                    "value": "eastspine",
+                  },
                 },
                 {
                   "kind": "point",
@@ -6446,7 +6427,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 88,
+          "line": 91,
           "name": "Ilvarien",
           "pairs": [],
           "placements": [
@@ -6482,15 +6463,19 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "typeWord": "realm",
         },
         {
-          "archetype": "path",
+          "archetype": "zone",
           "archetypeSource": "vocab",
           "details": [],
-          "flags": [],
+          "flags": [
+            "valemark",
+            "carrowen",
+            "contested",
+          ],
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 89,
+          "line": 94,
           "name": null,
           "pairs": [
             {
@@ -6498,71 +6483,54 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "value": "The Accord line - contested at every ford.",
             },
           ],
-          "placements": [
-            {
-              "form": "along",
-              "kind": "relational",
-              "ref": {
-                "form": "id",
-                "kind": "ref",
-                "value": "kingsway",
-              },
-            },
-          ],
+          "placements": [],
           "section": "realms",
           "texts": [],
           "typeWord": "border",
         },
         {
-          "archetype": "path",
+          "archetype": "zone",
           "archetypeSource": "vocab",
           "details": [],
-          "flags": [],
+          "flags": [
+            "khundrum",
+            "sathriss",
+            "contested",
+          ],
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 90,
+          "line": 95,
           "name": null,
           "pairs": [],
-          "placements": [
-            {
-              "form": "along",
-              "kind": "relational",
-              "ref": {
-                "form": "id",
-                "kind": "ref",
-                "value": "westspine",
-              },
-            },
-          ],
+          "placements": [],
           "section": "realms",
           "texts": [],
           "typeWord": "border",
         },
         {
-          "archetype": "path",
+          "archetype": "zone",
           "archetypeSource": "vocab",
           "details": [],
-          "flags": [],
+          "flags": [
+            "khundrum",
+            "east",
+            "watched",
+          ],
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 91,
+          "line": 96,
           "name": null,
-          "pairs": [],
-          "placements": [
+          "pairs": [
             {
-              "form": "along",
-              "kind": "relational",
-              "ref": {
-                "form": "id",
-                "kind": "ref",
-                "value": "eastspine",
-              },
+              "key": "gm",
+              "value": "Deepwatch keeps the Dawnwater under glass.",
             },
           ],
+          "placements": [],
           "section": "realms",
           "texts": [],
           "typeWord": "border",
@@ -6594,7 +6562,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
             },
           },
           "kind": "label-override",
-          "line": 94,
+          "line": 99,
           "target": {
             "form": "name",
             "kind": "ref",
@@ -6605,7 +6573,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 93,
+      "line": 98,
       "name": "labels",
     },
   ],
@@ -7245,7 +7213,9 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
-          "ids": [],
+          "ids": [
+            "vessany",
+          ],
           "kind": "entity",
           "level": "",
           "line": 32,
@@ -7273,7 +7243,9 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
-          "ids": [],
+          "ids": [
+            "khar",
+          ],
           "kind": "entity",
           "level": "",
           "line": 33,
@@ -7296,10 +7268,14 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "typeWord": "realm",
         },
         {
-          "archetype": "path",
+          "archetype": "zone",
           "archetypeSource": "vocab",
           "details": [],
-          "flags": [],
+          "flags": [
+            "vessany",
+            "khar",
+            "contested",
+          ],
           "gmOnly": false,
           "ids": [],
           "kind": "entity",
@@ -7312,17 +7288,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
               "value": "Redrawn at the Treaty of Argen; Khar disputes the southern third.",
             },
           ],
-          "placements": [
-            {
-              "form": "along",
-              "kind": "relational",
-              "ref": {
-                "form": "name",
-                "kind": "ref",
-                "value": "The Serpent's Spine",
-              },
-            },
-          ],
+          "placements": [],
           "section": "realms",
           "texts": [],
           "typeWord": "border",

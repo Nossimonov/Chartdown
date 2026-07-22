@@ -56,7 +56,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `<compass> edge of <ref>` | `town "Dunmere" : south edge of "Thornwood"` |
 | `near <ref \| point>` | `near (720,240)` |
 | `from <endpoint> [via <points>] to <endpoint>` — paths | `river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"` |
-| `along <ref>` — path shape hint or feature-following line | `border : along "The Serpent's Spine"` |
+| `along <ref>` — path shape hint, feature-following line, or a feature-following stretch of an `area` boundary / a border's stretch selector (spec 05 §2, ADR 0012) | `road "Coast Road" : from "Argenport" to "Merrow's Rest" along coast` · `realm khar "Khar" : area (600,80) along spine (620,470) (900,420)` |
 
 - `<ref>` is a bare id word or quoted display name; resolution is defined by [03 — Identity, References, and Links](03-identity-and-links.md).
 - **Multiple relational placements constrain jointly**: `on coast 70mi north of argenport` means both hold. In particular, two `on` references to path entities place the entity at the **intersection of their bands** — the idiom for crossings (`ford : on redford on tollroad`), whose location is thereby derived rather than restated; see spec 06 §6. If the constraints are satisfiable in more than one place, the placement is ambiguous — a fail-loud error — and an `at <cell|point>` *chooses* among the candidates without redefining extent.

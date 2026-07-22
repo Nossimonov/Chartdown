@@ -149,6 +149,14 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       const args: Placement[] = [];
       while (i < tokens.length) {
         const next = tokens[i]!;
+        // Area boundaries may follow features (#81): `along <ref>` between
+        // two vertices makes the boundary trace the feature's curve there.
+        if (c === "area" && ((next.kind === "chunk" && next.text === "along"))) {
+          i++;
+          const ref = takeRef("along");
+          if (ref) args.push({ kind: "relational", form: "along", ref });
+          continue;
+        }
         if (next.kind !== "chunk") break;
         const pos = parsePositional(next.text);
         if (!pos) break;

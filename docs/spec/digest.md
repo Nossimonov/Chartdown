@@ -49,7 +49,8 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 ## Standard library (spec 05/06, curated ~80 words)
 
 - **Terrain**: sea lake plains grassland farmland forest jungle hills mountains marsh(difficult) desert dunes snowfield tundra wasteland | battlemap: mud(difficult) sand grass snow ice(difficult) water(difficult) rubble(difficult) slope
-- **Paths**: river stream road trail canal pass coastline border
+- **Paths**: river stream road trail canal pass coastline
+- **Zones**: realm region border (border = a relationship+state, never a location — see region row)
 - **Crossings/sites**: ford(difficult) bridge keep castle tower ruin dungeon lair camp mine shrine temple port cave landmark stairs ramp
 - **Settlements** (derived tiers): settlement → capital city town village hamlet
 - **Structures triad** (UVTT-aligned): building(ruined) wall(ruined) fence(sight=all) pillar door(passes=closed,sight=none) gate window(passes=none,sight=all) arrow-slit
@@ -63,7 +64,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 |---|---|---|
 | `battlemap` | terrain, structures, features, tokens | structure detail lines indented under a `building` (`ruined : north east`, `door : O6.s`); footprints = rect/cell-union (orthogonal only; perimeter derived; on unions a `ruined` side word selects perimeter edges by facing); token word + area = staging zone; `elevation=` on areas — ledges auto-render where heights differ; crossings derive from geometry: `ford : on <river-id> on <road-id> difficult` occupies the bands' intersection (multi-crossing ambiguity errors; `at <cell>` chooses); road×river overlap without a crossing warns; area terrain layers beneath path bands — declare your bank cells; fallback word-labels are tooltips at battle scale (text labels: names/tokens/zones only); multi-level: `levels: upper ground cellar` (physical order, topmost first; `level:` names the default), `[structures upper]` section qualifiers or `level=`, any feature with `to=<level>` is a connector (auto-states `.up`/`.down` for themes), one panel per level; `drop` flag = fall-edge boundary (ticked cliff line); level surfaces are declared: `earth : area …` (underground rock), `air : area …` (open sky above unfloored space), `roof : area … difficult` (lower ceilings), `terrace` (walkable raised ground); feature footprints = range placements (`table hightable : G3..I3`); `open` flag on structures = walls without a ceiling (courtyards; themable state `building.open`; sky cells checked against `air` above on multi-level maps; flattens on UVTT export); UVTT export (§9, normative): one file per level, grid units — walls minus opening edges → `line_of_sight`, openings → `portals` (closed per `passes`; window = los hole + shut portal), `light=` → `lights`, grid → `resolution`; tokens/fences not exported; mode applies first (player export carries no secrets); caller supplies the raster image; room/zone labels render beneath features and tokens AND dodge them (nearest clear row to room center); line-feature labels anchor at the rendered course's arc-length midpoint, sliding along the course when crowded |
 | `hexcrawl` | hexes, routes, regions | ledger line: `C4 forest ruin "Name" gm="…"` (first word = terrain, rest = contents); omission = unexplored; `seen` = terrain only; grouped sugar `forest : C4 D3` legal |
-| `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `coastline coast : from …` then `sea "X" : west of coast` (referenced things need ids); borders: `border : along <ref>` |
+| `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `coastline coast : from …` then `sea "X" : west of coast` (referenced things need ids); realm edges may FOLLOW features: `area (110,240) along westspine (552,540) …` traces the feature's curve between the two vertices (one definition — moving the feature moves the border); `border` attaches a STATE to a stretch of one realm's boundary, never a location: `border : valemark contested` (blanket frontier) · `border : valemark east contested` (facing = outward normal, 8 sectors, ties clockwise; bare facing selects OPEN edges only — ray escapes without re-entering; `inner` selects bay edges) · `border : valemark along westspine sealed` (feature stretch) · `border : valemark carrowen contested` (two-realm sugar: shared stretch, both sides); specific beats general; states are ordinary vocabulary (theme chain); overlapping realm claims are legal (disputed march — tints blend, both boundaries draw) |
 
 Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`). Label density conduct (07 §5): point-marker labels claim placement first and migrate least (important tiers before minor); a label SHOULD shrink toward a legibility floor before moving far, MAY be omitted rather than drawn over other text (author overrides never omitted), and a long sprawled name whose midpoint is built over MAY repeat once per side instead of crossing it.
 
@@ -125,7 +126,9 @@ capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
 city "Argenport" : on coast at (160,470)
 town "Merrow's Rest" : on coast 70mi north of "Argenport"
 [realms]
-border : along spine gm="Disputed since the Treaty of Argen."
+realm vessany "Vessany" : west of spine
+realm khar "Khar" : east of spine
+border : vessany khar contested gm="Disputed since the Treaty of Argen."
 [labels]
 "The Argen Sea" : sprawl (60,200)..(120,450)
 ```

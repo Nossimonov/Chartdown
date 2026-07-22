@@ -80,15 +80,20 @@ ruin "The Echo Stair" : (1140,680)
 landmark "The Sundering Stone" : (700,430)
 
 [realms]
-realm "Valemark" : area (110,240) (240,170) (410,265) (588,368) (552,540) (350,530) (160,600) (100,320)
+; realm boundaries FOLLOW features (#81): between two vertices, `along`
+; traces the feature's curve - the ridge IS the border, and moving it
+; moves the border with it
+realm "Valemark" : area (110,240) along westspine (552,540) (350,530) (160,600) (100,320)
 realm "Carrowen" : area (160,600) (350,530) (552,540) (598,750) (545,900) (520,990) (115,990) (110,850)
-realm "Ghor Vakh" : area (85,30) (560,30) (565,165) (410,150) (290,180) (170,120) (100,85)
-realm "Khundrum" : area (1025,15) (1530,15) (1495,285) (1555,535) (1345,790) (1185,706) (1032,620) (1078,222)
-realm "Sathriss" : area (998,762) (1150,780) (1345,798) (1490,802) (1540,985) (1085,985) (1054,880)
+realm "Ghor Vakh" : area (85,30) (560,30) (565,165) along spur (100,85)
+realm "Khundrum" : area (1025,15) (1530,15) (1495,285) (1555,535) along eastspine (1078,222)
+realm "Sathriss" : area (998,762) along eastspine (1490,802) (1540,985) (1085,985) (1054,880)
 realm "Ilvarien" : area (615,350) (950,520) (935,645) (600,470)
-border : along kingsway gm="The Accord line - contested at every ford."
-border : along westspine
-border : along eastspine
+; borders name a relationship and its state, not a place - the seam's
+; location derives from the realms' own abutting boundaries
+border : valemark carrowen contested gm="The Accord line - contested at every ford."
+border : khundrum sathriss contested
+border : khundrum east watched gm="Deepwatch keeps the Dawnwater under glass."
 
 [labels]
 "The Sundered Sea" : sprawl (790,150)..(790,900)

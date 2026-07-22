@@ -25,6 +25,8 @@ interface Resolved {
   radius?: number;
   ridge?: boolean;
   halfPlane?: { compass: string; of: XY[] };
+  /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
+  alongSpans?: { ref: string; start: number; end: number }[];
 }
 
 export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }): void {
@@ -125,7 +127,38 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           out.point = center;
           out.radius = radius;
         } else if (p.shape === "area") {
-          out.polygon = e.section === "water" ? assembleWaterBoundary(pts) : pts;
+          // Boundary segments may FOLLOW features (#81): `along <ref>`
+          // between two vertices splices the feature's rendered curve
+          // between their projections — one definition, and moving the
+          // feature moves the border with it.
+          const spliced: XY[] = [];
+          const spans: { ref: string; start: number; end: number }[] = [];
+          for (let k = 0; k < p.args.length; k++) {
+            const arg = p.args[k]!;
+            if (arg.kind === "point") {
+              spliced.push(toXY(arg));
+              continue;
+            }
+            if (arg.kind !== "relational" || arg.form !== "along") continue;
+            const line = lookup(arg.ref)?.polyline;
+            const prev = spliced[spliced.length - 1];
+            let next: XY | null = null;
+            for (let m = k + 1; m < p.args.length; m++) {
+              const b = p.args[m]!;
+              if (b.kind === "point") {
+                next = toXY(b);
+                break;
+              }
+            }
+            next ??= spliced[0] ?? null; // trailing `along` follows through the closing edge
+            if (line && prev && next) {
+              const seg = subPolylineBetween(line, prev, next);
+              spans.push({ ref: arg.ref.value, start: spliced.length - 1, end: spliced.length + seg.length });
+              spliced.push(...seg);
+            }
+          }
+          if (spans.length) out.alongSpans = spans;
+          out.polygon = e.section === "water" ? assembleWaterBoundary(spliced) : spliced;
         } else {
           // The TRUE curve: a spline through the declared points, no noise.
           out.polyline = catmullRom(pts, 8);
@@ -296,6 +329,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
   }
 
+  const pip = (pt: XY, poly: XY[]): boolean => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i]!;
+      const b = poly[j]!;
+      if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+
   /** Point at fraction t of a polyline's arc length, with local direction. */
   const alongAt = (pts: XY[], t: number): { p: XY; dir: XY } => {
     let total = 0;
@@ -332,11 +375,24 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const labelJobs: { priority: number; run: () => void }[] = [];
   const deferLabel = (priority: number, run: () => void): void => void labelJobs.push({ priority, run });
 
+  // Political boundaries (#81): a border names a relationship, not a place —
+  // realms collected here, border declarations there, seams rendered after
+  // every realm's geometry is known.
+  // `frame` marks half-plane realms: their polygon is mostly viewport edge,
+  // so only border-stated stretches stroke (no outline around the map rim).
+  const realmInfos: { e: EntityNode; key: string; poly: XY[]; spans: { ref: string; start: number; end: number }[]; fill: string; frame?: boolean }[] = [];
+  const borderDecls: EntityNode[] = [];
+
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
     const titleEl = title ? el("title", {}, title) : "";
     const wordFill = theme.terrainFill(chain);
+
+    if (chain.includes("border")) {
+      borderDecls.push(e);
+      continue;
+    }
 
     if (r.halfPlane) {
       const poly = halfPlanePolygon(r.halfPlane, w, h);
@@ -346,6 +402,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.2 }),
         ),
       );
+      if (!isWater && e.archetype === "zone") realmInfos.push({ e, key: keyOf(e), poly, spans: [], fill: wordFill, frame: true });
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         deferLabel(4, () => {
           const c = centroid(poly);
@@ -405,14 +462,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       if (e.archetype === "zone") {
         // Realm tints: beneath terrain, above water — a nation shades its
-        // land and its territorial waters without hiding either.
+        // land and its territorial waters without hiding either. The tint
+        // is visible at a glance (owner round ten: 0.12 read as nothing).
+        // The BOUNDARY renders separately after all realms are known, so
+        // border states can restyle stretches of it (#81).
         layers.realms.push(
           el("g", { id: anchor }, titleEl,
-            // Visible at a glance (owner round ten): 0.12 tint read as
-            // no tint at all — a nation's color must survive old eyes.
-            el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: 0.2, stroke: shade(wordFill), "stroke-width": 1, "stroke-dasharray": "10 6", "stroke-opacity": 0.5 }),
+            el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: 0.2 }),
           ),
         );
+        realmInfos.push({ e, key: keyOf(e), poly: r.polygon, spans: r.alongSpans ?? [], fill: wordFill });
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
           deferLabel(4, () => {
             const c = centroid(r.polygon!);
@@ -424,10 +483,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const width = labelText.length * (size * 0.58 + spacing);
             // Sidestep within the territory before settling ON something
             // (Ghor Vakh's centroid sits right on the Vakh Teeth) — the
-            // ladder reaches a third of the realm each way, because a
-            // nation always keeps its name: least-bad rather than omitted.
+            // ladder reaches a third of the realm each way but never leaves
+            // it (a nation's name stays on its own land), and a nation
+            // always keeps its name: least-bad rather than omitted.
+            const dxs = [0, -bboxW / 5, bboxW / 5, -bboxW / 3, bboxW / 3]
+              .filter((dx) => dx === 0 || pip({ x: c.x + dx, y: c.y }, r.polygon!));
             const spot =
-              placer.placeOrDrop(c.x, c.y, labelText, size, "middle", [0, -bboxW / 5, bboxW / 5, -bboxW / 3, bboxW / 3], width) ??
+              placer.placeOrDrop(c.x, c.y, labelText, size, "middle", dxs, width) ??
               { x: c.x, y: placer.place(c.x, c.y, labelText, size, "middle", width), size };
             labelBuckets[4]!.push(
               text(labelText, {
@@ -660,6 +722,135 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             text(label, { x: spot.x, y: spot.y, "font-size": spot.size, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor, "font-family": "sans-serif" }),
           );
         });
+      }
+    }
+  }
+
+  // ---------- realm boundaries and border states (#81) ----------
+  // Each realm strokes its own boundary; border declarations restyle
+  // stretches of it. Facing = outward normal (8 sectors, ties clockwise);
+  // a facing word selects OPEN edges only (normal ray escapes without
+  // re-entering the realm), `inner` the complement — a C-shape's north is
+  // its very top, and the bay shores stay separately addressable.
+  if (realmInfos.length) {
+    const distToBoundary = (pt: XY, poly: XY[]): number => {
+      let best = Infinity;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i]!;
+        const b = poly[(i + 1) % poly.length]!;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const lenSq = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / lenSq));
+        best = Math.min(best, Math.hypot(a.x + t * dx - pt.x, a.y + t * dy - pt.y));
+      }
+      return best;
+    };
+    const SECTOR_OF: Record<string, number> = {
+      n: 0, north: 0, ne: 1, northeast: 1, e: 2, east: 2, se: 3, southeast: 3,
+      s: 4, south: 4, sw: 5, southwest: 5, w: 6, west: 6, nw: 7, northwest: 7,
+    };
+    interface EdgeInfo { mid: XY; nrm: XY; sector: number; open: boolean; abuts: Set<string> }
+    const edgeInfos = new Map<string, EdgeInfo[]>();
+    for (const info of realmInfos) {
+      const poly = info.poly;
+      const edges: EdgeInfo[] = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i]!;
+        const b = poly[(i + 1) % poly.length]!;
+        const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        let nrm = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len };
+        if (pip({ x: mid.x + nrm.x * 1.5, y: mid.y + nrm.y * 1.5 }, poly)) nrm = { x: -nrm.x, y: -nrm.y };
+        // Open vs inner: does the outward ray re-enter the realm? Sampled
+        // march (deterministic, tolerant of grazes counting as re-entry).
+        let open = true;
+        for (let t = 4; t <= 400; t += 4) {
+          if (pip({ x: mid.x + nrm.x * t, y: mid.y + nrm.y * t }, poly)) {
+            open = false;
+            break;
+          }
+        }
+        const deg = ((Math.atan2(nrm.x, -nrm.y) * 180) / Math.PI + 360) % 360;
+        const sector = Math.floor(((deg + 22.5) % 360) / 45);
+        const abuts = new Set<string>();
+        for (const other of realmInfos) {
+          if (other.key !== info.key && distToBoundary(mid, other.poly) < 2.5) abuts.add(other.key);
+        }
+        edges.push({ mid, nrm, sector, open, abuts });
+      }
+      edgeInfos.set(info.key, edges);
+    }
+    // Border declarations assign states, general → specific so the most
+    // specific selector wins: blanket, two-realm seam, facing, along-feature.
+    const stateOf = new Map<string, { state: string; decl: EntityNode }[]>();
+    for (const info of realmInfos) stateOf.set(info.key, new Array(info.poly.length).fill(null));
+    const realmByWord = new Map(realmInfos.map((info) => [info.key, info]));
+    const parsed = borderDecls.map((decl) => {
+      const realms = decl.flags.filter((word) => realmByWord.has(word));
+      const compass = decl.flags.filter((word) => SECTOR_OF[word] !== undefined);
+      const inner = decl.flags.includes("inner");
+      const alongRefs = decl.placements
+        .filter((p): p is Extract<typeof p, { kind: "relational"; form: "along" }> => p.kind === "relational" && p.form === "along")
+        .map((p) => p.ref.value);
+      const state = decl.flags.find((word) => !realmByWord.has(word) && SECTOR_OF[word] === undefined && word !== "inner") ?? "border";
+      const specificity = alongRefs.length ? 3 : compass.length ? 2 : realms.length >= 2 ? 1 : 0;
+      return { decl, realms, compass, inner, alongRefs, state, specificity };
+    });
+    parsed.sort((a, b) => a.specificity - b.specificity);
+    for (const d of parsed) {
+      const apply = (realmKey: string, pick: (edge: EdgeInfo, idx: number) => boolean): void => {
+        const edges = edgeInfos.get(realmKey);
+        const states = stateOf.get(realmKey);
+        if (!edges || !states) return;
+        edges.forEach((edge, idx) => {
+          if (pick(edge, idx)) states[idx] = { state: d.state, decl: d.decl };
+        });
+      };
+      if (d.realms.length >= 2) {
+        const [a, b] = [d.realms[0]!, d.realms[1]!];
+        apply(a, (edge) => edge.abuts.has(b));
+        apply(b, (edge) => edge.abuts.has(a));
+      } else if (d.realms.length === 1) {
+        const key = d.realms[0]!;
+        if (d.alongRefs.length) {
+          const spans = realmByWord.get(key)?.spans ?? [];
+          apply(key, (_edge, idx) =>
+            spans.some((s) => d.alongRefs.includes(s.ref) && idx >= s.start && idx < s.end));
+        } else if (d.compass.length) {
+          const sectors = new Set(d.compass.map((word) => SECTOR_OF[word]!));
+          apply(key, (edge) => sectors.has(edge.sector) && (d.inner ? !edge.open : edge.open));
+        } else {
+          apply(key, (edge) => edge.abuts.size === 0); // blanket: frontier only
+        }
+      }
+    }
+    // Stroke each realm's boundary in runs of constant state.
+    for (const info of realmInfos) {
+      const states = stateOf.get(info.key)!;
+      const poly = info.poly;
+      const n = poly.length;
+      let i = 0;
+      while (i < n) {
+        const current = states[i];
+        let j = i;
+        while (j + 1 < n && states[j + 1]?.state === current?.state && states[j + 1]?.decl === current?.decl) j++;
+        const pts = poly.slice(i, j + 2 > n ? n : j + 2);
+        if (j + 2 > n) pts.push(poly[0]!);
+        if (current) {
+          const stroke = shade(theme.terrainFill([current.state]));
+          const title = gmTitleFor(model, current.decl);
+          layers.lines.push(
+            el("g", {}, title ? el("title", {}, title) : "",
+              el("polyline", { points: pointsAttr(pts), fill: "none", stroke, "stroke-width": 2, "stroke-dasharray": "5 3", opacity: 0.85, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+            ),
+          );
+        } else if (!info.frame) {
+          layers.realms.push(
+            el("polyline", { points: pointsAttr(pts), fill: "none", stroke: shade(info.fill), "stroke-width": 1, "stroke-dasharray": "10 6", "stroke-opacity": 0.5, "stroke-linejoin": "round" }),
+          );
+        }
+        i = j + 1;
       }
     }
   }

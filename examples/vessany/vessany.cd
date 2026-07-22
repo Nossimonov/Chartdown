@@ -29,9 +29,9 @@ road "Coast Road" : from "Argenport" to "Merrow's Rest" along coast
 road "King's Way" : from highkeep to "Argenport"
 
 [realms]
-realm "Vessany" : west of "The Serpent's Spine"
-realm "Khar" : east of "The Serpent's Spine"
-border : along "The Serpent's Spine" gm="Redrawn at the Treaty of Argen; Khar disputes the southern third."
+realm vessany "Vessany" : west of "The Serpent's Spine"
+realm khar "Khar" : east of "The Serpent's Spine"
+border : vessany khar contested gm="Redrawn at the Treaty of Argen; Khar disputes the southern third."
 
 [labels]
 "The Argen Sea" : sprawl (60,200)..(120,450)

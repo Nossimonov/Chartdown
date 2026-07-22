@@ -66,7 +66,7 @@ landmark : feature
 ; zones
 realm : zone
 region : zone
-border : path
+border : zone
 
 ; annotation (see section 07)
 note : feature
@@ -80,7 +80,14 @@ Known sections: `[water]`, `[terrain]`, `[paths]`, `[settlements]`, `[features]`
 
 **Water and coastlines.** Water bodies are ordinary terrain areas; `coastline` is an ordinary path. A water area placed with the half-plane form — `coastline coast : from …` then `sea "The Argen Sea" : west of coast` — fills the map extent on the stated side of the referenced path, clipped to it. (Per spec 03, the coastline carries an explicit id because things reference it.) There are no winding-order conventions: the sea is on whichever side the author says, which is what the line reads as.
 
-**Political boundaries.** `border : along <ref>` (a path following a feature) is the blessed idiom; realm membership by half-plane (`realm "Khar" : east of spine`) or explicit geometry.
+**Political boundaries** (ADR 0012, superseding the original border-as-path idiom). A realm's boundary is its own geometry, and a border names a **relationship**, never a location:
+
+- **Realm edges may follow features.** Inside an `area` point list, `along <ref>` between two vertices makes the boundary trace the referenced feature's rendered curve between the projections of those vertices (the same feature-following as `from A to B along X`, spec 02 §7): `realm valemark "Valemark" : area (110,240) along westspine (552,540) …`. One definition — moving the feature moves the border.
+- **`border` attaches a state to a stretch of one realm's boundary.** Its predicate names the realm, an optional stretch selector, and a state word: `border : valemark contested` (blanket — every frontier stretch not abutting another realm), `border : valemark east contested` (facing selector), `border : valemark along westspine sealed` (feature selector), `border : valemark carrowen contested` (two-realm sugar: both realms' shared stretch, symmetric). More specific selectors win where declarations overlap: along-feature beats facing beats two-realm beats blanket. State words are ordinary vocabulary resolving through the theme chain (spec 04 §3) — unknown states render generically, never fail. `gm=` on a border annotates the relationship and is GM-only as usual.
+- **Facing is per edge, by outward normal** — the direction an outsider crosses from — bucketed into eight compass sectors, ties rounded clockwise. A bare facing word selects only **open** edges (the outward-normal ray from the edge midpoint escapes without re-entering the realm); the `inner` modifier selects the complement (edges facing the realm's own land across a bay). A C-shaped realm's `north` border is its very top alone; `inner north` is the bay's south shore; the bay's back wall stays open toward the mouth it faces.
+- **Overlapping realm claims are legal and meaningful** — two realms declaring the same land is a disputed march, not an authoring error; renderers blend the tints and draw both boundaries. Asymmetric states on a shared seam are likewise permitted (each side declares separately) — each realm's own boundary stroke carries its own state.
+
+A border whose realm reference resolves to nothing, or whose named realms never abut, has nothing to style; renderers SHOULD warn and MUST NOT invent geometry for it. Realm membership by half-plane (`realm "Khar" : east of spine`) remains available.
 
 ## 3. Hexcrawl maps
 
