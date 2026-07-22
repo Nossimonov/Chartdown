@@ -199,6 +199,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
               const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
               out.polyline = catmullRom([a, ...via, b], 8);
+              // Coastlines declared from/via/to register their curves too —
+              // sea boundaries must reuse them however the coast was written.
+              if (chain.includes("coastline")) coastCurves.push({ raw: [a, ...via, b], finished: out.polyline });
             }
             break;
           }
@@ -271,12 +274,20 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       o.target.form === "name" ? o.target.value === e.name : e.ids.includes(o.target.value),
     );
 
-  // Ridges are fat obstacles — labels must not cross them (owner round three).
+  // Every line is an obstacle: ridges fat, rivers and roads thin — a label
+  // above a river must not land ON the road that runs beside it (the
+  // Deepflow/Deep Road swap of owner round four).
   for (const { r } of items) {
-    if (r.polyline && r.ridge) {
-      for (let i = 0; i < r.polyline.length; i += 4) {
+    if (!r.polyline) continue;
+    if (r.ridge) {
+      for (let i = 0; i < r.polyline.length; i += 2) {
         const pt = r.polyline[i]!;
-        placer.block(pt.x - 9, pt.y - 9, 18, 18);
+        placer.block(pt.x - 10, pt.y - 10, 20, 20);
+      }
+    } else {
+      for (let i = 0; i < r.polyline.length; i += 3) {
+        const pt = r.polyline[i]!;
+        placer.block(pt.x - 3, pt.y - 3, 6, 6);
       }
     }
   }
@@ -399,7 +410,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const coast = theme.pathStroke(["coastline"]);
         layers.areas.push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 2, "stroke-linejoin": "round" }),
+            el("polygon", { points: pointsAttr(r.polygon), fill: theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 1.2, "stroke-linejoin": "round" }),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -448,7 +459,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         );
       } else {
         const stroke = theme.pathStroke(chain);
-        const width = Number(pairOf(e.pairs, "width") ?? 2);
+        // Coastlines are shorelines, not rivers: hairline by default (the
+        // island outline weight the owner preferred), unless width= says so.
+        const width = Number(pairOf(e.pairs, "width") ?? (chain.includes("coastline") ? 1.2 : 2));
         const lineParts: string[] = [titleEl];
         const edgeW = theme.edgeWidth(chain);
         if (edgeW) {
@@ -477,26 +490,42 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         let lp = r.polyline;
         if (lp[0]!.x > lp[lp.length - 1]!.x) lp = [...lp].reverse();
         const wpx = lbl.length * 10 * 0.58;
-        let chosen: { offset: number; dy: number } | null = null;
-        for (const offset of [0.38, 0.18, 0.6, 0.78]) {
-          for (const dy of [-4, 11]) {
-            const { p } = alongAt(lp, offset + (wpx / 2 / 1600));
-            if (placer.claimIfFree(p.x, dy < 0 ? p.y - 6 : p.y + 9, lbl, 10, "middle", wpx)) {
-              chosen = { offset, dy };
+        let pathLen = 0;
+        for (let i = 0; i < lp.length - 1; i++) pathLen += Math.hypot(lp[i + 1]!.x - lp[i]!.x, lp[i + 1]!.y - lp[i]!.y);
+        // The text CENTERS on its slot (text-anchor middle on the textPath),
+        // and slots are clamped so the name always fits within the feature —
+        // a late slot must never run the label off the end of a short river.
+        const halfFrac = Math.min(0.45, wpx / 2 / Math.max(pathLen, 1));
+        const slots = [0.5, 0.32, 0.68, 0.18, 0.82, 0.08, 0.92]
+          .map((s) => Math.min(1 - halfFrac, Math.max(halfFrac, s)))
+          .filter((s, i, arr) => arr.indexOf(s) === i);
+        let chosen: { offset: number; above: boolean } | null = null;
+        for (const offset of slots) {
+          for (const above of [true, false]) {
+            // The label's own box sits clear of the ±3px line obstacles, so a
+            // label never self-rejects against the line it names — but DOES
+            // reject against any OTHER line running in the corridor.
+            const mid = alongAt(lp, offset).p;
+            const start = alongAt(lp, Math.max(0, offset - halfFrac)).p;
+            const end = alongAt(lp, Math.min(1, offset + halfFrac)).p;
+            const boxes = [start, mid, end].map((pt) => ({ cx: pt.x, top: above ? pt.y - 14 : pt.y + 5 }));
+            const third = wpx / 3;
+            if (boxes.every((b) => placer.claimBoxIfFree(b.cx, b.top, third, 9))) {
+              chosen = { offset, above };
               break;
             }
           }
           if (chosen) break;
         }
-        const pick = chosen ?? { offset: 0.38, dy: -4 };
+        const pick = chosen ?? { offset: 0.5, above: true };
         const pid = `cdlp-${model.doc.docId}-${pathLabelCount++}`;
         const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
         const safe = lbl.replace(/&/g, "&amp;").replace(/</g, "&lt;");
         const weight = model.labelsMode === "keyed" ? ' font-weight="bold"' : "";
         layers.labels.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
-            `<text font-size="10" fill="${ink}" opacity="0.75" font-style="italic"${weight} font-family="sans-serif">` +
-            `<textPath href="#${pid}" startOffset="${fmt(pick.offset * 100)}%"><tspan dy="${pick.dy}">${safe}</tspan></textPath></text>`,
+            `<text font-size="10" fill="${ink}" opacity="0.75" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="${fmt(pick.offset * 100)}%"><tspan dy="${pick.above ? -5 : 12}">${safe}</tspan></textPath></text>`,
         );
       }
       continue;

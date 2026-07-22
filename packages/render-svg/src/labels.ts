@@ -48,6 +48,14 @@ export class LabelPlacer {
     return this.tryClaim(x, y, textStr, fontSize, anchor, widthPx);
   }
 
+  /** Claim an explicit centered box if free (curve labels size their own). */
+  claimBoxIfFree(cx: number, top: number, wpx: number, h: number): boolean {
+    const box = { x: cx - wpx / 2, y: top, w: wpx, h };
+    if (this.boxes.some((b) => intersects(b, box))) return false;
+    this.boxes.push(box);
+    return true;
+  }
+
   /**
    * Line-feature labels: candidates are points ALONG the feature (mid-course
    * first, sliding outward); the first free one wins. Sliding along the line
