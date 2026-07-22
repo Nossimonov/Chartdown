@@ -105,6 +105,10 @@ All four packages are [on npm under `@chartdown`](https://www.npmjs.com/org/char
 | [playground/](playground/) | The client-side playground, deployed to [nossimonov.github.io/Chartdown](https://nossimonov.github.io/Chartdown/) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Issue-tracking rules and the syntax-proposal process |
 
+## For AI agents
+
+The whole language fits in one file, maintained in lockstep with the normative spec: **[nossimonov.github.io/Chartdown/llms-full.txt](https://nossimonov.github.io/Chartdown/llms-full.txt)** (curated index at [/llms.txt](https://nossimonov.github.io/Chartdown/llms.txt)). It also ships inside the parser package — `node_modules/@chartdown/core/digest.md` — so agents working in any repo that depends on Chartdown have the spec locally. Read it before writing Chartdown; validate drafts with `npx @chartdown/cli check`, whose fail-loud diagnostics cite the spec sections they enforce.
+
 ## Contributing
 
 This project runs **issue-first and spec-first** — see [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. Syntax ideas are especially welcome as [syntax proposal issues](CONTRIBUTING.md#syntax-proposals).

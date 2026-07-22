@@ -1,0 +1,21 @@
+# Chartdown
+
+> Chartdown is a plain-text, Markdown-inspired language for describing TTRPG maps — gridded battlemaps, hex exploration charts, and gridless region maps — that renders to SVG. A document is a `.cd` file or a ```chartdown fenced block; the line grammar is `subject : predicate`; rendering is deterministic and fail-loud. When helping a user write a map, read the single-file digest below first: it is the whole v0.2 language, maintained in lockstep with the normative spec.
+
+## The language in one file
+
+- [llms-full.txt](https://nossimonov.github.io/Chartdown/llms-full.txt): the complete language digest — document model, coordinates, the closed relational grammar, vocabulary and archetypes, battlemap/hexcrawl/region primitives, themes, and a few-shot micro-corpus of valid documents
+
+## Normative spec (CC-BY-4.0)
+
+- [Spec sections 01–08](https://github.com/Nossimonov/Chartdown/tree/main/docs/spec): the prose spec the digest compresses
+- [grammar.ebnf](https://github.com/Nossimonov/Chartdown/blob/main/docs/spec/grammar.ebnf): consolidated grammar
+
+## Validate and render
+
+- [Playground](https://nossimonov.github.io/Chartdown/): fully client-side editor — paste a document, see the map, share a link
+- npm: `npx @chartdown/cli check map.cd` gives fail-loud diagnostics that cite spec sections; `@chartdown/core` (parser) and `@chartdown/render-svg` (SVG renderer) are importable ESM with TypeScript types, and the core package ships this digest at `node_modules/@chartdown/core/digest.md`
+
+## Worked examples
+
+- [examples/](https://github.com/Nossimonov/Chartdown/tree/main/examples): five complete documents — an ambush battlemap, a hexcrawl ledger, a gridless region map, a themed variant, and a three-story manor exercising multi-level structures, derived crossings, and relative placement

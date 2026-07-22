@@ -11,3 +11,6 @@ node_modules/
 dist/
 coverage/
 *.log
+
+# Generated at npm pack time (prepack copies the spec digest into the tarball)
+packages/core/digest.md
