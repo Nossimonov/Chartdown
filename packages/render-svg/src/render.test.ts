@@ -362,6 +362,68 @@ describe("levels (spec 06 §8)", () => {
     expect(frameless.diagnostics.some((d) => d.severity === "error" && d.message.includes("footprint"))).toBe(true);
   });
 
+  it("freestanding barriers draw their edge runs (#62)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 6x6",
+      "[structures]",
+      "wall w1 : B3.s C3.s D3.s",
+      "fence f1 : D1.e D2.e",
+      "pillar : E5",
+    ].join("\n");
+    const { svg, diagnostics } = renderSource(source, {});
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    const wallLines = svg.match(/stroke="#3d3629" stroke-width="3"[^/]*stroke-linecap="square"/g) ?? [];
+    expect(wallLines).toHaveLength(3); // the three wall edges
+    const fenceLines = svg.match(/stroke="#8a7a5c"/g) ?? [];
+    expect(fenceLines).toHaveLength(2); // dashed, sight-passing
+    expect(svg).toContain('fill="#5a5244"'); // the pillar post
+  });
+
+  it("vocab facet defaults and chain glyphs survive derivation and footprints (#64)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 8x8",
+      "scale: 5ft",
+      "[vocab]",
+      "hearth : campfire",
+      "[features]",
+      "hearth : F3..F4",
+      "campfire lone : B6",
+      "stairs up : G6..G7",
+    ].join("\n");
+    const { svg, diagnostics } = renderSource(source, { mode: "gm" });
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // both campfire-derived entities glow (light=20ft facet default → r=128)
+    const glows = svg.match(/r="128" fill="#ffd98a"/g) ?? [];
+    expect(glows).toHaveLength(2);
+    // both carry the flame fallback; the stairs footprint gets treads
+    const flames = svg.match(/fill="#d9822b"/g) ?? [];
+    expect(flames).toHaveLength(2);
+    expect(svg).toContain('stroke-width="2.2"'); // tread lines
+  });
+
+  it("legend: on renders a legend from the words actually used (#63, spec 07 §4)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 8x8",
+      "legend: on",
+      "[terrain]",
+      "mud : area B2..C3 difficult",
+      "river r : path A5 H5 width=1",
+      "[features]",
+      "campfire : E2",
+      "table : F2",
+    ].join("\n");
+    const { svg } = renderSource(source, {});
+    expect(svg).toContain(">mud</text>");
+    expect(svg).toContain(">river</text>");
+    expect(svg).toContain(">campfire</text>");
+    expect(svg).toContain(">table</text>");
+    const withoutLegend = renderSource(source.replace("legend: on\n", ""), {}).svg;
+    expect(withoutLegend).not.toContain(">mud</text>");
+  });
+
   it("cell-union footprints render with a derived perimeter (spec 06 §3, #45)", () => {
     const source = [
       "map: battlemap",

@@ -41,6 +41,8 @@ export interface Model {
    * chains for library-defined derivations are a known gap until #20.)
    */
   chainOf(word: string | null): string[];
+  /** Vocab facet default for a word (chain-walked); entity pairs override it. */
+  facetOf(word: string | null, key: string): string | undefined;
   /**
    * For entities placed relatively (spec 02 §7, #34): the resolved absolute
    * address, surfaced so the DM-facing frame stays absolute (tooltips).
@@ -108,13 +110,15 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
     }
   }
   const chainOf = (word: string | null): string[] => (word ? vocab.chain(word) : []);
+  const facetOf = (word: string | null, key: string): string | undefined =>
+    word ? vocab.facetOf(word, key) : undefined;
 
   const labelsMode: "names" | "none" = header.get("labels") === "none" ? "none" : "names";
   const resolvedNotes = new Map<EntityNode, string>();
   if (doc.mapType === "battlemap") {
     resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
   }
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, chainOf, resolvedNotes };
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, chainOf, facetOf, resolvedNotes };
 }
 
 // ---------- relative placement (spec 02 §7, issue #34) ----------

@@ -119,6 +119,12 @@ export function renderBattlemap(
       renderStructure(e, layers.structures, titleEl, anchor);
       continue;
     }
+    // Freestanding barriers (#62): wall/fence edge runs and pillar cells draw
+    // here — they always blocked light (walls.ts); now they're visible too.
+    if (e.archetype === "barrier") {
+      renderBarrier(e, layers.structures, titleEl, anchor);
+      continue;
+    }
     // Range-only entities: zones for zone/token archetypes, gm triggers, and
     // elevated areas; a range-only FEATURE is a footprint (the high table).
     const zoneLike = e.archetype === "zone" || (hasOnlyRange(e) && (e.archetype === "token" || e.gmOnly || elevation !== undefined));
@@ -699,6 +705,79 @@ export function renderBattlemap(
     }
   }
 
+  /**
+   * Freestanding barriers (#62, spec 06 §3): edge runs draw as wall lines —
+   * fences lighter and dashed (they pass sight), `ruined` collapsed like a
+   * structure's ruined side; cell placements (pillars) draw as dark posts.
+   */
+  function renderBarrier(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
+    const chain = model.chainOf(e.typeWord);
+    const isFence = chain.includes("fence");
+    const ruined = e.flags.includes("ruined");
+    const parts: string[] = [titleEl];
+    if (!e.name && !titleEl && e.typeWord) parts.unshift(el("title", {}, e.typeWord));
+    for (const p of e.placements) {
+      if (p.kind === "edge") {
+        const s = edgeSegment(p.at, p.dir);
+        parts.push(
+          el("line", {
+            x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y,
+            stroke: isFence ? "#8a7a5c" : INK,
+            "stroke-width": isFence ? 2 : 3,
+            "stroke-dasharray": isFence ? "3 3" : ruined ? "5 6" : undefined,
+            opacity: ruined ? 0.7 : 1,
+            "stroke-linecap": "square",
+          }),
+        );
+      } else if (p.kind === "address") {
+        const c = cellCenter(p);
+        parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: "#5a5244", stroke: INK, "stroke-width": 1 }));
+      }
+    }
+    into.push(el("g", { id: anchor }, ...parts));
+    if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
+      const first = e.placements.find((p) => p.kind === "edge" || p.kind === "address");
+      if (first) {
+        const at = first.kind === "edge" ? edgeSegment(first.at, first.dir).a : cellCenter(first);
+        layers.labels.push(text(e.name, { x: at.x, y: at.y - 6, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+      }
+    }
+  }
+
+  /**
+   * Hand-drawn glyph fallbacks, CHAIN-resolved (#64): a derived
+   * `hearth : campfire` keeps the flame — derivation carries semantics
+   * (spec 04 §2); themes may still override via [glyphs].
+   */
+  function fallbackGlyph(e: EntityNode, chain: string[], c: XY, scale: number, parts: string[]): boolean {
+    const has = (w: string): boolean => chain.includes(w);
+    if (has("campfire") || has("torch") || has("brazier") || has("lantern")) {
+      parts.push(el("circle", { cx: c.x, cy: c.y, r: 5 * scale, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
+      return true;
+    }
+    if (has("wagon")) {
+      const facing = pairOf(e.pairs, "facing");
+      const rot = facing === "south" || facing === "north" ? 90 : 0;
+      parts.push(
+        el("rect", {
+          x: c.x - CELL * 0.45 * scale, y: c.y - CELL * 0.28 * scale, width: CELL * 0.9 * scale, height: CELL * 0.56 * scale,
+          fill: "#a8763e", stroke: INK, "stroke-width": 1.5,
+          "stroke-dasharray": e.flags.includes("overturned") ? "4 3" : undefined,
+          transform: rot ? `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` : undefined,
+        }),
+      );
+      return true;
+    }
+    if (has("stairs") || has("ramp")) {
+      for (const [i, w] of [10, 7, 4].entries()) {
+        const y = c.y + (i - 1) * 6 * scale;
+        parts.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, "stroke-width": 2.2 }));
+      }
+      return true;
+    }
+    return false;
+  }
+
   function renderToken(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined): void {
     const size = Number(pairOf(e.pairs, "size") ?? 1) || 1;
     const fill = model.theme.side(pairOf(e.pairs, "side"));
@@ -738,7 +817,8 @@ export function renderBattlemap(
       const center = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
       const footprintParts: string[] = [titleEl];
       if (!e.name && !titleEl && e.typeWord) footprintParts.unshift(el("title", {}, e.typeWord));
-      const light = pairOf(e.pairs, "light");
+      // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.
+      const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
       if (light) {
         const radius = measureToCells(light, model) * CELL;
         footprintParts.push(
@@ -757,6 +837,10 @@ export function renderBattlemap(
         footprintParts.push(
           `<path d="${themed}" transform="translate(${fmt(center.x)} ${fmt(center.y)}) scale(${fmt(scale)})" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`,
         );
+      } else {
+        // Chain-resolved hand-drawn fallback (#64): a footprint hearth keeps
+        // its flame, footprint stairs their treads.
+        fallbackGlyph(e, chainR, center, Math.max(1, Math.min(r.w, r.h) / CELL) * 0.8, footprintParts);
       }
       into.push(el("g", { id: anchor }, ...footprintParts));
       if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
@@ -774,7 +858,8 @@ export function renderBattlemap(
       renderConnector(e, model.chainOf(e.typeWord), c, to, parts, into, anchor);
       return;
     }
-    const light = pairOf(e.pairs, "light");
+    // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.
+    const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;
       if (sightBlockers.length > 0) {
@@ -784,33 +869,22 @@ export function renderBattlemap(
         parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
       }
     }
-    const word = e.typeWord ?? "";
     const chain = model.chainOf(e.typeWord);
     const themedGlyph = model.theme.glyphFor(chain, c.x, c.y);
+    let drewFallback = false;
     if (themedGlyph) {
       const ink = model.theme.surface("ink", "fill", INK);
       parts.push(
         `<path d="${themedGlyph}" transform="translate(${fmt(c.x)} ${fmt(c.y)}) scale(0.9)" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`,
       );
-    } else if (word === "campfire" || word === "torch" || word === "brazier" || word === "lantern") {
-      parts.push(el("circle", { cx: c.x, cy: c.y, r: 5, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
-    } else if (word === "wagon") {
-      const facing = pairOf(e.pairs, "facing");
-      const rot = facing === "south" || facing === "north" ? 90 : 0;
-      parts.push(
-        el("rect", {
-          x: c.x - CELL * 0.45, y: c.y - CELL * 0.28, width: CELL * 0.9, height: CELL * 0.56,
-          fill: "#a8763e", stroke: INK, "stroke-width": 1.5,
-          "stroke-dasharray": e.flags.includes("overturned") ? "4 3" : undefined,
-          transform: rot ? `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` : undefined,
-        }),
-      );
+    } else if (fallbackGlyph(e, chain, c, 1, parts)) {
+      drewFallback = true;
     } else {
       parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: "#8f8474", stroke: INK, "stroke-width": 1 }));
     }
     // Label conduct (spec 06 §7): at battlemap scale, fallback word-labels are
     // tooltips — visible text is reserved for display names, tokens, and zones.
-    if (!e.name && !hasBattlemapGlyph(chain) && !themedGlyph && !titleEl && e.typeWord) {
+    if (!e.name && !hasBattlemapGlyph(chain) && !themedGlyph && !drewFallback && !titleEl && e.typeWord) {
       parts.unshift(el("title", {}, e.typeWord));
     }
     into.push(el("g", { id: anchor }, ...parts));
