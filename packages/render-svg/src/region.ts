@@ -370,18 +370,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // Paths serving as ZONAL FRONTIERS (a tundra's frostline) render in the
   // frontier register — a fine dotted line in the zone's tint — because any
   // solid line at river weight reads as a river (owner note).
-  const frontierFills = new Map<string, string>();
+  const frontierFills = new Map<string, { fill: string; zonePoly: XY[] }>();
   for (const it of items) {
     if (it.r.halfPlane?.refKey && it.e.section !== "water" && it.e.archetype !== "zone") {
-      frontierFills.set(it.r.halfPlane.refKey, theme.terrainFill(it.chain));
+      frontierFills.set(it.r.halfPlane.refKey, { fill: theme.terrainFill(it.chain), zonePoly: halfPlanePolygon(it.r.halfPlane, w, h) });
     }
     // Area-declared zones (a tundra following the coasts): any non-coastline
     // path their boundary follows is likewise a zonal frontier.
-    if (it.r.alongSpans && it.e.archetype !== "zone") {
+    if (it.r.alongSpans && it.r.polygon && it.e.archetype !== "zone") {
       for (const s of it.r.alongSpans) {
         if (!s.refKey) continue;
         const ch = chainByKey.get(s.refKey);
-        if (ch && !ch.includes("coastline")) frontierFills.set(s.refKey, theme.terrainFill(it.chain));
+        if (ch && !ch.includes("coastline")) frontierFills.set(s.refKey, { fill: theme.terrainFill(it.chain), zonePoly: it.r.polygon });
       }
     }
   }
@@ -718,7 +718,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         continue;
       }
       const areaParts: string[] = [titleEl];
-      const edgeFill = theme.prop(chain, "fill", { zone: "edge" });
+      const edgeFill = r.alongSpans?.length ? undefined : theme.prop(chain, "fill", { zone: "edge" });
       if (edgeFill) {
         // Edge zone (spec 08 §2): boundary band in the edge style, interior in core.
         const edgeW = theme.edgeWidth(chain) ?? 4;
@@ -810,13 +810,33 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         }
         massifs.push({ anchor, titleEl, poly: beltPoly, peaks: peaks.join(""), fill: wordFill });
       } else {
-        const frontierFill = frontierFills.get(keyOf(e));
-        if (frontierFill) {
-          // Zonal frontier: a fine dotted line in the zone's own tint — the
-          // classic treeline symbol, unmistakably not a river or road.
+        const frontier = frontierFills.get(keyOf(e));
+        if (frontier) {
+          // Zonal frontier: a dotted line drawn just INSIDE the zone,
+          // parallel to the fill edge — dots straddling the color boundary
+          // half-blend into both sides and the rhythm dies (owner review);
+          // on uniform ground inside the zone they read cleanly, with the
+          // fill edge itself as the crisp boundary. The topo-map treeline.
+          const lp0 = r.polyline;
+          const midI = Math.floor(lp0.length / 2);
+          const mp = lp0[midI]!;
+          const mn = lp0[Math.min(lp0.length - 1, midI + 1)]!;
+          const mpv = lp0[Math.max(0, midI - 1)]!;
+          const mlen = Math.hypot(mn.x - mpv.x, mn.y - mpv.y) || 1;
+          const nx0 = (mn.y - mpv.y) / mlen;
+          const ny0 = -(mn.x - mpv.x) / mlen;
+          const side = pip({ x: mp.x + nx0 * 4, y: mp.y + ny0 * 4 }, frontier.zonePoly) ? 1 : -1;
+          const inset = lp0.map((pt, i, arr) => {
+            const prev = arr[Math.max(0, i - 1)]!;
+            const next = arr[Math.min(arr.length - 1, i + 1)]!;
+            const dx = next.x - prev.x;
+            const dy = next.y - prev.y;
+            const len = Math.hypot(dx, dy) || 1;
+            return { x: pt.x + (dy / len) * side * 3, y: pt.y - (dx / len) * side * 3 };
+          });
           layers.lines.push(
             el("g", { id: anchor }, titleEl,
-              el("polyline", { points: pointsAttr(r.polyline), fill: "none", stroke: shade(frontierFill), "stroke-width": 1.2, "stroke-dasharray": "1 5", opacity: 0.8, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+              el("polyline", { points: pointsAttr(inset), fill: "none", stroke: shade(frontier.fill), "stroke-width": 1.7, "stroke-dasharray": "0.2 6", opacity: 0.9, "stroke-linejoin": "round", "stroke-linecap": "round" }),
             ),
           );
         } else {
