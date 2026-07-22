@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser && tsc --noEmit -p packages/obsidian && tsc --noEmit -p packages/mcp && tsc --noEmit -p packages/action && tsc --noEmit -p playground"
   },
   "devDependencies": {
+    "@rgrove/parse-xml": "^4.2.2",
     "@types/node": "^26.1.1",
     "esbuild": "^0.28.1",
     "happy-dom": "^20.11.0",

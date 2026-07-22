@@ -25,6 +25,12 @@ export function el(name: string, attrs: Attrs, ...children: string[]): string {
   return body ? `<${name}${attrText}>${body}</${name}>` : `<${name}${attrText}/>`;
 }
 
+/**
+ * <title> content is user text (display names, gm= notes) — escape it here so
+ * el()'s children-are-markup contract can stay intact (#79).
+ */
+export const svgTitle = (content: string): string => `<title>${esc(content)}</title>`;
+
 export const text = (content: string, attrs: Attrs): string =>
   `<text${Object.entries(attrs)
     .filter(([, v]) => v !== undefined)

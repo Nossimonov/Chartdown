@@ -31,7 +31,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 - **Relational placement — closed grammar, only these nine forms**:
   `at (x,y)` · `70mi north of <ref>` · `east of <ref>` (half-plane) · `on <ref>` · `on <ref> at <point|local>` · `south edge of <ref>` · `near <ref|point>` · `from <ep> via (p) (p) to <ep>` · `along <ref>`. Endpoints: ref, point, or `ref at (point)`.
 - **Referent-frame `at` payloads (#34)**: `on kitchen at C2..D2` — a cell/range/edge after `at` is LOCAL to the referent (structure footprint frame, NW cell = A1; moving the structure moves its contents). A path's frame is the document grid (= the crossing chooser). Detail lines use `at`-prefixed placements for the implicit parent frame: `door : at E2.e`. Absolute placement stays legal everywhere — author's choice per line, never a mode; renderers surface the resolved absolute address (tooltips). Outside-footprint local, frameless referent, or cross-level referent = error.
-- **Resolution rules**: references only to *earlier* declarations (forward ref = error); deterministic (document+seed); fail-loud (no room / ambiguous = error — renderers never relocate others); anchors are **live** (moving an anchor moves dependents; use a remnant landmark — `ruin "Former site of X"` — when destroying one).
+- **Resolution rules**: references only to *earlier* declarations (forward ref = error); deterministic (document+seed); fail-loud (no room / ambiguous = error — renderers never relocate others); anchors are **live** (moving an anchor moves dependents; use a remnant landmark — `ruin "Former site of X"` — when destroying one); output is **well-formed XML** for every valid document, whatever characters user text contains.
 
 ## Identity & links (spec 03)
 

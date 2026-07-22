@@ -71,6 +71,7 @@ Relational placement is legal **only** in the following forms, built from the cl
 2. **Deterministic.** Placement resolution and organic shape rendering are pure functions of (document, seed, renderer version, theme). No unseeded randomness, ever.
 3. **Fail-loud.** If a relational placement cannot be satisfied — no room `on "Gull Bay"`, ambiguous reference — that is an author-facing error naming the line. A renderer MUST NOT relocate other entities to make room.
 4. **Anchors are live.** Placements re-resolve from source on every render. Deliberately moving an anchor moves the entities anchored to it: the map is written in terms of itself. Because of rule 1, only upstream author edits ripple, and only downstream — never a renderer decision.
+5. **Well-formed output.** A renderer targeting an XML format (SVG, UVTT-adjacent XML) MUST emit well-formed markup for **every** valid document — user text (display names, `gm=` notes, labels) can never break the output, whatever characters it contains.
 
 > **Authoring pattern — the remnant landmark** *(non-normative)*: when a landmark is deliberately moved or destroyed (the city dragged into the hells), preserve dependent placements by leaving a remnant entity at the former position — `ruin "Former site of Elturel" : at (410,220)` — and anchoring dependents (or the moved original) to the remnant. This keeps live anchoring's readability without surprise ripple through history-heavy maps.
 
