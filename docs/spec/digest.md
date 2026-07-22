@@ -43,7 +43,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 
 - Nine closed archetypes: `terrain path feature structure barrier opening token zone light` (facets: `passes=`, `sight=` on barrier/opening; `size=`,`side=` on token; `range=` on light).
 - `[vocab]` entries: `word : archetype [facets]` or **derive** `word : other-word [overrides]` (`licorice-forest : forest` — forest semantics, theme swaps the motif). Sources shadow in order: standard library < `use:` files < document.
-- **Unknown words never fail**: archetype inferred from shape/path phrase → section context → lone point/cell → `feature`; renders generic glyph + word as label. Spelling never inspected (no suffix magic).
+- **Unknown words never fail**: archetype inferred from shape/path phrase → section context → lone point/cell → `feature`; renders generic glyph + word as label, deterministically tinted by the word's base (theme `fill=` overrides) so distinct types stay tellable apart on map and legend. Spelling never inspected (no suffix magic).
 - Themes own all appearance (assets live in themes, never map source); fallback chain ends at generic shape + label, so rendering never blocks.
 
 ## Standard library (spec 05/06, curated ~80 words)

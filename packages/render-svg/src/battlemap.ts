@@ -7,7 +7,7 @@
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
-import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
+import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
 import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { collectWalls, SIDE_NAME } from "./walls";
 
@@ -855,10 +855,15 @@ export function renderBattlemap(
             : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }),
         );
       }
+      const themed0 = model.theme.glyphFor(chainR, center.x, center.y);
+      const glyphless = !themed0 && !["campfire", "torch", "brazier", "lantern", "wagon", "stairs", "ramp"].some((w) => chainR.includes(w));
+      const slabFill = glyphless
+        ? (model.theme.prop(chainR, "fill") ?? wordTint(chainR[chainR.length - 1] ?? ""))
+        : "#8f8474";
       footprintParts.push(
-        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: "#8f8474", stroke: INK, "stroke-width": 1.2, rx: 2 }),
+        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: slabFill, stroke: INK, "stroke-width": 1.2, rx: 2 }),
       );
-      const themed = model.theme.glyphFor(chainR, center.x, center.y);
+      const themed = themed0;
       if (themed) {
         const ink = model.theme.surface("ink", "fill", INK);
         const scale = (Math.min(r.w, r.h) / 24) * 0.7;
@@ -909,7 +914,10 @@ export function renderBattlemap(
     } else if (fallbackGlyph(e, chain, c, 1, parts)) {
       drewFallback = true;
     } else {
-      parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: "#8f8474", stroke: INK, "stroke-width": 1 }));
+      // Glyphless words tint deterministically (#71): theme fill wins, else
+      // the word-hash — table and barrel stop being the same grey square.
+      const fill = model.theme.prop(chain, "fill") ?? wordTint(chain[chain.length - 1] ?? "");
+      parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
     }
     // Label conduct (spec 06 §7): at battlemap scale, fallback word-labels are
     // tooltips — visible text is reserved for display names, tokens, and zones.
