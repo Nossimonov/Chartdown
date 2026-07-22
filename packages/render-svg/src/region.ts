@@ -12,7 +12,7 @@ import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
-import { hasTierGlyph, INK, tierFor } from "./theme";
+import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
   blob, catmullRom, COMPASS_VECTORS, el, fmt, hashSeed, hashString, measureToNumber,
   nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
@@ -543,8 +543,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (isWater) {
         layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: theme.terrainFill(["sea"]) })));
       } else if (isZone) {
-        layers.realms.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: wordFill, opacity: 0.2 })));
-        realmInfos.push({ e, key: keyOf(e), poly, spans: [], fill: wordFill, frame: true });
+        // Nations are individuals, not a type: the tint keys on the realm's
+        // NAME (theme fill= for the word still wins), so each nation reads
+        // as itself — the #71 principle applied at entity grain.
+        const realmFill = theme.prop(chain, "fill") ?? wordTint(keyOf(e));
+        layers.realms.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: realmFill, opacity: 0.2 })));
+        realmInfos.push({ e, key: keyOf(e), poly, spans: [], fill: realmFill, frame: true });
       } else {
         // Zonal terrain (ADR 0013): tundra, desert, icecap — defined by a
         // FRONTIER, not an outline. Honest terrain fill, painted before
@@ -618,15 +622,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (e.archetype === "zone") {
         // Realm tints: beneath terrain, above water — a nation shades its
         // land and its territorial waters without hiding either. The tint
-        // is visible at a glance (owner round ten: 0.12 read as nothing).
-        // The BOUNDARY renders separately after all realms are known, so
-        // border states can restyle stretches of it (#81).
+        // is visible at a glance (owner round ten: 0.12 read as nothing)
+        // and keys on the realm's NAME, not the word: nations are
+        // individuals, so each gets its own deterministic color (theme
+        // fill= for the word still wins). The BOUNDARY renders separately
+        // after all realms are known, so border states can restyle
+        // stretches of it (#81).
+        const realmFill = theme.prop(chain, "fill") ?? wordTint(keyOf(e));
         layers.realms.push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: 0.2 }),
+            el("polygon", { points: pointsAttr(r.polygon), fill: realmFill, opacity: 0.2 }),
           ),
         );
-        realmInfos.push({ e, key: keyOf(e), poly: r.polygon, spans: r.alongSpans ?? [], fill: wordFill });
+        realmInfos.push({ e, key: keyOf(e), poly: r.polygon, spans: r.alongSpans ?? [], fill: realmFill });
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
           deferLabel(4, () => {
             const c = centroid(r.polygon!);
