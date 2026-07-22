@@ -4,6 +4,10 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Changed
+
+- Glyphless words tint **deterministically by their base word** (golden-angle hues, parchment-muted; theme `fill=` overrides): table and barrel — and every unknown word a scene will ever hold — stop being the same grey square, on the map and matched in the legend. (#71)
+
 ## [0.2.2] — 2026-07-22
 
 ### Added

@@ -57,7 +57,7 @@ This produces the **escalation ladder**, every rung optional: a bare unknown wor
 ## 4. Themes and the fallback chain
 
 - A theme maps vocabulary words and their states to appearance: glyph, color, line/fill treatment, and user art assets. **Asset references live in themes only, never in map source** (vision principle 4).
-- Rendering any entity walks the **fallback chain** until something answers: theme asset → theme glyph → base word's chain (for derived words) → standard-library glyph → archetype's generic shape + the word as label. A map can therefore never fail to render for want of appearance, assets, or theme coverage.
+- Rendering any entity walks the **fallback chain** until something answers: theme asset → theme glyph → base word's chain (for derived words) → standard-library glyph → archetype's generic shape + the word as label. A map can therefore never fail to render for want of appearance, assets, or theme coverage. At the chain terminal, renderers SHOULD **tint the generic shape deterministically by the word's base** (a theme `fill=` overrides), so distinct unknown types stay distinguishable — on the map and matched in the legend — however many a scene holds.
 - Themes MUST NOT alter geometry, placement, or archetype semantics. A `window` passes sight in every theme, on every planet, in every year.
 - The optional header key `theme:` *suggests* a theme; the renderer and its user always win. Theme file format is deferred to the styling section (08).
 - `side=` on tokens takes any word (`side=party`, `side=hive-swarm`); themes map sides to colors. Allegiance is vocabulary, not grammar.

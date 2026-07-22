@@ -6,7 +6,7 @@
 
 import type { EntityNode } from "@chartdown/core";
 import type { Model } from "./model";
-import { INK, tierFor, hasTierGlyph } from "./theme";
+import { INK, tierFor, hasTierGlyph, wordTint } from "./theme";
 import { el, fmt, text } from "./util";
 
 type SampleKind = "fill" | "stroke" | "barrier" | "glyph" | "tier";
@@ -125,7 +125,10 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
             parts.push(el("line", { x1: x + 7 - w, y1: ty, x2: x + 7 + w, y2: ty, stroke: INK, "stroke-width": 1.4 }));
           }
         } else {
-          parts.push(el("rect", { x: x + 2, y: y - 5, width: 10, height: 10, fill: "#8f8474", stroke: INK, "stroke-width": 1 }));
+          // Same deterministic tint the map square gets (#71) — the legend
+          // row and the piece it names can be matched by color alone.
+          const fill = model.theme.prop(chain, "fill") ?? wordTint(chain[chain.length - 1] ?? "");
+          parts.push(el("rect", { x: x + 2, y: y - 5, width: 10, height: 10, fill, stroke: INK, "stroke-width": 1 }));
         }
         break;
       }

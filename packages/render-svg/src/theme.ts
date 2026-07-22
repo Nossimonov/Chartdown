@@ -173,6 +173,20 @@ export class Theme {
 
 export const terrainFill = (word: string): string => TERRAIN_FILLS[word] ?? "#d8d3c5";
 
+/**
+ * Deterministic tint for glyphless words (#71): the vocabulary is open, so no
+ * curated glyph set can ever cover it — but every word can have a color. Hue
+ * from a word hash spread by the golden angle; saturation/lightness pinned to
+ * the parchment palette so distinct never means garish. Same word, same color,
+ * every map. Hash the chain's BASE word so derived families share their tint.
+ */
+export function wordTint(word: string): string {
+  let h = 0;
+  for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) >>> 0;
+  const hue = Math.round((h * 137.508) % 360);
+  return `hsl(${hue} 32% 55%)`;
+}
+
 export const tierOf = (word: string | null): { r: number; font: number; weight: string } =>
   (word && TIERS[word]) || { r: 3, font: 10, weight: "normal" };
 

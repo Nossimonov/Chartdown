@@ -362,6 +362,36 @@ describe("levels (spec 06 §8)", () => {
     expect(frameless.diagnostics.some((d) => d.severity === "error" && d.message.includes("footprint"))).toBe(true);
   });
 
+  it("glyphless words tint deterministically; legend samples match the map (#71)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 8x8",
+      "legend: on",
+      "[vocab]",
+      "keg : barrel",
+      "[features]",
+      "table : B2",
+      "barrel : C2",
+      "keg : D2",
+      "well : E2",
+    ].join("\n");
+    const { svg } = renderSource(source, {});
+    const tints = [...svg.matchAll(/fill="(hsl\([\d.]+ 32% 55%\))"/g)].map((m) => m[1]!);
+    const distinct = new Set(tints);
+    // table, barrel(+keg sharing the family tint), well → 3 distinct colors
+    expect(distinct.size).toBe(3);
+    // every tint appears at least twice: once on the map, once in the legend
+    for (const t of distinct) {
+      expect(tints.filter((x) => x === t).length).toBeGreaterThanOrEqual(2);
+    }
+    // derived keg shares barrel's tint (family hashing) — barrel's tint appears 4x (2 map + 2 legend? no: keg row + barrel row + 2 map squares)
+    const counts = new Map<string, number>();
+    for (const t of tints) counts.set(t, (counts.get(t) ?? 0) + 1);
+    expect(Math.max(...counts.values())).toBeGreaterThanOrEqual(3);
+    // determinism: same doc, same colors
+    expect(renderSource(source, {}).svg).toBe(svg);
+  });
+
   it("labels: keyed numbers names in document order, key= pins, key list in the band (#65)", () => {
     const source = [
       "map: battlemap",
