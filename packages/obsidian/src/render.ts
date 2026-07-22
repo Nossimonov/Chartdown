@@ -21,9 +21,9 @@ export function renderChartdownBlock(source: string, el: HTMLElement, mode: Rend
 
   const errors = diagnostics.filter((d) => d.severity === "error");
   if (errors.length > 0) {
-    const box = el.createEl("div", { cls: "chartdown-diagnostics" });
+    const box = el.createDiv({ cls: "chartdown-diagnostics" });
     for (const d of errors) {
-      box.createEl("div", { text: `line ${d.line}: ${d.message}` });
+      box.createDiv({ text: `line ${d.line}: ${d.message}` });
     }
   }
 }

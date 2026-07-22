@@ -23,6 +23,9 @@ if (typeof HTMLElement !== "undefined") {
     this.appendChild(el);
     return el;
   };
+  proto["createDiv"] ??= function (this: HTMLElement, o?: CreateElOptions): HTMLElement {
+    return (this as HTMLElement & { createEl(tag: string, o?: CreateElOptions): HTMLElement }).createEl("div", o);
+  };
   proto["empty"] ??= function (this: HTMLElement): void {
     this.replaceChildren();
   };
