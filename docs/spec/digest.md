@@ -65,7 +65,7 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 | `hexcrawl` | hexes, routes, regions | ledger line: `C4 forest ruin "Name" gm="…"` (first word = terrain, rest = contents); omission = unexplored; `seen` = terrain only; grouped sugar `forest : C4 D3` legal |
 | `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `coastline coast : from …` then `sea "X" : west of coast` (referenced things need ids); borders: `border : along <ref>` |
 
-Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`).
+Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`). Label density conduct (07 §5): point-marker labels claim placement first and migrate least (important tiers before minor); a label SHOULD shrink toward a legibility floor before moving far, MAY be omitted rather than drawn over other text (author overrides never omitted), and a long sprawled name whose midpoint is built over MAY repeat once per side instead of crossing it.
 
 ## Themes (spec 08)
 

@@ -263,12 +263,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // ---------- pass 2: render, markers known before any label places ----------
   const placer = new SideLabelPlacer({ w, h });
   // The title owns its corner; the compass its own (owner round five).
-  if (model.doc.title) placer.block(0, 0, model.doc.title.length * 10 + 30, 34);
-  if (model.header.get("compass") === "on") placer.block(w - 60, 10, 55, 62);
+  if (model.doc.title) placer.block(0, 0, model.doc.title.length * 10 + 30, 34, 3);
+  if (model.header.get("compass") === "on") placer.block(w - 60, 10, 55, 62, 3);
   for (const { e, r, chain } of items) {
     if (r.point) {
       const tier = tierFor(chain);
-      placer.block(r.point.x - tier.r - 1, r.point.y - tier.r - 1, tier.r * 2 + 2, tier.r * 2 + 2);
+      placer.block(r.point.x - tier.r - 1, r.point.y - tier.r - 1, tier.r * 2 + 2, tier.r * 2 + 2, 2);
     }
   }
 
@@ -323,9 +323,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
 
   // Point labels move LAST (owner: a point label's proximity IS its meaning);
   // things with room to roam yield. Claims run in priority order — 0 author
-  // overrides (fixed), 1 point markers, 2 curve labels, 3 area names,
-  // 4 water/realm sprawls — while paint order stacks the reverse, so big
-  // faint names sit beneath the small precise ones.
+  // overrides (fixed), 1 point markers (capitals before minor features),
+  // 2 curve labels, 3 area names, 4 water/realm sprawls — while paint order
+  // stacks the reverse, so big faint names sit beneath the small precise
+  // ones. Under density each label shrinks before it moves far, and is
+  // omitted rather than drawn over other text (spec 07 §5).
   const labelBuckets: string[][] = [[], [], [], [], []];
   const labelJobs: { priority: number; run: () => void }[] = [];
   const deferLabel = (priority: number, run: () => void): void => void labelJobs.push({ priority, run });
@@ -441,9 +443,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           deferLabel(3, () => {
             const c = r.point ?? centroid(r.polygon!);
             const lbl = labelTextFor(model, e) ?? e.name!;
-            const y = placer.place(c.x, c.y, lbl, 10, "middle");
+            const bw = Math.max(...r.polygon!.map((p) => p.x)) - Math.min(...r.polygon!.map((p) => p.x));
+            const spot = placer.placeOrDrop(c.x, c.y, lbl, 10, "middle", [0, -bw / 5, bw / 5]);
+            if (!spot) return; // omit before overwriting (spec 07 §5)
             labelBuckets[3]!.push(
-              text(lbl, { x: c.x, y, "font-size": 10, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+              text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
             );
           });
         }
@@ -468,9 +472,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         deferLabel(3, () => {
           const c = r.point ?? centroid(r.polygon!);
           const lbl = labelTextFor(model, e) ?? e.name!;
-          const y = placer.place(c.x, c.y, lbl, 11, "middle");
+          const bw = Math.max(...r.polygon!.map((p) => p.x)) - Math.min(...r.polygon!.map((p) => p.x));
+          const spot = placer.placeOrDrop(c.x, c.y, lbl, 11, "middle", [0, -bw / 5, bw / 5]);
+          if (!spot) return; // omit before overwriting (spec 07 §5)
           labelBuckets[3]!.push(
-            text(lbl, { x: c.x, y, "font-size": 11, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+            text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
           );
         });
       }
@@ -518,43 +524,92 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // via the shared placer — same collision discipline as battlemaps.
         let lp = r.polyline!;
         if (lp[0]!.x > lp[lp.length - 1]!.x) lp = [...lp].reverse();
-        const wpx = lbl.length * 10 * 0.58;
         let pathLen = 0;
         for (let i = 0; i < lp.length - 1; i++) pathLen += Math.hypot(lp[i + 1]!.x - lp[i]!.x, lp[i + 1]!.y - lp[i]!.y);
         // The text CENTERS on its slot (text-anchor middle on the textPath),
         // and slots are clamped so the name always fits within the feature —
         // a late slot must never run the label off the end of a short river.
-        const halfFrac = Math.min(0.45, wpx / 2 / Math.max(pathLen, 1));
-        const slots = [0.5, 0.32, 0.68, 0.18, 0.82, 0.08, 0.92]
-          .map((s) => Math.min(1 - halfFrac, Math.max(halfFrac, s)))
-          .filter((s, i, arr) => arr.indexOf(s) === i);
-        let chosen: { offset: number; above: boolean } | null = null;
-        for (const offset of slots) {
-          for (const above of [true, false]) {
-            // The label's own box sits clear of the ±3px line obstacles, so a
-            // label never self-rejects against the line it names — but DOES
-            // reject against any OTHER line running in the corridor.
-            const mid = alongAt(lp, offset).p;
-            const start = alongAt(lp, Math.max(0, offset - halfFrac)).p;
-            const end = alongAt(lp, Math.min(1, offset + halfFrac)).p;
-            const boxes = [start, mid, end].map((pt) => ({ cx: pt.x, top: above ? pt.y - 14 : pt.y + 5 }));
-            const third = wpx / 3;
-            if (boxes.every((b) => placer.claimBoxIfFree(b.cx, b.top, third, 9))) {
-              chosen = { offset, above };
-              break;
+        // Every candidate is PROBED (never claimed) so a rejected slot leaves
+        // no phantom boxes behind; shrink (floor 8px) before accepting any
+        // overlap; least-bad below a road beats free-but-far — and a label
+        // that would mostly cover other text is dropped, not scrawled.
+        type Cand = { offset: number; above: boolean; size: number; boxes: { cx: number; top: number }[]; wpx: number };
+        const candidatesAt = (size: number): Cand[] => {
+          const wpx = lbl.length * size * 0.58;
+          const halfFrac = Math.min(0.45, wpx / 2 / Math.max(pathLen, 1));
+          const slots = [0.5, 0.32, 0.68, 0.18, 0.82, 0.08, 0.92]
+            .map((s) => Math.min(1 - halfFrac, Math.max(halfFrac, s)))
+            .filter((s, i, arr) => arr.indexOf(s) === i);
+          const out: Cand[] = [];
+          // Text offsets PERPENDICULAR to the path (tspan dy on a textPath),
+          // so the boxes follow the path NORMAL — on a diagonal ridge a
+          // vertically-lifted box would sit above where the glyphs actually
+          // paint. Offsets clear the line's OWN obstacles (±3px thin, ±10px
+          // ridge band): a label never self-rejects against the feature it
+          // names, but DOES reject any OTHER line in the corridor.
+          const off = r.ridge ? 17 : 9.5;
+          // Fine tiling (~12px per box): coarse boxes on a diagonal leave
+          // diagonal gaps another diagonal label can slip through unnoticed
+          // (the Broken Spine × Understone Way cross).
+          const n = Math.max(3, Math.ceil(wpx / 12));
+          for (const offset of slots) {
+            for (const above of [true, false]) {
+              const boxAt = (t: number): { cx: number; top: number } => {
+                const { p, dir } = alongAt(lp, t);
+                const s = above ? 1 : -1;
+                return { cx: p.x + dir.y * off * s, top: p.y - dir.x * off * s - 4.5 };
+              };
+              const boxes: { cx: number; top: number }[] = [];
+              for (let i = 0; i < n; i++) {
+                const t = offset - halfFrac + ((i + 0.5) / n) * 2 * halfFrac;
+                boxes.push(boxAt(Math.min(1, Math.max(0, t))));
+              }
+              out.push({ offset, above, size, wpx, boxes });
             }
           }
-          if (chosen) break;
+          return out;
+        };
+        const costOf = (c: Cand): number => c.boxes.reduce((sum, b) => sum + placer.boxCost(b.cx, b.top, c.wpx / c.boxes.length, 9), 0);
+        let pick: Cand | null = null;
+        for (let size = 10; size >= 8 && !pick; size--) {
+          pick = candidatesAt(size).find((c) => costOf(c) === 0) ?? null;
         }
-        const pick = chosen ?? { offset: 0.5, above: true };
+        if (!pick) {
+          // A big label brushing an obstacle beats a shrunken migrated one:
+          // largest size whose least-bad slot only brushes (≤12% of its own
+          // area), then floor-size up to half-covered, then omit (spec 07 §5).
+          const leastBad = (size: number): { c: Cand; score: number } => {
+            const finalists = candidatesAt(size);
+            let best = finalists[0]!;
+            let bestScore = Infinity;
+            finalists.forEach((c, i) => {
+              const score = costOf(c) + i * size;
+              if (score < bestScore) {
+                bestScore = score;
+                best = c;
+              }
+            });
+            return { c: best, score: bestScore };
+          };
+          for (let size = 10; size >= 8 && !pick; size--) {
+            const b = leastBad(size);
+            if (b.score <= b.c.wpx * 9 * 0.12) pick = b.c;
+          }
+          if (!pick) {
+            const b = leastBad(8);
+            if (b.score > b.c.wpx * 9 * 0.5) return; // omit before overwriting
+            pick = b.c;
+          }
+        }
+        for (const b of pick!.boxes) placer.claimBox(b.cx, b.top, pick!.wpx / pick!.boxes.length, 9);
         const pid = `cdlp-${model.doc.docId}-${pathLabelCount++}`;
         const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
         const safe = lbl.replace(/&/g, "&amp;").replace(/</g, "&lt;");
         const weight = model.labelsMode === "keyed" ? ' font-weight="bold"' : "";
         labelBuckets[2]!.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
-            `<text font-size="10" fill="${ink}" opacity="0.75" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
-            `<textPath href="#${pid}" startOffset="${fmt(pick.offset * 100)}%"><tspan dy="${pick.above ? -5 : 12}">${safe}</tspan></textPath></text>`,
+            `<text font-size="${pick!.size}" fill="${ink}" opacity="0.75" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="${fmt(pick!.offset * 100)}%"><tspan dy="${pick!.above ? (r.ridge ? -14 : -5) : r.ridge ? 20 : 12}">${safe}</tspan></textPath></text>`,
         );
         });
       }
@@ -584,10 +639,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {
         const pt = r.point;
-        deferLabel(1, () => {
-          const spot = placer.placeBeside(pt.x + tier.r + 3, pt.x - tier.r - 3, pt.y + 4, label, tier.font);
+        // Within the point tier, importance = marker size: capitals claim
+        // before towns before minor features, so when a name must shrink or
+        // drop under density, it's the less-important one that gives way.
+        deferLabel(1 + (24 - tier.font) / 100, () => {
+          const spot = placer.placeBesideOrDrop(pt.x + tier.r + 3, pt.x - tier.r - 3, pt.y + 4, label, tier.font);
+          if (!spot) return; // omit before overwriting (spec 07 §5)
           labelBuckets[1]!.push(
-            text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),
+            // text-anchor is ALWAYS written: SVG's default is start, so an
+            // omitted "middle" renders shifted right (the clipped Deepwatch).
+            text(label, { x: spot.x, y: spot.y, "font-size": spot.size, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor, "font-family": "sans-serif" }),
           );
         });
       }
@@ -607,24 +668,45 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // an oversized sprawl must never overflow the map or its neighbors.
       const spanLen = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 40);
       const upper = name.toUpperCase();
-      const { size, spacing } = fitLabel(upper, spanLen, 16, 8);
       const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
       deferLabel(0, () => {
-        // Author-placed: fixed, but REGISTERED so movable labels avoid it.
-        if (vertical) placer.block(cx - size, cy - spanLen / 2, size * 2, spanLen);
-        else placer.block(cx - spanLen / 2, cy - size, spanLen, size * 2);
-        labelBuckets[0]!.push(
+        const sprawlText = (tx: number, ty: number, size: number, spacing: number): string =>
           text(upper, {
-            x: cx, y: cy, "font-size": size, "letter-spacing": spacing, fill: "#5a7a96", opacity: 0.85,
+            x: tx, y: ty, "font-size": size, "letter-spacing": spacing, fill: "#5a7a96", opacity: 0.85,
             "text-anchor": "middle", "font-family": "sans-serif",
-            transform: vertical ? `rotate(90 ${fmt(cx)} ${fmt(cy)})` : undefined,
-          }),
-        );
+            transform: vertical ? `rotate(90 ${fmt(tx)} ${fmt(ty)})` : undefined,
+          });
+        // Repeat rather than cross (spec 07 §5): priority 0 runs after
+        // markers and line obstacles register but before any movable label
+        // claims, so occupancy of the middle half measures FEATURE density.
+        // A span whose natural midpoint is built over (the archipelago in
+        // the strait) names itself once on each side of the occupied
+        // stretch — same body, no scrawl through the dense middle.
+        const midBusy = vertical
+          ? placer.occupancy(cx - 10, cy - spanLen * 0.25, 20, spanLen * 0.5)
+          : placer.occupancy(cx - spanLen * 0.25, cy - 10, spanLen * 0.5, 20);
+        if (midBusy > 0 && spanLen >= 200) {
+          const { size, spacing } = fitLabel(upper, spanLen * 0.42, 16, 8);
+          const half = spanLen * 0.21;
+          for (const off of [-spanLen * 0.27, spanLen * 0.27]) {
+            const tx = vertical ? cx : cx + off;
+            const ty = vertical ? cy + off : cy;
+            if (vertical) placer.block(tx - size, ty - half, size * 2, half * 2, 3);
+            else placer.block(tx - half, ty - size, half * 2, size * 2, 3);
+            labelBuckets[0]!.push(sprawlText(tx, ty, size, spacing));
+          }
+          return;
+        }
+        // Author-placed: fixed, but REGISTERED so movable labels avoid it.
+        const { size, spacing } = fitLabel(upper, spanLen, 16, 8);
+        if (vertical) placer.block(cx - size, cy - spanLen / 2, size * 2, spanLen, 3);
+        else placer.block(cx - spanLen / 2, cy - size, spanLen, size * 2, 3);
+        labelBuckets[0]!.push(sprawlText(cx, cy, size, spacing));
       });
     } else if (o.hint.kind === "at" && o.hint.target.kind === "point") {
       const p = toXY(o.hint.target);
       deferLabel(0, () => {
-        placer.block(p.x - name.length * 3.2, p.y - 10, name.length * 6.4, 14);
+        placer.block(p.x - name.length * 3.2, p.y - 10, name.length * 6.4, 14, 3);
         labelBuckets[0]!.push(text(name, { x: p.x, y: p.y, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
       });
     } else if (o.hint.kind === "side") {
@@ -634,7 +716,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const lx = base.x + vec.x * 16;
         const ly = base.y + vec.y * 16;
         deferLabel(0, () => {
-          placer.block(lx - name.length * 3.2, ly - 10, name.length * 6.4, 14);
+          placer.block(lx - name.length * 3.2, ly - 10, name.length * 6.4, 14, 3);
           labelBuckets[0]!.push(text(name, { x: lx, y: ly, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
         });
       }
