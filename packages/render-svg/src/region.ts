@@ -14,7 +14,7 @@ import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor } from "./theme";
 import {
-  blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
+  blob, catmullRom, COMPASS_VECTORS, el, fmt, hashSeed, measureToNumber,
   nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
 } from "./util";
 
@@ -31,7 +31,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const { w, h, scale } = size;
   const theme = model.theme;
   const ink = theme.surface("ink", "fill", INK);
-  const random = rng(model.seed + 7);
+  // No shared noise stream: every organic shape keys on its OWN geometry
+  // (owner review caught the defect — one stream meant adding a forest
+  // reshaped every blob and river declared after it).
   const resolved = new Map<string, Resolved>();
   const byName = new Map<string, string>();
   /** Direction toward declared water (from e.g. `sea : west of coast`), for landward nudges. */
@@ -51,14 +53,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return null;
   };
 
-  /** Meander amplitude grows with length; rivers wander more than roads. */
-  const meanderAmount = (pts: XY[], chain: string[]): number => {
-    let length = 0;
-    for (let i = 0; i < pts.length - 1; i++) length += Math.hypot(pts[i + 1]!.x - pts[i]!.x, pts[i + 1]!.y - pts[i]!.y);
-    const factor = chain.includes("river") ? 0.055 : chain.includes("road") ? 0.02 : 0.035;
-    return Math.min(32, Math.max(6, length * factor));
-  };
-
   const resolveEntity = (e: EntityNode): Resolved => {
     const chain = model.chainOf(e.typeWord);
     const out: Resolved = {};
@@ -74,13 +68,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         if (p.shape === "blob") {
           const center = pts[0] ?? out.point ?? { x: w / 2, y: h / 2 };
           const radius = (measureToNumber(pairOf(e.pairs, "size") ?? "40") / 2) * scale;
-          out.polygon = blob(center, radius, random);
+          // Keyed by the blob's own geometry + doc seed: same center+size →
+          // same shape; different center → different shape; edits elsewhere
+          // NEVER reshape it. Splined closed for a soft outline.
+          out.polygon = catmullRom(blob(center, radius, rng(hashSeed(model.seed, center.x, center.y, radius))), 5, true);
           out.point = center;
           out.radius = radius;
         } else if (p.shape === "area") {
           out.polygon = pts;
         } else {
-          out.polyline = meander(pts, meanderAmount(pts, chain), random);
+          // The TRUE curve: a spline through the declared points, no noise.
+          out.polyline = catmullRom(pts, 8);
           out.ridge = p.shape === "ridge";
         }
       } else if (p.kind === "relational") {
@@ -128,13 +126,28 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             break;
           }
           case "from-to": {
-            const endpoint = (ep: typeof p.from): XY | null =>
-              ep.point ? toXY(ep.point) : ep.at.kind === "point" ? toXY(ep.at) : refPoint(ep.at);
-            const a = endpoint(p.from);
-            const b = endpoint(p.to);
-            if (a && b) {
-              const raw = [a, ...p.via.map(toXY), b];
-              out.polyline = meander(raw, meanderAmount(raw, chain), random);
+            // Endpoints snap to the target's FINISHED geometry: a river mouth
+            // lands exactly on the drawn coast, and a bare water-body ref
+            // stops at the shore, not the center (rivers do not sail lakes).
+            const ring = (poly: XY[]): XY[] => [...poly, poly[0]!];
+            const resolveEnd = (ep: typeof p.from): { p: XY | null; shore: XY[] | null } => {
+              if (ep.at.kind === "point") return { p: toXY(ep.at), shore: null };
+              const target = lookup(ep.at);
+              if (ep.point) {
+                const raw = toXY(ep.point);
+                if (target?.polyline) return { p: nearestOnPolyline(target.polyline, raw), shore: null };
+                if (target?.polygon) return { p: nearestOnPolyline(ring(target.polygon), raw), shore: null };
+                return { p: raw, shore: null };
+              }
+              return { p: refPoint(ep.at), shore: target?.polygon ? ring(target.polygon) : null };
+            };
+            const A = resolveEnd(p.from);
+            const B = resolveEnd(p.to);
+            if (A.p && B.p) {
+              const via = p.via.map(toXY);
+              const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
+              const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
+              out.polyline = catmullRom([a, ...via, b], 8);
             }
             break;
           }
@@ -211,6 +224,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // territorial waters), then terrain — a nation's tint must never hide its
   // forests, and an island must rise above the sea that surrounds it.
   const layers = { water: [] as string[], realms: [] as string[], areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
+  let pathLabelCount = 0;
 
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
@@ -248,10 +262,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water")) {
         const isLake = chain.includes("lake");
         const waterFill = theme.terrainFill(isLake ? ["lake"] : ["sea"]);
-        // Lakes sit ON land: terrain layer. Seas are the floor: water layer.
+        // Splined shore, NO stroke: declared coastline paths own the shore
+        // line (a stroked raw polygon beside a splined coastline drew the
+        // messy double border the owner flagged). Lakes sit on land: terrain
+        // layer. Seas are the floor: water layer.
+        const shore = r.polygon.length > 2 ? catmullRom(r.polygon, 6, true) : r.polygon;
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: waterFill, stroke: shade(waterFill), "stroke-width": 1.5, "stroke-linejoin": "round" }),
+            el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -352,11 +370,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         layers.lines.push(el("g", { id: anchor }, ...lineParts));
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-        const mid = r.polyline[Math.floor(r.polyline.length / 2)]!;
         const lbl = labelTextFor(model, e) ?? e.name;
-        const y = placer.place(mid.x + 4, mid.y - 4, lbl, 10, "start");
+        // The label FOLLOWS the curve it names (owner review: stacked flat
+        // labels dissociate from their lines) — left-to-right for legibility.
+        let lp = r.polyline;
+        if (lp[0]!.x > lp[lp.length - 1]!.x) lp = [...lp].reverse();
+        const pid = `cdlp-${model.doc.docId}-${pathLabelCount++}`;
+        const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
+        const safe = lbl.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+        const weight = model.labelsMode === "keyed" ? ' font-weight="bold"' : "";
         layers.labels.push(
-          text(lbl, { x: mid.x + 4, y, "font-size": 10, fill: ink, opacity: 0.75, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "font-style": "italic", "font-family": "sans-serif" }),
+          `<path id="${pid}" d="${d}" fill="none"/>` +
+            `<text font-size="10" fill="${ink}" opacity="0.75" font-style="italic"${weight} font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="38%"><tspan dy="-4">${safe}</tspan></textPath></text>`,
         );
       }
       continue;

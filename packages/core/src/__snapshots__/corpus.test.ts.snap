@@ -4158,7 +4158,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 15,
+          "line": 16,
           "name": null,
           "pairs": [],
           "placements": [
@@ -4182,23 +4182,28 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 560,
-                  "y": 180,
+                  "x": 570,
+                  "y": 170,
                 },
                 {
                   "kind": "point",
-                  "x": 620,
-                  "y": 420,
+                  "x": 630,
+                  "y": 360,
                 },
                 {
                   "kind": "point",
-                  "x": 540,
-                  "y": 700,
+                  "x": 585,
+                  "y": 505,
                 },
                 {
                   "kind": "point",
-                  "x": 590,
-                  "y": 880,
+                  "x": 545,
+                  "y": 690,
+                },
+                {
+                  "kind": "point",
+                  "x": 595,
+                  "y": 875,
                 },
               ],
             },
@@ -4218,7 +4223,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 16,
+          "line": 17,
           "name": null,
           "pairs": [],
           "placements": [
@@ -4248,17 +4253,22 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 990,
-                  "y": 450,
+                  "y": 430,
                 },
                 {
                   "kind": "point",
-                  "x": 1060,
-                  "y": 680,
+                  "x": 1042,
+                  "y": 548,
                 },
                 {
                   "kind": "point",
                   "x": 1000,
-                  "y": 860,
+                  "y": 720,
+                },
+                {
+                  "kind": "point",
+                  "x": 1055,
+                  "y": 865,
                 },
               ],
             },
@@ -4278,7 +4288,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 17,
+          "line": 18,
           "name": null,
           "pairs": [],
           "placements": [
@@ -4333,7 +4343,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 18,
+          "line": 19,
           "name": null,
           "pairs": [],
           "placements": [
@@ -4386,7 +4396,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 20,
+          "line": 21,
           "name": "The Sundered Sea",
           "pairs": [],
           "placements": [
@@ -4399,23 +4409,28 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 560,
-                  "y": 180,
+                  "x": 570,
+                  "y": 170,
                 },
                 {
                   "kind": "point",
-                  "x": 620,
-                  "y": 420,
+                  "x": 630,
+                  "y": 360,
                 },
                 {
                   "kind": "point",
-                  "x": 540,
-                  "y": 700,
+                  "x": 585,
+                  "y": 505,
                 },
                 {
                   "kind": "point",
-                  "x": 590,
-                  "y": 880,
+                  "x": 545,
+                  "y": 690,
+                },
+                {
+                  "kind": "point",
+                  "x": 595,
+                  "y": 875,
                 },
                 {
                   "kind": "point",
@@ -4429,18 +4444,23 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 1000,
-                  "y": 860,
+                  "x": 1055,
+                  "y": 865,
                 },
                 {
                   "kind": "point",
-                  "x": 1060,
-                  "y": 680,
+                  "x": 1000,
+                  "y": 720,
+                },
+                {
+                  "kind": "point",
+                  "x": 1042,
+                  "y": 548,
                 },
                 {
                   "kind": "point",
                   "x": 990,
-                  "y": 450,
+                  "y": 430,
                 },
                 {
                   "kind": "point",
@@ -4470,7 +4490,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 21,
+          "line": 22,
           "name": "The Whalegrey Deep",
           "pairs": [],
           "placements": [
@@ -4529,7 +4549,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 22,
+          "line": 23,
           "name": "The Dawnwater",
           "pairs": [],
           "placements": [
@@ -4599,7 +4619,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 26,
+          "line": 29,
           "name": "The Spine of Aum",
           "pairs": [],
           "placements": [
@@ -4607,23 +4627,18 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 430,
-                  "y": 120,
+                  "x": 240,
+                  "y": 170,
                 },
                 {
                   "kind": "point",
-                  "x": 500,
-                  "y": 340,
+                  "x": 420,
+                  "y": 320,
                 },
                 {
                   "kind": "point",
-                  "x": 470,
-                  "y": 560,
-                },
-                {
-                  "kind": "point",
-                  "x": 540,
-                  "y": 780,
+                  "x": 555,
+                  "y": 465,
                 },
               ],
               "kind": "shape",
@@ -4645,7 +4660,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 27,
+          "line": 30,
           "name": "The Broken Spine",
           "pairs": [],
           "placements": [
@@ -4653,23 +4668,18 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 1120,
-                  "y": 80,
+                  "x": 1042,
+                  "y": 552,
                 },
                 {
                   "kind": "point",
-                  "x": 1180,
-                  "y": 300,
+                  "x": 1190,
+                  "y": 675,
                 },
                 {
                   "kind": "point",
-                  "x": 1140,
-                  "y": 520,
-                },
-                {
-                  "kind": "point",
-                  "x": 1200,
-                  "y": 740,
+                  "x": 1345,
+                  "y": 795,
                 },
               ],
               "kind": "shape",
@@ -4691,7 +4701,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 28,
+          "line": 31,
           "name": "The Vakh Teeth",
           "pairs": [],
           "placements": [
@@ -4699,18 +4709,18 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 180,
-                  "y": 140,
+                  "x": 170,
+                  "y": 120,
                 },
                 {
                   "kind": "point",
-                  "x": 300,
-                  "y": 200,
+                  "x": 290,
+                  "y": 180,
                 },
                 {
                   "kind": "point",
-                  "x": 420,
-                  "y": 160,
+                  "x": 410,
+                  "y": 150,
                 },
               ],
               "kind": "shape",
@@ -4730,12 +4740,12 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 30,
+          "line": 33,
           "name": "Skarnholt",
           "pairs": [
             {
               "key": "size",
-              "value": "45mi",
+              "value": "32mi",
             },
           ],
           "placements": [
@@ -4743,110 +4753,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 760,
-                  "y": 220,
-                },
-              ],
-              "kind": "shape",
-              "shape": "blob",
-            },
-          ],
-          "section": "terrain",
-          "texts": [],
-          "typeWord": "island",
-        },
-        {
-          "archetype": "terrain",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "level": "",
-          "line": 31,
-          "name": null,
-          "pairs": [
-            {
-              "key": "size",
-              "value": "25mi",
-            },
-          ],
-          "placements": [
-            {
-              "args": [
-                {
-                  "kind": "point",
-                  "x": 720,
-                  "y": 360,
-                },
-              ],
-              "kind": "shape",
-              "shape": "blob",
-            },
-          ],
-          "section": "terrain",
-          "texts": [],
-          "typeWord": "island",
-        },
-        {
-          "archetype": "terrain",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "level": "",
-          "line": 32,
-          "name": "Ilvarien Isle",
-          "pairs": [
-            {
-              "key": "size",
-              "value": "60mi",
-            },
-          ],
-          "placements": [
-            {
-              "args": [
-                {
-                  "kind": "point",
-                  "x": 800,
-                  "y": 490,
-                },
-              ],
-              "kind": "shape",
-              "shape": "blob",
-            },
-          ],
-          "section": "terrain",
-          "texts": [],
-          "typeWord": "island",
-        },
-        {
-          "archetype": "terrain",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "level": "",
-          "line": 33,
-          "name": null,
-          "pairs": [
-            {
-              "key": "size",
-              "value": "22mi",
-            },
-          ],
-          "placements": [
-            {
-              "args": [
-                {
-                  "kind": "point",
-                  "x": 860,
-                  "y": 580,
+                  "x": 648,
+                  "y": 482,
                 },
               ],
               "kind": "shape",
@@ -4867,11 +4775,11 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "kind": "entity",
           "level": "",
           "line": 34,
-          "name": "Vessel Isle",
+          "name": null,
           "pairs": [
             {
               "key": "size",
-              "value": "35mi",
+              "value": "22mi",
             },
           ],
           "placements": [
@@ -4879,8 +4787,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 770,
-                  "y": 660,
+                  "x": 712,
+                  "y": 496,
                 },
               ],
               "kind": "shape",
@@ -4901,11 +4809,11 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "kind": "entity",
           "level": "",
           "line": 35,
-          "name": "Thornshoal",
+          "name": "Ilvarien Isle",
           "pairs": [
             {
               "key": "size",
-              "value": "28mi",
+              "value": "58mi",
             },
           ],
           "placements": [
@@ -4913,8 +4821,42 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 845,
-                  "y": 780,
+                  "x": 790,
+                  "y": 514,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 36,
+          "name": null,
+          "pairs": [
+            {
+              "key": "size",
+              "value": "24mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 869,
+                  "y": 528,
                 },
               ],
               "kind": "shape",
@@ -4935,6 +4877,74 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "kind": "entity",
           "level": "",
           "line": 37,
+          "name": "Vessel Isle",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "34mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 948,
+                  "y": 540,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 38,
+          "name": "Thornshoal",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "20mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 735,
+                  "y": 585,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 40,
           "name": "The Kingswood",
           "pairs": [
             {
@@ -4948,7 +4958,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 280,
-                  "y": 420,
+                  "y": 430,
                 },
               ],
               "kind": "shape",
@@ -4968,7 +4978,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 38,
+          "line": 41,
           "name": "Thornmark Weald",
           "pairs": [
             {
@@ -4981,8 +4991,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 240,
-                  "y": 720,
+                  "x": 250,
+                  "y": 730,
                 },
               ],
               "kind": "shape",
@@ -5002,75 +5012,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 40,
-          "name": "The Sathriss Sink",
-          "pairs": [
-            {
-              "key": "size",
-              "value": "140mi",
-            },
-          ],
-          "placements": [
-            {
-              "args": [
-                {
-                  "kind": "point",
-                  "x": 1180,
-                  "y": 820,
-                },
-              ],
-              "kind": "shape",
-              "shape": "blob",
-            },
-          ],
-          "section": "terrain",
-          "texts": [],
-          "typeWord": "marsh",
-        },
-        {
-          "archetype": "terrain",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "level": "",
-          "line": 41,
-          "name": "The Green Throat",
-          "pairs": [
-            {
-              "key": "size",
-              "value": "110mi",
-            },
-          ],
-          "placements": [
-            {
-              "args": [
-                {
-                  "kind": "point",
-                  "x": 1350,
-                  "y": 880,
-                },
-              ],
-              "kind": "shape",
-              "shape": "blob",
-            },
-          ],
-          "section": "terrain",
-          "texts": [],
-          "typeWord": "jungle",
-        },
-        {
-          "archetype": "terrain",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [],
-          "kind": "entity",
-          "level": "",
-          "line": 42,
+          "line": 43,
           "name": "The White Reach",
           "pairs": [
             {
@@ -5084,7 +5026,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 1300,
-                  "y": 140,
+                  "y": 150,
                 },
               ],
               "kind": "shape",
@@ -5105,6 +5047,74 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "kind": "entity",
           "level": "",
           "line": 44,
+          "name": "The Sathriss Sink",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "130mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1130,
+                  "y": 855,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "marsh",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 45,
+          "name": "The Green Throat",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "100mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1380,
+                  "y": 900,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "jungle",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 47,
           "name": "Lake Vael",
           "pairs": [
             {
@@ -5118,7 +5128,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 350,
-                  "y": 520,
+                  "y": 530,
                 },
               ],
               "kind": "shape",
@@ -5133,7 +5143,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 24,
+      "line": 25,
       "name": "terrain",
     },
     {
@@ -5149,7 +5159,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 47,
+          "line": 50,
           "name": "The Vael",
           "pairs": [],
           "placements": [
@@ -5163,8 +5173,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 470,
-                  "y": 560,
+                  "x": 420,
+                  "y": 320,
                 },
               },
               "kind": "relational",
@@ -5178,8 +5188,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 400,
-                  "y": 540,
+                  "x": 375,
+                  "y": 430,
                 },
               ],
             },
@@ -5199,7 +5209,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 48,
+          "line": 51,
           "name": "The Serren",
           "pairs": [],
           "placements": [
@@ -5228,13 +5238,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 250,
-                  "y": 560,
+                  "x": 240,
+                  "y": 590,
                 },
                 {
                   "kind": "point",
-                  "x": 160,
-                  "y": 600,
+                  "x": 150,
+                  "y": 610,
                 },
               ],
             },
@@ -5254,7 +5264,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 49,
+          "line": 52,
           "name": "The Coldrun",
           "pairs": [],
           "placements": [
@@ -5268,8 +5278,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 500,
-                  "y": 340,
+                  "x": 300,
+                  "y": 230,
                 },
               },
               "kind": "relational",
@@ -5281,15 +5291,20 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 600,
-                  "y": 260,
+                  "x": 585,
+                  "y": 120,
                 },
               },
               "via": [
                 {
                   "kind": "point",
-                  "x": 560,
-                  "y": 300,
+                  "x": 430,
+                  "y": 180,
+                },
+                {
+                  "kind": "point",
+                  "x": 540,
+                  "y": 150,
                 },
               ],
             },
@@ -5309,7 +5324,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 50,
+          "line": 53,
           "name": "The Sathwater",
           "pairs": [],
           "placements": [
@@ -5323,8 +5338,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 1140,
-                  "y": 520,
+                  "x": 1120,
+                  "y": 615,
                 },
               },
               "kind": "relational",
@@ -5338,8 +5353,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 1160,
-                  "y": 680,
+                  "x": 1100,
+                  "y": 740,
                 },
               ],
             },
@@ -5359,7 +5374,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 51,
+          "line": 54,
           "name": "The Deepflow",
           "pairs": [],
           "placements": [
@@ -5373,8 +5388,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 1180,
-                  "y": 300,
+                  "x": 1190,
+                  "y": 675,
                 },
               },
               "kind": "relational",
@@ -5386,20 +5401,75 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 1510,
-                  "y": 320,
+                  "x": 1520,
+                  "y": 460,
                 },
               },
               "via": [
                 {
                   "kind": "point",
-                  "x": 1320,
-                  "y": 320,
+                  "x": 1330,
+                  "y": 570,
                 },
                 {
                   "kind": "point",
-                  "x": 1440,
-                  "y": 300,
+                  "x": 1450,
+                  "y": 480,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "reedrun",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 55,
+          "name": "The Reedrun",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "eastspine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 1080,
+                  "y": 580,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "eastshore",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 1005,
+                  "y": 700,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1030,
+                  "y": 640,
                 },
               ],
             },
@@ -5412,7 +5482,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 46,
+      "line": 49,
       "name": "paths",
     },
     {
@@ -5428,7 +5498,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 54,
+          "line": 58,
           "name": "Corven",
           "pairs": [
             {
@@ -5458,7 +5528,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 55,
+          "line": 59,
           "name": "Marrowgate",
           "pairs": [],
           "placements": [
@@ -5481,7 +5551,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 56,
+          "line": 60,
           "name": "Fairhaven",
           "pairs": [],
           "placements": [
@@ -5490,8 +5560,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "kind": "relational",
               "point": {
                 "kind": "point",
-                "x": 590,
-                "y": 420,
+                "x": 600,
+                "y": 300,
               },
               "ref": {
                 "form": "id",
@@ -5510,19 +5580,51 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "details": [],
           "flags": [],
           "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 61,
+          "name": "Tornquay",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "point": {
+                "kind": "point",
+                "x": 560,
+                "y": 640,
+              },
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "westshore",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "port",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
           "ids": [
             "ghorvakh",
           ],
           "kind": "entity",
           "level": "",
-          "line": 57,
+          "line": 62,
           "name": "Ghor Vakh Hold",
           "pairs": [],
           "placements": [
             {
               "kind": "point",
-              "x": 240,
-              "y": 100,
+              "x": 230,
+              "y": 90,
             },
           ],
           "section": "settlements",
@@ -5540,39 +5642,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 58,
+          "line": 63,
           "name": "Khundrum Gate",
           "pairs": [],
           "placements": [
             {
               "kind": "point",
-              "x": 1230,
-              "y": 260,
-            },
-          ],
-          "section": "settlements",
-          "texts": [],
-          "typeWord": "capital",
-        },
-        {
-          "archetype": "feature",
-          "archetypeSource": "vocab",
-          "details": [],
-          "flags": [],
-          "gmOnly": false,
-          "ids": [
-            "ssurath",
-          ],
-          "kind": "entity",
-          "level": "",
-          "line": 59,
-          "name": "Ssurath",
-          "pairs": [],
-          "placements": [
-            {
-              "kind": "point",
-              "x": 1150,
-              "y": 780,
+              "x": 1250,
+              "y": 660,
             },
           ],
           "section": "settlements",
@@ -5588,7 +5665,64 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 60,
+          "line": 64,
+          "name": "Deepwatch",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "point": {
+                "kind": "point",
+                "x": 1510,
+                "y": 450,
+              },
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "fareast",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "town",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "ssurath",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 65,
+          "name": "Ssurath",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 1090,
+              "y": 810,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 66,
           "name": "Reedhome",
           "pairs": [],
           "placements": [
@@ -5597,8 +5731,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "kind": "relational",
               "point": {
                 "kind": "point",
-                "x": 1030,
-                "y": 640,
+                "x": 1010,
+                "y": 705,
               },
               "ref": {
                 "form": "id",
@@ -5622,14 +5756,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 61,
+          "line": 67,
           "name": "Ilvarien",
           "pairs": [],
           "placements": [
             {
               "kind": "point",
-              "x": 800,
-              "y": 490,
+              "x": 790,
+              "y": 514,
             },
           ],
           "section": "settlements",
@@ -5640,7 +5774,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 53,
+      "line": 57,
       "name": "settlements",
     },
     {
@@ -5656,7 +5790,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 64,
+          "line": 70,
           "name": "The Long Kingsway",
           "pairs": [],
           "placements": [
@@ -5685,7 +5819,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 390,
+                  "x": 350,
                   "y": 600,
                 },
               ],
@@ -5704,7 +5838,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 65,
+          "line": 71,
           "name": "The Vakh Path",
           "pairs": [],
           "placements": [
@@ -5728,8 +5862,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 350,
-                  "y": 240,
+                  "x": 280,
+                  "y": 220,
                 },
               ],
             },
@@ -5747,7 +5881,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 66,
+          "line": 72,
           "name": "Aumgap Pass",
           "pairs": [],
           "placements": [
@@ -5756,16 +5890,16 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "from": {
                 "at": {
                   "kind": "point",
-                  "x": 450,
-                  "y": 430,
+                  "x": 380,
+                  "y": 260,
                 },
               },
               "kind": "relational",
               "to": {
                 "at": {
                   "kind": "point",
-                  "x": 510,
-                  "y": 470,
+                  "x": 455,
+                  "y": 380,
                 },
               },
               "via": [],
@@ -5786,7 +5920,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 67,
+          "line": 73,
           "name": "The Understone Way",
           "pairs": [],
           "placements": [
@@ -5810,8 +5944,56 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 1220,
-                  "y": 420,
+                  "x": 1180,
+                  "y": 740,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "road",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 74,
+          "name": "The Deep Road",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Khundrum Gate",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Deepwatch",
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1340,
+                  "y": 560,
+                },
+                {
+                  "kind": "point",
+                  "x": 1450,
+                  "y": 470,
                 },
               ],
             },
@@ -5824,7 +6006,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 63,
+      "line": 69,
       "name": "paths",
     },
     {
@@ -5838,7 +6020,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 70,
+          "line": 77,
           "name": "The Drowned Throne",
           "pairs": [
             {
@@ -5849,8 +6031,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "placements": [
             {
               "kind": "point",
-              "x": 790,
-              "y": 560,
+              "x": 825,
+              "y": 470,
             },
           ],
           "section": "features",
@@ -5866,14 +6048,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 71,
+          "line": 78,
           "name": "Elder Aum's Seat",
           "pairs": [],
           "placements": [
             {
               "kind": "point",
-              "x": 460,
-              "y": 450,
+              "x": 430,
+              "y": 330,
             },
           ],
           "section": "features",
@@ -5889,14 +6071,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 72,
+          "line": 79,
           "name": "The Echo Stair",
           "pairs": [],
           "placements": [
             {
               "kind": "point",
-              "x": 1160,
-              "y": 400,
+              "x": 1150,
+              "y": 640,
             },
           ],
           "section": "features",
@@ -5912,14 +6094,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 73,
+          "line": 80,
           "name": "The Sundering Stone",
           "pairs": [],
           "placements": [
             {
               "kind": "point",
-              "x": 820,
-              "y": 300,
+              "x": 700,
+              "y": 545,
             },
           ],
           "section": "features",
@@ -5930,7 +6112,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 69,
+      "line": 76,
       "name": "features",
     },
     {
@@ -5944,7 +6126,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 76,
+          "line": 83,
           "name": "Valemark",
           "pairs": [],
           "placements": [
@@ -5957,23 +6139,23 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 430,
-                  "y": 130,
+                  "x": 420,
+                  "y": 140,
                 },
                 {
                   "kind": "point",
-                  "x": 500,
-                  "y": 340,
+                  "x": 560,
+                  "y": 300,
                 },
                 {
                   "kind": "point",
-                  "x": 470,
-                  "y": 560,
+                  "x": 585,
+                  "y": 505,
                 },
                 {
                   "kind": "point",
                   "x": 350,
-                  "y": 520,
+                  "y": 530,
                 },
                 {
                   "kind": "point",
@@ -6003,7 +6185,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 77,
+          "line": 84,
           "name": "Carrowen",
           "pairs": [],
           "placements": [
@@ -6017,22 +6199,22 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 350,
-                  "y": 520,
+                  "y": 530,
                 },
                 {
                   "kind": "point",
-                  "x": 470,
-                  "y": 560,
+                  "x": 585,
+                  "y": 505,
                 },
                 {
                   "kind": "point",
-                  "x": 540,
-                  "y": 780,
+                  "x": 545,
+                  "y": 690,
                 },
                 {
                   "kind": "point",
-                  "x": 590,
-                  "y": 880,
+                  "x": 595,
+                  "y": 875,
                 },
                 {
                   "kind": "point",
@@ -6067,7 +6249,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 78,
+          "line": 85,
           "name": "Ghor Vakh",
           "pairs": [],
           "placements": [
@@ -6085,28 +6267,28 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 555,
-                  "y": 175,
+                  "x": 565,
+                  "y": 165,
                 },
                 {
                   "kind": "point",
-                  "x": 420,
-                  "y": 160,
+                  "x": 410,
+                  "y": 150,
                 },
                 {
                   "kind": "point",
-                  "x": 300,
-                  "y": 200,
+                  "x": 290,
+                  "y": 180,
                 },
                 {
                   "kind": "point",
-                  "x": 180,
-                  "y": 140,
+                  "x": 170,
+                  "y": 120,
                 },
                 {
                   "kind": "point",
                   "x": 100,
-                  "y": 95,
+                  "y": 85,
                 },
               ],
               "kind": "shape",
@@ -6126,7 +6308,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 79,
+          "line": 86,
           "name": "Khundrum",
           "pairs": [],
           "placements": [
@@ -6135,32 +6317,42 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 1025,
-                  "y": 10,
+                  "y": 15,
                 },
                 {
                   "kind": "point",
-                  "x": 1535,
-                  "y": 10,
+                  "x": 1530,
+                  "y": 15,
                 },
                 {
                   "kind": "point",
-                  "x": 1500,
-                  "y": 280,
+                  "x": 1495,
+                  "y": 285,
                 },
                 {
                   "kind": "point",
-                  "x": 1550,
-                  "y": 530,
+                  "x": 1555,
+                  "y": 535,
                 },
                 {
                   "kind": "point",
-                  "x": 1140,
-                  "y": 520,
+                  "x": 1350,
+                  "y": 790,
+                },
+                {
+                  "kind": "point",
+                  "x": 1190,
+                  "y": 672,
+                },
+                {
+                  "kind": "point",
+                  "x": 1044,
+                  "y": 556,
                 },
                 {
                   "kind": "point",
                   "x": 1082,
-                  "y": 225,
+                  "y": 222,
                 },
               ],
               "kind": "shape",
@@ -6180,7 +6372,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 80,
+          "line": 87,
           "name": "Sathriss",
           "pairs": [],
           "placements": [
@@ -6188,43 +6380,38 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 990,
-                  "y": 455,
+                  "x": 1002,
+                  "y": 725,
                 },
                 {
                   "kind": "point",
-                  "x": 1140,
-                  "y": 525,
+                  "x": 1150,
+                  "y": 752,
                 },
                 {
                   "kind": "point",
-                  "x": 1550,
-                  "y": 545,
+                  "x": 1345,
+                  "y": 798,
                 },
                 {
                   "kind": "point",
-                  "x": 1490,
-                  "y": 800,
+                  "x": 1487,
+                  "y": 802,
                 },
                 {
                   "kind": "point",
-                  "x": 1545,
-                  "y": 990,
+                  "x": 1540,
+                  "y": 985,
                 },
                 {
                   "kind": "point",
                   "x": 1085,
-                  "y": 990,
-                },
-                {
-                  "kind": "point",
-                  "x": 1002,
-                  "y": 858,
+                  "y": 985,
                 },
                 {
                   "kind": "point",
                   "x": 1058,
-                  "y": 680,
+                  "y": 862,
                 },
               ],
               "kind": "shape",
@@ -6244,7 +6431,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 81,
+          "line": 88,
           "name": "Ilvarien",
           "pairs": [],
           "placements": [
@@ -6252,23 +6439,23 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 700,
-                  "y": 170,
+                  "x": 620,
+                  "y": 430,
                 },
                 {
                   "kind": "point",
-                  "x": 890,
-                  "y": 170,
+                  "x": 980,
+                  "y": 485,
                 },
                 {
                   "kind": "point",
-                  "x": 910,
-                  "y": 810,
+                  "x": 990,
+                  "y": 600,
                 },
                 {
                   "kind": "point",
-                  "x": 705,
-                  "y": 820,
+                  "x": 640,
+                  "y": 560,
                 },
               ],
               "kind": "shape",
@@ -6288,7 +6475,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 82,
+          "line": 89,
           "name": null,
           "pairs": [
             {
@@ -6320,7 +6507,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 83,
+          "line": 90,
           "name": null,
           "pairs": [],
           "placements": [
@@ -6347,7 +6534,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 84,
+          "line": 91,
           "name": null,
           "pairs": [],
           "placements": [
@@ -6369,7 +6556,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 75,
+      "line": 82,
       "name": "realms",
     },
     {
@@ -6380,19 +6567,19 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
             "range": {
               "from": {
                 "kind": "point",
-                "x": 785,
+                "x": 800,
                 "y": 120,
               },
               "kind": "point-range",
               "to": {
                 "kind": "point",
-                "x": 815,
-                "y": 900,
+                "x": 830,
+                "y": 360,
               },
             },
           },
           "kind": "label-override",
-          "line": 87,
+          "line": 94,
           "target": {
             "form": "name",
             "kind": "ref",
@@ -6403,7 +6590,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 86,
+      "line": 93,
       "name": "labels",
     },
   ],
