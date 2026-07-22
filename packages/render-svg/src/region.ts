@@ -486,10 +486,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             // ladder reaches a third of the realm each way but never leaves
             // it (a nation's name stays on its own land), and a nation
             // always keeps its name: least-bad rather than omitted.
-            const dxs = [0, -bboxW / 5, bboxW / 5, -bboxW / 3, bboxW / 3]
-              .filter((dx) => dx === 0 || pip({ x: c.x + dx, y: c.y }, r.polygon!));
+            const dxs = [0, -bboxW / 5, bboxW / 5, -bboxW / 3, bboxW / 3];
             const spot =
-              placer.placeOrDrop(c.x, c.y, labelText, size, "middle", dxs, width) ??
+              placer.placeOrDrop(c.x, c.y, labelText, size, "middle", dxs, width, (x, y) => pip({ x, y }, r.polygon!)) ??
               { x: c.x, y: placer.place(c.x, c.y, labelText, size, "middle", width), size };
             labelBuckets[4]!.push(
               text(labelText, {
@@ -838,11 +837,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const pts = poly.slice(i, j + 2 > n ? n : j + 2);
         if (j + 2 > n) pts.push(poly[0]!);
         if (current) {
-          const stroke = shade(theme.terrainFill([current.state]));
+          // Not a road: a soft tinted band with an atlas dash-dot on top —
+          // the classic political-boundary treatment, unmistakable at a
+          // glance (owner: a thin solid stroke read as a river or road).
+          const stateFill = theme.terrainFill([current.state]);
+          const stroke = shade(stateFill);
           const title = gmTitleFor(model, current.decl);
           layers.lines.push(
             el("g", {}, title ? el("title", {}, title) : "",
-              el("polyline", { points: pointsAttr(pts), fill: "none", stroke, "stroke-width": 2, "stroke-dasharray": "5 3", opacity: 0.85, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+              el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stateFill, "stroke-width": 7, opacity: 0.25, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+              el("polyline", { points: pointsAttr(pts), fill: "none", stroke, "stroke-width": 1.6, "stroke-dasharray": "9 4 2 4", opacity: 0.9, "stroke-linejoin": "round", "stroke-linecap": "round" }),
             ),
           );
         } else if (!info.frame) {

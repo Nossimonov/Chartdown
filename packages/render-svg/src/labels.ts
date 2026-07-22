@@ -157,16 +157,17 @@ export class LabelPlacer {
    * least-bad shrunk spot would cover most of the label with other text,
    * returns null — the caller drops the label rather than scrawl it.
    */
-  placeOrDrop(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, dxs: number[] = [0], widthPx?: number): { y: number; x: number; size: number } | null {
+  placeOrDrop(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, dxs: number[] = [0], widthPx?: number, allow?: (x: number, y: number) => boolean): { y: number; x: number; size: number } | null {
     const floor = Math.max(8, fontSize - 3);
     const offsetsAt = (size: number): { dx: number; dy: number }[] => {
       const step = size * 1.1 + 2;
       const out: { dx: number; dy: number }[] = [];
       // Vertical nudges first at the natural x, then the horizontal
       // candidates (an area is WIDE — sidestepping a vertical obstacle
-      // beats dropping the name).
+      // beats dropping the name). `allow` vetoes candidate centers — a
+      // realm's name must stay on that realm's own land.
       for (const dy of [0, step, -step, 2 * step, -2 * step]) for (const dx of dxs) out.push({ dx, dy });
-      return out;
+      return out.filter((o) => !allow || allow(x + o.dx, y + o.dy));
     };
     for (let size = fontSize; size >= floor; size--) {
       for (const o of offsetsAt(size)) {
