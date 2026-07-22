@@ -157,7 +157,7 @@ export class LabelPlacer {
    * least-bad shrunk spot would cover most of the label with other text,
    * returns null — the caller drops the label rather than scrawl it.
    */
-  placeOrDrop(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, dxs: number[] = [0]): { y: number; x: number; size: number } | null {
+  placeOrDrop(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, dxs: number[] = [0], widthPx?: number): { y: number; x: number; size: number } | null {
     const floor = Math.max(8, fontSize - 3);
     const offsetsAt = (size: number): { dx: number; dy: number }[] => {
       const step = size * 1.1 + 2;
@@ -170,7 +170,7 @@ export class LabelPlacer {
     };
     for (let size = fontSize; size >= floor; size--) {
       for (const o of offsetsAt(size)) {
-        if (this.tryClaim(x + o.dx, y + o.dy, textStr, size, anchor)) return { x: x + o.dx, y: y + o.dy, size };
+        if (this.tryClaim(x + o.dx, y + o.dy, textStr, size, anchor, widthPx)) return { x: x + o.dx, y: y + o.dy, size };
       }
     }
     // No free spot at any size. A BIG label brushing an obstacle beats a
@@ -181,25 +181,25 @@ export class LabelPlacer {
       let best = { dx: 0, dy: 0 };
       let bestScore = Infinity;
       offsetsAt(size).forEach((o, i) => {
-        const score = this.overlapArea(this.boxFor(x + o.dx, y + o.dy, textStr, size, anchor)) + i * size;
+        const score = this.overlapArea(this.boxFor(x + o.dx, y + o.dy, textStr, size, anchor, widthPx)) + i * size;
         if (score < bestScore) {
           bestScore = score;
           best = o;
         }
       });
-      const box = this.boxFor(x + best.dx, y + best.dy, textStr, size, anchor);
+      const box = this.boxFor(x + best.dx, y + best.dy, textStr, size, anchor, widthPx);
       return { o: best, score: bestScore, area: box.w * box.h };
     };
     for (let size = fontSize; size >= floor; size--) {
       const b = leastBad(size);
       if (b.score <= b.area * 0.12) {
-        this.claim(x + b.o.dx, y + b.o.dy, textStr, size, anchor);
+        this.claim(x + b.o.dx, y + b.o.dy, textStr, size, anchor, widthPx);
         return { x: x + b.o.dx, y: y + b.o.dy, size };
       }
     }
     const b = leastBad(floor);
     if (b.score > b.area * 0.5) return null;
-    this.claim(x + b.o.dx, y + b.o.dy, textStr, floor, anchor);
+    this.claim(x + b.o.dx, y + b.o.dy, textStr, floor, anchor, widthPx);
     return { x: x + b.o.dx, y: y + b.o.dy, size: floor };
   }
 }

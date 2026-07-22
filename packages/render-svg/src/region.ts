@@ -419,10 +419,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             // A small realm gets a small name — the label fits its territory.
             const bboxW = Math.max(...r.polygon!.map((p) => p.x)) - Math.min(...r.polygon!.map((p) => p.x));
             const { size, spacing } = fitLabel(labelText, bboxW * 0.8, 15, 5);
-            const y = placer.place(c.x, c.y, labelText, size, "middle", labelText.length * (size * 0.58 + spacing));
+            const width = labelText.length * (size * 0.58 + spacing);
+            // Sidestep within the territory before settling ON something
+            // (Ghor Vakh's centroid sits right on the Vakh Teeth) — the
+            // ladder reaches a third of the realm each way, because a
+            // nation always keeps its name: least-bad rather than omitted.
+            const spot =
+              placer.placeOrDrop(c.x, c.y, labelText, size, "middle", [0, -bboxW / 5, bboxW / 5, -bboxW / 3, bboxW / 3], width) ??
+              { x: c.x, y: placer.place(c.x, c.y, labelText, size, "middle", width), size };
             labelBuckets[4]!.push(
               text(labelText, {
-                x: c.x, y, "font-size": size, "letter-spacing": spacing, fill: "#6b5d4a",
+                x: spot.x, y: spot.y, "font-size": spot.size, "letter-spacing": spacing, fill: "#6b5d4a",
                 opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
               }),
             );
@@ -676,23 +683,53 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             "text-anchor": "middle", "font-family": "sans-serif",
             transform: vertical ? `rotate(90 ${fmt(tx)} ${fmt(ty)})` : undefined,
           });
-        // Repeat rather than cross (spec 07 §5): priority 0 runs after
-        // markers and line obstacles register but before any movable label
-        // claims, so occupancy of the middle half measures FEATURE density.
-        // A span whose natural midpoint is built over (the archipelago in
-        // the strait) names itself once on each side of the occupied
-        // stretch — same body, no scrawl through the dense middle.
-        const midBusy = vertical
-          ? placer.occupancy(cx - 10, cy - spanLen * 0.25, 20, spanLen * 0.5)
-          : placer.occupancy(cx - spanLen * 0.25, cy - 10, spanLen * 0.5, 20);
-        if (midBusy > 0 && spanLen >= 200) {
-          const { size, spacing } = fitLabel(upper, spanLen * 0.42, 16, 8);
-          const half = spanLen * 0.21;
-          for (const off of [-spanLen * 0.27, spanLen * 0.27]) {
-            const tx = vertical ? cx : cx + off;
-            const ty = vertical ? cy + off : cy;
-            if (vertical) placer.block(tx - size, ty - half, size * 2, half * 2, 3);
-            else placer.block(tx - half, ty - size, half * 2, size * 2, 3);
+        // Repeat rather than cross (spec 07 §5): measure the stretch of the
+        // span actually built over — terrain areas and point features whose
+        // geometry crosses the strip (the water body itself and see-through
+        // realm tints don't count) — and center one copy in EACH real clear
+        // stretch, sized to fill it. Fixed fractions crowded the archipelago
+        // even when both sides had room to spare.
+        const s0 = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x);
+        const s1 = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+        const cross = vertical ? cx : cy;
+        let occ0 = Infinity;
+        let occ1 = -Infinity;
+        for (const it of items) {
+          if (it.e.section === "water" || it.e.archetype === "zone") continue;
+          const consider = (lo: number, hi: number, cLo: number, cHi: number): void => {
+            if (cHi < cross - 16 || cLo > cross + 16) return;
+            occ0 = Math.min(occ0, lo);
+            occ1 = Math.max(occ1, hi);
+          };
+          if (it.r.polygon) {
+            const xs = it.r.polygon.map((p) => p.x);
+            const ys = it.r.polygon.map((p) => p.y);
+            if (vertical) consider(Math.min(...ys), Math.max(...ys), Math.min(...xs), Math.max(...xs));
+            else consider(Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys));
+          } else if (it.r.point) {
+            const p = it.r.point;
+            if (vertical) consider(p.y - 6, p.y + 6, p.x - 6, p.x + 6);
+            else consider(p.x - 6, p.x + 6, p.y - 6, p.y + 6);
+          }
+        }
+        occ0 = Math.max(s0, occ0 - 10);
+        occ1 = Math.min(s1, occ1 + 10);
+        const stretches: { lo: number; hi: number }[] = [];
+        if (occ0 <= occ1 && spanLen >= 200) {
+          for (const st of [{ lo: s0, hi: occ0 }, { lo: occ1, hi: s1 }]) {
+            if (st.hi - st.lo >= 60) stretches.push(st);
+          }
+        }
+        if (stretches.length) {
+          for (const st of stretches) {
+            const len = st.hi - st.lo;
+            const { size, spacing } = fitLabel(upper, len * 0.8, 16, 8);
+            const m = (st.lo + st.hi) / 2;
+            const tx = vertical ? cx : m;
+            const ty = vertical ? m : cy;
+            const halfL = len * 0.4;
+            if (vertical) placer.block(tx - size, ty - halfL, size * 2, halfL * 2, 3);
+            else placer.block(tx - halfL, ty - size, halfL * 2, size * 2, 3);
             labelBuckets[0]!.push(sprawlText(tx, ty, size, spacing));
           }
           return;
