@@ -34,12 +34,12 @@ const PIXELS_PER_GRID = 70;
 export function mountChartdownBlock(source: string, el: HTMLElement, opts: BlockOptions): void {
   let mode: RenderMode = opts.initialMode;
 
-  const wrapper = el.createEl("div", { cls: "chartdown-block" });
-  const toolbar = wrapper.createEl("div", { cls: "chartdown-toolbar" });
+  const wrapper = el.createDiv({ cls: "chartdown-block" });
+  const toolbar = wrapper.createDiv({ cls: "chartdown-toolbar" });
   const modeBtn = toolbar.createEl("button", { cls: "chartdown-mode-toggle" });
   const svgBtn = toolbar.createEl("button", { text: "Export SVG" });
   const uvttBtn = toolbar.createEl("button", { text: "Export UVTT" });
-  const mapHost = wrapper.createEl("div", { cls: "chartdown-map-host" });
+  const mapHost = wrapper.createDiv({ cls: "chartdown-map-host" });
 
   const rerender = (): void => {
     mapHost.empty();

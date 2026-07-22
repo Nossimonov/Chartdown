@@ -47,7 +47,9 @@ export default class ChartdownPlugin extends Plugin {
   settings: ChartdownSettings = DEFAULT_SETTINGS;
 
   override async onload(): Promise<void> {
-    this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<ChartdownSettings> | null) };
+    const raw: unknown = await this.loadData();
+    const mode = raw !== null && typeof raw === "object" ? (raw as { mode?: unknown }).mode : undefined;
+    this.settings = { mode: mode === "gm" ? "gm" : "player" };
     this.registerMarkdownCodeBlockProcessor("chartdown", (source, el, ctx) => {
       const slash = ctx.sourcePath.lastIndexOf("/");
       const folder = slash >= 0 ? ctx.sourcePath.slice(0, slash + 1) : "";
