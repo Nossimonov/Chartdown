@@ -108,7 +108,9 @@ export function renderHexcrawl(model: Model, body: string[]): void {
   const labelLayer: string[] = [];
   const numbersOn = model.header.get("numbers") === "on";
   const gmMode = model.mode === "gm";
-  const placer = new LabelPlacer();
+  const bounds = hexFrame(model);
+  const placer = new LabelPlacer({ w: bounds.w, h: bounds.h });
+  if (model.doc.title) placer.block(0, 0, model.doc.title.length * 10 + 30, 34);
 
   for (let row = 1; row <= rows; row++) {
     for (let col = 1; col <= cols; col++) {

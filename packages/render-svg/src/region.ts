@@ -261,7 +261,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   }
 
   // ---------- pass 2: render, markers known before any label places ----------
-  const placer = new SideLabelPlacer();
+  const placer = new SideLabelPlacer({ w, h });
+  // The title owns its corner; the compass its own (owner round five).
+  if (model.doc.title) placer.block(0, 0, model.doc.title.length * 10 + 30, 34);
+  if (model.header.get("compass") === "on") placer.block(w - 60, 10, 55, 62);
   for (const { e, r, chain } of items) {
     if (r.point) {
       const tier = tierFor(chain);

@@ -15,6 +15,17 @@ export type Anchor = "start" | "middle" | "end";
 
 export class LabelPlacer {
   protected boxes: Box[] = [];
+  private readonly bounds: { w: number; h: number } | null;
+
+  /** With bounds, candidates that would leave the viewport are rejected. */
+  constructor(bounds?: { w: number; h: number }) {
+    this.bounds = bounds ?? null;
+  }
+
+  protected inBounds(box: Box): boolean {
+    if (!this.bounds) return true;
+    return box.x >= 2 && box.y >= 2 && box.x + box.w <= this.bounds.w - 2 && box.y + box.h <= this.bounds.h - 2;
+  }
 
   /** Reserve a non-label obstacle (e.g. a glyph) so labels avoid it. */
   block(x: number, y: number, w: number, h: number): void {
@@ -30,6 +41,7 @@ export class LabelPlacer {
 
   protected tryClaim(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): boolean {
     const box = this.boxFor(x, y, textStr, fontSize, anchor, widthPx);
+    if (!this.inBounds(box)) return false;
     if (this.boxes.some((b) => intersects(b, box))) return false;
     this.boxes.push(box);
     return true;
@@ -51,6 +63,7 @@ export class LabelPlacer {
   /** Claim an explicit centered box if free (curve labels size their own). */
   claimBoxIfFree(cx: number, top: number, wpx: number, h: number): boolean {
     const box = { x: cx - wpx / 2, y: top, w: wpx, h };
+    if (!this.inBounds(box)) return false;
     if (this.boxes.some((b) => intersects(b, box))) return false;
     this.boxes.push(box);
     return true;
