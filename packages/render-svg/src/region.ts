@@ -812,31 +812,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       } else {
         const frontier = frontierFills.get(keyOf(e));
         if (frontier) {
-          // Zonal frontier: a dotted line drawn just INSIDE the zone,
-          // parallel to the fill edge — dots straddling the color boundary
-          // half-blend into both sides and the rhythm dies (owner review);
-          // on uniform ground inside the zone they read cleanly, with the
-          // fill edge itself as the crisp boundary. The topo-map treeline.
-          const lp0 = r.polyline;
-          const midI = Math.floor(lp0.length / 2);
-          const mp = lp0[midI]!;
-          const mn = lp0[Math.min(lp0.length - 1, midI + 1)]!;
-          const mpv = lp0[Math.max(0, midI - 1)]!;
-          const mlen = Math.hypot(mn.x - mpv.x, mn.y - mpv.y) || 1;
-          const nx0 = (mn.y - mpv.y) / mlen;
-          const ny0 = -(mn.x - mpv.x) / mlen;
-          const side = pip({ x: mp.x + nx0 * 4, y: mp.y + ny0 * 4 }, frontier.zonePoly) ? 1 : -1;
-          const inset = lp0.map((pt, i, arr) => {
-            const prev = arr[Math.max(0, i - 1)]!;
-            const next = arr[Math.min(arr.length - 1, i + 1)]!;
-            const dx = next.x - prev.x;
-            const dy = next.y - prev.y;
-            const len = Math.hypot(dx, dy) || 1;
-            return { x: pt.x + (dy / len) * side * 3, y: pt.y - (dx / len) * side * 3 };
-          });
+          // Zonal frontier: a dotted line ON the boundary it defines. The
+          // "solid line" of earlier rounds was never these dots misbehaving
+          // — it was separate solid strokes (the generic area outline, then
+          // the theme's edge-zone rim) drawn underneath along the same
+          // geometry; with those gone, the dots keep their cadence.
           layers.lines.push(
             el("g", { id: anchor }, titleEl,
-              el("polyline", { points: pointsAttr(inset), fill: "none", stroke: shade(frontier.fill), "stroke-width": 1.7, "stroke-dasharray": "0.2 6", opacity: 0.9, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+              el("polyline", { points: pointsAttr(r.polyline), fill: "none", stroke: shade(frontier.fill), "stroke-width": 1.7, "stroke-dasharray": "0.2 6", opacity: 0.9, "stroke-linejoin": "round", "stroke-linecap": "round" }),
             ),
           );
         } else {
