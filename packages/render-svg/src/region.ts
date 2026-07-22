@@ -724,6 +724,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const edgeW = theme.edgeWidth(chain) ?? 4;
         areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: edgeFill, stroke: shade(edgeFill), "stroke-width": 1 }));
         areaParts.push(el("polygon", { points: pointsAttr(shrinkPolygon(r.polygon, edgeW * 2)), fill: wordFill }));
+      } else if (r.alongSpans?.length) {
+        // An area whose boundary FOLLOWS features doesn't stroke itself —
+        // the followed features own their lines (the coast draws the coast,
+        // the frostline draws its dotted frontier). A solid outline here
+        // painted over the dotted line it was supposed to reveal.
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill }));
       } else {
         areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, stroke: shade(wordFill), "stroke-width": 1 }));
       }

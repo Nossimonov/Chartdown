@@ -44,8 +44,8 @@ forest "Thornmark Weald" : blob (250,730) size=100mi
 ; ZONAL (ADR 0013), scoped to THIS continent: its area follows the
 ; frostline south and the coasts north to the map edge - each landmass
 ; can carry its own frontier
-frostline "The Frostline" : path (1055,205) (1190,150) (1350,185) (1505,145)
-tundra "The White Reach" : area (1055,205) along "The Frostline" (1505,145) along fareast (1540,0) (1020,0) along eastshore
+frostline "The Frostline" : path (1075,205) (1190,150) (1350,185) (1518,145)
+tundra "The White Reach" : area (1075,205) along "The Frostline" (1518,145) along fareast (1540,0) (1020,0) along eastshore
 marsh "The Sathriss Sink" : blob (1130,855) size=130mi
 jungle "The Green Throat" : blob (1380,900) size=100mi
 ; the great lake and its outflow
