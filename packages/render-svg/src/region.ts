@@ -725,7 +725,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         if (stretches.length) {
           for (const st of stretches) {
             const len = st.hi - st.lo;
-            const { size, spacing } = fitLabel(upper, len * 0.8, 16, 8);
+            // Each copy sits AT the center of its clear stretch, modestly
+            // sized (~half the stretch) — filling the stretch edge-to-edge
+            // read as crowding the very features the split was avoiding.
+            const { size, spacing } = fitLabel(upper, len * 0.55, 16, 8);
             const m = (st.lo + st.hi) / 2;
             const tx = vertical ? cx : m;
             const ty = vertical ? m : cy;

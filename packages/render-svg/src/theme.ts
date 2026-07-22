@@ -38,12 +38,14 @@ const PATH_STROKES: Record<string, { stroke: string; dash?: string }> = {
 };
 
 const TIERS: Record<string, { r: number; font: number; weight: string }> = {
-  capital: { r: 6, font: 15, weight: "bold" },
-  city: { r: 5, font: 13, weight: "bold" },
-  town: { r: 4, font: 11, weight: "normal" },
-  village: { r: 3, font: 10, weight: "normal" },
-  hamlet: { r: 2.5, font: 9, weight: "normal" },
-  settlement: { r: 3.5, font: 10, weight: "normal" },
+  // Fonts sit well below the 18px map title — a capital is the biggest
+  // SETTLEMENT, not a rival heading (owner round eleven).
+  capital: { r: 6, font: 13, weight: "bold" },
+  city: { r: 5, font: 11, weight: "bold" },
+  town: { r: 4, font: 10, weight: "normal" },
+  village: { r: 3, font: 9, weight: "normal" },
+  hamlet: { r: 2.5, font: 8, weight: "normal" },
+  settlement: { r: 3.5, font: 9, weight: "normal" },
 };
 
 const SIDE_COLORS: Record<string, string> = {
