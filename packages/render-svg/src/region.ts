@@ -28,7 +28,7 @@ interface Resolved {
   beltW?: number;
   halfPlane?: { compass: string; of: XY[]; refKey?: string };
   /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
-  alongSpans?: { ref: string; start: number; end: number }[];
+  alongSpans?: { ref: string; refKey?: string; start: number; end: number }[];
 }
 
 export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
@@ -197,7 +197,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // between their projections — one definition, and moving the
           // feature moves the border with it.
           const spliced: XY[] = [];
-          const spans: { ref: string; start: number; end: number }[] = [];
+          const spans: { ref: string; refKey?: string; start: number; end: number }[] = [];
           for (let k = 0; k < p.args.length; k++) {
             const arg = p.args[k]!;
             if (arg.kind === "point") {
@@ -218,7 +218,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             if (prev && next) {
               const seg = lineAspect(arg.ref, arg.face, prev, next, e.line);
               if (seg) {
-                spans.push({ ref: arg.ref.value, start: spliced.length - 1, end: spliced.length + seg.length });
+                const refKey = arg.ref.form === "id" ? arg.ref.value : (byName.get(arg.ref.value) ?? slugify(arg.ref.value));
+                spans.push({ ref: arg.ref.value, refKey, start: spliced.length - 1, end: spliced.length + seg.length });
                 spliced.push(...seg);
               }
             }
@@ -354,13 +355,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     chain: string[];
   }
   const items: Item[] = [];
+  const chainByKey = new Map<string, string[]>();
   for (const e of model.entities) {
     const r = resolveEntity(e);
     const key = keyOf(e);
     resolved.set(key, r);
     if (e.name) byName.set(e.name, key);
     if (r.halfPlane && e.section === "water") waterVector = COMPASS_VECTORS[r.halfPlane.compass] ?? null;
-    items.push({ e, r, chain: model.chainOf(e.typeWord) });
+    const chain = model.chainOf(e.typeWord);
+    chainByKey.set(key, chain);
+    items.push({ e, r, chain });
   }
 
   // Paths serving as ZONAL FRONTIERS (a tundra's frostline) render in the
@@ -370,6 +374,15 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   for (const it of items) {
     if (it.r.halfPlane?.refKey && it.e.section !== "water" && it.e.archetype !== "zone") {
       frontierFills.set(it.r.halfPlane.refKey, theme.terrainFill(it.chain));
+    }
+    // Area-declared zones (a tundra following the coasts): any non-coastline
+    // path their boundary follows is likewise a zonal frontier.
+    if (it.r.alongSpans && it.e.archetype !== "zone") {
+      for (const s of it.r.alongSpans) {
+        if (!s.refKey) continue;
+        const ch = chainByKey.get(s.refKey);
+        if (ch && !ch.includes("coastline")) frontierFills.set(s.refKey, theme.terrainFill(it.chain));
+      }
     }
   }
 
@@ -393,14 +406,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // Every line is an obstacle: ridges fat, rivers and roads thin — a label
   // above a river must not land ON the road that runs beside it (the
   // Deepflow/Deep Road swap of owner round four).
-  for (const { r } of items) {
+  const beltObstacles = new Map<string, { spec: [number, number, number, number]; handle: object }[]>();
+  for (const { e, r } of items) {
     if (!r.polyline) continue;
     if (r.ridge) {
       // Low weight: the belt is soft terrain, not a wall — labels prefer
       // to stay off it but a feature ON the range keeps its name (shrunk)
       // rather than dropping it. Blocks are arc-spaced so their weighted
-      // overlaps don't SUM past the drop threshold for on-belt labels.
+      // overlaps don't SUM past the drop threshold for on-belt labels,
+      // and kept as handles so a ridge's OWN label can place on its own
+      // belt without self-rejection (region-style mountain names).
       const half = (r.beltW ?? 28) / 2 + 3;
+      const own: { spec: [number, number, number, number]; handle: object }[] = [];
       let acc = 0;
       let lastAt = -Infinity;
       for (let i = 0; i < r.polyline.length; i++) {
@@ -411,10 +428,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         }
         if (acc - lastAt >= half * 1.6) {
           const pt = r.polyline[i]!;
-          placer.block(pt.x - half, pt.y - half, half * 2, half * 2, 0.3);
+          const spec: [number, number, number, number] = [pt.x - half, pt.y - half, half * 2, half * 2];
+          own.push({ spec, handle: placer.tempBlock(spec[0], spec[1], spec[2], spec[3], 0.3) });
           lastAt = acc;
         }
       }
+      beltObstacles.set(keyOf(e), own);
     } else {
       // Every sample point: gap-free, so parallel-line labels can't slip
       // through holes between obstacle boxes (the Deepflow/Deep Road pair).
@@ -446,8 +465,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const watery = e.section === "water" || chain.some((word) => word === "sea" || word === "water");
     if (watery && !chain.includes("lake")) continue;
     const c = r.point ?? centroid(r.polygon);
-    const wpx = e.name.length * 11 * 0.58;
-    nameHomes.push(placer.tempBlock(c.x - wpx / 2, c.y - 11, wpx, 13, 0.6));
+    const wpx = e.name.length * 11 * 0.58 + 8;
+    // The home covers the label's nudge band too — a reserved spot the
+    // label can't actually use (a road crossing the centroid) would push
+    // the name into ground a curve label already took (the Lake Vael
+    // collision of owner review).
+    nameHomes.push(placer.tempBlock(c.x - wpx / 2, c.y - 26, wpx, 42, 0.6));
   }
 
   /** Point at fraction t of a polyline's arc length, with local direction. */
@@ -717,7 +740,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // The ladder reaches a third of the area each way — a forest name
           // swaps fully to the far side of a road crossing it rather than
           // brushing the road's label (the Kingswood vs the Kingsway).
-          const spot = placer.placeOrDrop(c.x, c.y, lbl, 11, "middle", [0, -bw / 5, bw / 5, -bw / 3, bw / 3]);
+          // Zone-scale areas (a coast-following tundra) get proportionally
+          // larger type: a continent-cap's name shouldn't whisper.
+          const size = Math.min(18, Math.max(11, Math.round(bw / 16)));
+          const spot = placer.placeOrDrop(c.x, c.y, lbl, size, "middle", [0, -bw / 5, bw / 5, -bw / 3, bw / 3]);
           if (!spot) return; // omit before overwriting (spec 07 §5)
           labelBuckets[3]!.push(
             text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
@@ -819,6 +845,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // candidate slots along the line, above OR below it (a road that
         // follows a river labels on the opposite side), first free slot wins
         // via the shared placer — same collision discipline as battlemaps.
+        // RIDGES label region-style instead (owner): the name sits ON the
+        // massif, along the crest, in ink that reads against the belt — a
+        // range is a biome, not a road. Its own belt blocks are lifted for
+        // the duration so it never self-rejects.
+        const isRidge = !!r.ridge;
+        const ownBelt = isRidge ? (beltObstacles.get(keyOf(e)) ?? []) : [];
+        for (const o of ownBelt) placer.release(o.handle);
+        try {
         let lp = r.polyline!;
         if (lp[0]!.x > lp[lp.length - 1]!.x) lp = [...lp].reverse();
         let pathLen = 0;
@@ -849,7 +883,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             sum += Math.abs(dA);
             signed += dA;
           }
-          const inside = (above && signed < 0) || (!above && signed > 0);
+          // On-crest (ridge) text has no inside/outside — only total bend.
+          const inside = !isRidge && ((above && signed < 0) || (!above && signed > 0));
           // Weighted to beat slot-order bias and belt brushes: a mushed
           // label is worse than an off-center or on-belt one.
           return sum * 80 + (inside ? Math.abs(signed) * 120 : 0);
@@ -867,13 +902,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // paint. Offsets clear the line's OWN obstacles (±3px thin, ±10px
           // ridge band): a label never self-rejects against the feature it
           // names, but DOES reject any OTHER line in the corridor.
-          const off = r.ridge ? (r.beltW ?? 28) / 2 + 13 : 9.5;
+          const off = isRidge ? 0 : 9.5;
           // Fine tiling (~12px per box): coarse boxes on a diagonal leave
           // diagonal gaps another diagonal label can slip through unnoticed
           // (the Broken Spine × Understone Way cross).
           const n = Math.max(3, Math.ceil(wpx / 12));
           for (const offset of slots) {
-            for (const above of [true, false]) {
+            for (const above of isRidge ? [true] : [true, false]) {
               const boxAt = (t: number): { cx: number; top: number } => {
                 const { p, dir } = alongAt(lp, t);
                 const s = above ? 1 : -1;
@@ -932,12 +967,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // NO slot could straighten it). Past a bend threshold, abandon the
         // textPath and set the name straight beside the feature instead.
         if (pick!.penalty >= 60) {
+          // Too bent for a textPath. A ridge name stays ON its massif
+          // (region-style); other features label straight beside the line.
           const midp = alongAt(lp, 0.5).p;
-          const lift = r.ridge ? (r.beltW ?? 28) / 2 + 8 : 14;
-          const spot = placer.placeOrDrop(midp.x, midp.y - lift, lbl, 10, "middle");
+          const spot = isRidge
+            ? placer.placeOrDrop(midp.x, midp.y + 3, lbl, 10, "middle", [0, -24, 24], undefined, (x, y) => {
+                const q = nearestOnPolyline(lp, { x, y });
+                return Math.hypot(q.x - x, q.y - y) <= (r.beltW ?? 28) / 2;
+              })
+            : placer.placeOrDrop(midp.x, midp.y - 14, lbl, 10, "middle");
           if (spot) {
             labelBuckets[2]!.push(
-              text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: 0.75, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+              text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, opacity: isRidge ? 0.9 : 0.75, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
             );
             return;
           }
@@ -949,9 +990,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const weight = model.labelsMode === "keyed" ? ' font-weight="bold"' : "";
         labelBuckets[2]!.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
-            `<text font-size="${pick!.size}" fill="${ink}" opacity="0.75" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
-            `<textPath href="#${pid}" startOffset="${fmt(pick!.offset * 100)}%"><tspan dy="${fmt(pick!.above ? (r.ridge ? -((r.beltW ?? 28) / 2 + 10) : -5) : r.ridge ? (r.beltW ?? 28) / 2 + 16 : 12)}">${safe}</tspan></textPath></text>`,
+            `<text font-size="${pick!.size}" fill="${ink}" opacity="${isRidge ? 0.9 : 0.75}" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="${fmt(pick!.offset * 100)}%"><tspan dy="${fmt(isRidge ? 3.5 : pick!.above ? -5 : 12)}">${safe}</tspan></textPath></text>`,
         );
+        } finally {
+          for (const o of ownBelt) o.handle = placer.tempBlock(o.spec[0], o.spec[1], o.spec[2], o.spec[3], 0.3);
+        }
         });
       }
       continue;
