@@ -4,8 +4,15 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Fixed
+
+- Freestanding `wall`/`fence` edge runs and `pillar` cells now render (they always blocked light; now they're visible — #62, found by an agent dogfooding the MCP server)
+- Vocabulary facet defaults are honored: a bare `campfire` glows at its stdlib `light=20ft`, and derived words (`hearth : campfire`) keep their base's glyph and light on both cell and footprint placements; footprint `stairs` show treads (#64)
+- `legend: on` renders the spec 07 §4 generated legend — terrain swatches, path/barrier styles, feature glyphs from the words actually used (#63)
+
 ### Added
 
+- **`@chartdown/mcp`** — MCP server giving agents the full authoring loop: `chartdown_spec` (the digest), `chartdown_check` (fail-loud validation citing spec sections), `chartdown_render` (PNG image by default via pure-WASM rasterization with a vendored font — no browser, no native binaries; SVG on request), `chartdown_uvtt` (VTT geometry). ADR 0011 records the runtime-dependency boundary.
 - **LLM discoverability**: the site serves [`/llms.txt`](https://nossimonov.github.io/Chartdown/llms.txt) and [`/llms-full.txt`](https://nossimonov.github.io/Chartdown/llms-full.txt) (the spec digest verbatim); `@chartdown/core` ships `digest.md` inside the tarball; READMEs signpost the agent bootstrap path.
 
 ## [0.2.0] — 2026-07-21

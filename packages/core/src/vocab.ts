@@ -176,6 +176,22 @@ export class VocabTable {
   has(word: string): boolean {
     return this.entries.has(word);
   }
+
+  /**
+   * First facet pair for `key` along the derivation chain — vocabulary facets
+   * are overridable defaults (spec 06 §2: `campfire : feature light=20ft`
+   * means every campfire glows unless the entity says otherwise).
+   */
+  facetOf(word: string, key: string): string | undefined {
+    let current = this.entries.get(word);
+    while (current) {
+      const pair = current.pairs.find((p) => p.key === key);
+      if (pair) return pair.value;
+      if (current.baseIsArchetype) return undefined;
+      current = this.entries.get(current.base);
+    }
+    return undefined;
+  }
 }
 
 /** Parse one `[vocab]` line: `word : (archetype | word) [pairs/flags]`. */

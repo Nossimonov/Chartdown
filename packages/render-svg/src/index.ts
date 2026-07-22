@@ -10,6 +10,7 @@ import { parse, type AddressRange, type Diagnostic, type DocumentNode, type Enti
 import { battlemapFrame, renderBattlemap } from "./battlemap";
 import { titleBand } from "./grid";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
+import { buildLegend } from "./legend";
 import { buildModel, type RenderMode } from "./model";
 import { renderRegion } from "./region";
 import { INK, PAPER, Theme } from "./theme";
@@ -83,6 +84,14 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
   }
 
   // Furniture (spec 07 §4)
+  if (model.header.get("legend") === "on") {
+    const legend = buildLegend(model, w);
+    if (legend.height > 0) {
+      const band = el("rect", { x: 0, y: 0, width: w, height: legend.height, fill: theme.surface("paper", "fill", PAPER) });
+      body.push(`<g transform="translate(0 ${fmt(h)})">${band}${legend.svg}</g>`);
+      h += legend.height;
+    }
+  }
   if (doc.title) {
     body.push(text(doc.title, { x: 14, y: 22, "font-size": 16, "font-weight": "bold", fill: INK, "font-family": "sans-serif" }));
   }

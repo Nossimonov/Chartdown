@@ -83,7 +83,8 @@ export function exportUvtt(doc: DocumentNode, options: UvttOptions = {}): UvttRe
 
   const lights: Record<string, unknown>[] = [];
   for (const e of panelModel.entities) {
-    const light = pairOf(e.pairs, "light");
+    // Entity pair overrides the vocab facet default (#64, spec 06 §2).
+    const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
     if (light === undefined) continue;
     const address = e.placements.find((p) => p.kind === "address");
     const range = e.placements.find((p) => p.kind === "range");

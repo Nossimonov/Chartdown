@@ -50,6 +50,21 @@ await build({
   logLevel: "info",
 });
 
+// MCP server (issue #58): node ESM binary; the SDK and zod stay external
+// (runtime deps), everything else — including the spec digest — bundles in.
+await build({
+  entryPoints: ["packages/mcp/src/mcp.ts"],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@modelcontextprotocol/sdk", "@modelcontextprotocol/sdk/*", "zod", "@resvg/resvg-wasm"],
+  alias: sourceAliases,
+  loader: { ".md": "text" },
+  banner: { js: "#!/usr/bin/env node" },
+  outfile: "packages/mcp/dist/mcp.js",
+  logLevel: "info",
+});
+
 // Obsidian plugin (issue #38): CommonJS main.js with the `obsidian` module
 // external (the app provides it); dist/ is the complete sideloadable folder.
 await build({
