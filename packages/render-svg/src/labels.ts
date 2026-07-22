@@ -40,6 +40,15 @@ export class LabelPlacer {
   }
 
   /**
+   * Claim a candidate box if free; returns whether it was claimed. For label
+   * forms the placer can't position itself (e.g. textPath along a curve) —
+   * the caller proposes, the placer arbitrates and remembers.
+   */
+  claimIfFree(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): boolean {
+    return this.tryClaim(x, y, textStr, fontSize, anchor, widthPx);
+  }
+
+  /**
    * Line-feature labels: candidates are points ALONG the feature (mid-course
    * first, sliding outward); the first free one wins. Sliding along the line
    * keeps the label attached to what it names — a vertical nudge off a road

@@ -14,7 +14,7 @@ import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor } from "./theme";
 import {
-  blob, catmullRom, COMPASS_VECTORS, el, fmt, hashSeed, measureToNumber,
+  blob, catmullRom, COMPASS_VECTORS, el, fmt, hashSeed, hashString, measureToNumber,
   nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
 } from "./util";
 
@@ -53,6 +53,52 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return null;
   };
 
+  // Finished coastlines by their DECLARED points: water polygons whose edges
+  // run through the same points reuse the coastline's exact curve, so the sea
+  // fill and the shore line cannot mismatch (owner round-three note).
+  const coastCurves: { raw: XY[]; finished: XY[] }[] = [];
+  // Ordinals for identity-keyed blobs: nth anonymous blob of a given
+  // word+size keeps its shape when MOVED (shape belongs to the thing, not
+  // the place); only inserting an identical sibling before it renumbers.
+  const blobOrdinals = new Map<string, number>();
+
+  const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
+  const runMatches = (pts: XY[], start: number, raw: XY[], reversed: boolean): boolean => {
+    if (start + raw.length > pts.length) return false;
+    for (let k = 0; k < raw.length; k++) {
+      const r = reversed ? raw[raw.length - 1 - k]! : raw[k]!;
+      if (!near(pts[start + k]!, r)) return false;
+    }
+    return true;
+  };
+  /** Sea boundary: matched coastline runs use the finished curve; the rest stay straight. */
+  const assembleWaterBoundary = (pts: XY[]): XY[] => {
+    const out: XY[] = [];
+    let i = 0;
+    while (i < pts.length) {
+      let advanced = false;
+      for (const c of coastCurves) {
+        if (c.raw.length >= 2 && runMatches(pts, i, c.raw, false)) {
+          out.push(...c.finished);
+          i += c.raw.length;
+          advanced = true;
+          break;
+        }
+        if (c.raw.length >= 2 && runMatches(pts, i, c.raw, true)) {
+          out.push(...[...c.finished].reverse());
+          i += c.raw.length;
+          advanced = true;
+          break;
+        }
+      }
+      if (!advanced) {
+        out.push(pts[i]!);
+        i++;
+      }
+    }
+    return out;
+  };
+
   const resolveEntity = (e: EntityNode): Resolved => {
     const chain = model.chainOf(e.typeWord);
     const out: Resolved = {};
@@ -68,18 +114,23 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         if (p.shape === "blob") {
           const center = pts[0] ?? out.point ?? { x: w / 2, y: h / 2 };
           const radius = (measureToNumber(pairOf(e.pairs, "size") ?? "40") / 2) * scale;
-          // Keyed by the blob's own geometry + doc seed: same center+size →
-          // same shape; different center → different shape; edits elsewhere
-          // NEVER reshape it. Splined closed for a soft outline.
-          out.polygon = catmullRom(blob(center, radius, rng(hashSeed(model.seed, center.x, center.y, radius))), 5, true);
+          // Identity-keyed shape: id (or word) + size + doc seed — MOVING a
+          // blob slides the same shape (owner round three); same-size
+          // anonymous siblings differ by ordinal. Never keyed by position or
+          // by document order at large.
+          const idKey = `${entityAnchor(e) ?? e.typeWord ?? "blob"}:${radius}`;
+          const n = blobOrdinals.get(idKey) ?? 0;
+          blobOrdinals.set(idKey, n + 1);
+          out.polygon = catmullRom(blob(center, radius, rng(hashSeed(model.seed, radius, hashString(idKey), n))), 5, true);
           out.point = center;
           out.radius = radius;
         } else if (p.shape === "area") {
-          out.polygon = pts;
+          out.polygon = e.section === "water" ? assembleWaterBoundary(pts) : pts;
         } else {
           // The TRUE curve: a spline through the declared points, no noise.
           out.polyline = catmullRom(pts, 8);
           out.ridge = p.shape === "ridge";
+          if (chain.includes("coastline")) coastCurves.push({ raw: pts, finished: out.polyline });
         }
       } else if (p.kind === "relational") {
         switch (p.form) {
@@ -220,6 +271,35 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       o.target.form === "name" ? o.target.value === e.name : e.ids.includes(o.target.value),
     );
 
+  // Ridges are fat obstacles — labels must not cross them (owner round three).
+  for (const { r } of items) {
+    if (r.polyline && r.ridge) {
+      for (let i = 0; i < r.polyline.length; i += 4) {
+        const pt = r.polyline[i]!;
+        placer.block(pt.x - 9, pt.y - 9, 18, 18);
+      }
+    }
+  }
+
+  /** Point at fraction t of a polyline's arc length, with local direction. */
+  const alongAt = (pts: XY[], t: number): { p: XY; dir: XY } => {
+    let total = 0;
+    for (let i = 0; i < pts.length - 1; i++) total += Math.hypot(pts[i + 1]!.x - pts[i]!.x, pts[i + 1]!.y - pts[i]!.y);
+    let want = total * t;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const d = Math.hypot(pts[i + 1]!.x - pts[i]!.x, pts[i + 1]!.y - pts[i]!.y);
+      if (want <= d && d > 0) {
+        const f = want / d;
+        return {
+          p: { x: pts[i]!.x + (pts[i + 1]!.x - pts[i]!.x) * f, y: pts[i]!.y + (pts[i + 1]!.y - pts[i]!.y) * f },
+          dir: { x: (pts[i + 1]!.x - pts[i]!.x) / d, y: (pts[i + 1]!.y - pts[i]!.y) / d },
+        };
+      }
+      want -= d;
+    }
+    return { p: pts[pts.length - 1]!, dir: { x: 1, y: 0 } };
+  };
+
   // Paint order (#76): water first, then realm tints (they shade land AND
   // territorial waters), then terrain — a nation's tint must never hide its
   // forests, and an island must rise above the sea that surrounds it.
@@ -262,11 +342,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water")) {
         const isLake = chain.includes("lake");
         const waterFill = theme.terrainFill(isLake ? ["lake"] : ["sea"]);
-        // Splined shore, NO stroke: declared coastline paths own the shore
-        // line (a stroked raw polygon beside a splined coastline drew the
-        // messy double border the owner flagged). Lakes sit on land: terrain
+        // The boundary already reuses coastline curves (assembleWaterBoundary)
+        // — no stroke and no re-spline: the declared coastline owns the shore
+        // line and the fill follows it exactly. Lakes sit on land: terrain
         // layer. Seas are the floor: water layer.
-        const shore = r.polygon.length > 2 ? catmullRom(r.polygon, 6, true) : r.polygon;
+        const shore = r.polygon;
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
             el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
@@ -309,6 +389,25 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               x: c.x, y, "font-size": 15, "letter-spacing": 5, fill: "#6b5d4a",
               opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
             }),
+          );
+        }
+        continue;
+      }
+      // Islands are LAND (owner round three): paper surface and a coastline
+      // stroke, exactly like the continents — not a tinted blob.
+      if (chain.includes("island")) {
+        const coast = theme.pathStroke(["coastline"]);
+        layers.areas.push(
+          el("g", { id: anchor }, titleEl,
+            el("polygon", { points: pointsAttr(r.polygon), fill: theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 2, "stroke-linejoin": "round" }),
+          ),
+        );
+        if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+          const c = r.point ?? centroid(r.polygon);
+          const lbl = labelTextFor(model, e) ?? e.name;
+          const y = placer.place(c.x, c.y, lbl, 10, "middle");
+          layers.labels.push(
+            text(lbl, { x: c.x, y, "font-size": 10, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
           );
         }
         continue;
@@ -371,10 +470,25 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const lbl = labelTextFor(model, e) ?? e.name;
-        // The label FOLLOWS the curve it names (owner review: stacked flat
-        // labels dissociate from their lines) — left-to-right for legibility.
+        // The label FOLLOWS the curve it names, but placement is arbitrated:
+        // candidate slots along the line, above OR below it (a road that
+        // follows a river labels on the opposite side), first free slot wins
+        // via the shared placer — same collision discipline as battlemaps.
         let lp = r.polyline;
         if (lp[0]!.x > lp[lp.length - 1]!.x) lp = [...lp].reverse();
+        const wpx = lbl.length * 10 * 0.58;
+        let chosen: { offset: number; dy: number } | null = null;
+        for (const offset of [0.38, 0.18, 0.6, 0.78]) {
+          for (const dy of [-4, 11]) {
+            const { p } = alongAt(lp, offset + (wpx / 2 / 1600));
+            if (placer.claimIfFree(p.x, dy < 0 ? p.y - 6 : p.y + 9, lbl, 10, "middle", wpx)) {
+              chosen = { offset, dy };
+              break;
+            }
+          }
+          if (chosen) break;
+        }
+        const pick = chosen ?? { offset: 0.38, dy: -4 };
         const pid = `cdlp-${model.doc.docId}-${pathLabelCount++}`;
         const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
         const safe = lbl.replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -382,7 +496,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         layers.labels.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
             `<text font-size="10" fill="${ink}" opacity="0.75" font-style="italic"${weight} font-family="sans-serif">` +
-            `<textPath href="#${pid}" startOffset="38%"><tspan dy="-4">${safe}</tspan></textPath></text>`,
+            `<textPath href="#${pid}" startOffset="${fmt(pick.offset * 100)}%"><tspan dy="${pick.dy}">${safe}</tspan></textPath></text>`,
         );
       }
       continue;

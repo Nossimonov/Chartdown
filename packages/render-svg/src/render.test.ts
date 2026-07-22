@@ -380,8 +380,8 @@ describe("levels (spec 06 §8)", () => {
     expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
     // the sea is FULL water fill (not the faint zone tint)
     expect(svg).toMatch(/polygon[^/]*fill="#b9d3e6"/);
-    // the island rises above it in the land tone
-    expect(svg).toContain('fill="#e9e2cc"');
+    // the island rises above it as LAND: paper surface, coastline stroke
+    expect(svg).toMatch(/fill="#f9f5ea" stroke="#8fa8b8"/);
     // realm tint paints beneath terrain: its dashed boundary appears before the forest fill
     const realmAt = svg.indexOf('stroke-dasharray="10 6"');
     const forestAt = svg.indexOf("#a9c79c");

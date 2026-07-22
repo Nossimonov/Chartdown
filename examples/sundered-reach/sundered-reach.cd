@@ -11,31 +11,31 @@ seed: 7
 island : terrain
 
 [water]
-; shorelines first — rivers and ports anchor to them. The coasts tear
-; deepest where the sundered range plunges into the sea.
-coastline westshore : from (600,0) via (570,170) (630,360) (585,505) (545,690) (595,875) to (520,1000)
-coastline eastshore : from (1020,0) via (1080,220) (990,430) (1042,548) (1000,720) (1055,865) to (1080,1000)
+; shorelines first — rivers and ports anchor to them. Both coasts tear
+; deepest exactly where the sundered range meets the sea.
+coastline westshore : from (600,0) via (565,150) (625,280) (588,368) (552,540) (598,750) (545,900) to (520,1000)
+coastline eastshore : from (1020,0) via (1078,220) (995,470) (1030,618) (998,760) (1052,880) to (1080,1000)
 coastline farwest : from (60,0) via (100,300) (40,620) (110,850) to (80,1000)
 coastline fareast : from (1540,0) via (1500,280) (1560,540) (1490,800) to (1550,1000)
-; bounded seas (polygon water): the strait IS the cataclysm's monument
-sea "The Sundered Sea" : area (600,0) (570,170) (630,360) (585,505) (545,690) (595,875) (520,1000) (1080,1000) (1055,865) (1000,720) (1042,548) (990,430) (1080,220) (1020,0)
+; bounded seas: boundaries reuse the coastline curves point-for-point
+sea "The Sundered Sea" : area (600,0) (565,150) (625,280) (588,368) (552,540) (598,750) (545,900) (520,1000) (1080,1000) (1052,880) (998,760) (1030,618) (995,470) (1078,220) (1020,0)
 sea "The Whalegrey Deep" : area (0,0) (60,0) (100,300) (40,620) (110,850) (80,1000) (0,1000)
 sea "The Dawnwater" : area (1600,0) (1540,0) (1500,280) (1560,540) (1490,800) (1550,1000) (1600,1000)
 
 [terrain]
-; ONE broken range on ONE line: the Spine of Aum runs northwest-to-sea,
-; the strait severs it, and the Broken Spine carries the same line on -
-; the archipelago is its drowned crest
-mountains westspine "The Spine of Aum" : ridge (240,170) (420,320) (555,465)
-mountains eastspine "The Broken Spine" : ridge (1042,552) (1190,675) (1345,795)
+; ONE broken range on ONE line (240,170)->(1345,795): the Spine of Aum
+; dies at the western tear, the drowned crest carries the line through
+; the strait, and the Broken Spine rises from the eastern tear
+mountains westspine "The Spine of Aum" : ridge (240,170) (410,265) (588,368)
+mountains eastspine "The Broken Spine" : ridge (1030,618) (1185,706) (1345,795)
 mountains spur "The Vakh Teeth" : ridge (170,120) (290,180) (410,150)
-; the drowned crest - the elvish archipelago along the sundered line
-island "Skarnholt" : blob (648,482) size=32mi
-island : blob (712,496) size=22mi
-island "Ilvarien Isle" : blob (790,514) size=58mi
-island : blob (869,528) size=24mi
-island "Vessel Isle" : blob (948,540) size=34mi
-island "Thornshoal" : blob (735,585) size=20mi
+; the drowned crest - the elvish archipelago, colinear with both spines
+island "Skarnholt" : blob (655,406) size=32mi
+island : blob (722,444) size=22mi
+island "Ilvarien Isle" : blob (795,486) size=58mi
+island : blob (868,527) size=24mi
+island "Vessel Isle" : blob (945,570) size=34mi
+island "Thornshoal" : blob (700,530) size=20mi
 ; forests of the west
 forest "The Kingswood" : blob (280,430) size=120mi
 forest "Thornmark Weald" : blob (250,730) size=100mi
@@ -47,48 +47,48 @@ jungle "The Green Throat" : blob (1380,900) size=100mi
 lake "Lake Vael" : blob (350,530) size=70mi
 
 [paths]
-river vael "The Vael" : from westspine at (420,320) via (375,430) to "Lake Vael"
+river vael "The Vael" : from westspine at (410,265) via (370,400) to "Lake Vael"
 river serren "The Serren" : from "Lake Vael" via (240,590) (150,610) to farwest at (70,640)
-river coldrun "The Coldrun" : from westspine at (300,230) via (430,180) (540,150) to westshore at (585,120)
-river sathwater "The Sathwater" : from eastspine at (1120,615) via (1100,740) to "The Sathriss Sink"
-river deepflow "The Deepflow" : from eastspine at (1190,675) via (1330,570) (1450,480) to fareast at (1520,460)
-river reedrun "The Reedrun" : from eastspine at (1080,580) via (1030,640) to eastshore at (1005,700)
+river coldrun "The Coldrun" : from westspine at (320,215) via (450,160) (540,120) to westshore at (580,100)
+river sathwater "The Sathwater" : from eastspine at (1100,658) via (1080,760) to "The Sathriss Sink"
+river deepflow "The Deepflow" : from eastspine at (1185,706) via (1330,590) (1450,490) to fareast at (1520,470)
+river reedrun "The Reedrun" : from eastspine at (1080,646) via (1025,700) to eastshore at (1002,752)
 
 [settlements]
 capital corven "Corven" : (300,340) link="lore/corven.md"
 capital marrowgate "Marrowgate" : (330,700)
-town "Fairhaven" : on westshore at (600,300)
-port "Tornquay" : on westshore at (560,640)
+town "Fairhaven" : on westshore at (610,240)
+port "Tornquay" : on westshore at (570,650)
 capital ghorvakh "Ghor Vakh Hold" : (230,90)
-capital khundrumgate "Khundrum Gate" : (1250,660)
-town "Deepwatch" : on fareast at (1510,450)
+capital khundrumgate "Khundrum Gate" : (1255,645)
+town "Deepwatch" : on fareast at (1512,460)
 capital ssurath "Ssurath" : (1090,810)
-town "Reedhome" : on eastshore at (1010,705)
-capital ilvarien "Ilvarien" : (790,514)
+town "Reedhome" : on eastshore at (1045,858)
+capital ilvarien "Ilvarien" : (795,486)
 
 [paths]
 road kingsway "The Long Kingsway" : from "Corven" via (330,480) (350,600) to "Marrowgate"
 trail "The Vakh Path" : from "Ghor Vakh Hold" via (280,220) to "Corven"
-pass "Aumgap Pass" : from (380,260) to (455,380)
+pass "Aumgap Pass" : from (310,160) to (370,310)
 road stoneway "The Understone Way" : from "Khundrum Gate" via (1180,740) to "Ssurath"
-road "The Deep Road" : from "Khundrum Gate" via (1340,560) (1450,470) to "Deepwatch"
+road "The Deep Road" : from "Khundrum Gate" via (1340,570) (1450,480) to "Deepwatch"
 
 [features]
-ruin "The Drowned Throne" : (825,470) gm="The old world's capital. What sleeps beneath still dreams of unity."
-ruin "Elder Aum's Seat" : (430,330)
-ruin "The Echo Stair" : (1150,640)
-landmark "The Sundering Stone" : (700,545)
+ruin "The Drowned Throne" : (860,540) gm="The old world's capital. What sleeps beneath still dreams of unity."
+ruin "Elder Aum's Seat" : (390,300)
+ruin "The Echo Stair" : (1140,680)
+landmark "The Sundering Stone" : (700,430)
 
 [realms]
-realm "Valemark" : area (110,240) (420,140) (560,300) (585,505) (350,530) (160,600) (100,320)
-realm "Carrowen" : area (160,600) (350,530) (585,505) (545,690) (595,875) (520,990) (115,990) (110,850)
+realm "Valemark" : area (110,240) (240,170) (410,265) (588,368) (552,540) (350,530) (160,600) (100,320)
+realm "Carrowen" : area (160,600) (350,530) (552,540) (598,750) (545,900) (520,990) (115,990) (110,850)
 realm "Ghor Vakh" : area (85,30) (560,30) (565,165) (410,150) (290,180) (170,120) (100,85)
-realm "Khundrum" : area (1025,15) (1530,15) (1495,285) (1555,535) (1350,790) (1190,672) (1044,556) (1082,222)
-realm "Sathriss" : area (1002,725) (1150,752) (1345,798) (1487,802) (1540,985) (1085,985) (1058,862)
-realm "Ilvarien" : area (620,430) (980,485) (990,600) (640,560)
+realm "Khundrum" : area (1025,15) (1530,15) (1495,285) (1555,535) (1345,790) (1185,706) (1032,620) (1078,222)
+realm "Sathriss" : area (998,762) (1150,780) (1345,798) (1490,802) (1540,985) (1085,985) (1054,880)
+realm "Ilvarien" : area (615,350) (950,520) (935,645) (600,470)
 border : along kingsway gm="The Accord line - contested at every ford."
 border : along westspine
 border : along eastspine
 
 [labels]
-"The Sundered Sea" : sprawl (800,120)..(830,360)
+"The Sundered Sea" : sprawl (770,110)..(800,330)

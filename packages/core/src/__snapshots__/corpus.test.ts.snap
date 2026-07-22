@@ -4182,28 +4182,33 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 570,
-                  "y": 170,
+                  "x": 565,
+                  "y": 150,
                 },
                 {
                   "kind": "point",
-                  "x": 630,
-                  "y": 360,
+                  "x": 625,
+                  "y": 280,
                 },
                 {
                   "kind": "point",
-                  "x": 585,
-                  "y": 505,
+                  "x": 588,
+                  "y": 368,
+                },
+                {
+                  "kind": "point",
+                  "x": 552,
+                  "y": 540,
+                },
+                {
+                  "kind": "point",
+                  "x": 598,
+                  "y": 750,
                 },
                 {
                   "kind": "point",
                   "x": 545,
-                  "y": 690,
-                },
-                {
-                  "kind": "point",
-                  "x": 595,
-                  "y": 875,
+                  "y": 900,
                 },
               ],
             },
@@ -4247,28 +4252,28 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 1080,
+                  "x": 1078,
                   "y": 220,
                 },
                 {
                   "kind": "point",
-                  "x": 990,
-                  "y": 430,
+                  "x": 995,
+                  "y": 470,
                 },
                 {
                   "kind": "point",
-                  "x": 1042,
-                  "y": 548,
+                  "x": 1030,
+                  "y": 618,
                 },
                 {
                   "kind": "point",
-                  "x": 1000,
-                  "y": 720,
+                  "x": 998,
+                  "y": 760,
                 },
                 {
                   "kind": "point",
-                  "x": 1055,
-                  "y": 865,
+                  "x": 1052,
+                  "y": 880,
                 },
               ],
             },
@@ -4409,28 +4414,33 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 570,
-                  "y": 170,
+                  "x": 565,
+                  "y": 150,
                 },
                 {
                   "kind": "point",
-                  "x": 630,
-                  "y": 360,
+                  "x": 625,
+                  "y": 280,
                 },
                 {
                   "kind": "point",
-                  "x": 585,
-                  "y": 505,
+                  "x": 588,
+                  "y": 368,
+                },
+                {
+                  "kind": "point",
+                  "x": 552,
+                  "y": 540,
+                },
+                {
+                  "kind": "point",
+                  "x": 598,
+                  "y": 750,
                 },
                 {
                   "kind": "point",
                   "x": 545,
-                  "y": 690,
-                },
-                {
-                  "kind": "point",
-                  "x": 595,
-                  "y": 875,
+                  "y": 900,
                 },
                 {
                   "kind": "point",
@@ -4444,27 +4454,27 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 1055,
-                  "y": 865,
+                  "x": 1052,
+                  "y": 880,
                 },
                 {
                   "kind": "point",
-                  "x": 1000,
-                  "y": 720,
+                  "x": 998,
+                  "y": 760,
                 },
                 {
                   "kind": "point",
-                  "x": 1042,
-                  "y": 548,
+                  "x": 1030,
+                  "y": 618,
                 },
                 {
                   "kind": "point",
-                  "x": 990,
-                  "y": 430,
+                  "x": 995,
+                  "y": 470,
                 },
                 {
                   "kind": "point",
-                  "x": 1080,
+                  "x": 1078,
                   "y": 220,
                 },
                 {
@@ -4632,13 +4642,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 420,
-                  "y": 320,
+                  "x": 410,
+                  "y": 265,
                 },
                 {
                   "kind": "point",
-                  "x": 555,
-                  "y": 465,
+                  "x": 588,
+                  "y": 368,
                 },
               ],
               "kind": "shape",
@@ -4668,13 +4678,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 1042,
-                  "y": 552,
+                  "x": 1030,
+                  "y": 618,
                 },
                 {
                   "kind": "point",
-                  "x": 1190,
-                  "y": 675,
+                  "x": 1185,
+                  "y": 706,
                 },
                 {
                   "kind": "point",
@@ -4753,8 +4763,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 648,
-                  "y": 482,
+                  "x": 655,
+                  "y": 406,
                 },
               ],
               "kind": "shape",
@@ -4787,8 +4797,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 712,
-                  "y": 496,
+                  "x": 722,
+                  "y": 444,
                 },
               ],
               "kind": "shape",
@@ -4821,8 +4831,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 790,
-                  "y": 514,
+                  "x": 795,
+                  "y": 486,
                 },
               ],
               "kind": "shape",
@@ -4855,8 +4865,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 869,
-                  "y": 528,
+                  "x": 868,
+                  "y": 527,
                 },
               ],
               "kind": "shape",
@@ -4889,8 +4899,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 948,
-                  "y": 540,
+                  "x": 945,
+                  "y": 570,
                 },
               ],
               "kind": "shape",
@@ -4923,8 +4933,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 735,
-                  "y": 585,
+                  "x": 700,
+                  "y": 530,
                 },
               ],
               "kind": "shape",
@@ -5173,8 +5183,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 420,
-                  "y": 320,
+                  "x": 410,
+                  "y": 265,
                 },
               },
               "kind": "relational",
@@ -5188,8 +5198,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 375,
-                  "y": 430,
+                  "x": 370,
+                  "y": 400,
                 },
               ],
             },
@@ -5278,8 +5288,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 300,
-                  "y": 230,
+                  "x": 320,
+                  "y": 215,
                 },
               },
               "kind": "relational",
@@ -5291,20 +5301,20 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 585,
-                  "y": 120,
+                  "x": 580,
+                  "y": 100,
                 },
               },
               "via": [
                 {
                   "kind": "point",
-                  "x": 430,
-                  "y": 180,
+                  "x": 450,
+                  "y": 160,
                 },
                 {
                   "kind": "point",
                   "x": 540,
-                  "y": 150,
+                  "y": 120,
                 },
               ],
             },
@@ -5338,8 +5348,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 1120,
-                  "y": 615,
+                  "x": 1100,
+                  "y": 658,
                 },
               },
               "kind": "relational",
@@ -5353,8 +5363,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "via": [
                 {
                   "kind": "point",
-                  "x": 1100,
-                  "y": 740,
+                  "x": 1080,
+                  "y": 760,
                 },
               ],
             },
@@ -5388,8 +5398,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 1190,
-                  "y": 675,
+                  "x": 1185,
+                  "y": 706,
                 },
               },
               "kind": "relational",
@@ -5402,19 +5412,19 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 "point": {
                   "kind": "point",
                   "x": 1520,
-                  "y": 460,
+                  "y": 470,
                 },
               },
               "via": [
                 {
                   "kind": "point",
                   "x": 1330,
-                  "y": 570,
+                  "y": 590,
                 },
                 {
                   "kind": "point",
                   "x": 1450,
-                  "y": 480,
+                  "y": 490,
                 },
               ],
             },
@@ -5449,7 +5459,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 "point": {
                   "kind": "point",
                   "x": 1080,
-                  "y": 580,
+                  "y": 646,
                 },
               },
               "kind": "relational",
@@ -5461,15 +5471,15 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 "point": {
                   "kind": "point",
-                  "x": 1005,
-                  "y": 700,
+                  "x": 1002,
+                  "y": 752,
                 },
               },
               "via": [
                 {
                   "kind": "point",
-                  "x": 1030,
-                  "y": 640,
+                  "x": 1025,
+                  "y": 700,
                 },
               ],
             },
@@ -5560,8 +5570,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "kind": "relational",
               "point": {
                 "kind": "point",
-                "x": 600,
-                "y": 300,
+                "x": 610,
+                "y": 240,
               },
               "ref": {
                 "form": "id",
@@ -5592,8 +5602,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "kind": "relational",
               "point": {
                 "kind": "point",
-                "x": 560,
-                "y": 640,
+                "x": 570,
+                "y": 650,
               },
               "ref": {
                 "form": "id",
@@ -5648,8 +5658,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "placements": [
             {
               "kind": "point",
-              "x": 1250,
-              "y": 660,
+              "x": 1255,
+              "y": 645,
             },
           ],
           "section": "settlements",
@@ -5674,8 +5684,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "kind": "relational",
               "point": {
                 "kind": "point",
-                "x": 1510,
-                "y": 450,
+                "x": 1512,
+                "y": 460,
               },
               "ref": {
                 "form": "id",
@@ -5731,8 +5741,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "kind": "relational",
               "point": {
                 "kind": "point",
-                "x": 1010,
-                "y": 705,
+                "x": 1045,
+                "y": 858,
               },
               "ref": {
                 "form": "id",
@@ -5762,8 +5772,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "placements": [
             {
               "kind": "point",
-              "x": 790,
-              "y": 514,
+              "x": 795,
+              "y": 486,
             },
           ],
           "section": "settlements",
@@ -5890,16 +5900,16 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "from": {
                 "at": {
                   "kind": "point",
-                  "x": 380,
-                  "y": 260,
+                  "x": 310,
+                  "y": 160,
                 },
               },
               "kind": "relational",
               "to": {
                 "at": {
                   "kind": "point",
-                  "x": 455,
-                  "y": 380,
+                  "x": 370,
+                  "y": 310,
                 },
               },
               "via": [],
@@ -5988,12 +5998,12 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 {
                   "kind": "point",
                   "x": 1340,
-                  "y": 560,
+                  "y": 570,
                 },
                 {
                   "kind": "point",
                   "x": 1450,
-                  "y": 470,
+                  "y": 480,
                 },
               ],
             },
@@ -6031,8 +6041,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "placements": [
             {
               "kind": "point",
-              "x": 825,
-              "y": 470,
+              "x": 860,
+              "y": 540,
             },
           ],
           "section": "features",
@@ -6054,8 +6064,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "placements": [
             {
               "kind": "point",
-              "x": 430,
-              "y": 330,
+              "x": 390,
+              "y": 300,
             },
           ],
           "section": "features",
@@ -6077,8 +6087,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
           "placements": [
             {
               "kind": "point",
-              "x": 1150,
-              "y": 640,
+              "x": 1140,
+              "y": 680,
             },
           ],
           "section": "features",
@@ -6101,7 +6111,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
             {
               "kind": "point",
               "x": 700,
-              "y": 545,
+              "y": 430,
             },
           ],
           "section": "features",
@@ -6139,18 +6149,23 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 420,
-                  "y": 140,
+                  "x": 240,
+                  "y": 170,
                 },
                 {
                   "kind": "point",
-                  "x": 560,
-                  "y": 300,
+                  "x": 410,
+                  "y": 265,
                 },
                 {
                   "kind": "point",
-                  "x": 585,
-                  "y": 505,
+                  "x": 588,
+                  "y": 368,
+                },
+                {
+                  "kind": "point",
+                  "x": 552,
+                  "y": 540,
                 },
                 {
                   "kind": "point",
@@ -6203,18 +6218,18 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 585,
-                  "y": 505,
+                  "x": 552,
+                  "y": 540,
+                },
+                {
+                  "kind": "point",
+                  "x": 598,
+                  "y": 750,
                 },
                 {
                   "kind": "point",
                   "x": 545,
-                  "y": 690,
-                },
-                {
-                  "kind": "point",
-                  "x": 595,
-                  "y": 875,
+                  "y": 900,
                 },
                 {
                   "kind": "point",
@@ -6336,22 +6351,22 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 1350,
+                  "x": 1345,
                   "y": 790,
                 },
                 {
                   "kind": "point",
-                  "x": 1190,
-                  "y": 672,
+                  "x": 1185,
+                  "y": 706,
                 },
                 {
                   "kind": "point",
-                  "x": 1044,
-                  "y": 556,
+                  "x": 1032,
+                  "y": 620,
                 },
                 {
                   "kind": "point",
-                  "x": 1082,
+                  "x": 1078,
                   "y": 222,
                 },
               ],
@@ -6380,13 +6395,13 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 1002,
-                  "y": 725,
+                  "x": 998,
+                  "y": 762,
                 },
                 {
                   "kind": "point",
                   "x": 1150,
-                  "y": 752,
+                  "y": 780,
                 },
                 {
                   "kind": "point",
@@ -6395,7 +6410,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 1487,
+                  "x": 1490,
                   "y": 802,
                 },
                 {
@@ -6410,8 +6425,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 1058,
-                  "y": 862,
+                  "x": 1054,
+                  "y": 880,
                 },
               ],
               "kind": "shape",
@@ -6439,23 +6454,23 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 620,
-                  "y": 430,
+                  "x": 615,
+                  "y": 350,
                 },
                 {
                   "kind": "point",
-                  "x": 980,
-                  "y": 485,
+                  "x": 950,
+                  "y": 520,
                 },
                 {
                   "kind": "point",
-                  "x": 990,
-                  "y": 600,
+                  "x": 935,
+                  "y": 645,
                 },
                 {
                   "kind": "point",
-                  "x": 640,
-                  "y": 560,
+                  "x": 600,
+                  "y": 470,
                 },
               ],
               "kind": "shape",
@@ -6567,14 +6582,14 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
             "range": {
               "from": {
                 "kind": "point",
-                "x": 800,
-                "y": 120,
+                "x": 770,
+                "y": 110,
               },
               "kind": "point-range",
               "to": {
                 "kind": "point",
-                "x": 830,
-                "y": 360,
+                "x": 800,
+                "y": 330,
               },
             },
           },

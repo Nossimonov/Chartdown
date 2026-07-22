@@ -50,6 +50,13 @@ export function rng(seed: number): () => number {
  * geometry (center, size, points) plus the document seed, never on document
  * position: appending an entity can never reshape another (spec 02 §8).
  */
+/** Deterministic string hash, for identity-keyed shapes. */
+export function hashString(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
 export function hashSeed(...nums: number[]): number {
   let h = 2166136261 >>> 0;
   for (const n of nums) {
