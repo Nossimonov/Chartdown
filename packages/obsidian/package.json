@@ -1,8 +1,8 @@
-{
+﻿{
   "name": "@chartdown/obsidian",
   "private": true,
-  "version": "0.1.5",
-  "description": "Obsidian plugin: render chartdown fenced blocks in place. Not published to npm — distributed as an Obsidian community plugin.",
+  "version": "0.1.6",
+  "description": "Obsidian plugin: render chartdown fenced blocks in place. Not published to npm â€” distributed as an Obsidian community plugin.",
   "license": "MIT",
   "devDependencies": {
     "obsidian": "^1.13.1"
