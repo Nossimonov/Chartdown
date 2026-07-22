@@ -6,7 +6,7 @@
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, structureCells, type Cell } from "./grid";
-import { anchorAttr, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
+import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK } from "./theme";
 import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { collectWalls, SIDE_NAME } from "./walls";
@@ -615,13 +615,17 @@ export function renderBattlemap(
     // Since the label can't win a z-fight, it dodges instead: among the room's
     // cell rows, prefer the one nearest center whose span is clear of pieces.
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
-      const at = placeRoomLabel(e.name, cells);
-      layers.roomLabels.push(
-        text(e.name, {
-          x: at.x, y: at.y, "font-size": 10, fill: INK,
-          opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
-        }),
-      );
+      const lbl = labelTextFor(model, e);
+      if (lbl !== null) {
+        const at = placeRoomLabel(lbl, cells);
+        layers.roomLabels.push(
+          text(lbl, {
+            x: at.x, y: at.y, "font-size": 10, fill: INK,
+            "font-weight": model.labelsMode === "keyed" ? "bold" : undefined,
+            opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
+          }),
+        );
+      }
     }
   }
 
@@ -739,7 +743,8 @@ export function renderBattlemap(
       const first = e.placements.find((p) => p.kind === "edge" || p.kind === "address");
       if (first) {
         const at = first.kind === "edge" ? edgeSegment(first.at, first.dir).a : cellCenter(first);
-        layers.labels.push(text(e.name, { x: at.x, y: at.y - 6, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+        const lbl = labelTextFor(model, e) ?? e.name;
+        layers.labels.push(text(lbl, { x: at.x, y: at.y - 6, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
     }
   }
@@ -752,7 +757,14 @@ export function renderBattlemap(
   function fallbackGlyph(e: EntityNode, chain: string[], c: XY, scale: number, parts: string[]): boolean {
     const has = (w: string): boolean => chain.includes(w);
     if (has("campfire") || has("torch") || has("brazier") || has("lantern")) {
-      parts.push(el("circle", { cx: c.x, cy: c.y, r: 5 * scale, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
+      // Sized to be seen (#66): the ember plus a flame lick above it.
+      parts.push(el("circle", { cx: c.x, cy: c.y + 1.5 * scale, r: 6 * scale, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
+      parts.push(
+        el("path", {
+          d: `M${fmt(c.x - 3 * scale)} ${fmt(c.y - 3 * scale)} Q${fmt(c.x - 1 * scale)} ${fmt(c.y - 9 * scale)} ${fmt(c.x + 1 * scale)} ${fmt(c.y - 5 * scale)} Q${fmt(c.x + 2.5 * scale)} ${fmt(c.y - 8 * scale)} ${fmt(c.x + 3.5 * scale)} ${fmt(c.y - 3.5 * scale)}`,
+          fill: "none", stroke: "#a8541e", "stroke-width": 1.5, "stroke-linecap": "round",
+        }),
+      );
       return true;
     }
     if (has("wagon")) {
@@ -769,10 +781,22 @@ export function renderBattlemap(
       return true;
     }
     if (has("stairs") || has("ramp")) {
-      for (const [i, w] of [10, 7, 4].entries()) {
+      // Treads narrow toward the ascent, capped by a chevron (#66); `facing=`
+      // turns the flight (the direction climbed): n (default), e, s, w.
+      const facing = pairOf(e.pairs, "facing") ?? "n";
+      const rot = { n: 0, e: 90, s: 180, w: 270 }[facing] ?? 0;
+      const stair: string[] = [];
+      for (const [i, w] of [4, 7, 10].entries()) {
         const y = c.y + (i - 1) * 6 * scale;
-        parts.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, "stroke-width": 2.2 }));
+        stair.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, "stroke-width": 2.2 }));
       }
+      stair.push(
+        el("path", {
+          d: `M${fmt(c.x - 3 * scale)} ${fmt(c.y - 9 * scale)} L${fmt(c.x)} ${fmt(c.y - 13 * scale)} L${fmt(c.x + 3 * scale)} ${fmt(c.y - 9 * scale)}`,
+          fill: "none", stroke: INK, "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round",
+        }),
+      );
+      parts.push(rot === 0 ? stair.join("") : el("g", { transform: `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` }, ...stair));
       return true;
     }
     return false;
@@ -786,7 +810,11 @@ export function renderBattlemap(
       const base = cellCenter(a);
       const center = { x: base.x + ((size - 1) * CELL) / 2, y: base.y + ((size - 1) * CELL) / 2 };
       const radius = 0.38 * CELL * size;
-      const label = addresses.length > 1 ? (e.ids[idx] ?? `${e.typeWord}${idx + 1}`) : (e.name ?? e.ids[0] ?? e.typeWord ?? "?");
+      // Token identifiers (g1, g2) stay identifiers; named tokens key like any name.
+      const label =
+        addresses.length > 1
+          ? (e.ids[idx] ?? `${e.typeWord}${idx + 1}`)
+          : (labelTextFor(model, e) ?? e.ids[0] ?? e.typeWord ?? "?");
       into.push(
         el("g", { id: idx === 0 ? anchor : undefined },
           titleEl,
@@ -844,7 +872,8 @@ export function renderBattlemap(
       }
       into.push(el("g", { id: anchor }, ...footprintParts));
       if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
-        labels.push(text(e.name, { x: center.x, y: r.y + r.h + 10, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+        const lbl = labelTextFor(model, e) ?? e.name;
+        labels.push(text(lbl, { x: center.x, y: r.y + r.h + 10, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       return;
     }
@@ -889,7 +918,8 @@ export function renderBattlemap(
     }
     into.push(el("g", { id: anchor }, ...parts));
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
-      labels.push(text(e.name, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
+      const lbl = labelTextFor(model, e) ?? e.name;
+      labels.push(text(lbl, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
 }

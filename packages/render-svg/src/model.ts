@@ -31,8 +31,10 @@ export interface Model {
   header: Map<string, string>;
   seed: number;
   theme: Theme;
-  /** `labels:` header (spec 07 §3): derived labels render only in "names" mode. */
-  labelsMode: "names" | "none";
+  /** `labels:` header (spec 07 §3): names | keyed (numbered, key in the legend) | none. */
+  labelsMode: "names" | "keyed" | "none";
+  /** Keyed mode (spec 07 §3, #65): entity/hex-line → its key number. */
+  keys: Map<object, number>;
   /**
    * Theme fallback chain for a word (spec 04 §4): the word, then its
    * derivation bases — a theme lookup walks it until a word it knows.
@@ -113,12 +115,60 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   const facetOf = (word: string | null, key: string): string | undefined =>
     word ? vocab.facetOf(word, key) : undefined;
 
-  const labelsMode: "names" | "none" = header.get("labels") === "none" ? "none" : "names";
+  const labelsHeader = header.get("labels");
+  const labelsMode: "names" | "keyed" | "none" =
+    labelsHeader === "none" ? "none" : labelsHeader === "keyed" ? "keyed" : "names";
   const resolvedNotes = new Map<EntityNode, string>();
   if (doc.mapType === "battlemap") {
     resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
   }
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, chainOf, facetOf, resolvedNotes };
+  const keys = labelsMode === "keyed" ? assignKeys(entities, hexLines, diagnostics) : new Map<object, number>();
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, facetOf, resolvedNotes };
+}
+
+/**
+ * Keyed-mode numbering (spec 07 §3, #65): document order, deterministic;
+ * `key=<n>` pins an entity's number so later insertions cannot renumber
+ * published cross-references. Pins reserve first; the rest fill ascending.
+ */
+function assignKeys(
+  entities: EntityNode[],
+  hexLines: HexLineNode[],
+  diagnostics: Diagnostic[],
+): Map<object, number> {
+  const keys = new Map<object, number>();
+  const named: { node: EntityNode | HexLineNode; pin: number | null; line: number }[] = [];
+  const collect = (node: EntityNode | HexLineNode): void => {
+    if (!node.name || node.flags.includes("nolabel")) return;
+    const raw = pairOf(node.pairs, "key");
+    const pin = raw !== undefined ? Number(raw) : null;
+    if (raw !== undefined && (!Number.isInteger(pin) || pin! < 1)) {
+      diagnostics.push({ severity: "error", line: node.line, message: `key=${raw} is not a positive integer (spec 07 §3)` });
+      return;
+    }
+    named.push({ node, pin, line: node.line });
+  };
+  for (const e of entities) collect(e);
+  for (const hex of hexLines) collect(hex);
+
+  const used = new Set<number>();
+  for (const n of named) {
+    if (n.pin === null) continue;
+    if (used.has(n.pin)) {
+      diagnostics.push({ severity: "error", line: n.line, message: `key=${n.pin} is pinned twice (spec 07 §3)` });
+      continue;
+    }
+    used.add(n.pin);
+    keys.set(n.node, n.pin);
+  }
+  let next = 1;
+  for (const n of named) {
+    if (keys.has(n.node)) continue;
+    while (used.has(next)) next++;
+    used.add(next);
+    keys.set(n.node, next);
+  }
+  return keys;
 }
 
 // ---------- relative placement (spec 02 §7, issue #34) ----------
@@ -259,6 +309,16 @@ function resolveRelativePlacements(
 /** Derived-label gate (spec 07 §3): `labels: none` silences everything except `note` free text. */
 export function labelsOn(model: Model, e?: { typeWord?: string | null }): boolean {
   return model.labelsMode !== "none" || e?.typeWord === "note";
+}
+
+/** What a label site draws for a named node: the name — or its key number in keyed mode (spec 07 §3). */
+export function labelTextFor(model: Model, node: { name: string | null }): string | null {
+  if (!node.name) return null;
+  if (model.labelsMode === "keyed") {
+    const key = model.keys.get(node);
+    return key !== undefined ? String(key) : null;
+  }
+  return node.name;
 }
 
 export const anchorAttr = (model: Model, e: { ids: string[]; name: string | null }): string | undefined => {

@@ -11,7 +11,7 @@
 import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
-import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, pairOf, type Model } from "./model";
+import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor } from "./theme";
 import {
   blob, COMPASS_VECTORS, el, fmt, meander, measureToNumber,
@@ -225,7 +225,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const c = centroid(poly);
-        const labelText = e.name.toUpperCase();
+        const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
+        const labelText = keyedLbl ?? e.name.toUpperCase();
         const y = placer.place(c.x, c.y, labelText, 18, "middle", labelText.length * (18 * 0.58 + 6));
         layers.labels.push(
           text(labelText, {
@@ -255,9 +256,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       layers.areas.push(el("g", { id: anchor }, ...areaParts));
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const c = r.point ?? centroid(r.polygon);
-        const y = placer.place(c.x, c.y, e.name, 11, "middle");
+        const lbl = labelTextFor(model, e) ?? e.name;
+        const y = placer.place(c.x, c.y, lbl, 11, "middle");
         layers.labels.push(
-          text(e.name, { x: c.x, y, "font-size": 11, fill: ink, opacity: 0.8, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+          text(lbl, { x: c.x, y, "font-size": 11, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
         );
       }
       continue;
@@ -295,9 +297,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         const mid = r.polyline[Math.floor(r.polyline.length / 2)]!;
-        const y = placer.place(mid.x + 4, mid.y - 4, e.name, 10, "start");
+        const lbl = labelTextFor(model, e) ?? e.name;
+        const y = placer.place(mid.x + 4, mid.y - 4, lbl, 10, "start");
         layers.labels.push(
-          text(e.name, { x: mid.x + 4, y, "font-size": 10, fill: ink, opacity: 0.75, "font-style": "italic", "font-family": "sans-serif" }),
+          text(lbl, { x: mid.x + 4, y, "font-size": 10, fill: ink, opacity: 0.75, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "font-style": "italic", "font-family": "sans-serif" }),
         );
       }
       continue;
@@ -321,7 +324,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // Fallback-chain terminal (spec 04 §4): a marker with no meaningful
       // glyph anywhere along its chain carries its word as the label.
       const label =
-        e.name ??
+        (e.name !== null ? (labelTextFor(model, e) ?? e.name) : null) ??
         (e.typeWord === "note" ? e.texts[0] ?? null : null) ??
         (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {

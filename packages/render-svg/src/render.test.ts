@@ -362,6 +362,34 @@ describe("levels (spec 06 §8)", () => {
     expect(frameless.diagnostics.some((d) => d.severity === "error" && d.message.includes("footprint"))).toBe(true);
   });
 
+  it("labels: keyed numbers names in document order, key= pins, key list in the band (#65)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "labels: keyed",
+      "[structures]",
+      'building hall "The Hall" : B2..E5',
+      'building solar "The Solar" : F2..H5 key=7',
+      "[features]",
+      'well wishing "The Wishing Well" : C8',
+      "[tokens]",
+      'lord "Lord Grey" : C3',
+    ].join("\n");
+    const { svg, diagnostics } = renderSource(source, {});
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // numbers on the map (pin 7 respected, others fill 1,2,3), bold markers
+    expect(svg).toMatch(/font-weight="bold"[^>]*>1<\/text>/);
+    expect(svg).toMatch(/font-weight="bold"[^>]*>7<\/text>/);
+    // each name appears exactly once — in the key band, not on the map
+    expect(svg.match(/>The Hall<\/text>/g)).toHaveLength(1);
+    expect(svg.match(/>The Wishing Well<\/text>/g)).toHaveLength(1);
+    expect(svg).toMatch(/>1\.<\/text>/);
+    expect(svg).toMatch(/>7\.<\/text>/);
+    // duplicate pins fail loud
+    const dup = renderSource(source.replace('well wishing "The Wishing Well" : C8', 'well wishing "The Wishing Well" : C8 key=7'), {});
+    expect(dup.diagnostics.some((d) => d.severity === "error" && d.message.includes("pinned twice"))).toBe(true);
+  });
+
   it("freestanding barriers draw their edge runs (#62)", () => {
     const source = [
       "map: battlemap",
