@@ -19,18 +19,28 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # Dogfooding our own marketplace Action (#60): the committed example SVGs
-  # must never drift from their sources — verify renders and diffs.
+  # Dogfooding our own Action driver (#60): the committed example SVGs must
+  # never drift from their sources. Runs THIS branch's driver build — not the
+  # released @v1, whose renderer lags main and would deadlock every renderer
+  # change (its first run caught exactly that mismatch). Third-party use of
+  # the released action is demonstrated in Nossimonov/chartdown-demo.
   examples-verified:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Nossimonov/chartdown-action@v1
+      - uses: actions/setup-node@v4
         with:
-          root: examples
-          mode: both
-          markdown: "false"
-          verify: "true"
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify committed example SVGs against this branch's renderer
+        env:
+          INPUT_ROOT: examples
+          INPUT_MODE: both
+          INPUT_MARKDOWN: "false"
+          INPUT_VERIFY: "true"
+        run: node packages/action/dist/render.mjs
 
   # Required check on main (issue #37 lanes): changes reach main only by PR
   # from the preview branch — no direct development against production.
