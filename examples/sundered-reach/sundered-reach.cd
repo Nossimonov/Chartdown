@@ -1,0 +1,87 @@
+# The Sundered Reach
+
+map: region
+chartdown: 0.1
+extent: 1600x1000mi
+compass: on
+scale-bar: on
+seed: 7
+
+[vocab]
+island : terrain
+
+[water]
+; shorelines first — rivers and ports anchor to them
+coastline westshore : from (600,0) via (560,180) (620,420) (540,700) (590,880) to (520,1000)
+coastline eastshore : from (1020,0) via (1080,220) (990,450) (1060,680) (1000,860) to (1080,1000)
+coastline farwest : from (60,0) via (100,300) (40,620) (110,850) to (80,1000)
+coastline fareast : from (1540,0) via (1500,280) (1560,540) (1490,800) to (1550,1000)
+; bounded seas (polygon water): the strait IS the cataclysm's monument
+sea "The Sundered Sea" : area (600,0) (560,180) (620,420) (540,700) (590,880) (520,1000) (1080,1000) (1000,860) (1060,680) (990,450) (1080,220) (1020,0)
+sea "The Whalegrey Deep" : area (0,0) (60,0) (100,300) (40,620) (110,850) (80,1000) (0,1000)
+sea "The Dawnwater" : area (1600,0) (1540,0) (1500,280) (1560,540) (1490,800) (1550,1000) (1600,1000)
+
+[terrain]
+; the sundered range: one chain, two halves, one trend line
+mountains westspine "The Spine of Aum" : ridge (430,120) (500,340) (470,560) (540,780)
+mountains eastspine "The Broken Spine" : ridge (1120,80) (1180,300) (1140,520) (1200,740)
+mountains spur "The Vakh Teeth" : ridge (180,140) (300,200) (420,160)
+; the shattered chain between - the elvish archipelago
+island "Skarnholt" : blob (760,220) size=45mi
+island : blob (720,360) size=25mi
+island "Ilvarien Isle" : blob (800,490) size=60mi
+island : blob (860,580) size=22mi
+island "Vessel Isle" : blob (770,660) size=35mi
+island "Thornshoal" : blob (845,780) size=28mi
+; forests of the west
+forest "The Kingswood" : blob (280,420) size=120mi
+forest "Thornmark Weald" : blob (240,720) size=100mi
+; the east: swamps south, cold heights north
+marsh "The Sathriss Sink" : blob (1180,820) size=140mi
+jungle "The Green Throat" : blob (1350,880) size=110mi
+tundra "The White Reach" : blob (1300,140) size=130mi
+; the great lake and its outflow
+lake "Lake Vael" : blob (350,520) size=70mi
+
+[paths]
+river vael "The Vael" : from westspine at (470,560) via (400,540) to "Lake Vael"
+river serren "The Serren" : from "Lake Vael" via (250,560) (160,600) to farwest at (70,640)
+river coldrun "The Coldrun" : from westspine at (500,340) via (560,300) to westshore at (600,260)
+river sathwater "The Sathwater" : from eastspine at (1140,520) via (1160,680) to "The Sathriss Sink"
+river deepflow "The Deepflow" : from eastspine at (1180,300) via (1320,320) (1440,300) to fareast at (1510,320)
+
+[settlements]
+capital corven "Corven" : (300,340) link="lore/corven.md"
+capital marrowgate "Marrowgate" : (330,700)
+town "Fairhaven" : on westshore at (590,420)
+capital ghorvakh "Ghor Vakh Hold" : (240,100)
+capital khundrumgate "Khundrum Gate" : (1230,260)
+capital ssurath "Ssurath" : (1150,780)
+town "Reedhome" : on eastshore at (1030,640)
+capital ilvarien "Ilvarien" : (800,490)
+
+[paths]
+road kingsway "The Long Kingsway" : from "Corven" via (330,480) (390,600) to "Marrowgate"
+trail "The Vakh Path" : from "Ghor Vakh Hold" via (350,240) to "Corven"
+pass "Aumgap Pass" : from (450,430) to (510,470)
+road stoneway "The Understone Way" : from "Khundrum Gate" via (1220,420) to "Ssurath"
+
+[features]
+ruin "The Drowned Throne" : (790,560) gm="The old world's capital. What sleeps beneath still dreams of unity."
+ruin "Elder Aum's Seat" : (460,450)
+ruin "The Echo Stair" : (1160,400)
+landmark "The Sundering Stone" : (820,300)
+
+[realms]
+realm "Valemark" : area (110,240) (430,130) (500,340) (470,560) (350,520) (160,600) (100,320)
+realm "Carrowen" : area (160,600) (350,520) (470,560) (540,780) (590,880) (520,990) (115,990) (110,850)
+realm "Ghor Vakh" : area (85,30) (560,30) (555,175) (420,160) (300,200) (180,140) (100,95)
+realm "Khundrum" : area (1025,10) (1535,10) (1500,280) (1550,530) (1140,520) (1082,225)
+realm "Sathriss" : area (990,455) (1140,525) (1550,545) (1490,800) (1545,990) (1085,990) (1002,858) (1058,680)
+realm "Ilvarien" : area (700,170) (890,170) (910,810) (705,820)
+border : along kingsway gm="The Accord line - contested at every ford."
+border : along westspine
+border : along eastspine
+
+[labels]
+"The Sundered Sea" : sprawl (785,120)..(815,900)

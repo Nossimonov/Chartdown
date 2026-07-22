@@ -362,6 +362,35 @@ describe("levels (spec 06 §8)", () => {
     expect(frameless.diagnostics.some((d) => d.severity === "error" && d.message.includes("footprint"))).toBe(true);
   });
 
+  it("polygon water bounds seas so two continents can exist (#76)", () => {
+    const source = [
+      "map: region",
+      "extent: 400x300mi",
+      "[vocab]",
+      "island : terrain",
+      "[water]",
+      'sea "The Split" : area (150,0) (170,150) (150,300) (250,300) (230,150) (250,0)',
+      "[terrain]",
+      'island "Midholm" : blob (200,150) size=20mi',
+      'forest "The Weald" : blob (80,150) size=40mi',
+      "[realms]",
+      'realm "Westmark" : area (10,10) (140,10) (160,290) (10,290)',
+    ].join("\n");
+    const { svg, diagnostics } = renderSource(source, {});
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // the sea is FULL water fill (not the faint zone tint)
+    expect(svg).toMatch(/polygon[^/]*fill="#b9d3e6"/);
+    // the island rises above it in the land tone
+    expect(svg).toContain('fill="#e9e2cc"');
+    // realm tint paints beneath terrain: its dashed boundary appears before the forest fill
+    const realmAt = svg.indexOf('stroke-dasharray="10 6"');
+    const forestAt = svg.indexOf("#a9c79c");
+    expect(realmAt).toBeGreaterThan(-1);
+    expect(forestAt).toBeGreaterThan(realmAt);
+    // and the sea paints before the realm (territorial waters tint over water)
+    expect(svg.indexOf("#b9d3e6")).toBeLessThan(realmAt);
+  });
+
   it("glyphless words tint deterministically; legend samples match the map (#71)", () => {
     const source = [
       "map: battlemap",

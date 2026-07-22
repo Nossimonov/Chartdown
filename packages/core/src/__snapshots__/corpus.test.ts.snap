@@ -4085,6 +4085,2332 @@ exports[`example corpus > redford-crossing > AST snapshot is stable 1`] = `
 }
 `;
 
+exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
+{
+  "defaultLevel": "",
+  "docId": "the-sundered-reach",
+  "grid": null,
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "region",
+    },
+    {
+      "key": "chartdown",
+      "line": 4,
+      "value": "0.1",
+    },
+    {
+      "key": "extent",
+      "line": 5,
+      "value": "1600x1000mi",
+    },
+    {
+      "key": "compass",
+      "line": 6,
+      "value": "on",
+    },
+    {
+      "key": "scale-bar",
+      "line": 7,
+      "value": "on",
+    },
+    {
+      "key": "seed",
+      "line": 8,
+      "value": "7",
+    },
+  ],
+  "kind": "document",
+  "levels": [],
+  "mapType": "region",
+  "sections": [
+    {
+      "entries": [
+        {
+          "base": "terrain",
+          "baseIsArchetype": true,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 11,
+          "pairs": [],
+          "source": "document",
+          "word": "island",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 10,
+      "name": "vocab",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "westshore",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 15,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 600,
+                  "y": 0,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 520,
+                  "y": 1000,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 560,
+                  "y": 180,
+                },
+                {
+                  "kind": "point",
+                  "x": 620,
+                  "y": 420,
+                },
+                {
+                  "kind": "point",
+                  "x": 540,
+                  "y": 700,
+                },
+                {
+                  "kind": "point",
+                  "x": 590,
+                  "y": 880,
+                },
+              ],
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "coastline",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "eastshore",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 16,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 1020,
+                  "y": 0,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 1080,
+                  "y": 1000,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1080,
+                  "y": 220,
+                },
+                {
+                  "kind": "point",
+                  "x": 990,
+                  "y": 450,
+                },
+                {
+                  "kind": "point",
+                  "x": 1060,
+                  "y": 680,
+                },
+                {
+                  "kind": "point",
+                  "x": 1000,
+                  "y": 860,
+                },
+              ],
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "coastline",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "farwest",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 17,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 60,
+                  "y": 0,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 80,
+                  "y": 1000,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 100,
+                  "y": 300,
+                },
+                {
+                  "kind": "point",
+                  "x": 40,
+                  "y": 620,
+                },
+                {
+                  "kind": "point",
+                  "x": 110,
+                  "y": 850,
+                },
+              ],
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "coastline",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "fareast",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 18,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 1540,
+                  "y": 0,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 1550,
+                  "y": 1000,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1500,
+                  "y": 280,
+                },
+                {
+                  "kind": "point",
+                  "x": 1560,
+                  "y": 540,
+                },
+                {
+                  "kind": "point",
+                  "x": 1490,
+                  "y": 800,
+                },
+              ],
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "coastline",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 20,
+          "name": "The Sundered Sea",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 600,
+                  "y": 0,
+                },
+                {
+                  "kind": "point",
+                  "x": 560,
+                  "y": 180,
+                },
+                {
+                  "kind": "point",
+                  "x": 620,
+                  "y": 420,
+                },
+                {
+                  "kind": "point",
+                  "x": 540,
+                  "y": 700,
+                },
+                {
+                  "kind": "point",
+                  "x": 590,
+                  "y": 880,
+                },
+                {
+                  "kind": "point",
+                  "x": 520,
+                  "y": 1000,
+                },
+                {
+                  "kind": "point",
+                  "x": 1080,
+                  "y": 1000,
+                },
+                {
+                  "kind": "point",
+                  "x": 1000,
+                  "y": 860,
+                },
+                {
+                  "kind": "point",
+                  "x": 1060,
+                  "y": 680,
+                },
+                {
+                  "kind": "point",
+                  "x": 990,
+                  "y": 450,
+                },
+                {
+                  "kind": "point",
+                  "x": 1080,
+                  "y": 220,
+                },
+                {
+                  "kind": "point",
+                  "x": 1020,
+                  "y": 0,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "sea",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 21,
+          "name": "The Whalegrey Deep",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 0,
+                  "y": 0,
+                },
+                {
+                  "kind": "point",
+                  "x": 60,
+                  "y": 0,
+                },
+                {
+                  "kind": "point",
+                  "x": 100,
+                  "y": 300,
+                },
+                {
+                  "kind": "point",
+                  "x": 40,
+                  "y": 620,
+                },
+                {
+                  "kind": "point",
+                  "x": 110,
+                  "y": 850,
+                },
+                {
+                  "kind": "point",
+                  "x": 80,
+                  "y": 1000,
+                },
+                {
+                  "kind": "point",
+                  "x": 0,
+                  "y": 1000,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "sea",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 22,
+          "name": "The Dawnwater",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1600,
+                  "y": 0,
+                },
+                {
+                  "kind": "point",
+                  "x": 1540,
+                  "y": 0,
+                },
+                {
+                  "kind": "point",
+                  "x": 1500,
+                  "y": 280,
+                },
+                {
+                  "kind": "point",
+                  "x": 1560,
+                  "y": 540,
+                },
+                {
+                  "kind": "point",
+                  "x": 1490,
+                  "y": 800,
+                },
+                {
+                  "kind": "point",
+                  "x": 1550,
+                  "y": 1000,
+                },
+                {
+                  "kind": "point",
+                  "x": 1600,
+                  "y": 1000,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "water",
+          "texts": [],
+          "typeWord": "sea",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 13,
+      "name": "water",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "westspine",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 26,
+          "name": "The Spine of Aum",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 430,
+                  "y": 120,
+                },
+                {
+                  "kind": "point",
+                  "x": 500,
+                  "y": 340,
+                },
+                {
+                  "kind": "point",
+                  "x": 470,
+                  "y": 560,
+                },
+                {
+                  "kind": "point",
+                  "x": 540,
+                  "y": 780,
+                },
+              ],
+              "kind": "shape",
+              "shape": "ridge",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "mountains",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "eastspine",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 27,
+          "name": "The Broken Spine",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1120,
+                  "y": 80,
+                },
+                {
+                  "kind": "point",
+                  "x": 1180,
+                  "y": 300,
+                },
+                {
+                  "kind": "point",
+                  "x": 1140,
+                  "y": 520,
+                },
+                {
+                  "kind": "point",
+                  "x": 1200,
+                  "y": 740,
+                },
+              ],
+              "kind": "shape",
+              "shape": "ridge",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "mountains",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "spur",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 28,
+          "name": "The Vakh Teeth",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 180,
+                  "y": 140,
+                },
+                {
+                  "kind": "point",
+                  "x": 300,
+                  "y": 200,
+                },
+                {
+                  "kind": "point",
+                  "x": 420,
+                  "y": 160,
+                },
+              ],
+              "kind": "shape",
+              "shape": "ridge",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "mountains",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 30,
+          "name": "Skarnholt",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "45mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 760,
+                  "y": 220,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 31,
+          "name": null,
+          "pairs": [
+            {
+              "key": "size",
+              "value": "25mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 720,
+                  "y": 360,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 32,
+          "name": "Ilvarien Isle",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "60mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 800,
+                  "y": 490,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 33,
+          "name": null,
+          "pairs": [
+            {
+              "key": "size",
+              "value": "22mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 860,
+                  "y": 580,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 34,
+          "name": "Vessel Isle",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "35mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 770,
+                  "y": 660,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 35,
+          "name": "Thornshoal",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "28mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 845,
+                  "y": 780,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "island",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 37,
+          "name": "The Kingswood",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "120mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 280,
+                  "y": 420,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "forest",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 38,
+          "name": "Thornmark Weald",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "100mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 240,
+                  "y": 720,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "forest",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 40,
+          "name": "The Sathriss Sink",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "140mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1180,
+                  "y": 820,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "marsh",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 41,
+          "name": "The Green Throat",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "110mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1350,
+                  "y": 880,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "jungle",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 42,
+          "name": "The White Reach",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "130mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1300,
+                  "y": 140,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "tundra",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 44,
+          "name": "Lake Vael",
+          "pairs": [
+            {
+              "key": "size",
+              "value": "70mi",
+            },
+          ],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 350,
+                  "y": 520,
+                },
+              ],
+              "kind": "shape",
+              "shape": "blob",
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "lake",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 24,
+      "name": "terrain",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "vael",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 47,
+          "name": "The Vael",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "westspine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 470,
+                  "y": 560,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Lake Vael",
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 400,
+                  "y": 540,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "serren",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 48,
+          "name": "The Serren",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Lake Vael",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "farwest",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 70,
+                  "y": 640,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 250,
+                  "y": 560,
+                },
+                {
+                  "kind": "point",
+                  "x": 160,
+                  "y": 600,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "coldrun",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 49,
+          "name": "The Coldrun",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "westspine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 500,
+                  "y": 340,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "westshore",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 600,
+                  "y": 260,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 560,
+                  "y": 300,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "sathwater",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 50,
+          "name": "The Sathwater",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "eastspine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 1140,
+                  "y": 520,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "The Sathriss Sink",
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1160,
+                  "y": 680,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "deepflow",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 51,
+          "name": "The Deepflow",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "eastspine",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 1180,
+                  "y": 300,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "fareast",
+                },
+                "point": {
+                  "kind": "point",
+                  "x": 1510,
+                  "y": 320,
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1320,
+                  "y": 320,
+                },
+                {
+                  "kind": "point",
+                  "x": 1440,
+                  "y": 300,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "river",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 46,
+      "name": "paths",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "corven",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 54,
+          "name": "Corven",
+          "pairs": [
+            {
+              "key": "link",
+              "value": "lore/corven.md",
+            },
+          ],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 300,
+              "y": 340,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "marrowgate",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 55,
+          "name": "Marrowgate",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 330,
+              "y": 700,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 56,
+          "name": "Fairhaven",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "point": {
+                "kind": "point",
+                "x": 590,
+                "y": 420,
+              },
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "westshore",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "town",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "ghorvakh",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 57,
+          "name": "Ghor Vakh Hold",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 240,
+              "y": 100,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "khundrumgate",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 58,
+          "name": "Khundrum Gate",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 1230,
+              "y": 260,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "ssurath",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 59,
+          "name": "Ssurath",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 1150,
+              "y": 780,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 60,
+          "name": "Reedhome",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "on",
+              "kind": "relational",
+              "point": {
+                "kind": "point",
+                "x": 1030,
+                "y": 640,
+              },
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "eastshore",
+              },
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "town",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "ilvarien",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 61,
+          "name": "Ilvarien",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 800,
+              "y": 490,
+            },
+          ],
+          "section": "settlements",
+          "texts": [],
+          "typeWord": "capital",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 53,
+      "name": "settlements",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "kingsway",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 64,
+          "name": "The Long Kingsway",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Corven",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Marrowgate",
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 330,
+                  "y": 480,
+                },
+                {
+                  "kind": "point",
+                  "x": 390,
+                  "y": 600,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "road",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 65,
+          "name": "The Vakh Path",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Ghor Vakh Hold",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Corven",
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 350,
+                  "y": 240,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "trail",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 66,
+          "name": "Aumgap Pass",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "kind": "point",
+                  "x": 450,
+                  "y": 430,
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "kind": "point",
+                  "x": 510,
+                  "y": 470,
+                },
+              },
+              "via": [],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "pass",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "stoneway",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 67,
+          "name": "The Understone Way",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Khundrum Gate",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "name",
+                  "kind": "ref",
+                  "value": "Ssurath",
+                },
+              },
+              "via": [
+                {
+                  "kind": "point",
+                  "x": 1220,
+                  "y": 420,
+                },
+              ],
+            },
+          ],
+          "section": "paths",
+          "texts": [],
+          "typeWord": "road",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 63,
+      "name": "paths",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 70,
+          "name": "The Drowned Throne",
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "The old world's capital. What sleeps beneath still dreams of unity.",
+            },
+          ],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 790,
+              "y": 560,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "ruin",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 71,
+          "name": "Elder Aum's Seat",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 460,
+              "y": 450,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "ruin",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 72,
+          "name": "The Echo Stair",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 1160,
+              "y": 400,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "ruin",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 73,
+          "name": "The Sundering Stone",
+          "pairs": [],
+          "placements": [
+            {
+              "kind": "point",
+              "x": 820,
+              "y": 300,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "landmark",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 69,
+      "name": "features",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 76,
+          "name": "Valemark",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 110,
+                  "y": 240,
+                },
+                {
+                  "kind": "point",
+                  "x": 430,
+                  "y": 130,
+                },
+                {
+                  "kind": "point",
+                  "x": 500,
+                  "y": 340,
+                },
+                {
+                  "kind": "point",
+                  "x": 470,
+                  "y": 560,
+                },
+                {
+                  "kind": "point",
+                  "x": 350,
+                  "y": 520,
+                },
+                {
+                  "kind": "point",
+                  "x": 160,
+                  "y": 600,
+                },
+                {
+                  "kind": "point",
+                  "x": 100,
+                  "y": 320,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 77,
+          "name": "Carrowen",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 160,
+                  "y": 600,
+                },
+                {
+                  "kind": "point",
+                  "x": 350,
+                  "y": 520,
+                },
+                {
+                  "kind": "point",
+                  "x": 470,
+                  "y": 560,
+                },
+                {
+                  "kind": "point",
+                  "x": 540,
+                  "y": 780,
+                },
+                {
+                  "kind": "point",
+                  "x": 590,
+                  "y": 880,
+                },
+                {
+                  "kind": "point",
+                  "x": 520,
+                  "y": 990,
+                },
+                {
+                  "kind": "point",
+                  "x": 115,
+                  "y": 990,
+                },
+                {
+                  "kind": "point",
+                  "x": 110,
+                  "y": 850,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 78,
+          "name": "Ghor Vakh",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 85,
+                  "y": 30,
+                },
+                {
+                  "kind": "point",
+                  "x": 560,
+                  "y": 30,
+                },
+                {
+                  "kind": "point",
+                  "x": 555,
+                  "y": 175,
+                },
+                {
+                  "kind": "point",
+                  "x": 420,
+                  "y": 160,
+                },
+                {
+                  "kind": "point",
+                  "x": 300,
+                  "y": 200,
+                },
+                {
+                  "kind": "point",
+                  "x": 180,
+                  "y": 140,
+                },
+                {
+                  "kind": "point",
+                  "x": 100,
+                  "y": 95,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 79,
+          "name": "Khundrum",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 1025,
+                  "y": 10,
+                },
+                {
+                  "kind": "point",
+                  "x": 1535,
+                  "y": 10,
+                },
+                {
+                  "kind": "point",
+                  "x": 1500,
+                  "y": 280,
+                },
+                {
+                  "kind": "point",
+                  "x": 1550,
+                  "y": 530,
+                },
+                {
+                  "kind": "point",
+                  "x": 1140,
+                  "y": 520,
+                },
+                {
+                  "kind": "point",
+                  "x": 1082,
+                  "y": 225,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 80,
+          "name": "Sathriss",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 990,
+                  "y": 455,
+                },
+                {
+                  "kind": "point",
+                  "x": 1140,
+                  "y": 525,
+                },
+                {
+                  "kind": "point",
+                  "x": 1550,
+                  "y": 545,
+                },
+                {
+                  "kind": "point",
+                  "x": 1490,
+                  "y": 800,
+                },
+                {
+                  "kind": "point",
+                  "x": 1545,
+                  "y": 990,
+                },
+                {
+                  "kind": "point",
+                  "x": 1085,
+                  "y": 990,
+                },
+                {
+                  "kind": "point",
+                  "x": 1002,
+                  "y": 858,
+                },
+                {
+                  "kind": "point",
+                  "x": 1058,
+                  "y": 680,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 81,
+          "name": "Ilvarien",
+          "pairs": [],
+          "placements": [
+            {
+              "args": [
+                {
+                  "kind": "point",
+                  "x": 700,
+                  "y": 170,
+                },
+                {
+                  "kind": "point",
+                  "x": 890,
+                  "y": 170,
+                },
+                {
+                  "kind": "point",
+                  "x": 910,
+                  "y": 810,
+                },
+                {
+                  "kind": "point",
+                  "x": 705,
+                  "y": 820,
+                },
+              ],
+              "kind": "shape",
+              "shape": "area",
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "realm",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 82,
+          "name": null,
+          "pairs": [
+            {
+              "key": "gm",
+              "value": "The Accord line - contested at every ford.",
+            },
+          ],
+          "placements": [
+            {
+              "form": "along",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "kingsway",
+              },
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "border",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 83,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "along",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "westspine",
+              },
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "border",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 84,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "form": "along",
+              "kind": "relational",
+              "ref": {
+                "form": "id",
+                "kind": "ref",
+                "value": "eastspine",
+              },
+            },
+          ],
+          "section": "realms",
+          "texts": [],
+          "typeWord": "border",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 75,
+      "name": "realms",
+    },
+    {
+      "entries": [
+        {
+          "hint": {
+            "kind": "sprawl",
+            "range": {
+              "from": {
+                "kind": "point",
+                "x": 785,
+                "y": 120,
+              },
+              "kind": "point-range",
+              "to": {
+                "kind": "point",
+                "x": 815,
+                "y": 900,
+              },
+            },
+          },
+          "kind": "label-override",
+          "line": 87,
+          "target": {
+            "form": "name",
+            "kind": "ref",
+            "value": "The Sundered Sea",
+          },
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 86,
+      "name": "labels",
+    },
+  ],
+  "title": "The Sundered Reach",
+}
+`;
+
 exports[`example corpus > vessany > AST snapshot is stable 1`] = `
 {
   "defaultLevel": "",

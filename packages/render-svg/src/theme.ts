@@ -20,6 +20,7 @@ const TERRAIN_FILLS: Record<string, string> = {
   marsh: "#c2d2c0", desert: "#eeddb0", dunes: "#eeddb0",
   snowfield: "#eff2f4", snow: "#eff2f4", tundra: "#dfe4dd", ice: "#dcebf2",
   wasteland: "#d4c8b8", mud: "#c8b294", sand: "#ecdfb8", grass: "#dde5b8",
+  island: "#e9e2cc",
   rubble: "#cfc8bc", slope: "#d9d0bd",
   ford: "#cfd4b8",
   earth: "#6b6157",

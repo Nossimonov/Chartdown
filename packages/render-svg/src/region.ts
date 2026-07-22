@@ -207,7 +207,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       o.target.form === "name" ? o.target.value === e.name : e.ids.includes(o.target.value),
     );
 
-  const layers = { areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
+  // Paint order (#76): water first, then realm tints (they shade land AND
+  // territorial waters), then terrain — a nation's tint must never hide its
+  // forests, and an island must rise above the sea that surrounds it.
+  const layers = { water: [] as string[], realms: [] as string[], areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
 
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
@@ -218,7 +221,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     if (r.halfPlane) {
       const poly = halfPlanePolygon(r.halfPlane, w, h);
       const isWater = e.section === "water";
-      layers.areas.push(
+      (isWater ? layers.water : e.archetype === "zone" ? layers.realms : layers.areas).push(
         el("g", { id: anchor }, titleEl,
           el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.14 }),
         ),
@@ -239,6 +242,59 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
 
     if (r.polygon) {
+      // Polygon water (#76): a [water] entity with an area/blob placement is
+      // a bounded sea or lake — full water fill and a shore line, not the
+      // faint zone tint. This is what lets a world have TWO continents.
+      if (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water")) {
+        const isLake = chain.includes("lake");
+        const waterFill = theme.terrainFill(isLake ? ["lake"] : ["sea"]);
+        // Lakes sit ON land: terrain layer. Seas are the floor: water layer.
+        (isLake ? layers.areas : layers.water).push(
+          el("g", { id: anchor }, titleEl,
+            el("polygon", { points: pointsAttr(r.polygon), fill: waterFill, stroke: shade(waterFill), "stroke-width": 1.5, "stroke-linejoin": "round" }),
+          ),
+        );
+        if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+          const c = centroid(r.polygon);
+          const size = isLake ? 10 : 14;
+          const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
+          const labelText = keyedLbl ?? e.name.toUpperCase();
+          const width = labelText.length * (size * 0.58 + (isLake ? 2 : 4));
+          // Clamp into the viewport — an edge-hugging ocean's centroid can sit
+          // half off-map.
+          const cx = Math.min(Math.max(c.x, width / 2 + 10), w - width / 2 - 10);
+          const y = placer.place(cx, c.y, labelText, size, "middle", width);
+          layers.labels.push(
+            text(labelText, {
+              x: cx, y, "font-size": size, "letter-spacing": isLake ? 2 : 4,
+              fill: "#5a7a96", opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
+            }),
+          );
+        }
+        continue;
+      }
+      if (e.archetype === "zone") {
+        // Realm tints: beneath terrain, above water — a nation shades its
+        // land and its territorial waters without hiding either.
+        layers.realms.push(
+          el("g", { id: anchor }, titleEl,
+            el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: 0.12, stroke: shade(wordFill), "stroke-width": 1, "stroke-dasharray": "10 6", "stroke-opacity": 0.35 }),
+          ),
+        );
+        if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+          const c = centroid(r.polygon);
+          const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
+          const labelText = keyedLbl ?? e.name.toUpperCase();
+          const y = placer.place(c.x, c.y, labelText, 15, "middle", labelText.length * (15 * 0.58 + 5));
+          layers.labels.push(
+            text(labelText, {
+              x: c.x, y, "font-size": 15, "letter-spacing": 5, fill: "#6b5d4a",
+              opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
+            }),
+          );
+        }
+        continue;
+      }
       const areaParts: string[] = [titleEl];
       const edgeFill = theme.prop(chain, "fill", { zone: "edge" });
       if (edgeFill) {
@@ -364,7 +420,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
   }
 
-  body.push(...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
+  body.push(...layers.water, ...layers.realms, ...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {
