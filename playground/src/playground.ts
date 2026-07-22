@@ -7,6 +7,7 @@
 
 import { renderSource, type RenderMode } from "@chartdown/render-svg";
 import brenmark from "../../examples/brenmark/brenmark.cd";
+import tankard from "../../examples/gilded-tankard/gilded-tankard.cd";
 import manor from "../../examples/fairwater-manor/fairwater-manor.cd";
 import candyworld from "../../examples/gumdrop-vale/candyworld.theme.cd";
 import gumdrop from "../../examples/gumdrop-vale/gumdrop-vale.cd";
@@ -16,6 +17,7 @@ import vessany from "../../examples/vessany/vessany.cd";
 const EXAMPLES: Record<string, string> = {
   "Fairwater Manor (battlemap)": manor,
   "Ambush at Redford Crossing (battlemap)": redford,
+  "The Gilded Tankard (keyed labels + legend)": tankard,
   "The Brenmark (hexcrawl)": brenmark,
   "Vessany (region)": vessany,
   "Gumdrop Vale (region + custom vocab)": gumdrop,

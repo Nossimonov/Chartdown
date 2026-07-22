@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The example corpus is the parser's acceptance suite (issue #21 done-state):
  * every .cd in examples/ parses with zero errors and a stable AST snapshot.
  */
@@ -15,9 +15,10 @@ const exampleFiles: { name: string; path: string }[] = readdirSync(examplesDir, 
   .map((entry) => ({ name: entry.name, path: join(examplesDir, entry.name, `${entry.name}.cd`) }));
 
 describe("example corpus", () => {
-  it("finds the five examples", () => {
+  it("finds the six examples", () => {
     expect(exampleFiles.map((f) => f.name).sort()).toEqual([
       "brenmark",
+      "gilded-tankard",
       "fairwater-manor",
       "gumdrop-vale",
       "redford-crossing",

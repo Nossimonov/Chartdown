@@ -2633,6 +2633,450 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
 }
 `;
 
+exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
+{
+  "defaultLevel": "",
+  "docId": "the-gilded-tankard",
+  "grid": {
+    "cols": 12,
+    "kind": "square",
+    "rows": 10,
+  },
+  "header": [
+    {
+      "key": "map",
+      "line": 3,
+      "value": "battlemap",
+    },
+    {
+      "key": "chartdown",
+      "line": 4,
+      "value": "0.1",
+    },
+    {
+      "key": "grid",
+      "line": 5,
+      "value": "square 12x10",
+    },
+    {
+      "key": "scale",
+      "line": 6,
+      "value": "5ft",
+    },
+    {
+      "key": "labels",
+      "line": 7,
+      "value": "keyed",
+    },
+    {
+      "key": "legend",
+      "line": 8,
+      "value": "on",
+    },
+  ],
+  "kind": "document",
+  "levels": [],
+  "mapType": "battlemap",
+  "sections": [
+    {
+      "entries": [
+        {
+          "base": "campfire",
+          "baseIsArchetype": false,
+          "flags": [],
+          "kind": "vocab-entry",
+          "line": 11,
+          "pairs": [],
+          "source": "document",
+          "word": "hearth",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 10,
+      "name": "vocab",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 15,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "E",
+                    "kind": "address",
+                    "row": 8,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 16,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "B",
+                    "kind": "address",
+                    "row": 4,
+                  },
+                  "dir": "w",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "window",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "inn",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 14,
+          "name": "The Gilded Tankard",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "B",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "H",
+                "kind": "address",
+                "row": 8,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "snug",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 17,
+          "name": "The Snug",
+          "pairs": [
+            {
+              "key": "key",
+              "value": "5",
+            },
+          ],
+          "placements": [
+            {
+              "from": {
+                "col": "F",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "H",
+                "kind": "address",
+                "row": 4,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+        {
+          "archetype": "barrier",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "bar",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 18,
+          "name": "The Bar",
+          "pairs": [],
+          "placements": [
+            {
+              "at": {
+                "col": "D",
+                "kind": "address",
+                "row": 6,
+              },
+              "dir": "n",
+              "kind": "edge",
+            },
+            {
+              "at": {
+                "col": "E",
+                "kind": "address",
+                "row": 6,
+              },
+              "dir": "n",
+              "kind": "edge",
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "wall",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 13,
+      "name": "structures",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 21,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "C",
+                "kind": "address",
+                "row": 2,
+              },
+              "kind": "range",
+              "to": {
+                "col": "D",
+                "kind": "address",
+                "row": 2,
+              },
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "hearth",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "cellar-stairs",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 22,
+          "name": "Cellar Stairs",
+          "pairs": [
+            {
+              "key": "facing",
+              "value": "e",
+            },
+          ],
+          "placements": [
+            {
+              "col": "G",
+              "kind": "address",
+              "row": 6,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "stairs",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "longtable",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 23,
+          "name": "The Long Table",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "C",
+                "kind": "address",
+                "row": 5,
+              },
+              "kind": "range",
+              "to": {
+                "col": "D",
+                "kind": "address",
+                "row": 5,
+              },
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "table",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 24,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "col": "C",
+              "kind": "address",
+              "row": 7,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "barrel",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 20,
+      "name": "features",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [],
+          "kind": "entity",
+          "level": "",
+          "line": 27,
+          "name": "Old Marta",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "F",
+              "kind": "address",
+              "row": 6,
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "keeper",
+        },
+        {
+          "archetype": "token",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "start",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 28,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "D",
+                "kind": "address",
+                "row": 8,
+              },
+              "kind": "range",
+              "to": {
+                "col": "F",
+                "kind": "address",
+                "row": 8,
+              },
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "party",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 26,
+      "name": "tokens",
+    },
+    {
+      "entries": [
+        {
+          "flags": [],
+          "kind": "gm-attachment",
+          "line": 31,
+          "pairs": [],
+          "target": {
+            "form": "name",
+            "kind": "ref",
+            "value": "Old Marta",
+          },
+          "texts": [
+            "Knows every rumor in the vale; trades them for favors, not coin.",
+          ],
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 30,
+      "name": "gm",
+    },
+  ],
+  "title": "The Gilded Tankard",
+}
+`;
+
 exports[`example corpus > gumdrop-vale > AST snapshot is stable 1`] = `
 {
   "defaultLevel": "",

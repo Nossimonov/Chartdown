@@ -1,0 +1,31 @@
+# The Gilded Tankard
+
+map: battlemap
+chartdown: 0.1
+grid: square 12x10
+scale: 5ft
+labels: keyed              ; numbered markers, key list in the legend band
+legend: on                 ; vocabulary legend from the words actually used
+
+[vocab]
+hearth : campfire          ; derivation carries the flame and the glow
+
+[structures]
+building inn "The Gilded Tankard" : B2..H8
+  door : E8.s
+  window : B4.w
+building snug "The Snug" : F2..H4 key=5   ; pinned: publications cite 5 forever
+wall bar "The Bar" : D6.n E6.n
+
+[features]
+hearth : C2..D2            ; footprint hearth - lights the common room
+stairs cellar-stairs "Cellar Stairs" : G6 facing=e
+table longtable "The Long Table" : C5..D5
+barrel : C7
+
+[tokens]
+keeper "Old Marta" : F6
+party start : D8..F8
+
+[gm]
+"Old Marta" : "Knows every rumor in the vale; trades them for favors, not coin."
