@@ -716,26 +716,38 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         }
         occ0 = Math.max(s0, occ0 - 10);
         occ1 = Math.min(s1, occ1 + 10);
+        // The room is the WATER, not just the declared range: the named
+        // body's own geometry extends the clear stretches toward the map
+        // edges, so a split name grows away from the center instead of
+        // huddling small inside the author's hint box.
+        const targetPoly = resolved.get(key)?.polygon;
+        let e0 = s0;
+        let e1 = s1;
+        if (targetPoly) {
+          const vals = targetPoly.map((p) => (vertical ? p.y : p.x));
+          e0 = Math.min(e0, Math.max(12, Math.min(...vals)));
+          e1 = Math.max(e1, Math.min((vertical ? h : w) - 12, Math.max(...vals)));
+        }
         const stretches: { lo: number; hi: number }[] = [];
         if (occ0 <= occ1 && spanLen >= 200) {
-          for (const st of [{ lo: s0, hi: occ0 }, { lo: occ1, hi: s1 }]) {
+          for (const st of [{ lo: e0, hi: occ0 }, { lo: occ1, hi: e1 }]) {
             if (st.hi - st.lo >= 60) stretches.push(st);
           }
         }
         if (stretches.length) {
+          // Each copy sits AT the center of its clear stretch, sized to
+          // ~60% of the tighter stretch (both copies match — same body,
+          // same name, same size), with clear water kept on both sides.
+          const fitLen = Math.min(...stretches.map((st) => st.hi - st.lo)) * 0.6;
+          const { size, spacing } = fitLabel(upper, fitLen, 16, 8);
+          // The block covers the DRAWN column, not the stretch fraction —
+          // a spilled glyph outside its block is invisible to everyone
+          // else's collision checks (the "A" on the Sundering Stone).
+          const halfL = (upper.length * (size * 0.58 + spacing)) / 2 + 3;
           for (const st of stretches) {
-            const len = st.hi - st.lo;
-            // Each copy sits AT the center of its clear stretch, modestly
-            // sized (~half the stretch) — filling the stretch edge-to-edge
-            // read as crowding the very features the split was avoiding.
-            const { size, spacing } = fitLabel(upper, len * 0.55, 16, 8);
             const m = (st.lo + st.hi) / 2;
             const tx = vertical ? cx : m;
             const ty = vertical ? m : cy;
-            // The block covers the DRAWN column, not the stretch fraction —
-            // a spilled glyph outside its block is invisible to everyone
-            // else's collision checks (the "A" on the Sundering Stone).
-            const halfL = (upper.length * (size * 0.58 + spacing)) / 2 + 3;
             if (vertical) placer.block(tx - size, ty - halfL, size * 2, halfL * 2, 3);
             else placer.block(tx - halfL, ty - size, halfL * 2, size * 2, 3);
             labelBuckets[0]!.push(sprawlText(tx, ty, size, spacing));
@@ -782,19 +794,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
  * scaled proportionally) — no label is too big to exist on the map.
  */
 function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing: number): { size: number; spacing: number } {
-  const widthAt = (size: number, spacing: number): number => textStr.length * (size * 0.58 + spacing);
-  let size = baseSize;
-  let spacing = baseSpacing;
-  while (size > 8 && widthAt(size, spacing) > maxPx) {
-    size -= 1;
-    spacing = Math.max(0.5, (baseSpacing * size) / baseSize);
+  // Prefer a BIGGER font with tighter tracking over a smaller font with
+  // airy tracking: at each size, natural spacing if it fits, else the
+  // spacing the box allows (down to 0.5) before dropping a size. The
+  // promise is the text FITS — and grows when the space does.
+  const perChar = maxPx / textStr.length;
+  for (let size = baseSize; size > 8; size--) {
+    const natural = (baseSpacing * size) / baseSize;
+    if (textStr.length * (size * 0.58 + natural) <= maxPx) return { size, spacing: natural };
+    const needed = perChar - size * 0.58;
+    if (needed >= 0.5) return { size, spacing: needed };
   }
-  // Size floor reached but still too wide: collapse the letter-spacing —
-  // the promise is the text FITS, not that it keeps its tracking.
-  if (widthAt(size, spacing) > maxPx) {
-    spacing = Math.max(0.5, maxPx / textStr.length - size * 0.58);
-  }
-  return { size, spacing };
+  return { size: 8, spacing: Math.max(0.5, perChar - 8 * 0.58) };
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {
