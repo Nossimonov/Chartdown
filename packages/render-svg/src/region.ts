@@ -343,7 +343,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const isWater = e.section === "water";
       (isWater ? layers.water : e.archetype === "zone" ? layers.realms : layers.areas).push(
         el("g", { id: anchor }, titleEl,
-          el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.14 }),
+          el("polygon", { points: pointsAttr(poly), fill: isWater ? theme.terrainFill(["sea"]) : wordFill, opacity: isWater ? 1 : 0.2 }),
         ),
       );
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -408,7 +408,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // land and its territorial waters without hiding either.
         layers.realms.push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: 0.12, stroke: shade(wordFill), "stroke-width": 1, "stroke-dasharray": "10 6", "stroke-opacity": 0.35 }),
+            // Visible at a glance (owner round ten): 0.12 tint read as
+            // no tint at all — a nation's color must survive old eyes.
+            el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: 0.2, stroke: shade(wordFill), "stroke-width": 1, "stroke-dasharray": "10 6", "stroke-opacity": 0.5 }),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -727,7 +729,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const m = (st.lo + st.hi) / 2;
             const tx = vertical ? cx : m;
             const ty = vertical ? m : cy;
-            const halfL = len * 0.4;
+            // The block covers the DRAWN column, not the stretch fraction —
+            // a spilled glyph outside its block is invisible to everyone
+            // else's collision checks (the "A" on the Sundering Stone).
+            const halfL = (upper.length * (size * 0.58 + spacing)) / 2 + 3;
             if (vertical) placer.block(tx - size, ty - halfL, size * 2, halfL * 2, 3);
             else placer.block(tx - halfL, ty - size, halfL * 2, size * 2, 3);
             labelBuckets[0]!.push(sprawlText(tx, ty, size, spacing));
@@ -780,6 +785,11 @@ function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing:
   while (size > 8 && widthAt(size, spacing) > maxPx) {
     size -= 1;
     spacing = Math.max(0.5, (baseSpacing * size) / baseSize);
+  }
+  // Size floor reached but still too wide: collapse the letter-spacing —
+  // the promise is the text FITS, not that it keeps its tracking.
+  if (widthAt(size, spacing) > maxPx) {
+    spacing = Math.max(0.5, maxPx / textStr.length - size * 0.58);
   }
   return { size, spacing };
 }
