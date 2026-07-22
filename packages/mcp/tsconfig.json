@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@chartdown/core": ["../core/src/index"],
+      "@chartdown/render-svg": ["../render-svg/src/index"]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

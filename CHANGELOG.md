@@ -6,6 +6,7 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ### Added
 
+- **`@chartdown/mcp`** — MCP server giving agents the full authoring loop: `chartdown_spec` (the digest), `chartdown_check` (fail-loud validation citing spec sections), `chartdown_render` (PNG image by default via pure-WASM rasterization with a vendored font — no browser, no native binaries; SVG on request), `chartdown_uvtt` (VTT geometry). ADR 0011 records the runtime-dependency boundary.
 - **LLM discoverability**: the site serves [`/llms.txt`](https://nossimonov.github.io/Chartdown/llms.txt) and [`/llms-full.txt`](https://nossimonov.github.io/Chartdown/llms-full.txt) (the spec digest verbatim); `@chartdown/core` ships `digest.md` inside the tarball; READMEs signpost the agent bootstrap path.
 
 ## [0.2.0] — 2026-07-21

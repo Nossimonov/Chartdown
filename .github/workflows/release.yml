@@ -31,7 +31,7 @@ jobs:
       - name: Tag must match every package version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          for p in core render-svg cli browser; do
+          for p in core render-svg cli browser mcp; do
             V=$(node -p "require('./packages/$p/package.json').version")
             if [ "$V" != "$TAG" ]; then
               echo "packages/$p is $V but the tag says $TAG" >&2
@@ -45,7 +45,7 @@ jobs:
             echo "CHANGELOG.md has no '## [$TAG]' section — a version number users can't decode is noise" >&2
             exit 1
           fi
-      - run: npm publish -w @chartdown/core -w @chartdown/render-svg -w @chartdown/cli -w @chartdown/browser
+      - run: npm publish -w @chartdown/core -w @chartdown/render-svg -w @chartdown/cli -w @chartdown/browser -w @chartdown/mcp
       - name: GitHub Release from the changelog section
         env:
           GH_TOKEN: ${{ github.token }}

@@ -20,3 +20,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0008](0008-open-structures-declared.md) | Unroofed structures are declared with the `open` flag, not derived from the level stack | Accepted |
 | [0009](0009-relative-placement-referent-frames.md) | Relative placement rides `on … at`: the `at` payload is interpreted in the referent's frame | Accepted |
 | [0010](0010-uvtt-export-caller-raster.md) | UVTT export lives in the renderer and the caller supplies the raster | Accepted |
+| [0011](0011-mcp-server-runtime-deps.md) | `@chartdown/mcp` carries runtime dependencies; the zero-dep rule binds the language core | Accepted |

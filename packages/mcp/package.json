@@ -1,0 +1,41 @@
+{
+  "name": "@chartdown/mcp",
+  "version": "0.2.0",
+  "description": "Chartdown MCP server — check, render, and spec tools so AI agents can draft, validate, and visually verify plain-text TTRPG maps.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "chartdown-mcp": "dist/mcp.js"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "keywords": [
+    "chartdown",
+    "ttrpg",
+    "map",
+    "battlemap",
+    "mcp",
+    "model-context-protocol",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nossimonov/Chartdown.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://nossimonov.github.io/Chartdown/",
+  "bugs": "https://github.com/Nossimonov/Chartdown/issues",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@resvg/resvg-wasm": "^2.6.2",
+    "zod": "^3.24.0"
+  }
+}
