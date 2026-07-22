@@ -43,26 +43,47 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
     rows.push({ word, kind });
   };
 
-  for (const e of model.entities) add(e.typeWord, kindFor(model, e));
-  for (const hex of model.hexLines) {
-    add(hex.terrain, "fill");
-    for (const word of hex.contents) add(word, hasTierGlyph(model.chainOf(word)) ? "tier" : "glyph");
+  const vocabWanted = model.header.get("legend") === "on";
+  if (vocabWanted) {
+    for (const e of model.entities) add(e.typeWord, kindFor(model, e));
+    for (const hex of model.hexLines) {
+      add(hex.terrain, "fill");
+      for (const word of hex.contents) add(word, hasTierGlyph(model.chainOf(word)) ? "tier" : "glyph");
+    }
   }
-  if (rows.length === 0) return { svg: "", height: 0 };
+
+  // Keyed mode (spec 07 §3, #65): the key list is the labels — module-style.
+  const keyRows: { n: number; name: string }[] = [];
+  if (model.labelsMode === "keyed") {
+    for (const [node, n] of model.keys) keyRows.push({ n, name: (node as { name: string | null }).name ?? "" });
+    keyRows.sort((a, b) => a.n - b.n);
+  }
+
+  if (rows.length === 0 && keyRows.length === 0) return { svg: "", height: 0 };
 
   const ROW_H = 18;
   const PAD = 10;
   const colWidth = 150;
   const cols = Math.max(1, Math.min(4, Math.floor((width - PAD * 2) / colWidth)));
+  const keyPerCol = Math.ceil(keyRows.length / cols);
   const perCol = Math.ceil(rows.length / cols);
+  const keyBandH = keyRows.length > 0 ? keyPerCol * ROW_H : 0;
   const parts: string[] = [
     el("line", { x1: PAD, y1: 0.5, x2: width - PAD, y2: 0.5, stroke: "#c9c2b0", "stroke-width": 1 }),
   ];
 
+  keyRows.forEach((row, i) => {
+    const col = Math.floor(i / keyPerCol);
+    const x = PAD + col * colWidth;
+    const y = PAD + (i % keyPerCol) * ROW_H + ROW_H / 2;
+    parts.push(text(`${row.n}.`, { x: x + 12, y: y + 3.5, "font-size": 9, "font-weight": "bold", fill: INK, "text-anchor": "end", "font-family": "sans-serif" }));
+    parts.push(text(row.name, { x: x + 18, y: y + 3.5, "font-size": 9, fill: INK, "font-family": "sans-serif" }));
+  });
+
   rows.forEach((row, i) => {
     const col = Math.floor(i / perCol);
     const x = PAD + col * colWidth;
-    const y = PAD + (i % perCol) * ROW_H + ROW_H / 2;
+    const y = PAD + keyBandH + (i % perCol) * ROW_H + ROW_H / 2;
     const chain = model.chainOf(row.word);
     switch (row.kind) {
       case "fill":
@@ -112,5 +133,5 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
     parts.push(text(row.word, { x: x + 20, y: y + 3.5, "font-size": 9, fill: INK, "font-family": "sans-serif" }));
   });
 
-  return { svg: parts.join(""), height: PAD * 2 + perCol * ROW_H };
+  return { svg: parts.join(""), height: PAD * 2 + keyBandH + (rows.length > 0 ? perCol * ROW_H : 0) };
 }

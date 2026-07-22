@@ -84,7 +84,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
   }
 
   // Furniture (spec 07 §4)
-  if (model.header.get("legend") === "on") {
+  if (model.header.get("legend") === "on" || model.labelsMode === "keyed") {
     const legend = buildLegend(model, w);
     if (legend.height > 0) {
       const band = el("rect", { x: 0, y: 0, width: w, height: legend.height, fill: theme.surface("paper", "fill", PAPER) });

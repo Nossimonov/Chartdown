@@ -4,6 +4,15 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub Action** ([`Nossimonov/chartdown-action@v1`](https://github.com/Nossimonov/chartdown-action)): renders `.cd` files and ` ```chartdown ` fences in Markdown to SVGs committed beside them — campaign repos show maps natively on GitHub. `verify` mode diffs instead of writing; this repo dogfoods it in CI to guarantee committed example SVGs never drift from sources.
+- **`labels: keyed`** (spec 07 §3): numbered markers with a module-style key list in the legend band; `key=<n>` pins survive insertions; duplicate pins fail loud. (#65)
+
+### Changed
+
+- Campfire-family glyphs sized to be seen, with a flame lick; standalone stairs gain an ascent chevron, turnable with `facing=` (#66, agent verification feedback).
+
 ## [0.2.1] — 2026-07-22
 
 ### Fixed

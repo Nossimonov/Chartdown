@@ -7,7 +7,7 @@
 import type { Address, AddressRange, EntityNode, HexLineNode } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { LabelPlacer } from "./labels";
-import { gmTitleFor, labelsOn, pairOf, type Model } from "./model";
+import { gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { FOG, GRID_LINE, INK, tierOf } from "./theme";
 import { colToNumber, el, fmt, pointsAttr, text, type XY } from "./util";
 
@@ -134,11 +134,12 @@ export function renderHexcrawl(model: Model, body: string[]): void {
             contentLayer.push(glyph(word, at));
           });
           if (cell.name && labelsOn(model)) {
+            const lbl = labelTextFor(model, cell) ?? cell.name;
             const anchorId = `cd-${model.doc.docId}-${slugify(cell.name)}`;
-            const y = placer.place(c.x, c.y + R * 0.62, cell.name, 7.5, "middle");
+            const y = placer.place(c.x, c.y + R * 0.62, lbl, 7.5, "middle");
             labelLayer.push(
               el("g", { id: anchorId },
-                text(cell.name, { x: c.x, y, "font-size": 7.5, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }),
+                text(lbl, { x: c.x, y, "font-size": 7.5, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }),
               ),
             );
           }
@@ -195,8 +196,9 @@ export function renderHexcrawl(model: Model, body: string[]): void {
           const p = arcPoint(pts, t);
           return { x: p.x, y: p.y - R * 0.55 };
         });
-        const at = placer.placeAlong(candidates, e.name, 8, "middle");
-        labelLayer.push(text(e.name, { x: at.x, y: at.y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif" }));
+        const lbl = labelTextFor(model, e) ?? e.name;
+        const at = placer.placeAlong(candidates, lbl, 8, "middle");
+        labelLayer.push(text(lbl, { x: at.x, y: at.y, "font-size": 8, fill: INK, opacity: 0.8, "font-style": "italic", "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       continue;
     }
@@ -235,11 +237,12 @@ export function renderHexcrawl(model: Model, body: string[]): void {
           count++;
           if (c.y < minY) minY = c.y;
         }
-        const labelText = e.name.toUpperCase();
+        const keyedLbl = labelTextFor(model, e);
+        const labelText = model.labelsMode === "keyed" && keyedLbl !== null ? keyedLbl : e.name.toUpperCase();
         const width = labelText.length * (11 * 0.58 + 3);
         const y = placer.place(sx / count, minY - R * 1.35, labelText, 11, "middle", width);
         labelLayer.push(
-          text(e.name.toUpperCase(), { x: sx / count, y, "font-size": 11, "letter-spacing": 3, fill: "#7a5aa0", opacity: 0.85, "text-anchor": "middle", "font-family": "sans-serif" }),
+          text(labelText, { x: sx / count, y, "font-size": 11, "letter-spacing": model.labelsMode === "keyed" ? undefined : 3, fill: "#7a5aa0", opacity: 0.85, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }),
         );
       }
     }
