@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { renderSource } from "./index";
+import { exportUvttSource, renderSource } from "./index";
 
 const examplesDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "examples");
 const example = (name: string): string => readFileSync(join(examplesDir, name, `${name}.cd`), "utf8");
@@ -360,6 +360,54 @@ describe("levels (spec 06 §8)", () => {
       {},
     );
     expect(frameless.diagnostics.some((d) => d.severity === "error" && d.message.includes("footprint"))).toBe(true);
+  });
+
+  it("cell-union footprints render with a derived perimeter (spec 06 §3, #45)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "[structures]",
+      'building hall "The Hall" : B2..D5 E4..F5',
+      "  ruined : north",
+      "  door : E5.s",
+    ].join("\n");
+    const { svg, diagnostics } = renderSource(source, {});
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // Non-rectangular union: fill is a path of cell squares, not a rect.
+    expect(svg).toContain('<path d="M');
+    // Perimeter merges to 6 straight wall runs; both north-facing runs are
+    // ruined (dashed), the rest solid.
+    const walls = svg.match(/stroke="#3d3629" stroke-width="3"/g) ?? [];
+    expect(walls).toHaveLength(6);
+    const dashed = svg.match(/stroke-dasharray="5 6"/g) ?? [];
+    expect(dashed).toHaveLength(2);
+  });
+
+  it("union walls drive light and UVTT identically (one wall truth)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "[structures]",
+      'building hall "The Hall" : B2..D5 E4..F5',
+      "  ruined : north",
+      "  door : E5.s",
+    ].join("\n");
+    const { uvtt } = exportUvttSource(source, {});
+    // 18 perimeter cell-edges, minus 5 ruined-north edges, minus the door edge
+    expect(uvtt!["line_of_sight"]).toHaveLength(12);
+    expect(uvtt!["portals"]).toHaveLength(1);
+  });
+
+  it("room labels stay inside bent rooms (bounding-rect center can be outside)", () => {
+    const source = [
+      "map: battlemap",
+      "grid: square 10x10",
+      "[structures]",
+      'building spire "The Spire" : B2..B6 C6..F6',
+    ].join("\n");
+    const { svg } = renderSource(source, {});
+    // The wide base row (B6..F6) wins: narrow tower rows penalize the label.
+    expect(svg).toMatch(/<text x="136" y="203.5"[^>]*>The Spire<\/text>/);
   });
 
   it("open structures read as outdoor ground (spec 06 §3, ADR 0008)", () => {
