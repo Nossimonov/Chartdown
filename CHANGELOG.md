@@ -4,6 +4,10 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Added
+
+- **LLM discoverability**: the site serves [`/llms.txt`](https://nossimonov.github.io/Chartdown/llms.txt) and [`/llms-full.txt`](https://nossimonov.github.io/Chartdown/llms-full.txt) (the spec digest verbatim); `@chartdown/core` ships `digest.md` inside the tarball; READMEs signpost the agent bootstrap path.
+
 ## [0.2.0] — 2026-07-21
 
 ### Added

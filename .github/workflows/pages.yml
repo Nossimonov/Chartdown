@@ -52,6 +52,9 @@ jobs:
           cp -r main/playground/. site/
           mkdir -p site/preview
           cp -r preview/playground/. site/preview/
+          # LLM discoverability (#57): the spec digest IS llms-full.txt.
+          cp main/docs/spec/digest.md site/llms-full.txt
+          cp preview/docs/spec/digest.md site/preview/llms-full.txt
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
