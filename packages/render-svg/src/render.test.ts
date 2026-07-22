@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseXml } from "@rgrove/parse-xml";
 import { describe, expect, it } from "vitest";
 import { exportUvttSource, renderSource } from "./index";
 
@@ -667,6 +668,54 @@ describe("levels (spec 06 §8)", () => {
     const { svg } = renderSource(example("fairwater-manor"), { theme });
     expect(svg).toContain("M-5,-8 L-5,8");
   });
+});
+
+describe("output is well-formed XML (#79)", () => {
+  // parseXml is strict: a raw & or < anywhere in text content throws. Any
+  // call site that leaks user text into markup unescaped fails here.
+  const wellFormed = (src: string): void => {
+    for (const mode of ["player", "gm"] as const) {
+      expect(() => parseXml(renderSource(src, { mode }).svg)).not.toThrow();
+    }
+  };
+
+  it("battlemap tooltips escape display names and gm notes", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 8x8",
+      "[structures]",
+      'building vault "B - Treasury & Accounting <Ltd>" : A1..D4',
+      "  door : B4.s",
+      "[features]",
+      "crates loot : F6 gm=\"DC 25 <encrypted> & warded\"",
+    ].join("\n");
+    const { svg } = renderSource(src, { mode: "gm" });
+    expect(svg).toContain("&amp;");
+    wellFormed(src);
+  });
+
+  it("region and hexcrawl tooltip paths escape too", () => {
+    const region = [
+      "map: region",
+      "extent: 100x100mi",
+      "[terrain]",
+      'forest "Briar & Bramble <Wood>" : blob (50,50) size=20mi gm="Home of the Wolf & Wight"',
+    ].join("\n");
+    wellFormed(region);
+    const hexcrawl = [
+      "map: hexcrawl",
+      "grid: hex 4x4 pointy odd",
+      "[hexes]",
+      'B2 : forest "Thorn & Tangle" gm="Spiders < everywhere >"',
+    ].join("\n");
+    wellFormed(hexcrawl);
+  });
+
+  for (const name of ["redford-crossing", "brenmark", "vessany", "gumdrop-vale", "fairwater-manor", "gilded-tankard", "sundered-reach"]) {
+    it(`${name} parses as XML in both modes`, () => {
+      wellFormed(example(name));
+    });
+  }
 });
 
 describe("snapshots", () => {

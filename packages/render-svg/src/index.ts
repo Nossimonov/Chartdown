@@ -217,4 +217,5 @@ export function renderSource(source: string, options: RenderOptions & ParseOptio
 }
 
 export type { RenderMode } from "./model";
+export { readProvenance, stampProvenance, type Provenance } from "./provenance";
 export { exportUvtt, exportUvttSource, type UvttOptions, type UvttResult, type UvttSourceResult } from "./uvtt";

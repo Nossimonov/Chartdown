@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@
 import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
-import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { collectWalls, SIDE_NAME } from "./walls";
 
 interface Frame {
@@ -103,7 +103,7 @@ export function renderBattlemap(
     // Relatively-placed entities surface their resolved absolute address (#34):
     // the DM-facing frame is always absolute, whatever frame the author chose.
     const title = [gmTitleFor(model, e), model.resolvedNotes.get(e)].filter(Boolean).join(" — ");
-    const titleEl = title ? el("title", {}, title) : "";
+    const titleEl = title ? svgTitle(title) : "";
     const elevation = pairOf(e.pairs, "elevation");
 
     if (e.section === "terrain") {
@@ -719,7 +719,7 @@ export function renderBattlemap(
     const isFence = chain.includes("fence");
     const ruined = e.flags.includes("ruined");
     const parts: string[] = [titleEl];
-    if (!e.name && !titleEl && e.typeWord) parts.unshift(el("title", {}, e.typeWord));
+    if (!e.name && !titleEl && e.typeWord) parts.unshift(svgTitle(e.typeWord));
     for (const p of e.placements) {
       if (p.kind === "edge") {
         const s = edgeSegment(p.at, p.dir);
@@ -844,7 +844,7 @@ export function renderBattlemap(
       const chainR = model.chainOf(e.typeWord);
       const center = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
       const footprintParts: string[] = [titleEl];
-      if (!e.name && !titleEl && e.typeWord) footprintParts.unshift(el("title", {}, e.typeWord));
+      if (!e.name && !titleEl && e.typeWord) footprintParts.unshift(svgTitle(e.typeWord));
       // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.
       const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
       if (light) {
@@ -922,7 +922,7 @@ export function renderBattlemap(
     // Label conduct (spec 06 §7): at battlemap scale, fallback word-labels are
     // tooltips — visible text is reserved for display names, tokens, and zones.
     if (!e.name && !hasBattlemapGlyph(chain) && !themedGlyph && !drewFallback && !titleEl && e.typeWord) {
-      parts.unshift(el("title", {}, e.typeWord));
+      parts.unshift(svgTitle(e.typeWord));
     }
     into.push(el("g", { id: anchor }, ...parts));
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {

@@ -9,7 +9,7 @@ import { slugify } from "@chartdown/core";
 import { LabelPlacer } from "./labels";
 import { gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { FOG, GRID_LINE, INK, tierOf } from "./theme";
-import { colToNumber, el, fmt, pointsAttr, text, type XY } from "./util";
+import { colToNumber, el, fmt, pointsAttr, svgTitle, text, type XY } from "./util";
 
 const R = 24;
 const MARGIN = 30;
@@ -123,7 +123,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
 
       const fill = fogged ? model.theme.surface("fog", "fill", FOG) : model.theme.terrainFill(model.chainOf(cell!.terrain));
       const parts: string[] = [];
-      if (gmMode && cell?.gm) parts.push(el("title", {}, cell.gm));
+      if (gmMode && cell?.gm) parts.push(svgTitle(cell.gm));
       parts.push(el("polygon", { points: poly, fill, stroke: GRID_LINE, "stroke-width": 1 }));
 
       if (!fogged && cell) {
@@ -185,7 +185,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
       const title = gmTitleFor(model, e);
       routeLayer.push(
         el("g", { id: e.name ? `cd-${model.doc.docId}-${slugify(e.name)}` : undefined },
-          title ? el("title", {}, title) : "",
+          title ? svgTitle(title) : "",
           el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stroke.stroke, "stroke-width": chain.includes("river") ? 4 : 3, "stroke-dasharray": stroke.dash ?? (chain.includes("road") ? "8 4" : undefined), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.85 }),
         ),
       );

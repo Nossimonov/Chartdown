@@ -5,7 +5,7 @@
  * the URL fragment, which never leaves the browser.
  */
 
-import { renderSource, type RenderMode } from "@chartdown/render-svg";
+import { exportUvttSource, renderSource, type RenderMode } from "@chartdown/render-svg";
 import brenmark from "../../examples/brenmark/brenmark.cd";
 import tankard from "../../examples/gilded-tankard/gilded-tankard.cd";
 import manor from "../../examples/fairwater-manor/fairwater-manor.cd";
@@ -19,7 +19,7 @@ const EXAMPLES: Record<string, string> = {
   "Fairwater Manor (battlemap)": manor,
   "Ambush at Redford Crossing (battlemap)": redford,
   "The Gilded Tankard (keyed labels + legend)": tankard,
-  "The Sundered Reach (multi-continent region, in progress)": reach,
+  "The Sundered Reach (multi-continent region)": reach,
   "The Brenmark (hexcrawl)": brenmark,
   "Vessany (region)": vessany,
   "Gumdrop Vale (region + custom vocab)": gumdrop,
@@ -128,15 +128,77 @@ function flash(message: string): void {
   setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+function saveFile(name: string, contents: string, type: string): void {
+  const blob = new Blob([contents], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function download(): void {
   const svg = preview.querySelector("svg");
   if (!svg) return;
-  const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "chartdown-map.svg";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  saveFile("chartdown-map.svg", svg.outerHTML, "image/svg+xml");
+}
+
+// ---------- UVTT export (spec 06 §9): one .dd2vtt per level, raster included ----------
+
+const PIXELS_PER_GRID = 70;
+
+/** Rasterize a region of an SVG to base64 PNG via an offscreen canvas. */
+async function rasterize(
+  svg: string,
+  region: { x: number; y: number; w: number; h: number },
+  outW: number,
+  outH: number,
+): Promise<string> {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("could not rasterize the map SVG"));
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no 2d canvas available");
+    ctx.drawImage(img, region.x, region.y, region.w, region.h, 0, 0, outW, outH);
+    return canvas.toDataURL("image/png").split(",")[1] ?? "";
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function exportUvttFiles(): Promise<void> {
+  const probe = exportUvttSource(editor.value, { mode, pixelsPerGrid: PIXELS_PER_GRID });
+  if (!probe.uvtt) {
+    const error = probe.diagnostics.find((d) => d.severity === "error");
+    flash(error?.message ?? "UVTT export failed");
+    return;
+  }
+  const levels = probe.document.levels.length > 0 ? probe.document.levels : [""];
+  const names: string[] = [];
+  for (const level of levels) {
+    const result = exportUvttSource(editor.value, {
+      mode,
+      ...(level ? { level } : {}),
+      pixelsPerGrid: PIXELS_PER_GRID,
+    });
+    if (!result.uvtt) continue;
+    if (result.svg && result.imageRegion) {
+      const size = (result.uvtt["resolution"] as { map_size: { x: number; y: number } }).map_size;
+      result.uvtt["image"] = await rasterize(result.svg, result.imageRegion, size.x * PIXELS_PER_GRID, size.y * PIXELS_PER_GRID);
+    }
+    const name = `${probe.document.docId}${level ? `-${level}` : ""}.dd2vtt`;
+    saveFile(name, JSON.stringify(result.uvtt), "application/json");
+    names.push(name);
+  }
+  flash(`Exported ${names.join(", ")} — Universal VTT, one file per level.`);
 }
 
 // ---------- wiring ----------
@@ -156,6 +218,7 @@ themeSelect.addEventListener("change", renderNow);
 editor.addEventListener("input", scheduleRender);
 $("share").addEventListener("click", () => void share());
 $("download").addEventListener("click", download);
+$("uvtt").addEventListener("click", () => void exportUvttFiles());
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
   button.addEventListener("click", () => {
     mode = button.dataset["mode"] === "gm" ? "gm" : "player";

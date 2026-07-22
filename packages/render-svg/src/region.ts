@@ -14,8 +14,8 @@ import { SideLabelPlacer } from "./labels";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
-  blob, catmullRom, COMPASS_VECTORS, el, fmt, hashSeed, hashString, measureToNumber,
-  nearestOnPolyline, pointsAttr, rng, subPolylineBetween, text, type XY,
+  blob, catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
+  nearestOnPolyline, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
 } from "./util";
 
 interface Resolved {
@@ -528,7 +528,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
-    const titleEl = title ? el("title", {}, title) : "";
+    const titleEl = title ? svgTitle(title) : "";
     const wordFill = theme.terrainFill(chain);
 
     if (chain.includes("border")) {
@@ -1003,7 +1003,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         for (const b of pick!.boxes) placer.claimBox(b.cx, b.top, pick!.wpx / pick!.boxes.length, 9);
         const pid = `cdlp-${model.doc.docId}-${pathLabelCount++}`;
         const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
-        const safe = lbl.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+        const safe = esc(lbl);
         const weight = model.labelsMode === "keyed" ? ' font-weight="bold"' : "";
         labelBuckets[2]!.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
@@ -1194,7 +1194,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           const stroke = shade(stateFill);
           const title = gmTitleFor(model, current.decl);
           layers.lines.push(
-            el("g", {}, title ? el("title", {}, title) : "",
+            el("g", {}, title ? svgTitle(title) : "",
               el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stateFill, "stroke-width": 7, opacity: 0.25, "stroke-linejoin": "round", "stroke-linecap": "round" }),
               el("polyline", { points: pointsAttr(pts), fill: "none", stroke, "stroke-width": 1.6, "stroke-dasharray": "9 4 2 4", opacity: 0.9, "stroke-linejoin": "round", "stroke-linecap": "round" }),
             ),
