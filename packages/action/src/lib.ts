@@ -5,7 +5,7 @@
  */
 
 import { parse } from "@chartdown/core";
-import { renderSource, type RenderMode } from "@chartdown/render-svg";
+import { readProvenance, renderSource, stampProvenance, type RenderMode } from "@chartdown/render-svg";
 
 export interface ActionOptions {
   mode: "player" | "gm" | "both";
@@ -13,6 +13,9 @@ export interface ActionOptions {
   verify: boolean;
   theme?: string;
 }
+
+/** One canonical spelling per path — forward slashes on every OS. */
+export const normalizePath = (p: string): string => p.replace(/\\/g, "/").replace(/^\.\//, "");
 
 export interface RenderJob {
   /** Output path, relative to the scanned root. */
@@ -50,6 +53,7 @@ const outName = (base: string, mode: RenderMode): string => `${base}${mode === "
 export function renderCdFile(path: string, source: string, opts: ActionOptions): FileReport {
   const base = path.replace(/\.cd$/, "");
   const report: FileReport = { path, errors: [], jobs: [] };
+  const docId = parse(source).document.docId;
   for (const mode of modesFor(opts.mode)) {
     const options: Parameters<typeof renderSource>[1] = { mode };
     if (opts.theme !== undefined) options.theme = opts.theme;
@@ -57,7 +61,11 @@ export function renderCdFile(path: string, source: string, opts: ActionOptions):
     for (const d of diagnostics) {
       if (d.severity === "error") report.errors.push(`${path}:${d.line}: ${d.message}`);
     }
-    report.jobs.push({ outPath: outName(base, mode), svg });
+    const outPath = outName(base, mode);
+    report.jobs.push({
+      outPath,
+      svg: stampProvenance(svg, { source: normalizePath(path), docId, mode, output: normalizePath(outPath) }),
+    });
   }
   return report;
 }
@@ -79,8 +87,61 @@ export function renderMarkdownFile(path: string, markdown: string, opts: ActionO
       for (const d of diagnostics) {
         if (d.severity === "error") report.errors.push(`${path} (fence ${docId}):${d.line}: ${d.message}`);
       }
-      report.jobs.push({ outPath: outName(`${base}.${docId}${suffix}`, mode), svg });
+      const outPath = outName(`${base}.${docId}${suffix}`, mode);
+      report.jobs.push({
+        outPath,
+        svg: stampProvenance(svg, { source: normalizePath(path), docId, mode, output: normalizePath(outPath) }),
+      });
     }
   }
   return report;
+}
+
+export interface OrphanReport {
+  /** Marker-confirmed orphans (the #78 three-condition test) — safe to delete. */
+  orphans: string[];
+  /** Unmarked files that merely LOOK derived from a scanned source — warn-only, never deleted. */
+  suspects: string[];
+}
+
+/**
+ * The three-condition orphan test (#78): delete only what (1) bears the
+ * provenance marker, (2) still sits at the path the marker recorded — a
+ * hand-carried copy fails this and survives as a deliberate snapshot — and
+ * (3) no job in the current scan produces. Name-pattern inference never
+ * deletes anything: a hand-made SVG sharing a source's name is exactly the
+ * file this gate exists to protect.
+ */
+export function findOrphans(
+  svgs: ReadonlyArray<{ path: string; content: string }>,
+  producedPaths: ReadonlySet<string>,
+  sourcePaths: ReadonlySet<string>,
+): OrphanReport {
+  // Case-folded comparison: Windows checkouts disagree on case, not identity.
+  const fold = (p: string): string => normalizePath(p).toLowerCase();
+  const produced = new Set([...producedPaths].map(fold));
+  const sources = new Set([...sourcePaths].map(fold));
+  const report: OrphanReport = { orphans: [], suspects: [] };
+  for (const f of svgs) {
+    if (produced.has(fold(f.path))) continue; // a live output
+    const marker = readProvenance(f.content);
+    if (marker) {
+      if (fold(marker.output) === fold(f.path)) report.orphans.push(f.path);
+    } else if (looksDerived(fold(f.path), sources)) {
+      report.suspects.push(f.path);
+    }
+  }
+  return report;
+}
+
+/** Pre-marker legacy heuristic: unmarked output tied to a STILL-SCANNED source (mode change, fence rename). */
+function looksDerived(foldedPath: string, foldedSources: ReadonlySet<string>): boolean {
+  const base = foldedPath.replace(/\.svg$/, "").replace(/-gm$/, "");
+  if (foldedSources.has(`${base}.cd`)) return true;
+  const dot = base.lastIndexOf(".");
+  if (dot > base.lastIndexOf("/")) {
+    const mdBase = base.slice(0, dot);
+    return foldedSources.has(`${mdBase}.md`) || foldedSources.has(`${mdBase}.markdown`);
+  }
+  return false;
 }

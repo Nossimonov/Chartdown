@@ -1,5 +1,6 @@
+import { readProvenance } from "@chartdown/render-svg";
 import { describe, expect, it } from "vitest";
-import { extractFences, isMapDocument, renderCdFile, renderMarkdownFile } from "./lib";
+import { extractFences, findOrphans, isMapDocument, renderCdFile, renderMarkdownFile } from "./lib";
 
 const MAP = ["# Camp", "map: battlemap", "grid: square 4x4", "[features]", "campfire : B2"].join("\n");
 
@@ -36,5 +37,72 @@ describe("action driver logic (issue #60)", () => {
     const report = renderCdFile("maps/bad.cd", bad, { mode: "player", markdown: true, verify: false });
     expect(report.errors.length).toBeGreaterThan(0);
     expect(report.errors[0]).toMatch(/^maps\/bad\.cd:\d+/);
+  });
+
+  it("every job is stamped with provenance recording its own source and output (#78)", () => {
+    const cd = renderCdFile("maps\\camp.cd", MAP, { mode: "both", markdown: true, verify: false });
+    expect(cd.jobs.map((j) => readProvenance(j.svg))).toEqual([
+      { source: "maps/camp.cd", docId: "camp", mode: "player", output: "maps/camp.svg" },
+      { source: "maps/camp.cd", docId: "camp", mode: "gm", output: "maps/camp-gm.svg" },
+    ]);
+    const md = renderMarkdownFile("notes/session-3.md", `\`\`\`chartdown\n${MAP}\n\`\`\`\n`, { mode: "player", markdown: true, verify: false });
+    expect(readProvenance(md.jobs[0]!.svg)).toEqual({ source: "notes/session-3.md", docId: "camp", mode: "player", output: "notes/session-3.camp.svg" });
+  });
+});
+
+describe("orphan cleanup is marker-gated (#78)", () => {
+  const stampedAt = (output: string): string =>
+    renderCdFile(output.replace(/(-gm)?\.svg$/, ".cd"), MAP, { mode: output.endsWith("-gm.svg") ? "gm" : "player", markdown: true, verify: false }).jobs[0]!.svg;
+
+  it("a marked output no scan job produces is an orphan (docId rename, source deletion, mode change)", () => {
+    const { orphans, suspects } = findOrphans(
+      [{ path: "maps/old-name.svg", content: stampedAt("maps/old-name.svg") }],
+      new Set(["maps/new-name.svg"]),
+      new Set(["maps/new-name.cd"]),
+    );
+    expect(orphans).toEqual(["maps/old-name.svg"]);
+    expect(suspects).toEqual([]);
+  });
+
+  it("a hand-made SVG is untouched even when its name shadows a deleted source", () => {
+    const { orphans, suspects } = findOrphans(
+      [{ path: "maps/keep.svg", content: "<svg><circle r=\"5\"/></svg>" }],
+      new Set(),
+      new Set(),
+    );
+    expect(orphans).toEqual([]);
+    expect(suspects).toEqual([]);
+  });
+
+  it("a hand-carried COPY of a generated SVG survives — its marker names the old location", () => {
+    const { orphans } = findOrphans(
+      [{ path: "archive/camp-v1-frozen.svg", content: stampedAt("maps/camp.svg") }],
+      new Set(),
+      new Set(),
+    );
+    expect(orphans).toEqual([]);
+  });
+
+  it("path comparison shrugs off separators and case (Windows checkouts)", () => {
+    const { orphans } = findOrphans(
+      [{ path: "Maps\\Camp.svg", content: stampedAt("maps/camp.svg") }],
+      new Set(["maps/other.svg"]),
+      new Set(["maps/other.cd"]),
+    );
+    expect(orphans).toEqual(["Maps\\Camp.svg"]);
+  });
+
+  it("unmarked legacy outputs tied to a still-scanned source are suspects, never deletions", () => {
+    const { orphans, suspects } = findOrphans(
+      [
+        { path: "maps/camp.svg", content: "<svg/>" },                    // mode changed to gm-only
+        { path: "notes/session-3.gone-fence.svg", content: "<svg/>" },   // fence renamed
+        { path: "art/logo.svg", content: "<svg/>" },                     // unrelated hand-made file
+      ],
+      new Set(["maps/camp-gm.svg"]),
+      new Set(["maps/camp.cd", "notes/session-3.md"]),
+    );
+    expect(orphans).toEqual([]);
+    expect(suspects).toEqual(["maps/camp.svg", "notes/session-3.gone-fence.svg"]);
   });
 });
