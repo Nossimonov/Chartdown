@@ -1,7 +1,7 @@
 # The Gilded Tankard
 
 map: battlemap
-chartdown: 0.1
+chartdown: 0.2
 grid: square 12x10
 scale: 5ft
 labels: keyed              ; numbered markers, key list in the legend band

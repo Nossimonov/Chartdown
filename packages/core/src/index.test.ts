@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parse, SPEC_VERSION } from "./index";
 
 describe("basics", () => {
-  it("targets spec draft 0.1", () => {
-    expect(SPEC_VERSION).toBe("0.1");
+  it("tracks the released spec version (spec and packages version together)", () => {
+    expect(SPEC_VERSION).toBe("0.3");
   });
 
   it("parses a minimal document without errors", () => {

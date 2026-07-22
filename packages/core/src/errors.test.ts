@@ -37,8 +37,9 @@ describe("document model (spec 01)", () => {
     expect(warningsOf("map: battlemap\n[x-mytool]\nanything : A1\n")).toEqual([]);
   });
 
-  it("a newer chartdown: version warns", () => {
+  it("a newer chartdown: version warns; older targets parse silently", () => {
     expect(warningsOf("map: battlemap\nchartdown: 9.9\n").join()).toMatch(/targets spec 9.9/);
+    expect(warningsOf("map: battlemap\nchartdown: 0.1\n").join()).not.toMatch(/targets spec/);
   });
 });
 

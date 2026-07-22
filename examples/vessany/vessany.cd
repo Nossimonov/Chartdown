@@ -1,6 +1,7 @@
 # Vessany
 
 map: region
+chartdown: 0.3
 extent: 900x600mi            ; origin northwest; x east, y south
 compass: on
 scale-bar: on

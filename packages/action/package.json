@@ -1,7 +1,7 @@
 {
   "name": "@chartdown/action",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Driver for the chartdown-action GitHub Action. Not published to npm — distributed as a marketplace Action built from this monorepo.",
   "license": "MIT"
 }
