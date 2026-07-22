@@ -26,7 +26,7 @@ interface Resolved {
   ridge?: boolean;
   /** Massif breadth in px (from `width=`, a measure) — a ridge is a BELT, not a centerline. */
   beltW?: number;
-  halfPlane?: { compass: string; of: XY[] };
+  halfPlane?: { compass: string; of: XY[]; refKey?: string };
   /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
   alongSpans?: { ref: string; start: number; end: number }[];
 }
@@ -251,7 +251,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }
           case "side-of": {
             const r = lookup(p.ref);
-            if (r?.polyline) out.halfPlane = { compass: p.compass, of: r.polyline };
+            if (r?.polyline) out.halfPlane = { compass: p.compass, of: r.polyline, refKey: p.ref.form === "id" ? p.ref.value : (byName.get(p.ref.value) ?? slugify(p.ref.value)) };
             else {
               const base = refPoint(p.ref);
               if (base) {
@@ -361,6 +361,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     if (e.name) byName.set(e.name, key);
     if (r.halfPlane && e.section === "water") waterVector = COMPASS_VECTORS[r.halfPlane.compass] ?? null;
     items.push({ e, r, chain: model.chainOf(e.typeWord) });
+  }
+
+  // Paths serving as ZONAL FRONTIERS (a tundra's frostline) render in the
+  // frontier register — a fine dotted line in the zone's tint — because any
+  // solid line at river weight reads as a river (owner note).
+  const frontierFills = new Map<string, string>();
+  for (const it of items) {
+    if (it.r.halfPlane?.refKey && it.e.section !== "water" && it.e.archetype !== "zone") {
+      frontierFills.set(it.r.halfPlane.refKey, theme.terrainFill(it.chain));
+    }
   }
 
   // ---------- pass 2: render, markers known before any label places ----------
@@ -506,10 +516,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           const c = centroid(poly);
           const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
           const labelText = keyedLbl ?? e.name!.toUpperCase();
-          const y = placer.place(c.x, c.y, labelText, 18, "middle", labelText.length * (18 * 0.58 + 6));
+          const width = labelText.length * (18 * 0.58 + 6);
+          // The name stays INSIDE its zone (a tundra named south of its own
+          // frostline is nonsense) — same containment rule as realm names.
+          const bw = Math.max(...poly.map((pt) => pt.x)) - Math.min(...poly.map((pt) => pt.x));
+          const spot =
+            placer.placeOrDrop(c.x, c.y, labelText, 18, "middle", [0, -bw / 6, bw / 6, -bw / 4, bw / 4], width, (x, y) => pip({ x, y }, poly)) ??
+            { x: c.x, y: placer.place(c.x, c.y, labelText, 18, "middle", width), size: 18 };
           labelBuckets[4]!.push(
             text(labelText, {
-              x: c.x, y, "font-size": 18, "letter-spacing": 6,
+              x: spot.x, y: spot.y, "font-size": spot.size, "letter-spacing": 6,
               fill: isWater ? "#5a7a96" : INK, opacity: 0.55, "text-anchor": "middle", "font-family": "sans-serif",
             }),
           );
@@ -741,6 +757,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         }
         massifs.push({ anchor, titleEl, poly: beltPoly, peaks: peaks.join(""), fill: wordFill });
       } else {
+        const frontierFill = frontierFills.get(keyOf(e));
+        if (frontierFill) {
+          // Zonal frontier: a fine dotted line in the zone's own tint — the
+          // classic treeline symbol, unmistakably not a river or road.
+          layers.lines.push(
+            el("g", { id: anchor }, titleEl,
+              el("polyline", { points: pointsAttr(r.polyline), fill: "none", stroke: shade(frontierFill), "stroke-width": 1.2, "stroke-dasharray": "1 5", opacity: 0.8, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+            ),
+          );
+        } else {
         const stroke = theme.pathStroke(chain);
         // Coastlines are shorelines, not rivers: hairline by default (the
         // island outline weight the owner preferred), unless width= says so.
@@ -763,6 +789,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }),
         );
         layers.lines.push(el("g", { id: anchor }, ...lineParts));
+        }
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         deferLabel(2, () => {

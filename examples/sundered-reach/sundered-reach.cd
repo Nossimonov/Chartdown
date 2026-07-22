@@ -43,7 +43,7 @@ forest "Thornmark Weald" : blob (250,730) size=100mi
 ; the east: cold heights north, swamps south of the range. The tundra is
 ; ZONAL (ADR 0013): beyond the frostline the land IS tundra to the edge -
 ; a frontier fact, not a patch floating in grassland
-frostline "The Frostline" : path (1005,205) (1190,150) (1350,185) (1600,140)
+frostline "The Frostline" : path (1055,205) (1190,150) (1350,185) (1505,145)
 tundra "The White Reach" : north of "The Frostline"
 marsh "The Sathriss Sink" : blob (1130,855) size=130mi
 jungle "The Green Throat" : blob (1380,900) size=100mi

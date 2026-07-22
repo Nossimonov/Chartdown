@@ -5050,7 +5050,7 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
               "args": [
                 {
                   "kind": "point",
-                  "x": 1005,
+                  "x": 1055,
                   "y": 205,
                 },
                 {
@@ -5065,8 +5065,8 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
                 },
                 {
                   "kind": "point",
-                  "x": 1600,
-                  "y": 140,
+                  "x": 1505,
+                  "y": 145,
                 },
               ],
               "kind": "shape",
