@@ -50,6 +50,18 @@ await build({
   logLevel: "info",
 });
 
+// GitHub Action driver (issue #60): fully self-contained node script — the
+// action repo ships this file; runners need nothing but node.
+await build({
+  entryPoints: ["packages/action/src/render.ts"],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  alias: sourceAliases,
+  outfile: "packages/action/dist/render.mjs",
+  logLevel: "info",
+});
+
 // MCP server (issue #58): node ESM binary; the SDK and zod stay external
 // (runtime deps), everything else — including the spec digest — bundles in.
 await build({
