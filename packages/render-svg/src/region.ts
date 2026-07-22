@@ -396,6 +396,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const labelJobs: { priority: number; run: () => void }[] = [];
   const deferLabel = (priority: number, run: () => void): void => void labelJobs.push({ priority, run });
 
+  // Massif belts collected across the loop and emitted as ONE group per
+  // terrain fill with group-level opacity: overlapping ranges (the Vakh
+  // Teeth joining the Spine of Aum) composite as a single mountain system,
+  // never a darker double-exposure.
+  const massifs: { anchor: string | undefined; titleEl: string; poly: XY[]; peaks: string; fill: string }[] = [];
+
   // Political boundaries (#81): a border names a relationship, not a place —
   // realms collected here, border declarations there, seams rendered after
   // every realm's geometry is known.
@@ -578,30 +584,52 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (r.ridge) {
         // A mountain range is TERRAIN with dimensions (owner review): the
         // belt — breadth from width= — is the navigational footprint, with
-        // peak marks along the crest. Not a centerline of peaks.
+        // peak marks along the crest. Not a centerline of peaks, and not a
+        // constant-width ribbon either: the belt is a variable-width
+        // polygon that tapers to tips at the ends (no bulging into the
+        // sea) and swells and wavers along its length, phase-keyed to the
+        // ridge's identity so each range has its own profile.
         const beltW = r.beltW ?? 28;
         const lp = r.polyline;
-        let total = 0;
-        for (let i = 0; i < lp.length - 1; i++) total += Math.hypot(lp[i + 1]!.x - lp[i]!.x, lp[i + 1]!.y - lp[i]!.y);
+        const cum: number[] = [0];
+        for (let i = 1; i < lp.length; i++) cum.push(cum[i - 1]! + Math.hypot(lp[i]!.x - lp[i - 1]!.x, lp[i]!.y - lp[i - 1]!.y));
+        const total = cum[cum.length - 1]! || 1;
+        const phase = (hashString(entityAnchor(e) ?? e.name ?? "ridge") % 628) / 100;
+        const wAt = (t: number): number => {
+          const taper = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.6);
+          const wobble = 1 + 0.18 * Math.sin(4.3 * Math.PI * t + phase);
+          return beltW * (0.18 + 0.82 * taper) * wobble;
+        };
+        const leftSide: XY[] = [];
+        const rightSide: XY[] = [];
+        for (let i = 0; i < lp.length; i++) {
+          const prev = lp[Math.max(0, i - 1)]!;
+          const next = lp[Math.min(lp.length - 1, i + 1)]!;
+          const dx = next.x - prev.x;
+          const dy = next.y - prev.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const hw = wAt(cum[i]! / total) / 2;
+          leftSide.push({ x: lp[i]!.x + (dy / len) * hw, y: lp[i]!.y - (dx / len) * hw });
+          rightSide.push({ x: lp[i]!.x - (dy / len) * hw, y: lp[i]!.y + (dx / len) * hw });
+        }
+        const beltPoly = [lp[0]!, ...leftSide, lp[lp.length - 1]!, ...[...rightSide].reverse()];
         const count = Math.max(2, Math.floor(total / Math.max(14, beltW * 0.55)));
         const peaks: string[] = [];
         for (let i = 0; i <= count; i++) {
-          const { p, dir } = alongAt(lp, i / count);
-          // Deterministic stagger: peaks alternate off-crest so the belt
-          // reads as a massif, not beads on a string.
+          const t = i / count;
+          const wLoc = wAt(t);
+          // Peaks scale with the LOCAL width — smaller toward the tapered
+          // ends — and stagger off-crest so the belt reads as a massif.
+          const s = wLoc * (i % 3 === 1 ? 0.2 : 0.26);
+          if (s < 2.5) continue;
+          const { p, dir } = alongAt(lp, t);
           const side = i % 2 === 0 ? 1 : -1;
-          const offAmt = (i % 3 === 0 ? 0 : beltW * 0.16) * side;
+          const offAmt = (i % 3 === 0 ? 0 : wLoc * 0.18) * side;
           const px = p.x + dir.y * offAmt;
           const py = p.y - dir.x * offAmt;
-          const s = beltW * (i % 3 === 1 ? 0.16 : 0.22);
           peaks.push(`M${fmt(px - s)} ${fmt(py + s * 0.7)}L${fmt(px)} ${fmt(py - s)}L${fmt(px + s)} ${fmt(py + s * 0.7)}`);
         }
-        layers.lines.push(
-          el("g", { id: anchor }, titleEl,
-            el("polyline", { points: pointsAttr(lp), fill: "none", stroke: wordFill, "stroke-width": beltW, opacity: 0.55, "stroke-linejoin": "round", "stroke-linecap": "round" }),
-            el("path", { d: peaks.join(""), fill: "none", stroke: shade(wordFill), "stroke-width": 1.4, opacity: 0.85, "stroke-linejoin": "round", "stroke-linecap": "round" }),
-          ),
-        );
+        massifs.push({ anchor, titleEl, poly: beltPoly, peaks: peaks.join(""), fill: wordFill });
       } else {
         const stroke = theme.pathStroke(chain);
         // Coastlines are shorelines, not rivers: hairline by default (the
@@ -764,6 +792,24 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         });
       }
     }
+  }
+
+  // Massifs emit FIRST among lines (beneath rivers and roads that cross
+  // them), one group per fill with group-level opacity so overlaps merge.
+  if (massifs.length) {
+    const groups: string[] = [];
+    for (const fill of [...new Set(massifs.map((m) => m.fill))]) {
+      const mine = massifs.filter((m) => m.fill === fill);
+      groups.push(
+        el("g", { opacity: 0.55 },
+          ...mine.map((m) => el("g", { id: m.anchor }, m.titleEl, el("polygon", { points: pointsAttr(m.poly), fill }))),
+        ),
+      );
+      groups.push(
+        el("path", { d: mine.map((m) => m.peaks).join(""), fill: "none", stroke: shade(fill), "stroke-width": 1.4, opacity: 0.8, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+      );
+    }
+    layers.lines.unshift(...groups);
   }
 
   // ---------- realm boundaries and border states (#81) ----------
