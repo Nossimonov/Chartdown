@@ -80,7 +80,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     w = 820;
     h = unitsH * scale;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
-    renderRegion(model, body, { w, h, scale });
+    renderRegion(model, body, { w, h, scale }, diagnostics);
   }
 
   // Furniture (spec 07 §4)

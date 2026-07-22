@@ -47,6 +47,13 @@ Header keys, all defaulting `off`, all renderer-generated and never hand-maintai
 
 Renderers SHOULD avoid label collisions and MUST place labels deterministically (spec 02 §8.2 — seeded, stable across re-renders); explicit hints always win over automatic placement. Labels of `hidden` entities and `[gm]` content appear only in GM mode, per the fail-closed rule (spec 01 §6).
 
+When a map holds more detail than its size can sustain, renderers resolve label pressure the way a cartographer would, in this order:
+
+1. **Proximity outranks size.** A label anchored to a point marker is meaningful only next to its marker — point labels claim placement first and migrate least, and names with room to roam (areas, realms, seas) yield space to them. Within the point tier, more important markers (larger tiers) claim before minor ones.
+2. **Shrink before moving far.** A label that cannot be placed at full size SHOULD be retried at smaller sizes, down to a legibility floor, before being displaced from the feature it names.
+3. **Omit before overwriting.** If a label still cannot be placed without substantially covering other map text, renderers MAY omit it entirely — an unlabeled marker reads better than two names on top of each other. Author-placed `[labels]` overrides are never omitted.
+4. **Repeat rather than cross.** A name spanning a long feature (a sprawled sea, a realm) whose natural midpoint is densely built over MAY be repeated once on each side of the occupied stretch instead of being drawn across it.
+
 ---
 
 *This document is part of the Chartdown specification and is licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/), per [ADR 0001](../decisions/0001-mit-code-cc-by-spec.md).*

@@ -74,7 +74,7 @@ export type Relational =
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
   | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }
-  | { kind: "relational"; form: "along"; ref: Ref };
+  | { kind: "relational"; form: "along"; ref: Ref; face?: string };
 
 export type Placement = Address | AddressRange | Point | PointRange | Edge | Shape | Relational;
 

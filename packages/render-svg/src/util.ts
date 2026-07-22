@@ -45,6 +45,59 @@ export function rng(seed: number): () => number {
   };
 }
 
+/**
+ * Hash a set of numbers into an rng seed — organic shapes key on their OWN
+ * geometry (center, size, points) plus the document seed, never on document
+ * position: appending an entity can never reshape another (spec 02 §8).
+ */
+/** Deterministic string hash, for identity-keyed shapes. */
+export function hashString(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+export function hashSeed(...nums: number[]): number {
+  let h = 2166136261 >>> 0;
+  for (const n of nums) {
+    const v = Math.round(n * 8) | 0;
+    h = Math.imul(h ^ (v & 0xff), 16777619);
+    h = Math.imul(h ^ ((v >> 8) & 0xff), 16777619);
+    h = Math.imul(h ^ ((v >> 16) & 0xff), 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Catmull-Rom spline through the declared points — the TRUE curve: a pure
+ * function of the input, no noise (spec 02 §9: finishing is not inventing;
+ * authors control wiggle with via points). `closed` splines a ring.
+ */
+export function catmullRom(pts: XY[], samples = 8, closed = false): XY[] {
+  if (pts.length < 3) return pts.slice();
+  const P = (i: number): XY =>
+    closed ? pts[((i % pts.length) + pts.length) % pts.length]! : pts[Math.max(0, Math.min(pts.length - 1, i))]!;
+  const out: XY[] = [];
+  const segs = closed ? pts.length : pts.length - 1;
+  for (let i = 0; i < segs; i++) {
+    const p0 = P(i - 1);
+    const p1 = P(i);
+    const p2 = P(i + 1);
+    const p3 = P(i + 2);
+    for (let s = 0; s < samples; s++) {
+      const t = s / samples;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      out.push({
+        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+      });
+    }
+  }
+  if (!closed) out.push(pts[pts.length - 1]!);
+  return out;
+}
+
 /** Organic finishing: midpoint-displacement jitter of a polyline (two rounds). */
 export function meander(points: XY[], amount: number, random: () => number): XY[] {
   let current = points;

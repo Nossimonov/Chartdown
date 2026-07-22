@@ -4,9 +4,26 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-23
+
+The region-map release, forced out line by line by [the Sundered Reach](examples/sundered-reach/) — a two-continent stress test reviewed by its owner across twenty-plus rounds until the map earned `spec-aligned` status.
+
+### Added
+
+- **Borders are relationships** (spec 05 §2, [ADR 0012](docs/decisions/0012-borders-are-relationships.md), #81): realm `area` boundaries may **follow features** — `along <ref>` between two vertices traces the feature's curve (a ridge, a coastline), so moving the feature moves the border. `border` leaves the path family and attaches a **state** to a stretch of one realm's boundary: blanket frontier, facing word (outward normal, eight sectors, open edges only; `inner` for bay shores), `along <ref>`, or two-realm sugar for the shared abutting stretch — most specific wins. States are open vocabulary; overlapping realm claims are legal (a disputed march); stated seams render as an atlas band with dash-dot, default boundaries the same dash-dot lighter.
+- **Terrain kinds** (spec 02 §9, 03 §2, 05 §2, [ADR 0013](docs/decisions/0013-terrain-kinds-aspect-adaptation.md), #82): terrain is patches (`blob`/`area`), belts (`ridge <points> width=<measure>` — a variable-width massif with peak marks, tapering to tips, merging where ranges overlap), or **zones** — climatic terrain defined by a frontier, declared as an area following the frontier and the coasts (continent-scoped) or a half-plane (map-wide). Zonal frontiers render as dotted lines in the zone's tint. `ground: <terrain-word>` names what unmarked land is. Mountain crest and extent coexist on one entity (`ridge (…) area (…)`) — refinement is additive, and references always mean the crest.
+- **Aspect adaptation** (spec 03 §2, ADR 0013): a reference names the *thing*, not its geometry class — line-needing forms take the polyline else the area boundary; point-needing take point → midpoint → centroid; area-needing take polygon → belt. Never guesses between multiple meaningful lines: `along` a crestless area fails loud, disambiguated by `along <compass> edge of <ref>`.
+- **Dense-map label conduct** (spec 07 §5, #73): placement claims run in priority order — author overrides, point markers (proximity IS their meaning; capitals before minor features), curve labels, area names, realm/sea sprawls — while paint stacks the reverse. Labels **shrink before migrating** (size floor, then tracking), are **omitted rather than drawn over other text**, and a split sprawl name **repeats once per clear stretch** of its water, centered and sized to the room it actually has.
+
 ### Changed
 
 - Glyphless words tint **deterministically by their base word** (golden-angle hues, parchment-muted; theme `fill=` overrides): table and barrel — and every unknown word a scene will ever hold — stop being the same grey square, on the map and matched in the legend. (#71)
+- **Nations tint by name**: every realm gets its own deterministic color (the #71 principle at entity grain), with boundary dashes to match — six nations, six tints, one glance.
+- Region label placement grew a body of cartographic judgment: curve labels prefer straight stretches and the outside of bends (over-bent names set straight instead of mushing), roads dodge area names (never the reverse), mountain names sit ON their massif region-style, realm and zone names stay inside their own territory, and settlement type steps down so capitals stop rivaling the map title.
+
+### Fixed
+
+- Polygon seas bound by coastline curves (two continents can exist, #76); islands render as land; water→realms→terrain paint order; half-planes span the full map beyond their frontier; phantom label claim boxes; `text-anchor` always written (SVG defaults to start); diagonal label collision gaps; fitLabel prefers size over tracking.
 
 ## [0.2.2] — 2026-07-22
 
@@ -66,7 +83,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Nossimonov/Chartdown/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Nossimonov/Chartdown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Nossimonov/Chartdown/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Nossimonov/Chartdown/compare/v0.1.0...v0.2.0

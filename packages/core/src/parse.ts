@@ -43,7 +43,7 @@ const MAP_TYPES = new Set(["battlemap", "hexcrawl", "region"]);
 const KNOWN_HEADER_KEYS = new Set([
   "map", "chartdown", "id", "grid", "scale", "extent", "seed",
   "use", "theme", "labels", "legend", "scale-bar", "compass", "numbers",
-  "levels", "level",
+  "levels", "level", "ground",
 ]);
 const UNIVERSAL_SECTIONS = new Set(["vocab", "gm", "labels"]);
 const SECTIONS_BY_TYPE: Record<string, Set<string>> = {

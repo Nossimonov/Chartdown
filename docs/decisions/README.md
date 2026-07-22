@@ -21,3 +21,5 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0009](0009-relative-placement-referent-frames.md) | Relative placement rides `on … at`: the `at` payload is interpreted in the referent's frame | Accepted |
 | [0010](0010-uvtt-export-caller-raster.md) | UVTT export lives in the renderer and the caller supplies the raster | Accepted |
 | [0011](0011-mcp-server-runtime-deps.md) | `@chartdown/mcp` carries runtime dependencies; the zero-dep rule binds the language core | Accepted |
+| [0012](0012-borders-are-relationships.md) | Borders are relationships with states; realm edges may follow features | Accepted |
+| [0013](0013-terrain-kinds-aspect-adaptation.md) | Terrain comes in kinds (patches, belts, zones); references adapt by aspect, never by guess | Accepted |

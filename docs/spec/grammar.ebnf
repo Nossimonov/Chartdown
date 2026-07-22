@@ -52,6 +52,9 @@ point          = "(" , number , "," , number , ")" ; (* gridless world units, or
 point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) , { placement | pair } ;
+                 (* inside an "area" point list, "along" , ref between two
+                    vertices makes the boundary follow the feature's curve
+                    between their projections — spec 05 §2, ADR 0012 *)
 
 relational     = ( "at" , ( point | address | range | edge ) )
                | ( [ measure ] , compass , "of" , ref )
@@ -59,7 +62,7 @@ relational     = ( "at" , ( point | address | range | edge ) )
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
-               | ( "along" , ref ) ;
+               | ( "along" , [ compass , "edge" , "of" ] , ref ) ;
                  (* closed grammar — no other relational forms exist.
                     multiple relational placements constrain jointly; two "on"
                     path refs = band intersection (crossings, spec 06 §6).

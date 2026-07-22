@@ -66,7 +66,7 @@ landmark : feature
 ; zones
 realm : zone
 region : zone
-border : path
+border : zone
 
 ; annotation (see section 07)
 note : feature
@@ -80,7 +80,24 @@ Known sections: `[water]`, `[terrain]`, `[paths]`, `[settlements]`, `[features]`
 
 **Water and coastlines.** Water bodies are ordinary terrain areas; `coastline` is an ordinary path. A water area placed with the half-plane form — `coastline coast : from …` then `sea "The Argen Sea" : west of coast` — fills the map extent on the stated side of the referenced path, clipped to it. (Per spec 03, the coastline carries an explicit id because things reference it.) There are no winding-order conventions: the sea is on whichever side the author says, which is what the line reads as.
 
-**Political boundaries.** `border : along <ref>` (a path following a feature) is the blessed idiom; realm membership by half-plane (`realm "Khar" : east of spine`) or explicit geometry.
+**Terrain kinds** (ADR 0013). Terrain facts come in three geometric kinds, each with its idiom:
+
+- **Patches** — forests, marshes, wealds: things with an outline sitting *on* the ground. `blob`/`area`, the paint-on-parchment model, unchanged.
+- **Belts** — ranges following a spine with breadth: `ridge <points> width=<measure>` (spec 02 §9).
+- **Zones** — climatic terrain (tundra, desert, icecap) defined by a **frontier, not an outline**. A zone scoped to one landmass declares an `area` whose edges follow the frontier and the coasts (the same feature-following as realm boundaries, ADR 0012): `tundra "The White Reach" : area (1055,205) along "The Frostline" (1505,145) along fareast (1540,0) (1020,0) along eastshore` — each continent carries its own frontier, and adding a second continent's tundra is a second declaration. The half-plane form (`north of <ref>`) remains for truly map-wide zones; note a half-plane spans the FULL map beyond its frontier, every landmass included. Either way, renderers give zonal terrain honest terrain fill (painted beneath water, so seas win where they overlap) — never the washed zone tint — and a non-coastline path serving as a zonal frontier renders in the frontier register (a fine dotted line in the zone's tint), not at river weight.
+
+**Named ground.** The optional region header key `ground: <terrain-word>` states what unmarked land is (`ground: plains`); the theme paints the base accordingly. Unstated, the ground is unspecified open land — the parchment.
+
+**Mountains: crest and extent coexist; refinement is additive** (ADR 0013). `ridge (…)` declares the crest and sketches the extent (the belt). Adding `area (…)` *on the same entity* refines the extent while the crest remains — `along <ref>` always means the declared crest, so references never break under refinement. An area-only mountain entity (a plateau, a highland waste) has **no crest**: a line-needing reference to it is ambiguous and fails loud, resolved by naming a face — `along south edge of <ref>` (spec 02 §7). All political outcomes are authorable and none is a representational default: border on the divide (`along <ref>`), a no-man's march (each realm to its near face), or a whole-range claim (boundary along the far face).
+
+**Political boundaries** (ADR 0012, superseding the original border-as-path idiom). A realm's boundary is its own geometry, and a border names a **relationship**, never a location:
+
+- **Realm edges may follow features.** Inside an `area` point list, `along <ref>` between two vertices makes the boundary trace the referenced feature's rendered curve between the projections of those vertices (the same feature-following as `from A to B along X`, spec 02 §7): `realm valemark "Valemark" : area (110,240) along westspine (552,540) …`. One definition — moving the feature moves the border.
+- **`border` attaches a state to a stretch of one realm's boundary.** Its predicate names the realm, an optional stretch selector, and a state word: `border : valemark contested` (blanket — every frontier stretch not abutting another realm), `border : valemark east contested` (facing selector), `border : valemark along westspine sealed` (feature selector), `border : valemark carrowen contested` (two-realm sugar: both realms' shared stretch, symmetric). More specific selectors win where declarations overlap: along-feature beats facing beats two-realm beats blanket. State words are ordinary vocabulary resolving through the theme chain (spec 04 §3) — unknown states render generically, never fail. `gm=` on a border annotates the relationship and is GM-only as usual.
+- **Facing is per edge, by outward normal** — the direction an outsider crosses from — bucketed into eight compass sectors, ties rounded clockwise. A bare facing word selects only **open** edges (the outward-normal ray from the edge midpoint escapes without re-entering the realm); the `inner` modifier selects the complement (edges facing the realm's own land across a bay). A C-shaped realm's `north` border is its very top alone; `inner north` is the bay's south shore; the bay's back wall stays open toward the mouth it faces.
+- **Overlapping realm claims are legal and meaningful** — two realms declaring the same land is a disputed march, not an authoring error; renderers blend the tints and draw both boundaries. Asymmetric states on a shared seam are likewise permitted (each side declares separately) — each realm's own boundary stroke carries its own state.
+
+A border whose realm reference resolves to nothing, or whose named realms never abut, has nothing to style; renderers SHOULD warn and MUST NOT invent geometry for it. Realm membership by half-plane (`realm "Khar" : east of spine`) remains available.
 
 ## 3. Hexcrawl maps
 

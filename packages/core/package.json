@@ -1,6 +1,6 @@
 {
   "name": "@chartdown/core",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Chartdown parser and AST — a plain-text, Markdown-inspired language for TTRPG maps. Runtime-dependency-free by rule (ADR 0007).",
   "license": "MIT",
   "type": "module",

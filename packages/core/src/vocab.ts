@@ -74,7 +74,7 @@ landmark : feature
 ; zones
 realm : zone
 region : zone
-border : path
+border : zone
 
 ; annotation (spec 07)
 note : feature

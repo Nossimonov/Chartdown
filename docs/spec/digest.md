@@ -15,7 +15,7 @@ scale: 5ft                    ; real size of one cell (grid maps)
 mud : area H11..J11 difficult
 ```
 
-Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · `grid:` · `scale:` · `extent: 900x600mi` (gridless size) · `seed:` (int; varies deterministic organic rendering) · `use:` (import vocabulary doc; repeatable) · `theme:` (suggestion only) · `labels: names|keyed|none` · `legend: on` · `scale-bar: on` · `compass: on` · `numbers: on`. Unknown keys/sections warn; `[x-*]` sections are silently ignored (extension namespace).
+Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · `grid:` · `scale:` · `extent: 900x600mi` (gridless size) · `seed:` (int; varies deterministic organic rendering) · `use:` (import vocabulary doc; repeatable) · `theme:` (suggestion only) · `labels: names|keyed|none` · `legend: on` · `scale-bar: on` · `compass: on` · `numbers: on` · `ground: <terrain-word>` (region: names what unmarked land is). Unknown keys/sections warn; `[x-*]` sections are silently ignored (extension namespace).
 
 ## The one line grammar
 
@@ -26,7 +26,8 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 - **Cells, all grids**: chess-style `K11`, `C4` (columns A..Z, AA…; 1-indexed; row 1 = north). Ranges `A11..F15` (rect / hex run / hex block). Lists: `C12 E13`.
 - **Edges/corners**: `O6.s` (n/e/s/w), `K5.nw` (corners). Wall runs: `wall : K5.e K6.e K7.e`.
 - **Gridless points**: `(x,y)` in extent units from NW origin; point ranges `(x1,y1)..(x2,y2)`.
-- **Shapes** (renderer finishes organically, deterministically — finishing is not inventing; give major paths generous `via` points): `area <cells|points|range>` · `path <seq> width=N` · `blob <center> size=<measure>` · `ridge <seq>`.
+- **Shapes** (renderer finishes organically, deterministically — finishing is not inventing; give major paths generous `via` points): `area <cells|points|range>` · `path <seq> width=N` · `blob <center> size=<measure>` · `ridge <seq> width=<measure>` (an elongated MASS along a spine — `width=` is its breadth; the belt is the footprint, not the centerline; `ridge (…) area (…)` on one entity refines the extent while the crest survives for references).
+- **Aspect adaptation** (03): a reference names the THING, not its geometry class — point-needing forms take point→line midpoint→centroid; line-needing (`along`, endpoints) take polyline (a range's crest)→area boundary (rivers stop at shores); area-needing take polygon→a ridge's belt. Never guesses between multiple meaningful lines: `along` a crestless AREA fails loud; disambiguate with a face — `along south edge of <ref>`. Terrain kinds (05): patches (blob/area), belts (ridge), ZONES — climatic terrain by frontier. Continent-scoped: an `area` whose edges follow the frontier + the coasts (`tundra "The White Reach" : area (…) along "The Frostline" … along eastshore`) — each landmass its own frontier. Map-wide: half-plane (`north of <ref>`; spans the FULL map beyond the frontier). Honest fill, seas win overlaps; frontier paths render dotted in the zone's tint, never river weight.
 - **Relational placement — closed grammar, only these nine forms**:
   `at (x,y)` · `70mi north of <ref>` · `east of <ref>` (half-plane) · `on <ref>` · `on <ref> at <point|local>` · `south edge of <ref>` · `near <ref|point>` · `from <ep> via (p) (p) to <ep>` · `along <ref>`. Endpoints: ref, point, or `ref at (point)`.
 - **Referent-frame `at` payloads (#34)**: `on kitchen at C2..D2` — a cell/range/edge after `at` is LOCAL to the referent (structure footprint frame, NW cell = A1; moving the structure moves its contents). A path's frame is the document grid (= the crossing chooser). Detail lines use `at`-prefixed placements for the implicit parent frame: `door : at E2.e`. Absolute placement stays legal everywhere — author's choice per line, never a mode; renderers surface the resolved absolute address (tooltips). Outside-footprint local, frameless referent, or cross-level referent = error.
@@ -49,7 +50,8 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 ## Standard library (spec 05/06, curated ~80 words)
 
 - **Terrain**: sea lake plains grassland farmland forest jungle hills mountains marsh(difficult) desert dunes snowfield tundra wasteland | battlemap: mud(difficult) sand grass snow ice(difficult) water(difficult) rubble(difficult) slope
-- **Paths**: river stream road trail canal pass coastline border
+- **Paths**: river stream road trail canal pass coastline
+- **Zones**: realm region border (border = a relationship+state, never a location — see region row)
 - **Crossings/sites**: ford(difficult) bridge keep castle tower ruin dungeon lair camp mine shrine temple port cave landmark stairs ramp
 - **Settlements** (derived tiers): settlement → capital city town village hamlet
 - **Structures triad** (UVTT-aligned): building(ruined) wall(ruined) fence(sight=all) pillar door(passes=closed,sight=none) gate window(passes=none,sight=all) arrow-slit
@@ -63,9 +65,9 @@ Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · 
 |---|---|---|
 | `battlemap` | terrain, structures, features, tokens | structure detail lines indented under a `building` (`ruined : north east`, `door : O6.s`); footprints = rect/cell-union (orthogonal only; perimeter derived; on unions a `ruined` side word selects perimeter edges by facing); token word + area = staging zone; `elevation=` on areas — ledges auto-render where heights differ; crossings derive from geometry: `ford : on <river-id> on <road-id> difficult` occupies the bands' intersection (multi-crossing ambiguity errors; `at <cell>` chooses); road×river overlap without a crossing warns; area terrain layers beneath path bands — declare your bank cells; fallback word-labels are tooltips at battle scale (text labels: names/tokens/zones only); multi-level: `levels: upper ground cellar` (physical order, topmost first; `level:` names the default), `[structures upper]` section qualifiers or `level=`, any feature with `to=<level>` is a connector (auto-states `.up`/`.down` for themes), one panel per level; `drop` flag = fall-edge boundary (ticked cliff line); level surfaces are declared: `earth : area …` (underground rock), `air : area …` (open sky above unfloored space), `roof : area … difficult` (lower ceilings), `terrace` (walkable raised ground); feature footprints = range placements (`table hightable : G3..I3`); `open` flag on structures = walls without a ceiling (courtyards; themable state `building.open`; sky cells checked against `air` above on multi-level maps; flattens on UVTT export); UVTT export (§9, normative): one file per level, grid units — walls minus opening edges → `line_of_sight`, openings → `portals` (closed per `passes`; window = los hole + shut portal), `light=` → `lights`, grid → `resolution`; tokens/fences not exported; mode applies first (player export carries no secrets); caller supplies the raster image; room/zone labels render beneath features and tokens AND dodge them (nearest clear row to room center); line-feature labels anchor at the rendered course's arc-length midpoint, sliding along the course when crowded |
 | `hexcrawl` | hexes, routes, regions | ledger line: `C4 forest ruin "Name" gm="…"` (first word = terrain, rest = contents); omission = unexplored; `seen` = terrain only; grouped sugar `forest : C4 D3` legal |
-| `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `coastline coast : from …` then `sea "X" : west of coast` (referenced things need ids); borders: `border : along <ref>` |
+| `region` | water, terrain, paths, settlements, features, realms | water by half-plane: `coastline coast : from …` then `sea "X" : west of coast` (referenced things need ids); realm edges may FOLLOW features: `area (110,240) along westspine (552,540) …` traces the feature's curve between the two vertices (one definition — moving the feature moves the border); `border` attaches a STATE to a stretch of one realm's boundary, never a location: `border : valemark contested` (blanket frontier) · `border : valemark east contested` (facing = outward normal, 8 sectors, ties clockwise; bare facing selects OPEN edges only — ray escapes without re-entering; `inner` selects bay edges) · `border : valemark along westspine sealed` (feature stretch) · `border : valemark carrowen contested` (two-realm sugar: shared stretch, both sides); specific beats general; states are ordinary vocabulary (theme chain); overlapping realm claims are legal (disputed march — tints blend, both boundaries draw) |
 
-Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`).
+Universal sections: `[vocab]`, `[gm]`, `[labels]` (overrides must resolve: `"The Argen Sea" : sprawl (60,200)..(120,450)`, `highkeep : north`; free text needs `note`). Label density conduct (07 §5): point-marker labels claim placement first and migrate least (important tiers before minor); a label SHOULD shrink toward a legibility floor before moving far, MAY be omitted rather than drawn over other text (author overrides never omitted), and a long sprawled name whose midpoint is built over MAY repeat once per side instead of crossing it.
 
 ## Themes (spec 08)
 
@@ -119,13 +121,15 @@ compass: on
 coastline coast : from (210,0) via (150,130) (120,390) to (140,600)
 sea "The Argen Sea" : west of coast
 [terrain]
-mountains spine "The Serpent's Spine" : ridge (700,60) (740,280) (690,530)
+mountains spine "The Serpent's Spine" : ridge (700,60) (740,280) (690,530) width=60mi
 [settlements]
 capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"
 city "Argenport" : on coast at (160,470)
 town "Merrow's Rest" : on coast 70mi north of "Argenport"
 [realms]
-border : along spine gm="Disputed since the Treaty of Argen."
+realm vessany "Vessany" : west of spine
+realm khar "Khar" : east of spine
+border : vessany khar contested gm="Disputed since the Treaty of Argen."
 [labels]
 "The Argen Sea" : sprawl (60,200)..(120,450)
 ```
