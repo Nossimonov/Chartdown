@@ -321,6 +321,15 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const layers = { water: [] as string[], realms: [] as string[], areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
   let pathLabelCount = 0;
 
+  // Point labels move LAST (owner: a point label's proximity IS its meaning);
+  // things with room to roam yield. Claims run in priority order — 0 author
+  // overrides (fixed), 1 point markers, 2 curve labels, 3 area names,
+  // 4 water/realm sprawls — while paint order stacks the reverse, so big
+  // faint names sit beneath the small precise ones.
+  const labelBuckets: string[][] = [[], [], [], [], []];
+  const labelJobs: { priority: number; run: () => void }[] = [];
+  const deferLabel = (priority: number, run: () => void): void => void labelJobs.push({ priority, run });
+
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
@@ -336,16 +345,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         ),
       );
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-        const c = centroid(poly);
-        const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
-        const labelText = keyedLbl ?? e.name.toUpperCase();
-        const y = placer.place(c.x, c.y, labelText, 18, "middle", labelText.length * (18 * 0.58 + 6));
-        layers.labels.push(
-          text(labelText, {
-            x: c.x, y, "font-size": 18, "letter-spacing": 6,
-            fill: isWater ? "#5a7a96" : INK, opacity: 0.55, "text-anchor": "middle", "font-family": "sans-serif",
-          }),
-        );
+        deferLabel(4, () => {
+          const c = centroid(poly);
+          const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
+          const labelText = keyedLbl ?? e.name!.toUpperCase();
+          const y = placer.place(c.x, c.y, labelText, 18, "middle", labelText.length * (18 * 0.58 + 6));
+          labelBuckets[4]!.push(
+            text(labelText, {
+              x: c.x, y, "font-size": 18, "letter-spacing": 6,
+              fill: isWater ? "#5a7a96" : INK, opacity: 0.55, "text-anchor": "middle", "font-family": "sans-serif",
+            }),
+          );
+        });
       }
       continue;
     }
@@ -368,22 +379,25 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-          const c = centroid(r.polygon);
-          const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
-          const labelText = keyedLbl ?? e.name.toUpperCase();
-          // Text fits its water: the font shrinks until the name fits the
-          // polygon's width (no label is too big to exist on the map).
-          const bboxW = Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x));
-          const { size, spacing } = fitLabel(labelText, bboxW * 0.85, isLake ? 10 : 14, isLake ? 2 : 4);
-          const width = labelText.length * (size * 0.58 + spacing);
-          const cx = Math.min(Math.max(c.x, width / 2 + 10), w - width / 2 - 10);
-          const y = placer.place(cx, c.y, labelText, size, "middle", width);
-          layers.labels.push(
-            text(labelText, {
-              x: cx, y, "font-size": size, "letter-spacing": spacing,
-              fill: "#5a7a96", opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
-            }),
-          );
+          const priority = isLake ? 3 : 4;
+          deferLabel(priority, () => {
+            const c = centroid(r.polygon!);
+            const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
+            const labelText = keyedLbl ?? e.name!.toUpperCase();
+            // Text fits its water: the font shrinks until the name fits the
+            // polygon's width (no label is too big to exist on the map).
+            const bboxW = Math.max(...r.polygon!.map((p) => p.x)) - Math.min(...r.polygon!.map((p) => p.x));
+            const { size, spacing } = fitLabel(labelText, bboxW * 0.85, isLake ? 10 : 14, isLake ? 2 : 4);
+            const width = labelText.length * (size * 0.58 + spacing);
+            const cx = Math.min(Math.max(c.x, width / 2 + 10), w - width / 2 - 10);
+            const y = placer.place(cx, c.y, labelText, size, "middle", width);
+            labelBuckets[priority]!.push(
+              text(labelText, {
+                x: cx, y, "font-size": size, "letter-spacing": spacing,
+                fill: "#5a7a96", opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
+              }),
+            );
+          });
         }
         continue;
       }
@@ -396,19 +410,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-          const c = centroid(r.polygon);
-          const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
-          const labelText = keyedLbl ?? e.name.toUpperCase();
-          // A small realm gets a small name — the label fits its territory.
-          const bboxW = Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x));
-          const { size, spacing } = fitLabel(labelText, bboxW * 0.8, 15, 5);
-          const y = placer.place(c.x, c.y, labelText, size, "middle", labelText.length * (size * 0.58 + spacing));
-          layers.labels.push(
-            text(labelText, {
-              x: c.x, y, "font-size": size, "letter-spacing": spacing, fill: "#6b5d4a",
-              opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
-            }),
-          );
+          deferLabel(4, () => {
+            const c = centroid(r.polygon!);
+            const keyedLbl = model.labelsMode === "keyed" ? labelTextFor(model, e) : null;
+            const labelText = keyedLbl ?? e.name!.toUpperCase();
+            // A small realm gets a small name — the label fits its territory.
+            const bboxW = Math.max(...r.polygon!.map((p) => p.x)) - Math.min(...r.polygon!.map((p) => p.x));
+            const { size, spacing } = fitLabel(labelText, bboxW * 0.8, 15, 5);
+            const y = placer.place(c.x, c.y, labelText, size, "middle", labelText.length * (size * 0.58 + spacing));
+            labelBuckets[4]!.push(
+              text(labelText, {
+                x: c.x, y, "font-size": size, "letter-spacing": spacing, fill: "#6b5d4a",
+                opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif",
+              }),
+            );
+          });
         }
         continue;
       }
@@ -422,12 +438,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-          const c = r.point ?? centroid(r.polygon);
-          const lbl = labelTextFor(model, e) ?? e.name;
-          const y = placer.place(c.x, c.y, lbl, 10, "middle");
-          layers.labels.push(
-            text(lbl, { x: c.x, y, "font-size": 10, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
-          );
+          deferLabel(3, () => {
+            const c = r.point ?? centroid(r.polygon!);
+            const lbl = labelTextFor(model, e) ?? e.name!;
+            const y = placer.place(c.x, c.y, lbl, 10, "middle");
+            labelBuckets[3]!.push(
+              text(lbl, { x: c.x, y, "font-size": 10, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+            );
+          });
         }
         continue;
       }
@@ -447,12 +465,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       layers.areas.push(el("g", { id: anchor }, ...areaParts));
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-        const c = r.point ?? centroid(r.polygon);
-        const lbl = labelTextFor(model, e) ?? e.name;
-        const y = placer.place(c.x, c.y, lbl, 11, "middle");
-        layers.labels.push(
-          text(lbl, { x: c.x, y, "font-size": 11, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
-        );
+        deferLabel(3, () => {
+          const c = r.point ?? centroid(r.polygon!);
+          const lbl = labelTextFor(model, e) ?? e.name!;
+          const y = placer.place(c.x, c.y, lbl, 11, "middle");
+          labelBuckets[3]!.push(
+            text(lbl, { x: c.x, y, "font-size": 11, fill: ink, opacity: 0.8, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif" }),
+          );
+        });
       }
       continue;
     }
@@ -490,12 +510,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         layers.lines.push(el("g", { id: anchor }, ...lineParts));
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
-        const lbl = labelTextFor(model, e) ?? e.name;
+        deferLabel(2, () => {
+        const lbl = labelTextFor(model, e) ?? e.name!;
         // The label FOLLOWS the curve it names, but placement is arbitrated:
         // candidate slots along the line, above OR below it (a road that
         // follows a river labels on the opposite side), first free slot wins
         // via the shared placer — same collision discipline as battlemaps.
-        let lp = r.polyline;
+        let lp = r.polyline!;
         if (lp[0]!.x > lp[lp.length - 1]!.x) lp = [...lp].reverse();
         const wpx = lbl.length * 10 * 0.58;
         let pathLen = 0;
@@ -530,11 +551,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
         const safe = lbl.replace(/&/g, "&amp;").replace(/</g, "&lt;");
         const weight = model.labelsMode === "keyed" ? ' font-weight="bold"' : "";
-        layers.labels.push(
+        labelBuckets[2]!.push(
           `<path id="${pid}" d="${d}" fill="none"/>` +
             `<text font-size="10" fill="${ink}" opacity="0.75" font-style="italic"${weight} text-anchor="middle" font-family="sans-serif">` +
             `<textPath href="#${pid}" startOffset="${fmt(pick.offset * 100)}%"><tspan dy="${pick.above ? -5 : 12}">${safe}</tspan></textPath></text>`,
         );
+        });
       }
       continue;
     }
@@ -561,10 +583,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         (e.typeWord === "note" ? e.texts[0] ?? null : null) ??
         (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {
-        const spot = placer.placeBeside(r.point.x + tier.r + 3, r.point.x - tier.r - 3, r.point.y + 4, label, tier.font);
-        layers.labels.push(
-          text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),
-        );
+        const pt = r.point;
+        deferLabel(1, () => {
+          const spot = placer.placeBeside(pt.x + tier.r + 3, pt.x - tier.r - 3, pt.y + 4, label, tier.font);
+          labelBuckets[1]!.push(
+            text(label, { x: spot.x, y: spot.y, "font-size": tier.font, "font-weight": tier.weight, fill: ink, "text-anchor": spot.anchor === "middle" ? undefined : spot.anchor, "font-family": "sans-serif" }),
+          );
+        });
       }
     }
   }
@@ -583,24 +608,44 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const spanLen = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 40);
       const upper = name.toUpperCase();
       const { size, spacing } = fitLabel(upper, spanLen, 16, 8);
-      layers.labels.push(
-        text(upper, {
-          x: cx, y: cy, "font-size": size, "letter-spacing": spacing, fill: "#5a7a96", opacity: 0.85,
-          "text-anchor": "middle", "font-family": "sans-serif",
-          transform: Math.abs(b.y - a.y) > Math.abs(b.x - a.x) ? `rotate(90 ${fmt(cx)} ${fmt(cy)})` : undefined,
-        }),
-      );
+      const vertical = Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
+      deferLabel(0, () => {
+        // Author-placed: fixed, but REGISTERED so movable labels avoid it.
+        if (vertical) placer.block(cx - size, cy - spanLen / 2, size * 2, spanLen);
+        else placer.block(cx - spanLen / 2, cy - size, spanLen, size * 2);
+        labelBuckets[0]!.push(
+          text(upper, {
+            x: cx, y: cy, "font-size": size, "letter-spacing": spacing, fill: "#5a7a96", opacity: 0.85,
+            "text-anchor": "middle", "font-family": "sans-serif",
+            transform: vertical ? `rotate(90 ${fmt(cx)} ${fmt(cy)})` : undefined,
+          }),
+        );
+      });
     } else if (o.hint.kind === "at" && o.hint.target.kind === "point") {
       const p = toXY(o.hint.target);
-      layers.labels.push(text(name, { x: p.x, y: p.y, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
+      deferLabel(0, () => {
+        placer.block(p.x - name.length * 3.2, p.y - 10, name.length * 6.4, 14);
+        labelBuckets[0]!.push(text(name, { x: p.x, y: p.y, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
+      });
     } else if (o.hint.kind === "side") {
       const base = resolved.get(key)?.point;
       if (base) {
         const vec = COMPASS_VECTORS[o.hint.compass]!;
-        layers.labels.push(text(name, { x: base.x + vec.x * 16, y: base.y + vec.y * 16, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
+        const lx = base.x + vec.x * 16;
+        const ly = base.y + vec.y * 16;
+        deferLabel(0, () => {
+          placer.block(lx - name.length * 3.2, ly - 10, name.length * 6.4, 14);
+          labelBuckets[0]!.push(text(name, { x: lx, y: ly, "font-size": 11, fill: ink, "text-anchor": "middle", "font-family": "sans-serif" }));
+        });
       }
     }
   }
+
+  // Claim in priority order (stable within a tier); paint big faint names
+  // beneath small precise ones, author overrides on top.
+  labelJobs.sort((a, b) => a.priority - b.priority);
+  for (const job of labelJobs) job.run();
+  layers.labels.push(...labelBuckets[4]!, ...labelBuckets[3]!, ...labelBuckets[2]!, ...labelBuckets[1]!, ...labelBuckets[0]!);
 
   body.push(...layers.water, ...layers.realms, ...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
 }
