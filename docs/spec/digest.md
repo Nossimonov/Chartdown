@@ -1,4 +1,4 @@
-# Chartdown Digest — spec draft v0.1
+# Chartdown Digest — spec v0.3
 
 *Single-file language reference for machine/agent ingestion (issue #12). Informative — the prose sections 01–07 are normative. Maintained in the same commit as any spec change. Companion: [grammar.ebnf](grammar.ebnf).*
 
