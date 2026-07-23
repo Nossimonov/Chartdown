@@ -6,7 +6,7 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ### Changed
 
-- Obsidian: each map's toolbar gains the round-trip pair (#88; replaces an unreleased primer-button design after owner review). **Copy source** leads the copied text with `;` comment lines naming the language and pointing at the public reference (`llms-full.txt`), so a paste into an LLM chat self-identifies without the plugin bundling a spec or pushing AI at anyone. **Paste source** brings a reply back: accepts bare Chartdown or a ` ```chartdown ` fence, strips a returning breadcrumb, **validates before writing** — an invalid paste changes nothing and names the offending line. The store README now presents the co-writing workflow and how to bootstrap an assistant (paste `llms-full.txt`, or `@chartdown/mcp` for tool-using agents).
+- Obsidian: each map's toolbar gains the round-trip pair (#88; replaces an unreleased primer-button design after owner review). **Copy Chartdown** leads the copied text with `;` comment lines naming the language and pointing at the public reference (`llms-full.txt`), so a paste into an LLM chat self-identifies without the plugin bundling a spec or pushing AI at anyone. **Paste Chartdown** brings a reply back: accepts bare Chartdown or a ` ```chartdown ` fence, strips a returning breadcrumb, **validates before writing** — an invalid paste changes nothing and names the offending line; the button grays out while the clipboard is empty (format metadata only — content is read exactly once, on an explicit paste click). The store README now presents the co-writing workflow and how to bootstrap an assistant (paste `llms-full.txt`, or `@chartdown/mcp` for tool-using agents).
 
 ### Fixed
 

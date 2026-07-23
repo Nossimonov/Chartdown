@@ -18,6 +18,12 @@ export interface BlockIO {
   copy?(text: string): Promise<void>;
   /** Read the system clipboard as text. */
   readClipboard?(): Promise<string>;
+  /**
+   * Whether the clipboard currently holds text — determined WITHOUT reading
+   * the content (format metadata only). Resolve true when unknowable: never
+   * disable the button on a guess.
+   */
+  clipboardHasText?(): Promise<boolean>;
   /** Replace this block's source lines in the note (between the fence markers). */
   replaceSource?(newSource: string): Promise<void>;
   /** Reveal an exported file in the system file explorer (desktop only). */
@@ -72,14 +78,26 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
   const svgBtn = toolbar.createEl("button", { text: "Export SVG" });
   const uvttBtn = toolbar.createEl("button", { text: "Export UVTT" });
   const copyBtn = toolbar.createEl("button", {
-    text: "Copy source",
+    text: "Copy Chartdown",
     attr: { title: "Copy this map's Chartdown source, headed by a comment pointing at the language reference" },
   });
   const pasteBtn = toolbar.createEl("button", {
-    text: "Paste source",
+    text: "Paste Chartdown",
     attr: { title: "Replace this map with Chartdown from your clipboard (validated first; a bare document or a ```chartdown fence both work)" },
   });
   const mapHost = wrapper.createDiv({ cls: "chartdown-map-host" });
+
+  // Empty clipboard → grayed paste button. The check is format-metadata only
+  // (never the content), and it re-runs at the moments the answer can have
+  // changed: mount, hovering back onto the toolbar, and after our own copy.
+  const syncPasteState = (): void => {
+    void (async () => {
+      const has = (await opts.io.clipboardHasText?.()) ?? true;
+      pasteBtn.disabled = !has;
+    })();
+  };
+  toolbar.addEventListener("mouseenter", syncPasteState);
+  syncPasteState();
 
   const rerender = (): void => {
     mapHost.empty();
@@ -107,6 +125,7 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
     void (async () => {
       await opts.io.copy?.(`${SOURCE_BREADCRUMB}\n${source}${source.endsWith("\n") ? "" : "\n"}`);
       opts.io.notify("Chartdown: map source on your clipboard.");
+      syncPasteState();
     })();
   });
 

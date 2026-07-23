@@ -34,6 +34,7 @@ function makeIO(withRaster = false, clipboard = ""): { io: BlockIO; written: Wri
       copied.push(text);
     },
     readClipboard: async () => clipboard,
+    clipboardHasText: async () => clipboard.length > 0 || copied.length > 0,
     replaceSource: async (s) => {
       replaced.push(s);
     },
@@ -117,7 +118,7 @@ describe("the per-map toolbar", () => {
     const el = document.createElement("div");
     const { io, copied, notices } = makeIO();
     mountChartdownBlock(SOURCE, el, { initialMode: "player", baseName: "test-map", folderLabel: "", io });
-    [...el.querySelectorAll("button")].find((b) => b.textContent === "Copy source")!.click();
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Copy Chartdown")!.click();
     await flush();
     expect(copied).toHaveLength(1);
     const text = copied[0]!;
@@ -133,7 +134,7 @@ describe("the per-map toolbar", () => {
     const el = document.createElement("div");
     const { io, replaced, notices } = makeIO(false, reply);
     mountChartdownBlock(SOURCE, el, { initialMode: "player", baseName: "test-map", folderLabel: "", io });
-    [...el.querySelectorAll("button")].find((b) => b.textContent === "Paste source")!.click();
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Paste Chartdown")!.click();
     await flush();
     expect(replaced).toHaveLength(1);
     expect(replaced[0]!.startsWith("# Test Map")).toBe(true); // fence and breadcrumb gone
@@ -145,11 +146,23 @@ describe("the per-map toolbar", () => {
     const el = document.createElement("div");
     const { io, replaced, notices } = makeIO(false, "map: dungeon\n");
     mountChartdownBlock(SOURCE, el, { initialMode: "player", baseName: "test-map", folderLabel: "", io });
-    [...el.querySelectorAll("button")].find((b) => b.textContent === "Paste source")!.click();
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Paste Chartdown")!.click();
     await flush();
     expect(replaced).toHaveLength(0);
     expect(notices[0]).toContain("nothing changed");
     expect(notices[0]).toMatch(/line \d+/); // the diagnostic names the line
+  });
+
+  it("grays Paste Chartdown while the clipboard is empty — format metadata only, and copying re-enables it", async () => {
+    const el = document.createElement("div");
+    const { io } = makeIO(false, ""); // empty clipboard, nothing copied yet
+    mountChartdownBlock(SOURCE, el, { initialMode: "player", baseName: "test-map", folderLabel: "", io });
+    await flush();
+    const paste = [...el.querySelectorAll("button")].find((b) => b.textContent === "Paste Chartdown")!;
+    expect(paste.disabled).toBe(true);
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Copy Chartdown")!.click();
+    await flush();
+    expect(paste.disabled).toBe(false); // our own copy is a known clipboard change
   });
 
   it("chartdownFromClipboard handles bare source, CRLF, and empty clipboards", () => {

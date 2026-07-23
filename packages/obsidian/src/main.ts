@@ -43,6 +43,23 @@ async function rasterize(
   }
 }
 
+/**
+ * Clipboard presence WITHOUT reading content: Electron's availableFormats()
+ * is metadata only (reading a user's clipboard uninvited is bad manners —
+ * the paste flow reads it exactly once, on an explicit click). Mobile has no
+ * Electron; resolve true so the button never disables on a guess.
+ */
+async function clipboardHasText(): Promise<boolean> {
+  try {
+    const electron = (window as unknown as { require?: (m: string) => { clipboard?: { availableFormats(): string[] } } }).require?.("electron");
+    const formats = electron?.clipboard?.availableFormats();
+    if (formats) return formats.some((f) => f.startsWith("text/"));
+  } catch {
+    // fall through — unknowable here
+  }
+  return true;
+}
+
 export default class ChartdownPlugin extends Plugin {
   settings: ChartdownSettings = DEFAULT_SETTINGS;
 
@@ -68,6 +85,7 @@ export default class ChartdownPlugin extends Plugin {
             await navigator.clipboard.writeText(text);
           },
           readClipboard: async () => navigator.clipboard.readText(),
+          clipboardHasText,
           replaceSource: async (newSource) => {
             // The processor's section info maps this block back to its fence
             // lines; replace strictly BETWEEN the markers so the fence itself
