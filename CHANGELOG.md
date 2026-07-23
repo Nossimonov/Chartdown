@@ -11,6 +11,7 @@ All notable changes to the Chartdown language and its reference implementation. 
 ### Fixed
 
 - The spec digest — served publicly as `llms-full.txt` — and `grammar.ebnf` still titled themselves "spec draft v0.1", misinforming every LLM that bootstraps from them; the grammar also claimed sections 01–07 while covering 08. Headers now state the real version, and a core test locks both artifacts to `SPEC_VERSION` so they can never drift again. Owner-caught.
+- **Releasing is one command** (#90): `npm run bump -- x.y.z` rewrites every version surface — the six package.json files, render-svg's pin on core, `SPEC_VERSION`, the digest/grammar/spec-README headers — and rolls the `[Unreleased]` changelog into the new section with compare links. The core consistency test derives the expected version from the packages and asserts *every* surface agrees, so a surface that escapes the command fails `npm test` instead of shipping (the failure mode behind both the 0.3.1 fix and the digest-header fix above). The right way is now the easy way.
 
 ## [0.3.2] — 2026-07-22
 
