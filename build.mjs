@@ -86,6 +86,7 @@ await build({
   format: "cjs",
   external: ["obsidian"],
   alias: sourceAliases,
+  loader: { ".md": "text" },
   outfile: "packages/obsidian/dist/main.js",
   logLevel: "info",
 });

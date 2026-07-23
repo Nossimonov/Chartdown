@@ -8,6 +8,7 @@
 import { Notice, Plugin, PluginSettingTab, Setting, type App, type SettingDefinitionItem } from "obsidian";
 import { parse } from "@chartdown/core";
 import { mountChartdownBlock } from "./block";
+import { authoringPrimer } from "./primer";
 import type { RenderMode } from "./render";
 
 interface ChartdownSettings {
@@ -69,9 +70,23 @@ export default class ChartdownPlugin extends Plugin {
             // selected — the "get it out as a file" affordance.
             (this.app as unknown as { showInFolder?: (path: string) => void }).showInFolder?.(folder + name);
           },
+          copy: async (text) => {
+            await navigator.clipboard.writeText(text);
+          },
           rasterize,
         },
       });
+    });
+    // The from-scratch half of AI co-authoring (#88): the per-map toolbar
+    // button carries an existing map; this carries only the language.
+    this.addCommand({
+      id: "copy-ai-primer",
+      name: "Copy AI authoring primer (language reference for your assistant)",
+      callback: () => {
+        void navigator.clipboard.writeText(authoringPrimer()).then(() => {
+          new Notice("Chartdown: primer on your clipboard — paste into your AI chat and describe the map you want.", 8000);
+        });
+      },
     });
     this.addSettingTab(new ChartdownSettingTab(this.app, this));
   }

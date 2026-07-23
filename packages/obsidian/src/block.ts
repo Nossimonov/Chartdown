@@ -8,12 +8,15 @@
 
 import { parse } from "@chartdown/core";
 import { exportUvttSource, renderSource } from "@chartdown/render-svg";
+import { authoringPrimer } from "./primer";
 import { renderChartdownBlock, type RenderMode } from "./render";
 
 export interface BlockIO {
   /** Write a text file next to the note; overwrite silently. */
   writeFile(name: string, contents: string): Promise<void>;
   notify(message: string): void;
+  /** Put text on the system clipboard. */
+  copy?(text: string): Promise<void>;
   /** Reveal an exported file in the system file explorer (desktop only). */
   reveal?(name: string): void;
   /** Rasterize `region` of an SVG to a base64 PNG (no data-URI prefix). */
@@ -39,6 +42,10 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
   const modeBtn = toolbar.createEl("button", { cls: "chartdown-mode-toggle" });
   const svgBtn = toolbar.createEl("button", { text: "Export SVG" });
   const uvttBtn = toolbar.createEl("button", { text: "Export UVTT" });
+  const aiBtn = toolbar.createEl("button", {
+    text: "Copy AI primer",
+    attr: { title: "Copy the Chartdown language reference plus this map's source — paste into any AI chat and describe the changes you want" },
+  });
   const mapHost = wrapper.createDiv({ cls: "chartdown-map-host" });
 
   const rerender = (): void => {
@@ -60,6 +67,13 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
       await opts.io.writeFile(name, svg);
       opts.io.notify(`Chartdown: exported ${opts.folderLabel}${name} (a real file in your vault folder)`);
       opts.io.reveal?.(name);
+    })();
+  });
+
+  aiBtn.addEventListener("click", () => {
+    void (async () => {
+      await opts.io.copy?.(authoringPrimer(source));
+      opts.io.notify("Chartdown: primer + this map are on your clipboard — paste into your AI chat and describe the changes you want.");
     })();
   });
 

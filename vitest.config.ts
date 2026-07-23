@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -5,6 +6,17 @@ import { defineConfig } from "vitest/config";
 // point at dist/ for npm consumers, so the workspace aliases here keep the
 // dev loop build-free (tsconfig `paths` do the same for the typechecker).
 export default defineConfig({
+  plugins: [
+    {
+      // Mirror build.mjs's `.md: "text"` esbuild loader (digest imports).
+      name: "md-as-text",
+      enforce: "pre",
+      load(id) {
+        if (id.endsWith(".md")) return `export default ${JSON.stringify(readFileSync(id, "utf8"))};`;
+        return null;
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@chartdown/core": fileURLToPath(new URL("packages/core/src/index.ts", import.meta.url)),

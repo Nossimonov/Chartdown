@@ -18,15 +18,19 @@ interface Written {
   contents: string;
 }
 
-function makeIO(withRaster = false): { io: BlockIO; written: Written[]; notices: string[]; revealed: string[] } {
+function makeIO(withRaster = false): { io: BlockIO; written: Written[]; notices: string[]; revealed: string[]; copied: string[] } {
   const written: Written[] = [];
   const notices: string[] = [];
   const revealed: string[] = [];
+  const copied: string[] = [];
   const io: BlockIO = {
     writeFile: async (name, contents) => {
       written.push({ name, contents });
     },
     notify: (m) => notices.push(m),
+    copy: async (text) => {
+      copied.push(text);
+    },
     reveal: (name) => revealed.push(name),
     ...(withRaster
       ? {
@@ -34,7 +38,7 @@ function makeIO(withRaster = false): { io: BlockIO; written: Written[]; notices:
         }
       : {}),
   };
-  return { io, written, notices, revealed };
+  return { io, written, notices, revealed, copied };
 }
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
@@ -101,6 +105,21 @@ describe("the per-map toolbar", () => {
     [...el.querySelectorAll("button")].find((b) => b.textContent === "Export UVTT")!.click();
     await flush();
     expect(written.map((w) => w.name).sort()).toEqual(["tower-base.dd2vtt", "tower-top.dd2vtt"]);
+  });
+
+  it("copies the AI primer: language digest plus this map's source, in one clipboard-load (#88)", async () => {
+    const el = document.createElement("div");
+    const { io, copied, notices } = makeIO();
+    mountChartdownBlock(SOURCE, el, { initialMode: "player", baseName: "test-map", folderLabel: "", io });
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Copy AI primer")!.click();
+    await flush();
+    expect(copied).toHaveLength(1);
+    const primer = copied[0]!;
+    expect(primer).toContain("co-writing a Chartdown map"); // the instructions
+    expect(primer).toContain("archetype"); // the digest is embedded, not linked
+    expect(primer).toContain('building shed "Shed" : B2..D4'); // the current source rides along
+    expect(primer.indexOf("archetype")).toBeLessThan(primer.indexOf("building shed")); // reference first, map after
+    expect(notices[0]).toContain("paste into your AI chat");
   });
 
   it("refuses UVTT for non-battlemaps with a notice, writing nothing", async () => {
