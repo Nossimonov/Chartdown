@@ -23,6 +23,10 @@ describe("basics", () => {
     expect(readFileSync(join(specDir, "digest.md"), "utf8").split("\n")[0]).toContain(`spec v${SPEC_VERSION}`);
     expect(readFileSync(join(specDir, "grammar.ebnf"), "utf8")).toContain(`spec v${SPEC_VERSION}`);
     expect(readFileSync(join(specDir, "README.md"), "utf8")).toContain(`spec v${SPEC_VERSION}`);
+    // The project README: the status headline and the CDN embed pin.
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+    expect(readme).toContain(`Spec v${SPEC_VERSION}`);
+    expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
   });
 
   it("parses a minimal document without errors", () => {

@@ -48,6 +48,8 @@ replaceIn("packages/core/src/parse.ts", `SPEC_VERSION = "${spec(current)}"`, `SP
 for (const artifact of ["docs/spec/digest.md", "docs/spec/grammar.ebnf", "docs/spec/README.md"]) {
   replaceIn(artifact, `spec v${spec(current)}`, `spec v${spec(next)}`, { optional: spec(current) === spec(next) });
 }
+replaceIn("README.md", `Spec v${spec(current)}`, `Spec v${spec(next)}`, { optional: spec(current) === spec(next) });
+replaceIn("README.md", `@chartdown/browser@${spec(current)}`, `@chartdown/browser@${spec(next)}`, { optional: spec(current) === spec(next) });
 
 // CHANGELOG: the [Unreleased] items become the new section; links follow.
 const changelog = read("CHANGELOG.md");
