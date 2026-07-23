@@ -64,11 +64,16 @@ Three lanes (issue #37):
 
 - **`preview`** — the staging branch. Pushes deploy a staging playground at [/Chartdown/preview/](https://nossimonov.github.io/Chartdown/preview/) so features can be exercised live before they reach `main`. CI runs here too.
 - **`main`** — production. Merges deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit. **Direct pushes are rejected — including for admins**: changes reach `main` only by pull request from `preview`, with CI (`test`) and the source-branch check (`gatekeeper`) required to pass.
-- **Version tags** — the npm release lane. Publishing is *never* triggered by a branch push. To release: move the `[Unreleased]` items in [CHANGELOG.md](CHANGELOG.md) into a new `## [x.y.z]` section, bump all four `packages/*/package.json` versions to the same number, commit, then tag and push the tag:
+- **Version tags** — the npm release lane. Publishing is *never* triggered by a branch push. To release, run the bump command — it rewrites **every** version surface in one shot (the six `packages/*/package.json`, render-svg's pin on core, the parser's `SPEC_VERSION`, the digest/grammar/spec-README headers, and it rolls the `[Unreleased]` changelog items into the new `## [x.y.z]` section with compare links) — then review the diff, commit, and after the PR reaches `main`, tag:
 
   ```sh
-  git tag v0.1.1 && git push origin v0.1.1
+  npm run bump -- 0.4.0
+  git diff && npm test        # every surface is also consistency-tested
+  # …commit, PR to main, then:
+  git tag v0.4.0 && git push origin v0.4.0
   ```
+
+  Never bump by hand-editing the list above — a core test asserts all surfaces agree, so a missed one fails `npm test` (and with it the release gate), but the *easy* way is the command. (The Obsidian plugin's `0.1.x` lane versions separately by design.)
 
   The [release workflow](.github/workflows/release.yml) builds, typechecks, tests, refuses to publish unless the tag equals every package version **and** has a matching changelog section, publishes `@chartdown/{core,render-svg,cli,browser}` via **npm OIDC trusted publishing** — no tokens or OTPs; provenance attestations are automatic — and creates the GitHub Release with that changelog section as its notes. Each package on npmjs.com names `release.yml` in this repo as its trusted publisher.
 

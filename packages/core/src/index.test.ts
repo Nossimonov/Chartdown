@@ -5,16 +5,24 @@ import { describe, expect, it } from "vitest";
 import { parse, SPEC_VERSION } from "./index";
 
 describe("basics", () => {
-  it("tracks the released spec version (spec and packages version together)", () => {
-    expect(SPEC_VERSION).toBe("0.3");
-  });
-
-  it("the machine-ingestion artifacts state the same spec version (no header drift)", () => {
-    // The digest is served publicly as llms-full.txt — a stale version line
-    // misinforms every LLM that bootstraps from it (owner-caught at v0.1).
-    const specDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "docs", "spec");
+  it("every version surface agrees — one bump command, one truth (#90)", () => {
+    // Any surface that escapes `npm run bump` fails here, on every push and
+    // in the release gate — never waiting for an owner catch (the failure
+    // mode that shipped SPEC_VERSION=0.1 and a digest titled draft v0.1).
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const pkg = (name: string): { version: string; dependencies?: Record<string, string> } =>
+      JSON.parse(readFileSync(join(root, "packages", name, "package.json"), "utf8").replace(/^﻿/, "")) as { version: string; dependencies?: Record<string, string> };
+    const versions = ["core", "render-svg", "cli", "browser", "mcp", "action"].map((name) => pkg(name).version);
+    expect(new Set(versions).size).toBe(1); // the six packages version together
+    expect(pkg("render-svg").dependencies?.["@chartdown/core"]).toBe(versions[0]); // and the pin follows
+    // The spec and the packages version together: SPEC_VERSION is major.minor.
+    expect(SPEC_VERSION).toBe(versions[0]!.split(".").slice(0, 2).join("."));
+    // The machine-ingestion artifacts — the digest is served publicly as
+    // llms-full.txt, so a stale header misinforms every bootstrapping LLM.
+    const specDir = join(root, "docs", "spec");
     expect(readFileSync(join(specDir, "digest.md"), "utf8").split("\n")[0]).toContain(`spec v${SPEC_VERSION}`);
     expect(readFileSync(join(specDir, "grammar.ebnf"), "utf8")).toContain(`spec v${SPEC_VERSION}`);
+    expect(readFileSync(join(specDir, "README.md"), "utf8")).toContain(`spec v${SPEC_VERSION}`);
   });
 
   it("parses a minimal document without errors", () => {
