@@ -5,7 +5,7 @@
  * rendered blocks. Default player, fail-closed per spec 01 §6.
  */
 
-import { Notice, Plugin, PluginSettingTab, Setting, type App, type SettingDefinitionItem } from "obsidian";
+import { Notice, Plugin, PluginSettingTab, Setting, TFile, type App, type SettingDefinitionItem } from "obsidian";
 import { parse } from "@chartdown/core";
 import { mountChartdownBlock } from "./block";
 import type { RenderMode } from "./render";
@@ -43,6 +43,23 @@ async function rasterize(
   }
 }
 
+/**
+ * Clipboard presence WITHOUT reading content: Electron's availableFormats()
+ * is metadata only (reading a user's clipboard uninvited is bad manners —
+ * the paste flow reads it exactly once, on an explicit click). Mobile has no
+ * Electron; resolve true so the button never disables on a guess.
+ */
+async function clipboardHasText(): Promise<boolean> {
+  try {
+    const electron = (window as unknown as { require?: (m: string) => { clipboard?: { availableFormats(): string[] } } }).require?.("electron");
+    const formats = electron?.clipboard?.availableFormats();
+    if (formats) return formats.some((f) => f.startsWith("text/"));
+  } catch {
+    // fall through — unknowable here
+  }
+  return true;
+}
+
 export default class ChartdownPlugin extends Plugin {
   settings: ChartdownSettings = DEFAULT_SETTINGS;
 
@@ -63,6 +80,26 @@ export default class ChartdownPlugin extends Plugin {
           },
           notify: (message) => {
             new Notice(message, 8000);
+          },
+          copy: async (text) => {
+            await navigator.clipboard.writeText(text);
+          },
+          readClipboard: async () => navigator.clipboard.readText(),
+          clipboardHasText,
+          replaceSource: async (newSource) => {
+            // The processor's section info maps this block back to its fence
+            // lines; replace strictly BETWEEN the markers so the fence itself
+            // (and everything else in the note) is untouched.
+            const info = ctx.getSectionInfo(el);
+            const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
+            if (!info || !(file instanceof TFile)) {
+              new Notice("Chartdown: couldn't locate this block in its note — reopen the note and try again.", 8000);
+              return;
+            }
+            await this.app.vault.process(file, (data) => {
+              const lines = data.split("\n");
+              return [...lines.slice(0, info.lineStart + 1), ...newSource.split("\n"), ...lines.slice(info.lineEnd)].join("\n");
+            });
           },
           reveal: (name) => {
             // Desktop API; opens the system file explorer with the file

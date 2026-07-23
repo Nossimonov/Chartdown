@@ -1,9 +1,20 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse, SPEC_VERSION } from "./index";
 
 describe("basics", () => {
   it("tracks the released spec version (spec and packages version together)", () => {
     expect(SPEC_VERSION).toBe("0.3");
+  });
+
+  it("the machine-ingestion artifacts state the same spec version (no header drift)", () => {
+    // The digest is served publicly as llms-full.txt — a stale version line
+    // misinforms every LLM that bootstraps from it (owner-caught at v0.1).
+    const specDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "docs", "spec");
+    expect(readFileSync(join(specDir, "digest.md"), "utf8").split("\n")[0]).toContain(`spec v${SPEC_VERSION}`);
+    expect(readFileSync(join(specDir, "grammar.ebnf"), "utf8")).toContain(`spec v${SPEC_VERSION}`);
   });
 
   it("parses a minimal document without errors", () => {
