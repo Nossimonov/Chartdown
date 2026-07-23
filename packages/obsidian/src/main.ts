@@ -5,10 +5,9 @@
  * rendered blocks. Default player, fail-closed per spec 01 §6.
  */
 
-import { Notice, Plugin, PluginSettingTab, Setting, type App, type SettingDefinitionItem } from "obsidian";
+import { Notice, Plugin, PluginSettingTab, Setting, TFile, type App, type SettingDefinitionItem } from "obsidian";
 import { parse } from "@chartdown/core";
 import { mountChartdownBlock } from "./block";
-import { authoringPrimer } from "./primer";
 import type { RenderMode } from "./render";
 
 interface ChartdownSettings {
@@ -65,28 +64,33 @@ export default class ChartdownPlugin extends Plugin {
           notify: (message) => {
             new Notice(message, 8000);
           },
+          copy: async (text) => {
+            await navigator.clipboard.writeText(text);
+          },
+          readClipboard: async () => navigator.clipboard.readText(),
+          replaceSource: async (newSource) => {
+            // The processor's section info maps this block back to its fence
+            // lines; replace strictly BETWEEN the markers so the fence itself
+            // (and everything else in the note) is untouched.
+            const info = ctx.getSectionInfo(el);
+            const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
+            if (!info || !(file instanceof TFile)) {
+              new Notice("Chartdown: couldn't locate this block in its note — reopen the note and try again.", 8000);
+              return;
+            }
+            await this.app.vault.process(file, (data) => {
+              const lines = data.split("\n");
+              return [...lines.slice(0, info.lineStart + 1), ...newSource.split("\n"), ...lines.slice(info.lineEnd)].join("\n");
+            });
+          },
           reveal: (name) => {
             // Desktop API; opens the system file explorer with the file
             // selected — the "get it out as a file" affordance.
             (this.app as unknown as { showInFolder?: (path: string) => void }).showInFolder?.(folder + name);
           },
-          copy: async (text) => {
-            await navigator.clipboard.writeText(text);
-          },
           rasterize,
         },
       });
-    });
-    // The from-scratch half of AI co-authoring (#88): the per-map toolbar
-    // button carries an existing map; this carries only the language.
-    this.addCommand({
-      id: "copy-ai-primer",
-      name: "Copy AI authoring primer (language reference for your assistant)",
-      callback: () => {
-        void navigator.clipboard.writeText(authoringPrimer()).then(() => {
-          new Notice("Chartdown: primer on your clipboard — paste into your AI chat and describe the map you want.", 8000);
-        });
-      },
     });
     this.addSettingTab(new ChartdownSettingTab(this.app, this));
   }

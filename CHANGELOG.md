@@ -4,6 +4,14 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Changed
+
+- Obsidian: each map's toolbar gains the round-trip pair (#88; replaces an unreleased primer-button design after owner review). **Copy source** leads the copied text with `;` comment lines naming the language and pointing at the public reference (`llms-full.txt`), so a paste into an LLM chat self-identifies without the plugin bundling a spec or pushing AI at anyone. **Paste source** brings a reply back: accepts bare Chartdown or a ` ```chartdown ` fence, strips a returning breadcrumb, **validates before writing** — an invalid paste changes nothing and names the offending line. The store README now presents the co-writing workflow and how to bootstrap an assistant (paste `llms-full.txt`, or `@chartdown/mcp` for tool-using agents).
+
+### Fixed
+
+- The spec digest — served publicly as `llms-full.txt` — and `grammar.ebnf` still titled themselves "spec draft v0.1", misinforming every LLM that bootstraps from them; the grammar also claimed sections 01–07 while covering 08. Headers now state the real version, and a core test locks both artifacts to `SPEC_VERSION` so they can never drift again. Owner-caught.
+
 ## [0.3.2] — 2026-07-22
 
 Fixes found by an agent stretching the tool's legs on old campaign notes (#78, #79).
