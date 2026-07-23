@@ -88,8 +88,11 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
   const mapHost = wrapper.createDiv({ cls: "chartdown-map-host" });
 
   // Empty clipboard → grayed paste button. The check is format-metadata only
-  // (never the content), and it re-runs at the moments the answer can have
-  // changed: mount, hovering back onto the toolbar, and after our own copy.
+  // (never the content). No OS clipboard-change event reaches us and polling
+  // would be its own kind of snooping, so the state re-syncs at the moments
+  // the answer can have changed AND a click is imminent: mount, the pointer
+  // entering the toolbar (always precedes a click on Paste), keyboard focus
+  // entering it, and after our own copy.
   const syncPasteState = (): void => {
     void (async () => {
       const has = (await opts.io.clipboardHasText?.()) ?? true;
@@ -97,6 +100,7 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
     })();
   };
   toolbar.addEventListener("mouseenter", syncPasteState);
+  toolbar.addEventListener("focusin", syncPasteState);
   syncPasteState();
 
   const rerender = (): void => {
