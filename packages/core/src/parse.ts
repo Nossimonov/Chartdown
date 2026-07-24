@@ -42,7 +42,9 @@ export interface ParseResult {
 }
 
 const MAP_TYPES = new Set(["battlemap", "hexcrawl", "region"]);
-const KNOWN_HEADER_KEYS = new Set([
+// Exported for the digest-completeness test: every known key must appear in
+// the digest's "Header keys" list (#99) — agents learn the language from it.
+export const KNOWN_HEADER_KEYS = new Set([
   "map", "chartdown", "id", "grid", "scale", "extent", "seed",
   "use", "theme", "labels", "legend", "scale-bar", "compass", "numbers",
   "levels", "level", "ground",

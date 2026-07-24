@@ -26,6 +26,31 @@ describe("action driver logic (issue #60)", () => {
     expect(report.jobs.map((j) => j.outPath)).toEqual(["notes/session-3.camp.svg", "notes/session-3.camp-2.svg"]);
   });
 
+  it("extracts fences wrapped in a <details> collapsible — the long-document idiom", () => {
+    // The blessed pattern for big maps: image in the flow, source folded
+    // away. Extraction must see through the HTML wrapper.
+    const md = [
+      "# Session 3",
+      "",
+      "![The estate](./session-3.camp.svg)",
+      "",
+      "<details>",
+      "<summary>Map source (Chartdown)</summary>",
+      "",
+      "```chartdown",
+      MAP,
+      "```",
+      "",
+      "</details>",
+      "",
+    ].join("\n");
+    const fences = extractFences(md);
+    expect(fences).toHaveLength(1);
+    expect(fences[0]).toContain("campfire");
+    const report = renderMarkdownFile("notes/session-3.md", md, { mode: "player", markdown: true, verify: false });
+    expect(report.jobs.map((j) => j.outPath)).toEqual(["notes/session-3.camp.svg"]);
+  });
+
   it("theme and vocab documents are recognized as non-maps", () => {
     expect(isMapDocument(MAP)).toBe(true);
     expect(isMapDocument("# Candyworld\n\n[theme]\nsea : fill=#f4c\n")).toBe(false);

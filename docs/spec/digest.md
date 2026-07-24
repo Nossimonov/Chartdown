@@ -15,7 +15,7 @@ scale: 5ft                    ; real size of one cell (grid maps)
 mud : area H11..J11 difficult
 ```
 
-Header keys: `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · `grid:` · `scale:` · `extent: 900x600mi` (gridless size) · `seed:` (int; varies deterministic organic rendering) · `use:` (import vocabulary doc; repeatable) · `theme:` (suggestion only) · `labels: names|keyed|none` · `legend: on` · `scale-bar: on` · `compass: on` · `numbers: on` · `ground: <terrain-word>` (region: names what unmarked land is). Unknown keys/sections warn; `[x-*]` sections are silently ignored (extension namespace).
+Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexcrawl` | `region`; experimental types carry a `-beta` suffix) · `chartdown:` (spec version pin) · `id:` (doc slug for anchors) · `grid:` · `scale:` · `extent: 900x600mi` (gridless size) · `seed:` (int; varies deterministic organic rendering) · `levels: top base` (battlemap floor stack, spec 06 §8) · `level:` (the default floor to render) · `use:` (import vocabulary doc; repeatable) · `theme:` (suggestion only) · `labels: names|keyed|none` · `legend: on` · `scale-bar: on` · `compass: on` · `numbers: on` · `ground: <terrain-word>` (region: names what unmarked land is). Unknown keys/sections warn; `[x-*]` sections are silently ignored (extension namespace).
 
 ## The one line grammar
 
