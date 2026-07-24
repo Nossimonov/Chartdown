@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse, SPEC_VERSION } from "./index";
+import { KNOWN_HEADER_KEYS } from "./parse";
 
 describe("basics", () => {
   it("every version surface agrees — one bump command, one truth (#90)", () => {
@@ -27,6 +28,18 @@ describe("basics", () => {
     const readme = readFileSync(join(root, "README.md"), "utf8");
     expect(readme).toContain(`Spec v${SPEC_VERSION}`);
     expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
+  });
+
+  it("every known header key is defined in the digest's Header keys list (#99)", () => {
+    // Agents learn the language from the digest — a key the parser accepts
+    // but the digest never names is invisible to them (user-caught: map:).
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const digest = readFileSync(join(root, "docs", "spec", "digest.md"), "utf8");
+    const keysLine = digest.split("\n").find((l) => l.startsWith("Header keys:"));
+    expect(keysLine).toBeDefined();
+    for (const key of KNOWN_HEADER_KEYS) {
+      expect(keysLine, `header key '${key}:' missing from the digest`).toContain(`\`${key}:`);
+    }
   });
 
   it("parses a minimal document without errors", () => {
