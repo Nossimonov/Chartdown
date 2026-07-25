@@ -62,6 +62,20 @@ Nine issues, all on `0.4-dev`.
 | **Free text placements + `key=`** (#107) | The set is `<point\|cell>`, `<range>`, `sprawl <range>`, `along <ref>`. `along` now draws the caption **on the course**. `key=<n>` works without `labels: keyed` — a numbered route through a named map. |
 | **Fields** (#106, ADR 0018) | `light: dark` (and `light <level>: daylight`) makes a dark map with emitters as pools. Declare your own: `[vocab] radiation : field occluded=none states=none,heavy,lethal`, then `radiation: heavy` and `reactor : F4 radiation=40ft`. |
 
+## Fixed since the last round — please re-verify these five
+
+All from the battlemap exercise, all on `0.4-dev`. Your original repros should now behave as marked.
+
+| Issue | What was wrong | What to check now |
+|---|---|---|
+| **#125** | The unparented-opening check asked whether `earth` was *ever declared* over a cell, not whether it **wins** there. Since spec 06 §5's idiom is to lay ground truth across a level and paint over it, any map declaring `earth` broadly let every opening through unchecked. | Both directions: an opening in rock that *is* overpainted by floor must now fail ("no barrier to perforate"), and one in genuine rock must still pass. The mirror-image false positive — "solid ground on both sides" firing on open grass — is gone. |
+| **#126** | `passes=` values were never validated. Worse than reported: **`sight=` was never enumerated in the spec at all**, only implied by two examples. | Both facets are closed sets now — `passes=` is `open`/`closed`/`none`, `sight=` is `all`/`none` (spec 04 §1). A typo fails on vocab lines, entities, and details alike. |
+| **#127** | A misspelled ambient value was accepted silently. | `light: dalyight` now fails. `light` ships `states=dark,dim,daylight,moonlight` — it previously had **no declared values**, so there was nothing for a typo to fail against. |
+| **#128** | A barrier word in a structure detail rendered an ordinary wall, and the warning diagnosed the wrong problem. | The diagnostic now names the real failure and points at freestanding barriers. **See the note below — this one is scheduled to change again.** |
+| **#129** | Inferred document kind never warned, though spec 01 §2 and this document both promised it would. | A vocabulary or theme document with no `kind:` names the inferred kind and the line to add. |
+
+**#128 is a moving target on purpose.** The capability half is filed as #130 (*a barrier word on a structure side*) and is **accepted but not yet implemented** — deliberately held so this round can verify #128 as filed. When #130 lands, `cave-in : east` becomes legal and that warning is **removed**. If you are reading this after that happens, its absence is the feature, not a regression.
+
 ## What is NOT done yet — please don't report these as bugs
 
 Accepted and specified, but **not implemented**:
@@ -76,6 +90,7 @@ Accepted and specified, but **not implemented**:
 - **#116** dead-declaration warnings
 - **#124** staged revelation (`hidden=<group>`, `[gm <group>]`, `--reveal`)
 - **#93** placed coast/river morphology (`cape`, `cove`, `island` on a spine)
+- **#130** a barrier word on a structure side (`cave-in : east`) — accepted this round, held until this verification completes
 
 Also open: **#74** (themes fleshed out), which is the phase's capstone.
 
@@ -92,7 +107,7 @@ Reproductions in the style of #101–#105 (a minimal document, the command, expe
 
 ## Current state
 
-- **217 tests** green, typecheck clean, committed example SVGs unchanged.
-- Phase 4: **9 of 22 issues closed**. Milestone: *Phase 4 — Language depth (v0.4)*.
+- **222 tests** green, typecheck clean, committed example SVGs unchanged.
+- Phase 4: **14 of 26 issues closed**. Milestone: *Phase 4 — Language depth (v0.4)*.
 - ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md).
 - The language reference for agents is `docs/spec/digest.md` **on this branch** — the published `llms-full.txt` is 0.3.3 and does not describe any of the above.
