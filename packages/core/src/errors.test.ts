@@ -66,32 +66,6 @@ describe("coordinates and grids (spec 02)", () => {
   });
 });
 
-describe("one staging-zone spelling (spec 06 §4, ADR 0015)", () => {
-  const battlemap = (line: string): string => `map: battlemap\ngrid: square 20x20\n[tokens]\n${line}\n`;
-
-  it("a token word carrying an area placement fails loud, naming both fixes", () => {
-    const msg = errorsOf(battlemap("party start : J14..L15")).join();
-    expect(msg).toMatch(/token takes a cell/);
-    expect(msg).toMatch(/'start party : <range>'/);
-    expect(msg).toMatch(/\[vocab\] watch : zone/);
-  });
-
-  it("the `start` word — and anything deriving from it — is the staging zone", () => {
-    expect(errorsOf(battlemap("start party : J14..L15"))).toEqual([]);
-    expect(errorsOf(`map: battlemap\ngrid: square 20x20\n[vocab]\nrally : start\n[tokens]\nrally r1 : A1..B2\n`)).toEqual([]);
-  });
-
-  it("a declared zone word and an ordinary cell token are both still fine", () => {
-    expect(errorsOf(`map: battlemap\ngrid: square 20x20\n[vocab]\nwatch : zone\n[tokens]\nwatch w1 : A1..B2\n`)).toEqual([]);
-    expect(errorsOf(battlemap('ogre "Gruk" : G9 size=2'))).toEqual([]);
-  });
-
-  it("gm-only ranges are untouched — they are features, not tokens", () => {
-    const src = 'map: battlemap\ngrid: square 20x20\n[gm]\ntrigger ambush : K9..L10 "springs"\n';
-    expect(errorsOf(src)).toEqual([]);
-  });
-});
-
 describe("identity and references (spec 03)", () => {
   it("explicit id collisions are parse-time errors", () => {
     const src = "map: battlemap\ngrid: square 9x9\n[features]\ncrates loot : A1\nchest loot : B2\n";

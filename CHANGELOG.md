@@ -4,10 +4,6 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
-### Changed
-
-- **BREAKING — a staging zone has one spelling** ([ADR 0015](docs/decisions/0015-one-staging-zone-spelling.md), #121): the word `start` (or anything deriving from it) with an area placement — `start party : J14..L15`. Spec 06 §4's inference rule ("a token-archetype word with an area placement renders as a staging zone") is removed, and a token word carrying an area is now a fail-loud error naming both fixes. Previously the same picture came from two spellings with **different theme subjects**: in `party start : …` the type word is `party`, so `start : fill=` styled nothing — a trap that caught a reader of that very section. The three example lines migrate; the rendered zone label changes from `start` to `party`. Because it breaks, this ships in 0.4, never a patch.
-
 ## [0.3.3] — 2026-07-25
 
 Mostly the conformance half of the #93–#115 batch review: everywhere the implementation didn't do what the spec already said. Found by two authoring-at-scale exercises — a Middle-earth region map and a full-Moria eight-level mega-dungeon — plus the release-plumbing and co-authoring work from the same cycle.

@@ -159,10 +159,7 @@ export function renderBattlemap(
     }
     // Range-only entities: zones for zone/token archetypes, gm triggers, and
     // elevated areas; a range-only FEATURE is a footprint (the high table).
-    // A staging zone is the `start` word (zone archetype) — not any token word
-    // that happens to carry a range (#121, ADR 0015). gm-only ranges and
-    // elevation areas keep their zone rendering.
-    const zoneLike = e.archetype === "zone" || (hasOnlyRange(e) && (e.gmOnly || elevation !== undefined));
+    const zoneLike = e.archetype === "zone" || (hasOnlyRange(e) && (e.archetype === "token" || e.gmOnly || elevation !== undefined));
     if (zoneLike) {
       renderZone(e, layers.zones, layers.roomLabels, titleEl, anchor, elevation);
       continue;

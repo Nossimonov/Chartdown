@@ -401,22 +401,6 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       archetypeSource = inferred.source;
     }
 
-    // One spelling for a staging zone (#121, ADR 0015): a token word with an
-    // area placement used to render as one, which meant `party start : <range>`
-    // and `start party : <range>` produced the same picture from different
-    // words — and therefore different theme subjects. The token+range form is
-    // gone and says so; a staging zone is the word `start` (or anything
-    // deriving from it). gm-only range entities are unaffected: they resolve
-    // to `feature`, not `token`.
-    if (archetype === "token" && predicate.placements.some((p) => p.kind === "range")) {
-      diags.push(
-        error(
-          raw.line,
-          "a token takes a cell (use size= for a larger token); for a staging area use 'start' ('start party : <range>'), and for another kind of zone declare the word ('[vocab] watch : zone') (spec 06 §4)",
-        ),
-      );
-    }
-
     // Level resolution and validation (spec 06 §8).
     const levelParam = predicate.pairs.find((p) => p.key === "level")?.value;
     const toParam = predicate.pairs.find((p) => p.key === "to")?.value;

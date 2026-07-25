@@ -27,7 +27,7 @@ crates loot : P4
 goblins g1 g2 : C12 E13
 goblin-archers a1 a2 : O4 P5
 ogre "Gruk" : G9 size=2 hidden
-start party : J14..L15
+party start : J14..L15
 
 [gm]
 trigger ambush : K9..L10 "spring when the wagon is mid-ford"

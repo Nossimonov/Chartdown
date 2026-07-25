@@ -88,9 +88,7 @@ building tollhouse "Ruined Toll House" : N3..Q6
 
 The standard library ships **zero creature words**. Creatures are setting content: an unknown word in `[tokens]` infers the token archetype (spec 04 §3) and renders as a labeled token; `size=<n>` (cells per side) and `side=<word>` (themed to colors) carry the tactics. Communities publish creature vocabularies via `use:`; themes supply art. The zero is mechanical (inference already renders anything), cultural (no implied canon), and legal (nothing IP-adjacent to police).
 
-A **staging zone** is the standard-library word `start` (`start : zone`, §2) with an area placement — `start party : J14..L15` marks where the PCs begin — and so is any word deriving from it (`[vocab] rally : start`). One word, one archetype, one theme subject.
-
-A **token** takes a cell; `size=<n>` makes it larger. A token word carrying an area placement is an error naming the fix, so there is exactly one spelling for a staging area rather than two that render alike and theme differently ([ADR 0015](../decisions/0015-one-staging-zone-spelling.md)).
+A token-archetype word with an **area placement** renders as a staging zone: `party start : J14..L15` marks where the PCs begin.
 
 ## 5. Elevation
 
