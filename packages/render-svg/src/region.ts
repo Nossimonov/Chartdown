@@ -1150,7 +1150,23 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // drop under density, it's the less-important one that gives way.
         deferLabel(1 + (24 - tier.font) / 100, () => {
           const spot = placer.placeBesideOrDrop(pt.x + tier.r + 3, pt.x - tier.r - 3, pt.y + 4, label, tier.font);
-          if (!spot) return; // omit before overwriting (spec 07 §5)
+          if (!spot) {
+            // Every adjacent slot failed at every size. Before giving the name
+            // up, try open space with a leader line to carry the association
+            // (spec 07 §5, #133) — this competes with omission, not with good
+            // placement, so a connected name beats no name.
+            const led = placer.placeWithLeader(pt.x, pt.y, label, tier.font);
+            if (!led) return; // omit before overwriting (spec 07 §5)
+            const lead = theme.surface("leader", "stroke", ink);
+            labelBuckets[1]!.push(
+              el("line", {
+                x1: led.from.x, y1: led.from.y, x2: pt.x, y2: pt.y,
+                stroke: lead, "stroke-width": 0.6, opacity: 0.55,
+              }),
+              text(label, { x: led.x, y: led.y, "font-size": led.size, "font-weight": tier.weight, fill: ink, "text-anchor": led.anchor, "font-family": "sans-serif" }),
+            );
+            return;
+          }
           labelBuckets[1]!.push(
             // text-anchor is ALWAYS written: SVG's default is start, so an
             // omitted "middle" renders shifted right (the clipped Deepwatch).

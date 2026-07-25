@@ -57,8 +57,9 @@ When a map holds more detail than its size can sustain, renderers resolve label 
 
 1. **Proximity outranks size.** A label anchored to a point marker is meaningful only next to its marker — point labels claim placement first and migrate least, and names with room to roam (areas, realms, seas) yield space to them. Within the point tier, more important markers (larger tiers) claim before minor ones.
 2. **Shrink before moving far.** A label that cannot be placed at full size SHOULD be retried at smaller sizes, down to a legibility floor, before being displaced from the feature it names.
-3. **Omit before overwriting.** If a label still cannot be placed without substantially covering other map text, renderers MAY omit it entirely — an unlabeled marker reads better than two names on top of each other. Author-placed `[labels]` overrides are never omitted.
-4. **Repeat rather than cross.** A name spanning a long feature (a sprawled sea, a realm) whose natural midpoint is densely built over MAY be repeated once on each side of the occupied stretch instead of being drawn across it.
+3. **Connect before omitting.** A label with no adjacent slot at any size MAY be placed in nearby open space with a **leader line** — a hairline from the name to its marker — rather than dropped. The leader carries the association that adjacency otherwise provides, so the label is still that marker's name. Because it does, the displacement limit that rule 1 implies must be stated rather than assumed: a leader reaches no further than a fixed bound, and a name that cannot be connected within it is omitted under rule 4. Without an explicit bound a crowded map becomes a scatter of names on strings, each individually justified. The connector is theme-owned (`leader`, spec 08 §2).
+4. **Omit before overwriting.** If a label still cannot be placed without substantially covering other map text, renderers MAY omit it entirely — an unlabeled marker reads better than two names on top of each other. Author-placed `[labels]` overrides are never omitted.
+5. **Repeat rather than cross.** A name spanning a long feature (a sprawled sea, a realm) whose natural midpoint is densely built over MAY be repeated once on each side of the occupied stretch instead of being drawn across it.
 
 ---
 

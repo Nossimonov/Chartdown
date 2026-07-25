@@ -121,7 +121,8 @@ theme-line     = theme-subject , ":" , { pair } , EOL ;
 theme-subject  = word , [ "." , word ]                (* word / word.state / word.core / word.edge *)
                | "side" , "." , word
                | surface-word ;
-surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge" ;
+surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge"
+               | "leader" ;
                  (* pair keys (closed): fill stroke width dash opacity glyph asset edge;
                     glyph= and asset= values may be comma-separated variant pools,
                     chosen by deterministic position hash *)

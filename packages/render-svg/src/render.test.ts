@@ -1065,3 +1065,40 @@ describe("shrink floors are two floors, not one (#132)", () => {
     for (const base of Object.values(TIERS)) expect(shrinkFloor(base, 5000)).toBeLessThanOrEqual(base);
   });
 });
+
+/**
+ * #133: a label with no adjacent slot may sit in open space with a leader line
+ * back to its marker, instead of being dropped (spec 07 §5 rule 3).
+ */
+describe("leader lines rescue labels that would be omitted (#133)", () => {
+  // One marker boxed in by long names on every side, with open space beyond.
+  const crowded = [
+    "map: region", "extent: 900x600mi", "[settlements]",
+    // The subject is the LOWEST tier so it claims last (priority is font size,
+    // spec 07 §5 rule 1) and genuinely faces a full neighbourhood.
+    'hamlet subject "Subjecttown" : (450,300)',
+    ...[[430,290],[470,290],[430,310],[470,310],[450,285],[450,320],[425,300],[475,300]]
+      .map(([x, y], i) => `capital "Averyverylongcompetitorname${i}" : (${x},${y})`),
+  ].join("\n");
+
+  it("the name is kept and connected rather than dropped", () => {
+    const { svg } = renderSource(crowded, {});
+    expect(svg).toContain(">Subjecttown<");
+    const leaders = svg.match(/<line [^>]*opacity="0\.55"/g) ?? [];
+    expect(leaders.length, "a leader should connect the displaced name").toBeGreaterThan(0);
+  });
+
+  it("the leader stays within its bound — names do not wander off", () => {
+    const { svg } = renderSource(crowded, {});
+    for (const m of svg.matchAll(/<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"[^>]*opacity="0\.55"/g)) {
+      const [, x1, y1, x2, y2] = m.map(Number);
+      // 45 is the bound, measured marker-to-label-anchor; the drawn line runs
+      // to the box edge, so allow the label's own half-width beyond it.
+      expect(Math.hypot(x1! - x2!, y1! - y2!)).toBeLessThan(120);
+    }
+  });
+
+  it("placement stays deterministic", () => {
+    expect(renderSource(crowded, {}).svg).toBe(renderSource(crowded, {}).svg);
+  });
+});

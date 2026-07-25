@@ -63,6 +63,40 @@ export const shrinkFloor = (fontSize: number, canvasWidth = NOMINAL_WIDTH): numb
 
 export type Anchor = "start" | "middle" | "end";
 
+/**
+ * How far a label may travel from its marker when a leader line carries the
+ * association (spec 07 §5, #133).
+ *
+ * The bound needs its own statement because rule 1's "migrate least" was doing
+ * two jobs at once: keeping a name legible AS that marker's name, and keeping
+ * it from wandering. A leader takes over the first job entirely — the line
+ * says which marker it belongs to — so without an explicit limit the second
+ * job goes unenforced and a crowded map becomes a scatter of names on strings.
+ *
+ * A flat bound, deliberately. Scaling it by the marker's radius reads better —
+ * the more important the place, the further the eye will follow a line — but
+ * every settlement tier has a radius between 2.5 and 6, so any sane multiple
+ * lands inside the same tens of pixels and the proportionality never decides
+ * anything. Measured: 45 and 60 produce identical maps. Rather than dress a
+ * constant up as a rule that does no work, it is a constant.
+ *
+ * 45 is where the recovery plateaus: below it leaders cannot reach open space
+ * (at 30 only one label is rescued), above it nothing further is gained, which
+ * is the signal that the bound is limiting wandering rather than placement.
+ */
+const LEADER_REACH = 45;
+/** Below this a leader is pointless — the label is close enough to read as adjacent. */
+const LEADER_MIN = 14;
+
+export interface LeaderPlacement {
+  x: number;
+  y: number;
+  anchor: Anchor;
+  size: number;
+  /** Where the leader meets the label; the caller draws to the marker. */
+  from: { x: number; y: number };
+}
+
 export class LabelPlacer {
   protected boxes: Box[] = [];
   private readonly bounds: { w: number; h: number } | null;
@@ -318,6 +352,44 @@ export class SideLabelPlacer extends LabelPlacer {
     });
     this.claim(best.x, best.y, textStr, fontSize, best.anchor);
     return best;
+  }
+
+  /**
+   * Last rung before omission (spec 07 §5, #133): put the name in open space
+   * near the marker and let a leader line carry the association.
+   *
+   * Only reached when every adjacent slot has failed at every size, so this
+   * competes with dropping the name, not with placing it well. Candidates ring
+   * the marker at growing radius, ordered so the nearest and the most
+   * conventional directions win — placement stays a pure function of geometry
+   * and declaration order (spec 02 §8.2).
+   */
+  placeWithLeader(cx: number, cy: number, textStr: string, fontSize: number): LeaderPlacement | null {
+    const reach = LEADER_REACH;
+    // Cardinals and diagonals, NE first: a name set above-right of its marker
+    // is the cartographic default, and ties resolve the same way every render.
+    const dirs: { dx: number; dy: number; anchor: Anchor }[] = [
+      { dx: 1, dy: -1, anchor: "start" }, { dx: -1, dy: -1, anchor: "end" },
+      { dx: 1, dy: 1, anchor: "start" }, { dx: -1, dy: 1, anchor: "end" },
+      { dx: 1, dy: 0, anchor: "start" }, { dx: -1, dy: 0, anchor: "end" },
+      { dx: 0, dy: -1, anchor: "middle" }, { dx: 0, dy: 1, anchor: "middle" },
+    ];
+    for (let r = LEADER_MIN; r <= reach; r += 6) {
+      for (const size of [fontSize, this.floorFor(fontSize)]) {
+        for (const d of dirs) {
+          const norm = Math.hypot(d.dx, d.dy) || 1;
+          const x = cx + (d.dx / norm) * r;
+          const y = cy + (d.dy / norm) * r;
+          if (!this.tryClaim(x, y, textStr, size, d.anchor)) continue;
+          // The leader meets the label at the edge facing the marker, so the
+          // line touches the text rather than striking through it.
+          const box = this.boxFor(x, y, textStr, size, d.anchor);
+          const fromX = d.dx > 0 ? box.x : d.dx < 0 ? box.x + box.w : box.x + box.w / 2;
+          return { x, y, anchor: d.anchor, size, from: { x: fromX, y: box.y + box.h / 2 } };
+        }
+      }
+    }
+    return null;
   }
 
   /**

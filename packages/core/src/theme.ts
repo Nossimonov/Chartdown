@@ -7,7 +7,7 @@ import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize } from "./lex";
 
 export const THEME_PROPS = new Set(["fill", "stroke", "width", "dash", "opacity", "glyph", "asset", "edge"]);
-export const SURFACE_WORDS = new Set(["paper", "grid", "fog", "ink", "light", "ledge"]);
+export const SURFACE_WORDS = new Set(["paper", "grid", "fog", "ink", "light", "ledge", "leader"]);
 export const ZONE_WORDS = new Set(["core", "edge"]);
 
 export interface ThemeEntry {
