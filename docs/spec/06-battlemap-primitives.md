@@ -84,6 +84,18 @@ building tollhouse "Ruined Toll House" : N3..Q6
 - **Coincident walls are one wall**: when structures share a wall line (a room built against the courtyard's wall, adjoining rooms' party wall), the coincident edges form a single wall — an opening declared in *either* structure opens the shared edge for sight, light, and passage.
 - **The `open` flag** *(from proposal [#33](https://github.com/Nossimonov/Chartdown/issues/33))*: a structure flagged `open` has walls but no ceiling — courtyards, pens, ruins open to the sky: `building courtyard : D2..V10 open`. Openness is **declared, never derived** (consistent with §5's level ground-truth); it matters mechanically (flight, lobbed shots, weather) and visually, so the renderer distinguishes open interiors from roofed ones — themable as an ordinary state, `building.open : fill=…` (spec 08). On multi-level maps, an open structure's **sky cells** (its footprint minus sibling structures on its own level) should see `air` on the level above; a floor above open ground draws a renderer warning naming both entities and a cell. Universal VTT has no open/enclosed field, so the flag flattens on UVTT export (§9).
 - Freestanding walls need no parent: `wall : K5.e K6.e K7.e` (edge runs, spec 02 §5), with `ruined` available as a state.
+- **Openings in unbuilt geometry**: an opening MAY be declared with **no parent structure** where its edge separates a passable cell from a **declared impassable surface** (`earth`, or any word inheriting it — §5). The rock is the barrier; the opening perforates it. This is how a cave mouth, a mine adit, or a gate cut into a mountainside is written, without inventing a chamber for it to live in:
+
+  ```chartdown
+  [terrain]
+  earth : area A1..IZ140                  ; the mountain
+  [structures]
+  passage gate-tunnel "The Gate-tunnel" : IL66..IQ74
+  [features]
+  gate great-gates "The Great Gates" : IQ69.e IQ70.e IQ71.e   ; opens onto rock, no parent
+  ```
+
+  Rooms **carve** the rock: a structure's footprint is floor even where `earth` was declared across it, which is what "fills everything outside the rooms" (§5) means. An opening with **passable cells on both sides** (nothing to pass through) or **impassable on both** (buried in stone) is a fail-loud error naming the cell and edge. The impassable boundary is an occluder, so it exports as `line_of_sight` and the opening as a portal (§9) — previously a cave system exported with no occlusion at all except where an author had faked walls.
 
 ## 4. Tokens — no bestiary, by design
 

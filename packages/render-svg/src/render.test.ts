@@ -813,6 +813,49 @@ describe("every drawn thing is a theme subject (#117, #119)", () => {
   });
 });
 
+describe("openings perforate declared terrain; passes= is enumerated (#113)", () => {
+  const mk = (opening: string): string =>
+    [
+      "map: battlemap", "grid: square 12x8", "scale: 10ft",
+      "[vocab]", "arch : opening sight=all",
+      "[terrain]", "earth : area A1..L8",
+      "[structures]", "passage hall : D3..H6",
+      "[features]", opening,
+    ].join("\n");
+
+  it("an opening in a rock face needs no parent structure", () => {
+    const { diagnostics } = renderSource(mk("gate great-gates : D4.w"), { mode: "gm" });
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("fails loud with nothing to pass through, or buried in stone", () => {
+    // Rooms carve the rock, so F4/F3 are both floor.
+    const inRoom = renderSource(mk("arch inner : F4.n"), { mode: "gm" });
+    expect(inRoom.diagnostics.find((d) => d.severity === "error")?.message).toMatch(/no barrier to perforate/);
+    const buried = renderSource(mk("door buried : B2.e"), { mode: "gm" });
+    expect(buried.diagnostics.find((d) => d.severity === "error")?.message).toMatch(/solid ground on both sides/);
+  });
+
+  it("passes= resolves through the chain, defaulting to open — an arch is not a shut door", () => {
+    // `gate` inherits door's passes=closed facet: a portal, closed.
+    const gate = exportUvttSource(mk("gate great-gates : D4.w"), { mode: "gm" }).uvtt as
+      | { portals: { closed: boolean }[] } | null;
+    expect(gate?.portals.map((p) => p.closed)).toEqual([true]);
+    // `arch : opening sight=all` leaves passes unset → open → no leaf, no portal.
+    // Before #113 the facet was never read and this exported as a CLOSED portal.
+    const arch = exportUvttSource(mk("arch a1 : D4.w"), { mode: "gm" }).uvtt as
+      | { portals: unknown[] } | null;
+    expect(arch?.portals).toEqual([]);
+  });
+
+  it("the rock boundary is an occluder, so a cave exports with line_of_sight", () => {
+    const uvtt = exportUvttSource(mk("gate great-gates : D4.w"), { mode: "gm" }).uvtt as
+      | { line_of_sight: unknown[] } | null;
+    // Without the earth boundary this was only the room's own 16 wall segments.
+    expect((uvtt?.line_of_sight.length ?? 0)).toBeGreaterThan(16);
+  });
+});
+
 describe("free text renders as text alone (spec 07 §2, #104)", () => {
   const NOTES = [
     "map: battlemap",

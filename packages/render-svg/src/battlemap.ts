@@ -9,7 +9,7 @@ import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, merg
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
 import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
-import { collectWalls, SIDE_NAME } from "./walls";
+import { collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 interface Frame {
   cols: number;
@@ -149,6 +149,14 @@ export function renderBattlemap(
     }
     if (e.archetype === "structure") {
       renderStructure(e, layers.structures, titleEl, anchor);
+      continue;
+    }
+    // An opening with no parent structure (#113): the Doors of Durin are a
+    // hole in a mountainside, not a door in a built wall. Legal where the edge
+    // separates open floor from a declared impassable surface — the rock IS
+    // the barrier, so it needs no invented chamber to live in.
+    if (e.archetype === "opening") {
+      renderUnparentedOpening(e, titleEl, anchor);
       continue;
     }
     // Freestanding barriers (#62): wall/fence edge runs and pillar cells draw
@@ -761,6 +769,54 @@ export function renderBattlemap(
       }
     }
     return best;
+  }
+
+  /**
+   * An opening perforating declared terrain, with no parent structure
+   * (spec 06 §3, #113). Fail-loud where the geometry doesn't support it:
+   * passable on both sides is a door standing in open air; impassable on both
+   * is a door inside solid rock. Neither is a passage through anything.
+   */
+  function renderUnparentedOpening(e: EntityNode, titleEl: string, anchor: string | undefined): void {
+    const rock = impassableCells(model);
+    const chain = model.chainOf(e.typeWord);
+    const windowLike = chain.includes("window") || chain.includes("arrow-slit");
+    const stroke = model.theme.prop(chain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
+    const width = Number(model.theme.prop(chain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
+    const parts: string[] = [titleEl];
+    for (const p of e.placements) {
+      if (p.kind !== "edge") continue;
+      const here = { col: colToNumber(p.at.col), row: p.at.row };
+      // Only the four cell edges separate two cells; a corner token addresses
+      // a point, which nothing can be a passage through.
+      const steps: Record<string, { dc: number; dr: number }> = {
+        n: { dc: 0, dr: -1 }, s: { dc: 0, dr: 1 }, e: { dc: 1, dr: 0 }, w: { dc: -1, dr: 0 },
+      };
+      const n = steps[p.dir];
+      if (!n) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `an opening takes a cell EDGE (n/e/s/w), not the corner ${p.at.col}${p.at.row}.${p.dir} (spec 02 §5)`,
+        });
+        continue;
+      }
+      const solidHere = rock.has(`${here.col}:${here.row}`);
+      const solidThere = rock.has(`${here.col + n.dc}:${here.row + n.dr}`);
+      if (solidHere === solidThere) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: solidHere
+            ? `opening '${e.typeWord ?? ""}' at ${p.at.col}${p.at.row}.${p.dir} has solid ground on both sides — it passes through nothing (spec 06 §3)`
+            : `opening '${e.typeWord ?? ""}' at ${p.at.col}${p.at.row}.${p.dir} has no barrier to perforate — give it a parent structure, a freestanding wall, or a declared impassable surface (spec 06 §3)`,
+        });
+        continue;
+      }
+      const s = edgeSegment(p.at, p.dir);
+      parts.push(el("line", { x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, "stroke-width": width }));
+    }
+    if (parts.length > 1) layers.openings.push(el("g", { id: anchor }, ...parts));
   }
 
   /**

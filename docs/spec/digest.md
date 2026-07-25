@@ -55,7 +55,7 @@ Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexc
 - **Zones**: realm region border (border = a relationship+state, never a location — see region row)
 - **Crossings/sites**: ford(difficult) bridge keep castle tower ruin dungeon lair camp mine shrine temple port cave landmark stairs ramp
 - **Settlements** (derived tiers): settlement → capital city town village hamlet
-- **Structures triad** (UVTT-aligned): building(ruined) wall(ruined) fence(sight=all) pillar door(passes=closed,sight=none) gate window(passes=none,sight=all) arrow-slit
+- **Structures triad** (UVTT-aligned): building(ruined) wall(ruined) fence(sight=all) pillar door(passes=closed,sight=none — `passes=` is a CLOSED set: open|closed|none, DEFAULT open; resolves through the vocab chain; feeds the normative UVTT portal transform) gate window(passes=none,sight=all) arrow-slit
 - **Props**: wagon(overturned) crates barrel chest table altar statue well boulder tree pit(difficult) campfire(light=20ft) torch lantern brazier
 - **Zones/misc**: realm region start note
 - **No bestiary by design** — creatures are user words via token inference (`goblins g1 g2 : C12 E13`).

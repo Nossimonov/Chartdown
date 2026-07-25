@@ -20,6 +20,18 @@ The language defines only **archetypes**: closed, setting-free behavioral catego
 
 Future spec sections MAY extend this table; documents MUST NOT. Generic parameters (`hidden`, `gm=`, `link=`, `detail=`, `facing=`, `size=`, `width=`, …) remain archetype-independent.
 
+### `passes=` — a closed value set
+
+`passes=` feeds a **normative** transform (the UVTT export of spec 06 §9), so unlike `side=` it cannot be open vocabulary: an unknown value there has no safe degradation, and two conforming renderers would export different portal states from the same document.
+
+| Value | Meaning | UVTT |
+|---|---|---|
+| `open` | no leaf; movement and sight pass unless `sight=` says otherwise | los hole, no portal |
+| `closed` | a leaf that is shut but operable (doors, gates) | los hole + `closed: true` portal |
+| `none` | never passes bodies (windows, arrow-slits, grates) | los per `sight=`, shut portal |
+
+**`open` is the default** when `passes=` is unset, which makes `arch : opening sight=all` — the commonest opening in any dungeon — mean what every reader already takes it to mean. The value resolves through the vocabulary chain like any facet (§2): the entity's own pair, then the word's facet, then its base word's.
+
 ## 2. Vocabulary
 
 A vocabulary entry binds a type word to meaning. Two forms:

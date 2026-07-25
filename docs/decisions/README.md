@@ -26,3 +26,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0014](0014-provenance-gated-cleanup.md) | Generated SVGs carry a provenance marker; cleanup is gated on it, never on inference | Accepted |
 | [0015](0015-one-staging-zone-spelling.md) | A staging zone has one spelling: the word `start` | Accepted |
 | [0016](0016-derivation-carries-word-keyed-behaviour.md) | Derivation carries behaviour attached to a standard-library word | Accepted |
+| [0017](0017-openings-perforate-terrain.md) | Openings may perforate declared terrain; `passes=` is a closed value set | Accepted |
