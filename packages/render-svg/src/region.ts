@@ -443,10 +443,31 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       beltObstacles.set(keyOf(e), own);
     } else {
-      // Every sample point: gap-free, so parallel-line labels can't slip
-      // through holes between obstacle boxes (the Deepflow/Deep Road pair).
+      // The corridor is the line's RENDERED stroke plus a hair of clearance,
+      // not a constant (#134). A flat ±3 reserved ~6 units either side of a
+      // 2-unit river — three times the ink — and did it absolutely, before
+      // the label ladder ran, so a settlement near a river could not place
+      // its name at ANY size. Minas Tirith sits ~9 units from the Anduin and
+      // was dropped entirely; Edoras was shrunk 13 → 10 by the same reserve.
+      //
+      // Soft, like the ridge belts above. `tryClaim` rejects on ANY overlap
+      // whatever the weight, so the preferred path still keeps names off the
+      // line; weight only prices the least-bad fallback — and there, a name
+      // brushing the river it stands on beats no name at all. That ordering
+      // is the cartography: on the reference map these names touch their
+      // rivers, because the adjacency is the point.
+      //
+      // Still one box per sample point, NOT resampled along the segments.
+      // The claim this comment used to make — "gap-free" — was never true:
+      // resolved spacing runs from 0.6 to 122 units on a real map, so coarse
+      // stretches always had holes. Filling them was tried and costs far more
+      // than it buys, because overlapping obstacle boxes double-count in the
+      // cost sum and shut out labels the narrower corridor had just admitted.
+      // The Deepflow/Deep Road pair this guards is covered by its own test.
+      const strokeW = Number(pairOf(e.pairs, "width") ?? (model.chainOf(e.typeWord).includes("coastline") ? 1.2 : 2));
+      const half = strokeW / 2 + 1;
       for (const pt of r.polyline) {
-        placer.block(pt.x - 3, pt.y - 3, 6, 6);
+        placer.block(pt.x - half, pt.y - half, half * 2, half * 2, 0.35);
       }
     }
   }
