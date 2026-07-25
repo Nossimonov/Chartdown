@@ -27,7 +27,12 @@ mud : area H11..J11 difficult
 In order:
 
 1. **Title** — an optional line `# <text>`, legal only as the first non-blank line. It is the document's display name. `#` has no other meaning in the language.
-2. **Header** — every line between the title and the first section. Header lines are ordinary lines (§4) whose subjects are reserved keys. `map:` MUST be present and MUST be the first header line; its value is the map type. Map types in v0.1: `battlemap`, `hexcrawl`, `region`. Experimental future types carry a `-beta` suffix until stabilized. Other header keys are defined per map type; a renderer MUST warn on unknown header keys and otherwise ignore them.
+2. **Header** — every line between the title and the first section. Header lines are ordinary lines (§4) whose subjects are reserved keys. **The first header line is `map:` or `kind:`**, and a document declares one or the other, never both.
+   - **`map:`** names the map type — `battlemap`, `hexcrawl`, `region`; experimental future types carry a `-beta` suffix until stabilized.
+   - **`kind:`** names a non-map document — `vocabulary` (spec 04 §2) or `theme` (spec 08 §1). These need no `map:`, and before this key existed they were defined only by what they *lacked*, which left the two shareable, publishable document kinds with **no positive discriminator and no validation path**. A map is spelled by `map:` itself, so `kind:` takes no `map` value.
+   - **Compatibility:** a document with neither is accepted and its kind inferred from the sections present (`[theme]`/`[glyphs]` → theme, `[vocab]`-only → vocabulary), with a warning. Inference is a compatibility path, not the rule — an empty file, a `[gm]`-only file, and a tool-generated partial vocabulary are all undecidable by inspection, and a typo'd `map:` line should report itself rather than be re-read as a vocabulary.
+
+   Other header keys are defined per map type; a renderer MUST warn on unknown header keys and otherwise ignore them.
 3. **Sections** — a line `[name]` opens a section, which runs until the next section line or end of document. The section determines the grammar of its lines, as defined by the map type's spec sections. A renderer MUST warn on unknown section names and ignore their contents — except names prefixed `x-` (e.g. `[x-mytool]`), which are the sanctioned extension namespace and are ignored silently. A section header MAY carry **one qualifier token** after the name (`[structures upper]`); its meaning is defined by the map type (battlemaps use it for levels, spec 06 §8) and it is an error where the map type defines none.
 4. **Blank lines** are insignificant everywhere.
 

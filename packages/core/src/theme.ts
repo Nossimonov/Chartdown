@@ -48,8 +48,12 @@ export function parseThemeDocument(source: string, diagnostics: Diagnostic[]): T
     const colonIndex = tokens.findIndex((t) => t.kind === "colon");
 
     if (section === null) {
-      // Header zone: only `use:` is meaningful in a theme document.
+      // Header zone: `use:` imports, and `kind: theme` is the document's own
+      // discriminator (#110) — not an unknown line to warn about.
       const key = tokens[0];
+      if (colonIndex === 1 && key?.kind === "chunk" && key.text === "kind") {
+        continue;
+      }
       if (colonIndex === 1 && key?.kind === "chunk" && key.text === "use") {
         const value = tokens
           .slice(2)

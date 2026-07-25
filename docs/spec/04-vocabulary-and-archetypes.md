@@ -56,7 +56,7 @@ Every row inherits, per the rule above — a table of exceptions would be a main
 Vocabulary comes from three sources; later **shadows** earlier, silently and deliberately:
 
 1. **The standard library** — the shipped medieval-fantasy vocabulary (`forest`, `river`, `wagon`, `door`, `keep`, …), implicitly present. It is written in this same mechanism and holds no privileged status; its content is enumerated by the primitives sections.
-2. **Used libraries** — the header key `use: <path-or-name>` imports vocabulary documents (`use: vocab/candyworld.cd`); multiple `use:` lines apply in order. This is the shareable/publishable surface. A *vocabulary document* is an ordinary Chartdown document containing only `[vocab]` sections; the `map:` header line is not required for pure vocabulary documents.
+2. **Used libraries** — the header key `use: <path-or-name>` imports vocabulary documents (`use: vocab/candyworld.cd`); multiple `use:` lines apply in order. This is the shareable/publishable surface. A *vocabulary document* is an ordinary Chartdown document containing only `[vocab]` sections. It carries `kind: vocabulary` as its first header line instead of `map:` (spec 01 §2) — the positive discriminator that makes it identifiable, and therefore checkable, from the file alone.
 3. **In-document `[vocab]`** — one-off definitions for one map.
 
 ## 3. Unknown words and usage inference

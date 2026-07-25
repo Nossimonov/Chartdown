@@ -45,10 +45,13 @@ const MAP_TYPES = new Set(["battlemap", "hexcrawl", "region"]);
 // Exported for the digest-completeness test: every known key must appear in
 // the digest's "Header keys" list (#99) — agents learn the language from it.
 export const KNOWN_HEADER_KEYS = new Set([
-  "map", "chartdown", "id", "grid", "scale", "extent", "seed",
+  "map", "kind", "chartdown", "id", "grid", "scale", "extent", "seed",
   "use", "theme", "labels", "legend", "scale-bar", "compass", "numbers",
   "levels", "level", "ground",
 ]);
+
+/** Document kinds a `kind:` header may name — `map` is spelled by `map:` itself. */
+export const DOCUMENT_KINDS = new Set(["vocabulary", "theme"]);
 const UNIVERSAL_SECTIONS = new Set(["vocab", "gm", "labels"]);
 const SECTIONS_BY_TYPE: Record<string, Set<string>> = {
   battlemap: new Set(["terrain", "structures", "features", "tokens"]),
@@ -218,6 +221,8 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
 
   // Header (spec 01 §2.2)
   let sawMap = false;
+  let sawFirstHeader = false;
+  let declaredKind: string | null = null;
   while (i < lines.length && !lines[i]!.text.startsWith("[")) {
     const raw = lines[i]!;
     const tokens = tokenize(raw.text, raw.line, diagnostics);
@@ -235,9 +240,26 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       .join(" ");
     document.header.push({ key, value, line: raw.line } satisfies HeaderEntry);
 
-    if (!sawMap) {
-      if (key !== "map") {
-        diagnostics.push(error(raw.line, "'map:' must be the first header line (spec 01 §2)"));
+    // The first header line is `map:` or `kind:` (spec 01 §2, #110) — one rule
+    // covering all three document kinds, where two of them used to be defined
+    // by what they LACKED and were therefore undecidable from the file alone.
+    if (!sawFirstHeader) {
+      if (key !== "map" && key !== "kind") {
+        diagnostics.push(error(raw.line, "the first header line is 'map:' or 'kind:' (spec 01 §2)"));
+      }
+      sawFirstHeader = true;
+    }
+    if (key === "kind") {
+      declaredKind = value;
+      if (!DOCUMENT_KINDS.has(value)) {
+        diagnostics.push(error(raw.line, `unknown document kind '${value}' — expected vocabulary or theme (a map is spelled by 'map:')`));
+      }
+      if (sawMap) diagnostics.push(error(raw.line, "a document declares 'map:' or 'kind:', never both (spec 01 §2)"));
+      continue;
+    }
+    if (key === "map") {
+      if (declaredKind !== null) {
+        diagnostics.push(error(raw.line, "a document declares 'map:' or 'kind:', never both (spec 01 §2)"));
       }
       sawMap = true;
     }
@@ -273,7 +295,11 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       diagnostics.push(warning(raw.line, `unknown header key '${key}'`));
     }
   }
-  if (!sawMap) diagnostics.push(error(lines[0]?.line ?? 1, "missing required 'map:' header line"));
+  // A declared non-map kind is a complete answer: vocabulary and theme
+  // documents need no map: (spec 04 par.2, spec 08 par.1).
+  if (!sawMap && declaredKind === null) {
+    diagnostics.push(error(lines[0]?.line ?? 1, "missing required 'map:' header line"));
+  }
   if (document.docId === "document" && document.title) document.docId = slugify(document.title);
 
   // Level defaults and validation (spec 06 §8).

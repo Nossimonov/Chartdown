@@ -16,7 +16,7 @@ describe("document model (spec 01)", () => {
   });
 
   it("map: must be the first header line", () => {
-    expect(errorsOf("scale: 5ft\nmap: battlemap\n").join()).toMatch(/must be the first header line/);
+    expect(errorsOf("scale: 5ft\nmap: battlemap\n").join()).toMatch(/first header line is 'map:' or 'kind:'/);
   });
 
   it("unknown map types error", () => {
@@ -89,6 +89,23 @@ describe("one staging-zone spelling (spec 06 §4, ADR 0015)", () => {
   it("gm-only ranges are untouched — they are features, not tokens", () => {
     const src = 'map: battlemap\ngrid: square 20x20\n[gm]\ntrigger ambush : K9..L10 "springs"\n';
     expect(errorsOf(src)).toEqual([]);
+  });
+});
+
+describe("document kind (spec 01 §2, #110)", () => {
+  it("the first header line is map: or kind:", () => {
+    expect(errorsOf("kind: vocabulary\n[vocab]\nhall : building\n")).toEqual([]);
+    expect(errorsOf("scale: 5ft\nmap: battlemap\n").join()).toMatch(/first header line is 'map:' or 'kind:'/);
+  });
+
+  it("a declared kind removes the missing-map: error", () => {
+    expect(errorsOf("kind: theme\n")).toEqual([]);
+    expect(errorsOf("[vocab]\nhall : building\n").join()).toMatch(/missing required 'map:'/);
+  });
+
+  it("unknown kinds and map:+kind: together are errors", () => {
+    expect(errorsOf("kind: spaceship\n").join()).toMatch(/unknown document kind 'spaceship'/);
+    expect(errorsOf("map: battlemap\nkind: theme\n").join()).toMatch(/never both/);
   });
 });
 

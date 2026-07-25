@@ -1,5 +1,6 @@
 # Candyworld
 ; The lollipop test (spec 08): restyle Gumdrop Vale without touching its source.
+kind: theme
 use: default
 
 [theme]

@@ -4,7 +4,7 @@
 
 ## 1. Theme documents
 
-A **theme document** is an ordinary Chartdown document containing only `[theme]` and `[glyphs]` sections; like vocabulary documents, it requires no `map:` header. One lexical layer serves maps, vocabularies, and themes alike.
+A **theme document** is an ordinary Chartdown document containing only `[theme]` and `[glyphs]` sections; like vocabulary documents it needs no `map:`, carrying `kind: theme` as its first header line instead (spec 01 §2). One lexical layer serves maps, vocabularies, and themes alike.
 
 ```chartdown
 # Candyworld
