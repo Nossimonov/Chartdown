@@ -32,7 +32,13 @@ header-key     = "ground" | "chartdown" | "id" | "grid" | "scale" | "extent" | "
                       labels    = "names" | "keyed" | "none" ;
                       legend | scale-bar | compass | numbers = "on" | "off" ;
                     plus map-line/kind-line above. Out-of-set = error, never a
-                    silent default. *)
+                    silent default.
+                    Four more carry FORMATS, likewise checked (spec 01 §2):
+                      extent = number , "x" , number , [ unit ] ;
+                      seed   = [ "-" ] , digit , { digit } ;
+                      scale  = measure ;   (* unit optional, per `measure` below *)
+                      chartdown = number , { "." , number } ;
+                    Malformed = error, never a silent fallback. *)
 
 section        = "[" , section-name , [ " " , word ] , "]" , EOL , { content-line } ;
 section-name   = word ;                              (* known names per map type, spec 05/06/07;

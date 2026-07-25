@@ -360,3 +360,47 @@ describe("closed header value sets (spec 01 §2)", () => {
       .toMatch(/'legend: yes' is not one of on, off — the value is a closed set \(spec 01 §2\)/);
   });
 });
+
+describe("header formats are checked, not silently defaulted (#136)", () => {
+  const region = (line: string): string => `# T\nmap: region\n${line}\n`;
+
+  it("a malformed extent errors instead of rendering at 800x600", () => {
+    // The space is the realistic one: the value is RIGHT and the author has
+    // merely spaced it, and the whole region map silently rescales.
+    for (const bad of ["huge", "900*600", "900x600 mi", "900-600mi"]) {
+      expect(errorsOf(region(`extent: ${bad}`)).join(), bad).toMatch(/is malformed — expected <width>x<height>/);
+    }
+    for (const ok of ["900x600mi", "12x8mi", "1600x1000"]) {
+      expect(errorsOf(region(`extent: ${ok}`)), ok).toEqual([]);
+    }
+  });
+
+  it("a zero dimension gets its own message", () => {
+    expect(errorsOf(region("extent: 900x0mi")).join()).toMatch(/has a zero dimension/);
+  });
+
+  it("seed is a whole number — fractional included", () => {
+    expect(errorsOf(region("extent: 900x600mi\nseed: banana")).join()).toMatch(/expected a whole number/);
+    expect(errorsOf(region("extent: 900x600mi\nseed: 3.7")).join()).toMatch(/expected a whole number/);
+    expect(errorsOf(region("extent: 900x600mi\nseed: 3742"))).toEqual([]);
+  });
+
+  it("scale keeps the grammar's OPTIONAL unit", () => {
+    // grammar.ebnf: measure = number , [ unit ]. Requiring a unit here would
+    // be a language change smuggled in as a bug fix.
+    const bm = (v: string): string => `# T\nmap: battlemap\ngrid: square 8x6\nscale: ${v}\n`;
+    expect(errorsOf(bm("soon")).join()).toMatch(/expected a measure/);
+    for (const ok of ["5ft", "6mi", "5", "2.5ft"]) expect(errorsOf(bm(ok)), ok).toEqual([]);
+  });
+
+  it("a typo'd version pin errors rather than silently unpinning", () => {
+    expect(errorsOf(region("extent: 900x600mi\nchartdown: banana")).join()).toMatch(/expected a spec version/);
+    expect(errorsOf(region("extent: 900x600mi\nchartdown: 0.3"))).toEqual([]);
+    // the newer-than-parser warning still applies to a well-formed pin
+    expect(warningsOf(region("extent: 900x600mi\nchartdown: 9.9")).join()).toMatch(/targets spec 9\.9/);
+  });
+
+  it("ground: is left open — an unknown word is legal (spec 04 §3)", () => {
+    expect(errorsOf(region("extent: 900x600mi\nground: nonsense"))).toEqual([]);
+  });
+});

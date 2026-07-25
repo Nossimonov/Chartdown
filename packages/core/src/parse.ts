@@ -67,6 +67,35 @@ export const DOCUMENT_KINDS = new Set(["vocabulary", "theme"]);
  * argument here: the language defines every legal value, so an out-of-set one
  * cannot be an author extending the language and can only be a mistake.
  */
+/**
+ * Header keys whose value is a FORMAT rather than a value set.
+ *
+ * Each of these was consumed by a coercion with a silent fallback —
+ * `Number(seed) || 0`, `measureToNumber(scale) || 5`, a regex on `extent:`
+ * defaulting to 800x600, `parseFloat(chartdown)` compared against NaN. So a
+ * malformed value produced a map built on a default the author never wrote,
+ * and `check` said ok.
+ *
+ * The forward-compatibility argument is the decisive one (owner, #136): a
+ * document that silently rides a default today is a document that BREAKS the
+ * day the assumed grammar becomes real. If `seed: goldenrod` is ever made
+ * legal by hashing the string, every map that quietly rendered at seed 0
+ * changes its organic geometry at once — and the author never wrote anything
+ * wrong enough to be told about it. Rejecting now keeps that door open.
+ */
+export const HEADER_FORMATS: Record<string, { re: RegExp; expected: string }> = {
+  extent: { re: /^\d+x\d+[a-z]*$/, expected: "<width>x<height> with an optional unit, e.g. '900x600mi'" },
+  seed: { re: /^-?\d+$/, expected: "a whole number, e.g. '3742'" },
+  // Unit optional: grammar.ebnf defines `measure = number , [ unit ]`, so
+  // `scale: 5` is grammar-legal and tightening it here would be a language
+  // change smuggled in as a bug fix.
+  scale: { re: /^\d+(\.\d+)?[a-z]*$/, expected: "a measure, e.g. '5ft' or '6mi'" },
+  chartdown: { re: /^\d+(\.\d+)*$/, expected: "a spec version, e.g. '0.3'" },
+};
+
+const formatMessage = (key: string, value: string): string =>
+  `'${key}: ${value}' is malformed — expected ${HEADER_FORMATS[key]!.expected} (spec 01 §2)`;
+
 export const CLOSED_HEADER_VALUES: Record<string, Set<string>> = {
   labels: new Set(["names", "keyed", "none"]),
   legend: new Set(["on", "off"]),
@@ -342,8 +371,16 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       // Spec 01: warn only when the document targets a NEWER spec than this
       // parser implements (render best-effort anyway); older targets are
       // this parser's own history and parse silently.
-      if (parseFloat(value) > parseFloat(SPEC_VERSION)) {
+      if (!HEADER_FORMATS.chartdown!.re.test(value)) {
+        diagnostics.push(error(raw.line, formatMessage("chartdown", value)));
+      } else if (parseFloat(value) > parseFloat(SPEC_VERSION)) {
         diagnostics.push(warning(raw.line, `document targets spec ${value}; this parser implements ${SPEC_VERSION}`));
+      }
+    } else if (HEADER_FORMATS[key] !== undefined) {
+      if (!HEADER_FORMATS[key]!.re.test(value)) {
+        diagnostics.push(error(raw.line, formatMessage(key, value)));
+      } else if (key === "extent" && /^0+x|x0+[a-z]*$/.test(value)) {
+        diagnostics.push(error(raw.line, `'extent: ${value}' has a zero dimension — a map with no area renders nothing (spec 02 §5)`));
       }
     } else if (key === "use") {
       const lib = options.libraries?.[value];
