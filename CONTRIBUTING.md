@@ -64,6 +64,10 @@ Three lanes (issue #37):
 
 - **`preview`** — the staging branch. Pushes deploy a staging playground at [/Chartdown/preview/](https://nossimonov.github.io/Chartdown/preview/) so features can be exercised live before they reach `main`. CI runs here too.
 - **`main`** — production. Merges deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit. **Direct pushes are rejected — including for admins**: changes reach `main` only by pull request from `preview`, with CI (`test`) and the source-branch check (`gatekeeper`) required to pass.
+- **`0.4-dev`** — the breaking-change lane, open while Phase 4 runs. `preview` must stay **releasable as a patch at all times**, so anything that breaks existing documents lands here instead and merges to `preview` only when the minor is ready. Branched from `preview`; rebase or merge `preview` into it as bugfixes ship.
+
+  > **Merging it back:** `0.4-dev` was created by branching at the breaking commit and then **reverting that commit on `preview`** (which is protected against force-pushes). Git therefore considers the change already-seen, and a plain merge will NOT re-apply it. When Phase 4 is ready, **revert the revert on `preview` first** (`git revert <revert-sha>`), then merge `0.4-dev`. The revert commit names the branch and this note.
+
 - **Version tags** — the npm release lane. Publishing is *never* triggered by a branch push. To release, run the bump command — it rewrites **every** version surface in one shot (the six `packages/*/package.json`, render-svg's pin on core, the parser's `SPEC_VERSION`, the digest/grammar/spec-README headers, and it rolls the `[Unreleased]` changelog items into the new `## [x.y.z]` section with compare links) — then review the diff, commit, and after the PR reaches `main`, tag:
 
   ```sh
