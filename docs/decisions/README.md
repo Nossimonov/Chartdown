@@ -24,3 +24,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0012](0012-borders-are-relationships.md) | Borders are relationships with states; realm edges may follow features | Accepted |
 | [0013](0013-terrain-kinds-aspect-adaptation.md) | Terrain comes in kinds (patches, belts, zones); references adapt by aspect, never by guess | Accepted |
 | [0014](0014-provenance-gated-cleanup.md) | Generated SVGs carry a provenance marker; cleanup is gated on it, never on inference | Accepted |
+| [0015](0015-one-staging-zone-spelling.md) | A staging zone has one spelling: the word `start` | Accepted |

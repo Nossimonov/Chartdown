@@ -728,8 +728,10 @@ describe("one vocabulary chain, walked once (#101, #103, #105)", () => {
       "fence f1 : H6.n",
       "[terrain]",
       "road r1 : path A12 N12 width=2",
+      "[vocab]",
+      "watch : zone",
       "[tokens]",
-      "zone z1 \"Z\" : A6..B7",
+      "watch z1 \"Z\" : A6..B7",
     ].join("\n");
     const theme = [
       "[theme]",
@@ -739,7 +741,7 @@ describe("one vocabulary chain, walked once (#101, #103, #105)", () => {
       "pillar : fill=#bb1111",
       "fence : stroke=#cc2222",
       "road : stroke=#ff5555",
-      "zone : fill=#654321",
+      "watch : fill=#654321",
     ].join("\n");
     const { svg } = renderSource(src, { theme });
     for (const value of ["#445566", "#778899", "#aabbcc", "#bb1111", "#cc2222", "#ff5555", "#654321"]) {

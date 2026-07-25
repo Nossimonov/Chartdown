@@ -25,7 +25,7 @@ barrel : C7
 
 [tokens]
 keeper "Old Marta" : F6
-party start : D8..F8
+start party : D8..F8
 
 [gm]
 "Old Marta" : "Knows every rumor in the vale; trades them for favors, not coin."

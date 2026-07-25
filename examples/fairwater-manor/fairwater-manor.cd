@@ -96,7 +96,7 @@ guards g1 g2 : M12 M16 side=foe
 guard g3 : R8 side=foe
 lord "Lord Fairwater" : I4
 assassin "The Whisper" : O4 hidden side=foe
-party start : K19..O20
+start party : K19..O20
 
 [gm]
 trigger alarm : L10..N10 "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds."
