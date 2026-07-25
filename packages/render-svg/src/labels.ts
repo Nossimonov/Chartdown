@@ -16,6 +16,51 @@ interface Box {
 /** Cost weight of text boxes: brushing a road is fine, covering a name is not. */
 const TEXT_WEIGHT = 3;
 
+/**
+ * How far a label may shrink (spec 07 §5 step 2). TWO floors, deliberately
+ * separate — `Math.max(8, fontSize - 3)` conflated them (#132).
+ *
+ * - **Legibility** is about the reader and scales with the map, because an SVG
+ *   is resolution-independent: how large "8 units" appears is the viewer's
+ *   choice, not the document's. A fixed pixel count optimizes for fit-to-width
+ *   and pays for it by discarding information a zoomable medium could keep.
+ * - **Hierarchy** is about the map and is inherently relative: a capital that
+ *   shrank to a hamlet's size would erase the tier system that makes the map
+ *   readable at any zoom. This one must NOT scale with the canvas.
+ *
+ * Conflated, the `- 3` silently governed the important labels: a capital's
+ * floor was 10 and no amount of lowering the `8` could move it, while a
+ * `hamlet` at base 8 had **zero** shrink headroom and went straight to
+ * omission under any crowding.
+ *
+ * **On "scale-aware", honestly:** the legibility floor is written as a
+ * fraction of the canvas, but a region canvas is a hard-coded 820 units wide
+ * (`index.ts`), and these floors are reached only from region rendering — so
+ * today the fraction evaluates to one constant and the scale-awareness is
+ * latent, not active. It is kept in this form because it is the correct shape
+ * the day the canvas stops being fixed, and because writing it as a bare
+ * constant would hide that the value is a fraction of something. The claim
+ * that a fixed floor is a fixed-raster assumption stands; the lever for acting
+ * on it is the canvas, and the canvas does not move yet.
+ */
+const LEGIBILITY_FRACTION = 1 / 130;
+const LEGIBILITY_MIN = 4;
+const HIERARCHY_RATIO = 0.7;
+/** Canvas width assumed when the placer was built without bounds. */
+const NOMINAL_WIDTH = 820;
+
+/**
+ * Smallest size a label of this base size may shrink to on this canvas.
+ * Exported for testing: the constants above only mean something in relation
+ * to each other, and this is where that relationship is decided.
+ */
+export const shrinkFloor = (fontSize: number, canvasWidth = NOMINAL_WIDTH): number => {
+  const legibility = Math.max(LEGIBILITY_MIN, canvasWidth * LEGIBILITY_FRACTION);
+  // Rounded: the fallback claims AT the floor, so a fractional one would put
+  // `font-size="9.1"` in the output for no reader-visible gain.
+  return Math.min(fontSize, Math.round(Math.max(legibility, fontSize * HIERARCHY_RATIO)));
+};
+
 export type Anchor = "start" | "middle" | "end";
 
 export class LabelPlacer {
@@ -47,6 +92,16 @@ export class LabelPlacer {
   release(handle: object): void {
     const i = this.boxes.indexOf(handle as Box);
     if (i >= 0) this.boxes.splice(i, 1);
+  }
+
+  /**
+   * The smallest size this label may shrink to: the larger of what the reader
+   * can still make out and what its rank requires (see the constants above).
+   * Never above the base size, so a small label is not floored out of shrinking
+   * altogether on a large canvas.
+   */
+  protected floorFor(fontSize: number): number {
+    return shrinkFloor(fontSize, this.bounds?.w ?? NOMINAL_WIDTH);
   }
 
   protected boxFor(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, widthPx?: number): Box {
@@ -170,7 +225,7 @@ export class LabelPlacer {
    * returns null — the caller drops the label rather than scrawl it.
    */
   placeOrDrop(x: number, y: number, textStr: string, fontSize: number, anchor: Anchor, dxs: number[] = [0], widthPx?: number, allow?: (x: number, y: number) => boolean): { y: number; x: number; size: number } | null {
-    const floor = Math.max(8, fontSize - 3);
+    const floor = this.floorFor(fontSize);
     const offsetsAt = (size: number): { dx: number; dy: number }[] => {
       const step = size * 1.1 + 2;
       const out: { dx: number; dy: number }[] = [];
@@ -190,7 +245,10 @@ export class LabelPlacer {
     // shrunken migrated one: accept the largest size whose least-bad slot
     // only brushes (≤12% of its own box); then a floor-size slot up to
     // half-covered; beyond that, omit before overwriting.
-    const leastBad = (size: number): { o: { dx: number; dy: number }; score: number; area: number } => {
+    // `i * size` ranks candidates (nearer offsets preferred) but is not ink on
+    // the label, so the omit tests below weigh OVERLAP only — see the sibling
+    // note in placeBesideOrDrop (#132).
+    const leastBad = (size: number): { o: { dx: number; dy: number }; overlap: number; area: number } => {
       let best = { dx: 0, dy: 0 };
       let bestScore = Infinity;
       offsetsAt(size).forEach((o, i) => {
@@ -201,17 +259,17 @@ export class LabelPlacer {
         }
       });
       const box = this.boxFor(x + best.dx, y + best.dy, textStr, size, anchor, widthPx);
-      return { o: best, score: bestScore, area: box.w * box.h };
+      return { o: best, overlap: this.overlapArea(box), area: box.w * box.h };
     };
     for (let size = fontSize; size >= floor; size--) {
       const b = leastBad(size);
-      if (b.score <= b.area * 0.12) {
+      if (b.overlap <= b.area * 0.12) {
         this.claim(x + b.o.dx, y + b.o.dy, textStr, size, anchor, widthPx);
         return { x: x + b.o.dx, y: y + b.o.dy, size };
       }
     }
     const b = leastBad(floor);
-    if (b.score > b.area * 0.5) return null;
+    if (b.overlap > b.area * 0.5) return null;
     this.claim(x + b.o.dx, y + b.o.dy, textStr, floor, anchor, widthPx);
     return { x: x + b.o.dx, y: y + b.o.dy, size: floor };
   }
@@ -270,7 +328,7 @@ export class SideLabelPlacer extends LabelPlacer {
    * an unlabeled point reads better than two names on top of each other.
    */
   placeBesideOrDrop(rightX: number, leftX: number, y: number, textStr: string, fontSize: number): (SidePlacement & { size: number }) | null {
-    const floor = Math.max(8, fontSize - 3);
+    const floor = this.floorFor(fontSize);
     const candidatesAt = (size: number): SidePlacement[] => {
       const step = size * 1.1 + 2;
       const midX = (rightX + leftX) / 2;
@@ -294,7 +352,13 @@ export class SideLabelPlacer extends LabelPlacer {
     // last few px at the settlement it serves) beats a shrunken migrated
     // one: largest size whose least-bad candidate only brushes (≤12% of its
     // own box), then floor-size up to half-covered, then omit.
-    const leastBad = (size: number): { c: SidePlacement; score: number; area: number } => {
+    // `i * size * 2` is a PREFERENCE — it keeps a name on its marker's
+    // favoured side when two candidates overlap equally. It is not ink on the
+    // label, so it ranks candidates but must not be weighed against the omit
+    // thresholds below: at candidate index 7 it alone ate ~40% of the budget,
+    // and a label was dropped for sitting in an unfavoured slot rather than
+    // for covering anything (#132).
+    const leastBad = (size: number): { c: SidePlacement; overlap: number; area: number } => {
       const finalists = candidatesAt(size);
       let best = finalists[0]!;
       let bestScore = Infinity;
@@ -306,17 +370,17 @@ export class SideLabelPlacer extends LabelPlacer {
         }
       });
       const box = this.boxFor(best.x, best.y, textStr, size, best.anchor);
-      return { c: best, score: bestScore, area: box.w * box.h };
+      return { c: best, overlap: this.overlapArea(box), area: box.w * box.h };
     };
     for (let size = fontSize; size >= floor; size--) {
       const b = leastBad(size);
-      if (b.score <= b.area * 0.12) {
+      if (b.overlap <= b.area * 0.12) {
         this.claim(b.c.x, b.c.y, textStr, size, b.c.anchor);
         return { ...b.c, size };
       }
     }
     const b = leastBad(floor);
-    if (b.score > b.area * 0.5) return null;
+    if (b.overlap > b.area * 0.5) return null;
     this.claim(b.c.x, b.c.y, textStr, floor, b.c.anchor);
     return { ...b.c, size: floor };
   }

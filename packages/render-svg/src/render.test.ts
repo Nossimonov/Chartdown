@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseXml } from "@rgrove/parse-xml";
 import { describe, expect, it } from "vitest";
 import { exportUvttSource, renderSource } from "./index";
+import { shrinkFloor } from "./labels";
 
 const examplesDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "examples");
 const example = (name: string): string => readFileSync(join(examplesDir, name, `${name}.cd`), "utf8");
@@ -1021,5 +1022,46 @@ describe("sight= recovers to the vocabulary default too (#131)", () => {
     expect(svg(" sight=all"), "all").toBe(base);
     expect(svg(" sight=bogus"), "bogus").toBe(base);
     expect(svg(" sight=none"), "none").not.toBe(base); // the facet still works
+  });
+});
+
+/**
+ * #132: the legibility floor and the hierarchy floor are separate concerns and
+ * were conflated in `Math.max(8, fontSize - 3)`. Unit-tested rather than driven
+ * through a document: the constants only mean anything in relation to each
+ * other, and synthetic crowding cannot reliably force the shrink path (a tier
+ * claims by font size, so a hamlet under pressure is dropped by earlier
+ * claimants before it ever shrinks).
+ */
+describe("shrink floors are two floors, not one (#132)", () => {
+  const TIERS = { capital: 13, city: 11, town: 10, village: 9, hamlet: 8 };
+
+  it("every tier can shrink — a hamlet had ZERO headroom", () => {
+    // Old floor: max(8, 8 - 3) = 8, identical to base, so any crowding took a
+    // hamlet from full size straight to omission with no step in between.
+    for (const [tier, base] of Object.entries(TIERS)) {
+      expect(shrinkFloor(base), tier).toBeLessThan(base);
+    }
+  });
+
+  it("hierarchy is preserved: a bigger tier never floors below a smaller one", () => {
+    const floors = Object.values(TIERS).map((b) => shrinkFloor(b));
+    for (let i = 1; i < floors.length; i++) expect(floors[i - 1]!).toBeGreaterThanOrEqual(floors[i]!);
+    expect(shrinkFloor(TIERS.capital)).toBeGreaterThan(shrinkFloor(TIERS.hamlet));
+  });
+
+  it("the floor is proportional, so the old capital-vs-constant trap is gone", () => {
+    // A capital's floor was 10 and governed by `fontSize - 3`, so lowering the
+    // `8` — the fix #132 originally proposed — could not move it at all.
+    expect(shrinkFloor(13)).toBeLessThan(10);
+  });
+
+  it("floors are whole numbers — the fallback claims AT the floor", () => {
+    for (const base of Object.values(TIERS)) expect(shrinkFloor(base) % 1).toBe(0);
+  });
+
+  it("a wider canvas raises the legibility floor, but never above the base size", () => {
+    expect(shrinkFloor(18, 3000)).toBeGreaterThan(shrinkFloor(18, 400));
+    for (const base of Object.values(TIERS)) expect(shrinkFloor(base, 5000)).toBeLessThanOrEqual(base);
   });
 });
