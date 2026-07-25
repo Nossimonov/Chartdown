@@ -16,7 +16,7 @@ The language defines only **archetypes**: closed, setting-free behavioral catego
 | `opening` | passage through a barrier; same facets (door: `passes=closed sight=none`; window: `passes=none sight=all`) |
 | `token` | an actor; `size=`, `side=` |
 | `zone` | a named region with soft or drawn bounds |
-| `light` | emits light; `range=`, `color=` |
+| `field` | emanates from sources over an ambient baseline (§5); facet `occluded=` |
 
 Future spec sections MAY extend this table; documents MUST NOT. Generic parameters (`hidden`, `gm=`, `link=`, `detail=`, `facing=`, `size=`, `width=`, …) remain archetype-independent.
 
@@ -62,7 +62,7 @@ Most of the standard library is ordinary vocabulary: a word, an archetype, some 
 | `terrace` | walkable raised ground | 06 §5 | yes |
 | `start` | staging zone (where the party begins) | 06 §4 | yes |
 | `note` | free text — renders as its text, no marker | 07 §2 | yes |
-| `light` | emits light over a range (`light=<measure>`) | 06 §2 | yes |
+| `light` | the shipped **field**: `light=<measure>` emitters over a `light:` ambient | §5, 06 §2 | yes |
 
 Every row inherits, per the rule above — a table of exceptions would be a maintenance hazard, and a uniform answer is one an author can predict. **A spec section that attaches behaviour to a word is committing to that behaviour being inheritable, and MUST register the word here** or use a facet instead.
 
@@ -93,12 +93,38 @@ This produces the **escalation ladder**, every rung optional: a bare unknown wor
 - The optional header key `theme:` *suggests* a theme; the renderer and its user always win. Theme file format is deferred to the styling section (08).
 - `side=` on tokens takes any word (`side=party`, `side=hive-swarm`); themes map sides to colors. Allegiance is vocabulary, not grammar.
 
-## 5. Grammar sketch additions
+## 5. Fields
+
+Some things **emanate from sources over an ambient baseline**: light is the shipped example, but a setting may want radiation, silence, antimagic, blight, or heat, and they all behave the same way. The `field` archetype is that shape, and a setting declares its own in one line:
+
+```chartdown
+[vocab]
+radiation : field occluded=none states=none,light,heavy,lethal
+silence   : field                      ; occluded like light, by default
+```
+
+A **field word** earns four affordances, each reusing machinery that already exists:
+
+| Affordance | Spelling | Mechanism |
+|---|---|---|
+| **Emitter** | `reactor r1 : F4 radiation=40ft` | an ordinary `key=value` parameter whose key is the field word |
+| **Ambient baseline** | `radiation: heavy` (header), `radiation deep-one: lethal` (per level) | a header key naming a declared field |
+| **Regional override** | `radiation "Hot Cells" : A1..B5 lethal` | a range placement carrying a state |
+| **Appearance** | `radiation : fill=…` · `radiation.heavy : …` | spec 08 §2's `word` / `word.state` |
+
+- **Values are states** (§2): any value renders, a value declared with `states=` is documented and silent, and a typo warns. `light` ships `dark`, `dim`, `daylight`, `moonlight` as declared values; anything else (`witchlight`) still works.
+- **`occluded=`** says whether matter stops the field: `sight` (the default — blocked by whatever blocks sight, which is what light does) or `none` (fills regardless of interceding material). Without it every declared field would silently inherit light's occlusion, which is wrong for an antimagic zone or a radiation hazard.
+- **Ambient is content, not presentation.** Whether a place is dark is a fact about the place that survives changing themes, exactly as an entity's `light=` is — and spec 08 §6 forbids themes from altering semantics for this reason. The default is unchanged when no ambient is declared, so no existing document moves.
+- **A renderer owes an unknown field only geometry and a lookup**: ambient as page treatment, emitters as pools of their range, regions as their extent, each taking its fill from the theme's `<field>` / `<field>.<state>` entry. A renderer that has never heard of `radiation` still draws it, degrading through §4's fallback chain. Extra cleverness for the field a renderer *does* understand — tracing light against sight blockers — is a renderer's privilege, not a semantic difference.
+
+> The emitter-parameter namespace is therefore **derived from the vocabulary**: declaring `radiation : field` is what makes `radiation=40ft` meaningful, and a document that does not declare it leaves the pair an ordinary unrecognized parameter.
+
+## 6. Grammar sketch additions
 
 ```ebnf
 vocab-line = word , ":" , ( archetype | word ) , { pair | word } , EOL ;
 archetype  = "terrain" | "path" | "feature" | "structure" | "barrier"
-           | "opening" | "token" | "zone" | "light" ;
+           | "opening" | "token" | "zone" | "field" ;
 use-line   = "use" , ":" , ( path | word ) , EOL ;      (* header; repeatable *)
 theme-line = "theme" , ":" , word , EOL ;               (* header; a suggestion *)
 ```

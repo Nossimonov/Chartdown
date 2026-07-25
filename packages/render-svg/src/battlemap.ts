@@ -50,6 +50,13 @@ export function renderBattlemap(
    */
   // Declared with the other render state: renderFreeText runs inside the
   // entity loop below, before any later let would initialise.
+  // Emitter pools per field, as mask holes for the ambient wash (#106).
+  const fieldHoles = new Map<string, string[]>();
+  const noteHole = (field: string, shape: string): void => {
+    const list = fieldHoles.get(field) ?? [];
+    list.push(shape);
+    fieldHoles.set(field, list);
+  };
   let noteCourseCount = 0;
   let openEdgeCache: Set<string> | null = null;
   const openingEdgeKeys = (): Set<string> => {
@@ -247,10 +254,71 @@ export function renderBattlemap(
   // not be overpainted by the sibling structure's coincident wall line.
   body.push(
     ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
-    ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
+    ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens,
   );
+  // Ambient field wash (#106): the declared baseline is a fact about the place,
+  // so a `light: dark` map draws dark and its emitters read as pools in it.
+  // The wash sits above the map and BELOW labels — a dark sheet is still a
+  // sheet the GM has to read. Emitter pools are punched out with a mask, the
+  // same technique the land mask uses for water.
+  body.push(...ambientWash());
+  body.push(...layers.labels);
 
   // ---------- helpers ----------
+
+  /**
+   * The declared ambient for a field on this level, honouring the per-level
+   * qualifier: `light celebdil: daylight` beats `light: dark` on that panel.
+   */
+  function ambientOf(field: string): string | undefined {
+    const level = levelCtx?.level;
+    let general: string | undefined;
+    for (const h of model.doc.header) {
+      if (h.key !== field) continue;
+      if (h.qualifier === undefined) general = h.value;
+      else if (level !== undefined && h.qualifier === level) return h.value;
+    }
+    return general;
+  }
+
+  /**
+   * A hole in the ambient wash for one emitter. Occlusion follows the field's
+   * `occluded=` facet (spec 04 §5): `sight` (light's default) traces against
+   * sight blockers, `none` fills through matter — an antimagic zone or a
+   * radiation hazard is not stopped by a wall.
+   */
+  function emitterHole(at: XY, radius: number): string {
+    const occluded = model.facetOf("light", "occluded") ?? "sight";
+    if (occluded !== "none" && sightBlockers.length > 0) {
+      return el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill: "#000" });
+    }
+    return el("circle", { cx: at.x, cy: at.y, r: radius, fill: "#000" });
+  }
+
+  /** Full-frame wash for every declared ambient whose theme entry has a fill. */
+  function ambientWash(): string[] {
+    const out: string[] = [];
+    const fields = new Set(model.doc.header.filter((h) => model.archetypeOf(h.key) === "field").map((h) => h.key));
+    for (const field of fields) {
+      const value = ambientOf(field);
+      if (value === undefined) continue;
+      const fill = model.theme.prop(model.chainOf(field), "fill", { state: value });
+      // No theme entry for this condition: the renderer has nothing to say
+      // about it, and inventing a tone would be guessing (spec 04 §4).
+      if (!fill) continue;
+      const opacity = model.theme.prop(model.chainOf(field), "opacity", { state: value }) ?? "0.82";
+      const holes = fieldHoles.get(field) ?? [];
+      const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
+      out.push(
+        `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(frame.w)}" height="${fmt(frame.h)}">` +
+          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill: "#fff" }) +
+          holes.join("") +
+          `</mask></defs>` +
+          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill, opacity, mask: `url(#${id})` }),
+      );
+    }
+    return out;
+  }
 
   function cellsAlong(pts: XY[]): Set<string> {
     const cells = new Set<string>();
@@ -1092,6 +1160,7 @@ export function renderBattlemap(
       const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
       if (light) {
         const radius = measureToCells(light, model) * CELL;
+        noteHole("light", emitterHole(center, radius));
         footprintParts.push(
           sightBlockers.length > 0
             ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 })
@@ -1139,6 +1208,7 @@ export function renderBattlemap(
     const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;
+      noteHole("light", emitterHole(c, radius));
       if (sightBlockers.length > 0) {
         const poly = visibilityPolygon(c, radius, sightBlockers);
         parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));

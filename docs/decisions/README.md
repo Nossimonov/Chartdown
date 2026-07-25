@@ -27,3 +27,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0015](0015-one-staging-zone-spelling.md) | A staging zone has one spelling: the word `start` | Accepted |
 | [0016](0016-derivation-carries-word-keyed-behaviour.md) | Derivation carries behaviour attached to a standard-library word | Accepted |
 | [0017](0017-openings-perforate-terrain.md) | Openings may perforate declared terrain; `passes=` is a closed value set | Accepted |
+| [0018](0018-fields-generalize-light.md) | Ambient conditions are content; the vacant `light` archetype becomes `field` | Accepted |

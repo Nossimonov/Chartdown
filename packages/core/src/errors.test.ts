@@ -92,6 +92,35 @@ describe("one staging-zone spelling (spec 06 §4, ADR 0015)", () => {
   });
 });
 
+describe("fields (spec 04 §5, #106)", () => {
+  it("light ships as a field, so `light:` is a legal ambient header", () => {
+    expect(errorsOf("map: battlemap\ngrid: square 9x9\nlight: dark\n")).toEqual([]);
+    expect(warningsOf("map: battlemap\ngrid: square 9x9\nlight: dark\n")).toEqual([]);
+  });
+
+  it("a header key may carry ONE level qualifier", () => {
+    const src = "map: battlemap\ngrid: square 9x9\nlevels: top base\nlight top: daylight\n";
+    expect(errorsOf(src)).toEqual([]);
+    expect(errorsOf("map: battlemap\ngrid: square 9x9\nlight a b: dark\n").join()).toMatch(/malformed header line/);
+  });
+
+  it("a setting declares its own field and its ambient key is then legal", () => {
+    // The header is parsed BEFORE [vocab], so the key check is deferred until
+    // the vocabulary is known — otherwise this would warn as unknown.
+    const src = [
+      "map: battlemap", "grid: square 9x9", "radiation: heavy",
+      "[vocab]", "radiation : field occluded=none states=none,heavy,lethal",
+      "[features]", "reactor r : F4 radiation=40ft",
+    ].join("\n");
+    expect(errorsOf(src)).toEqual([]);
+    expect(warningsOf(src)).toEqual([]);
+  });
+
+  it("a key that is not a field still warns as unknown", () => {
+    expect(warningsOf("map: battlemap\ngrid: square 9x9\nflavor: spicy\n").join()).toMatch(/unknown header key 'flavor'/);
+  });
+});
+
 describe("declared states (spec 04 §2, #108)", () => {
   const room = "map: battlemap\ngrid: square 9x9\n[structures]\nbuilding b : B2..D4\n";
 

@@ -65,6 +65,17 @@ start : zone
 
 `light=<range>` is a **generic parameter** — any entity may emit light; the props above merely carry defaults (`campfire : O7 light=30ft` overrides).
 
+**Ambient light** — the header key `light:` says what the light level is where nothing is emitting:
+
+```chartdown
+light: dark                  ; the whole map, unless a level says otherwise
+light celebdil: daylight     ; …except the summit
+```
+
+Absent `light:`, behaviour is unchanged, so no existing document moves. With it, a `light=` emitter finally has a baseline to be relative to: a 30ft lamp in a `dark` map is a pool of light in blackness; the same line in a `daylight` map is a prop. Darkness is **content, not appearance** — whether the Chamber of the West-door is dark is a fact about Moria that survives changing themes, which is why it is here and not in a theme (spec 08 §6 forbids themes from altering semantics). Values are open vocabulary (`dark`, `dim`, `daylight`, `moonlight`, `witchlight`); themes map them to page treatment.
+
+> `light` is the standard library's **field** — the general shape for anything that emanates from sources over an ambient baseline. A setting that wants radiation, silence, or antimagic declares its own in one line and gets the same four affordances; see spec 04 §5. Nothing above requires knowing that.
+
 ## 3. Structure details
 
 An indented line beneath a `structure` entity is a **structure detail**, interpreted in the parent's frame:
@@ -158,6 +169,7 @@ At battlemap scale, table legibility outranks self-description: **fallback word-
 
 *(Normative since issue [#40](https://github.com/Nossimonov/Chartdown/issues/40); previously a non-normative note.)* A battlemap exports to Universal VTT (`.dd2vtt`/`.uvtt`/`.df2vtt`) as a **pure transform of the parsed document** — export is a transform, not an interpretation, which is why the structures triad is modeled first-class. One file per level; coordinates in grid units:
 
+- **`environment.ambient_light`** — the declared `light:` ambient for the exported level (§2), so a dark map arrives dark. Absent a declaration, or for a value the exporter does not recognize, the scene stays fully lit rather than guessing a tone. Only `light` maps: UVTT has one ambient field, and a setting's own fields have no counterpart there.
 - **`line_of_sight`** — structure perimeter walls (per cell edge, minus `ruined` sides, coincident edges deduplicated per §3) minus **every opening edge**, plus freestanding non-fence barriers. Portals own their edges' occlusion.
 - **`portals`** — every door/gate/window/arrow-slit edge: `closed` from the `passes` facet (doors default closed; windows never pass). **Window-ness is the combination**: a hole in `line_of_sight` (sight and light pass) plus a shut portal (movement doesn't) — UVTT has no sight facet, but the pair models it.
 - **`lights`** — every entity carrying `light=`, positioned at its placement's center, range converted to grid units via `scale:`.

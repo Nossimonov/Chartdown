@@ -67,6 +67,11 @@ export const DEFAULT_THEME_SOURCE: string = [
   `fog : fill=${FOG}`,
   `ink : fill=${INK}`,
   "light : fill=#ffd98a",
+  // Ambient conditions for the shipped field (#106): a value with no entry
+  // draws no wash at all, so a renderer never invents a tone it was not told.
+  "light.dark : fill=#10131a opacity=0.86",
+  "light.dim : fill=#1b2029 opacity=0.55",
+  "light.moonlight : fill=#1d2740 opacity=0.45",
   "ledge : stroke=#6b5d4a",
   "building : fill=#efe9da",
   "building.open : fill=#e3ddc2 ; unroofed interiors read as outdoor ground (spec 06 par.3)",

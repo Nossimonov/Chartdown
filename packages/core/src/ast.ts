@@ -184,6 +184,8 @@ export interface SectionNode {
 export interface HeaderEntry {
   key: string;
   value: string;
+  /** One optional qualifier token before the colon — `light celebdil: daylight` (spec 01 §2). */
+  qualifier?: string;
   line: number;
 }
 

@@ -263,6 +263,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   let sawMap = false;
   let sawFirstHeader = false;
   let declaredKind: string | null = null;
+  const deferredHeaderKeys: { key: string; line: number }[] = [];
   while (i < lines.length && !lines[i]!.text.startsWith("[")) {
     const raw = lines[i]!;
     const tokens = tokenize(raw.text, raw.line, diagnostics);
@@ -270,15 +271,20 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     i++;
     if (!split) continue;
     const keyToken = split.subject[0];
-    if (split.subject.length !== 1 || keyToken?.kind !== "chunk") {
-      diagnostics.push(error(raw.line, "malformed header line — expected 'key: value'"));
+    // A header subject is the key, optionally followed by ONE qualifier
+    // token (spec 01 §2, #106): `light celebdil: daylight` scopes an ambient
+    // to a level, the same shape `[structures upper]` already uses.
+    const qualifierToken = split.subject[1];
+    if (split.subject.length > 2 || keyToken?.kind !== "chunk" || (qualifierToken !== undefined && qualifierToken.kind !== "chunk")) {
+      diagnostics.push(error(raw.line, "malformed header line — expected 'key: value' or 'key qualifier: value'"));
       continue;
     }
     const key = keyToken.text;
+    const qualifier = qualifierToken !== undefined && qualifierToken.kind === "chunk" ? qualifierToken.text : undefined;
     const value = split.predicate
       .map((t) => (t.kind === "chunk" ? t.text : t.kind === "string" ? `"${t.value}"` : t.kind === "pair" ? `${t.key}=${t.value}` : ":"))
       .join(" ");
-    document.header.push({ key, value, line: raw.line } satisfies HeaderEntry);
+    document.header.push({ key, value, line: raw.line, ...(qualifier !== undefined ? { qualifier } : {}) } satisfies HeaderEntry);
 
     // The first header line is `map:` or `kind:` (spec 01 §2, #110) — one rule
     // covering all three document kinds, where two of them used to be defined
@@ -332,9 +338,21 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     } else if (key === "level") {
       document.defaultLevel = value;
     } else if (!KNOWN_HEADER_KEYS.has(key)) {
-      diagnostics.push(warning(raw.line, `unknown header key '${key}'`));
+      // Deferred: a field word declared in a later [vocab] section is a legal
+      // ambient key (spec 04 §5), and the header is parsed before we know it.
+      deferredHeaderKeys.push({ key, line: raw.line });
     }
   }
+  // Deferred header-key validation (#106): a field word declared in a [vocab]
+  // section below is a legal ambient key, and the header was parsed before the
+  // vocabulary existed. Everything still unrecognized warns as it always did.
+  const reportUnknownHeaderKeys = (): void => {
+    for (const { key, line } of deferredHeaderKeys) {
+      if (vocab.archetypeOf(key) === "field") continue;
+      diagnostics.push(warning(line, `unknown header key '${key}'`));
+    }
+  };
+
   // A declared non-map kind is a complete answer: vocabulary and theme
   // documents need no map: (spec 04 par.2, spec 08 par.1).
   if (!sawMap && declaredKind === null) {
@@ -434,6 +452,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   }
   finishSection();
 
+  reportUnknownHeaderKeys();
   return { document, diagnostics };
 
   // ---------- line parsers ----------

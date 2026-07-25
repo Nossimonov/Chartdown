@@ -11,7 +11,7 @@ import { splitLines, tokenize } from "./lex";
 
 export const ARCHETYPES = new Set([
   "terrain", "path", "feature", "structure", "barrier",
-  "opening", "token", "zone", "light",
+  "opening", "token", "zone", "field",
 ]);
 
 /** The shipped standard library — normative content of specs 05 §1 and 06 §2. */
@@ -119,6 +119,9 @@ torch : feature light=20ft
 lantern : feature light=15ft
 brazier : feature light=20ft
 start : zone
+
+; fields — emanate from sources over an ambient baseline (spec 04 §6)
+light : field
 `;
 
 export class VocabTable {

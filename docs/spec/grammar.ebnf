@@ -97,7 +97,7 @@ vocab-line     = word , ":" , ( archetype | word ) , { pair | word } , EOL ;
                  (* second form = derivation from another word, with overrides;
                     cycles are errors; shadowing order: stdlib < use: < document *)
 archetype      = "terrain" | "path" | "feature" | "structure" | "barrier"
-               | "opening" | "token" | "zone" | "light" ;
+               | "opening" | "token" | "zone" | "field" ;
                  (* closed; extensible by spec sections only.
                     unknown words never fail: archetype inferred from
                     shape token, else section, else feature — spec 04 §3 *)
