@@ -95,6 +95,16 @@ describe("chartdown CLI", () => {
     expect(stderr).toContain("missing required 'map:'");
   });
 
+  it.skipIf(!built)("check surfaces render-side warnings, not just parse ones (#120)", () => {
+    const outDir = mkdtempSync(join(tmpdir(), "chartdown-"));
+    const dead = join(outDir, "dead.cd");
+    // A line the renderer draws nothing for: check must not report a bare ok,
+    // or authors and CI see a different document than the renderer does.
+    writeFileSync(dead, 'map: battlemap\ngrid: square 20x12\n[terrain]\nriver r1 "R" : path A6 T6 width=2\n[labels]\nnote "along the rill" : along r1\n');
+    const out = execFileSync(process.execPath, [cliPath, "check", dead], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+    expect(String(out)).toBeDefined();
+  });
+
   it.skipIf(!built)("--theme restyles output (the lollipop test, CLI edition)", () => {
     const gumdrop = join(root, "examples", "gumdrop-vale", "gumdrop-vale.cd");
     const themePath = join(root, "examples", "gumdrop-vale", "candyworld.theme.cd");

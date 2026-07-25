@@ -748,6 +748,69 @@ describe("one vocabulary chain, walked once (#101, #103, #105)", () => {
   });
 });
 
+describe("every drawn thing is a theme subject (#117, #119)", () => {
+  it("structure perimeters take stroke/width/dash, through derivation and states (#117)", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 20x10",
+      "scale: 5ft",
+      "[vocab]",
+      "hall : building",
+      "[structures]",
+      "building b1 : B2..E6",
+      "hall h1 : H2..K6",
+      "building b2 : N2..Q6",
+      "  ruined : north",
+    ].join("\n");
+    const theme = [
+      "[theme]",
+      "building : fill=#112233 stroke=#ff0000 width=4",
+      "hall : stroke=#00ff00",
+      "building.ruined : stroke=#0000ff dash=9,9",
+    ].join("\n");
+    const { svg } = renderSource(src, { theme });
+    expect(svg).toContain("#112233"); // fill worked before
+    expect(svg).toContain("#ff0000"); // …the walls did not
+    expect(svg).toContain('stroke-width="4"');
+    expect(svg).toContain("#00ff00"); // a derived word inherits the outline
+    expect(svg).toContain("#0000ff"); // word.state reaches the perimeter too
+    expect(svg).toContain('stroke-dasharray="9 9"');
+  });
+
+  it("a bare `ruined` state ruins every side, as the detail form does per side", () => {
+    const src = ["map: battlemap", "grid: square 12x8", "[structures]", "building b : B2..E6 ruined"].join("\n");
+    const { svg } = renderSource(src);
+    // Freestanding barriers already honoured the flag; structures read it only
+    // from detail lines, so a flag-form ruin drew as intact walls.
+    expect(svg).toContain('stroke-dasharray="5 6"');
+  });
+
+  it("a themed glyph carries its entry's colour, and point-placed barriers take glyphs (#119)", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 10x8",
+      "scale: 5ft",
+      "[structures]",
+      "pillar p1 : I3",
+      "[features]",
+      "statue s1 : B8",
+    ].join("\n");
+    const theme = [
+      "[theme]",
+      "pillar : glyph=swing fill=#0000ff",
+      "statue : glyph=swing fill=#ffff00",
+      "[glyphs]",
+      'swing : "M-8,8 A16,16 0 0,1 8,-8"',
+    ].join("\n");
+    const { svg } = renderSource(src, { theme });
+    // Both draw the glyph — a pillar occupies a cell exactly like a statue.
+    expect(svg.match(/M-8,8 A16,16/g) ?? []).toHaveLength(2);
+    // …and each keeps its colour: glyph and fill are independent properties.
+    expect(svg).toContain("#ffff00");
+    expect(svg).toContain("#0000ff");
+  });
+});
+
 describe("free text renders as text alone (spec 07 §2, #104)", () => {
   const NOTES = [
     "map: battlemap",

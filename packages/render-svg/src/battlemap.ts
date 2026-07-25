@@ -620,15 +620,42 @@ export function renderBattlemap(
     // and spec 06 §9's UVTT line_of_sight already says so normatively. Drawing
     // the wall straight across meant the render and the export disagreed about
     // the same document — and an archway read as unbroken stone.
+    // `ruined` reaches a structure two ways: as a detail line selecting sides
+    // by facing (`ruined : north east`, spec 06 §3) or as the bare state the
+    // stdlib declares on `building` (spec 06 §2) — which selects every side.
+    // Only the first was honoured, so a flag-form ruin drew as intact walls
+    // (freestanding barriers already read the flag; structures did not).
     const ruinedSides = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
+    const ruinedAll = e.flags.includes("ruined");
     const openEdges = openingEdgeKeys();
     const solidEdges = perimeterEdges(cells).filter((pe) => {
       const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
       return !openEdges.has(segKey(edgeSegment(address, pe.dir)));
     });
+    // A structure's perimeter is a theme subject like every other archetype
+    // (#117): the room outline is the most visually defining thing on a
+    // battlemap, and it was drawn in literal ink at a literal weight, so no
+    // theme could restyle it by any lever. Resolves through the structure's
+    // own vocabulary word, so derived words and `word.state` both answer.
+    const structChain = model.chainOf(e.typeWord);
+    const wallCtx = open ? { state: "open" } : {};
+    const wallStroke = model.theme.prop(structChain, "stroke", wallCtx) ?? INK;
+    const wallWidth = Number(model.theme.prop(structChain, "width", wallCtx) ?? 3) || 3;
     for (const run of mergeEdgeRuns(solidEdges)) {
-      const ruined = ruinedSides.has(SIDE_NAME[run.dir]) || ruinedSides.has(run.dir);
-      parts.push(el("line", { x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2, stroke: INK, "stroke-width": 3, "stroke-dasharray": ruined ? "5 6" : undefined, opacity: ruined ? 0.7 : 1 }));
+      const ruined = ruinedAll || ruinedSides.has(SIDE_NAME[run.dir]) || ruinedSides.has(run.dir);
+      // `ruined` is a state, so a theme may restyle it — falling back to the
+      // built-in collapsed dashes when it says nothing.
+      const ruinedStroke = ruined ? model.theme.prop(structChain, "stroke", { state: "ruined" }) : undefined;
+      const ruinedDash = ruined ? model.theme.prop(structChain, "dash", { state: "ruined" })?.replace(",", " ") : undefined;
+      parts.push(
+        el("line", {
+          x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
+          stroke: ruinedStroke ?? wallStroke,
+          "stroke-width": wallWidth,
+          "stroke-dasharray": ruined ? (ruinedDash ?? "5 6") : (model.theme.prop(structChain, "dash", wallCtx)?.replace(",", " ")),
+          opacity: ruined ? 0.7 : 1,
+        }),
+      );
     }
     for (const d of e.details) {
       for (const p of d.placements) {
@@ -835,8 +862,15 @@ export function renderBattlemap(
         );
       } else if (p.kind === "address") {
         const c = cellCenter(p);
-        const fill = model.theme.prop(chain, "fill") ?? "#5a5244";
-        parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
+        // A point-placed barrier occupies a cell exactly like a point feature,
+        // so it takes a glyph like one (#119) — a pillar wants a column mark.
+        const glyph = model.theme.glyphFor(chain, c.x, c.y);
+        if (glyph) {
+          parts.push(themedGlyphPath(glyph, chain, c));
+        } else {
+          const fill = model.theme.prop(chain, "fill") ?? "#5a5244";
+          parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
+        }
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
@@ -848,6 +882,24 @@ export function renderBattlemap(
         layers.labels.push(text(lbl, { x: at.x, y: at.y - 6, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
     }
+  }
+
+  /**
+   * A themed glyph carries its entry's colour (#119). Spec 08 §3 lists `fill`
+   * and `glyph` as independent members of one closed set, so a themer should
+   * not have to choose the shape OR the colour — `fill=` paints the path and
+   * `stroke=` inks it, each falling back to the previous outline-only look.
+   */
+  function themedGlyphPath(d: string, chain: string[], c: XY): string {
+    const fill = model.theme.prop(chain, "fill");
+    const stroke = model.theme.prop(chain, "stroke") ?? model.theme.surface("ink", "fill", INK);
+    const width = Number(model.theme.prop(chain, "width") ?? 1.6) || 1.6;
+    const opacity = model.theme.prop(chain, "opacity");
+    return (
+      `<path d="${d}" transform="translate(${fmt(c.x)} ${fmt(c.y)}) scale(0.9)" fill="${fill ?? "none"}"` +
+      ` stroke="${stroke}" stroke-width="${fmt(width)}"${opacity ? ` opacity="${opacity}"` : ""}` +
+      ` vector-effect="non-scaling-stroke" stroke-linecap="round"/>`
+    );
   }
 
   /**
@@ -1008,10 +1060,7 @@ export function renderBattlemap(
     const themedGlyph = model.theme.glyphFor(chain, c.x, c.y);
     let drewFallback = false;
     if (themedGlyph) {
-      const ink = model.theme.surface("ink", "fill", INK);
-      parts.push(
-        `<path d="${themedGlyph}" transform="translate(${fmt(c.x)} ${fmt(c.y)}) scale(0.9)" fill="none" stroke="${ink}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`,
-      );
+      parts.push(themedGlyphPath(themedGlyph, chain, c));
     } else if (fallbackGlyph(e, chain, c, 1, parts)) {
       drewFallback = true;
     } else {
