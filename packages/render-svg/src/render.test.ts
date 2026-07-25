@@ -552,12 +552,17 @@ describe("levels (spec 06 §8)", () => {
     expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
     // Non-rectangular union: fill is a path of cell squares, not a rect.
     expect(svg).toContain('<path d="M');
-    // Perimeter merges to 6 straight wall runs; both north-facing runs are
-    // ruined (dashed), the rest solid.
+    // Perimeter merges to straight wall runs; both north-facing runs are
+    // ruined (dashed), the rest solid. The unbroken south side B5..F5 is
+    // SPLIT BY THE DOOR at E5.s (#103) — an opening is a hole, so the wall
+    // stops either side of it instead of being drawn straight across.
     const walls = svg.match(/stroke="#3d3629" stroke-width="3"/g) ?? [];
-    expect(walls).toHaveLength(6);
+    expect(walls).toHaveLength(7);
     const dashed = svg.match(/stroke-dasharray="5 6"/g) ?? [];
     expect(dashed).toHaveLength(2);
+    // The door's own span carries no wall line — only the opening stroke.
+    expect(svg).toContain('x1="152" y1="184" x2="184" y2="184" stroke="#a8763e"');
+    expect(svg).not.toContain('x1="152" y1="184" x2="184" y2="184" stroke="#3d3629"');
   });
 
   it("union walls drive light and UVTT identically (one wall truth)", () => {
@@ -667,6 +672,123 @@ describe("levels (spec 06 §8)", () => {
     const theme = "[theme]\nladder.down : glyph=rungs\n[glyphs]\nrungs : \"M-5,-8 L-5,8 M5,-8 L5,8 M-5,-3 L5,-3 M-5,3 L5,3\"\n";
     const { svg } = renderSource(example("fairwater-manor"), { theme });
     expect(svg).toContain("M-5,-8 L-5,8");
+  });
+});
+
+describe("one vocabulary chain, walked once (#101, #103, #105)", () => {
+  const THEME = "[theme]\nbuilding : fill=#112233\n";
+  const MAP = (vocabBlock: string): string =>
+    ["map: battlemap", "grid: square 10x10", "scale: 5ft", vocabBlock, "[structures]", "hall h1 : B2..D4"].join("\n");
+
+  it("a use:-imported derivation resolves through the theme chain, exactly as an in-document one does", () => {
+    const imported = renderSource(MAP("use: lib.cd"), {
+      theme: THEME,
+      libraries: { "lib.cd": "[vocab]\nhall : building\n" },
+    });
+    const inDocument = renderSource(MAP("[vocab]\nhall : building"), { theme: THEME });
+    // The bug: only the in-document derivation reached the theme, and nothing
+    // warned — the map rendered plausibly with half its theme dead.
+    expect(imported.svg).toContain("#112233");
+    expect(inDocument.svg).toContain("#112233");
+  });
+
+  it("a word derived from door/gate/window strokes like its base, not like the wall (#103)", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 16x8",
+      "scale: 5ft",
+      "[vocab]",
+      "portal : door",
+      "hatch : opening passes=closed sight=none",
+      "[structures]",
+      "building r1 : B2..D6",
+      "  door : D4.e",
+      "building r2 : F2..H6",
+      "  portal : H4.e",
+      "building r3 : J2..L6",
+      "  hatch : L4.e",
+    ].join("\n");
+    const { svg } = renderSource(src);
+    const doorStrokes = svg.match(/stroke="#a8763e"/g) ?? [];
+    // door + portal (derived) + hatch (bound to the archetype) — all three.
+    expect(doorStrokes.length).toBe(3);
+  });
+
+  it("openings, barriers, paths, and zones honour their theme entries (#105)", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 14x14",
+      "scale: 5ft",
+      "[structures]",
+      "building b1 : D2..F4",
+      "  door : F3.e",
+      "  window : D3.w",
+      "wall w1 : H2.n I2.n",
+      "pillar p1 : K2",
+      "fence f1 : H6.n",
+      "[terrain]",
+      "road r1 : path A12 N12 width=2",
+      "[tokens]",
+      "zone z1 \"Z\" : A6..B7",
+    ].join("\n");
+    const theme = [
+      "[theme]",
+      "door : stroke=#445566",
+      "window : stroke=#778899",
+      "wall : stroke=#aabbcc",
+      "pillar : fill=#bb1111",
+      "fence : stroke=#cc2222",
+      "road : stroke=#ff5555",
+      "zone : fill=#654321",
+    ].join("\n");
+    const { svg } = renderSource(src, { theme });
+    for (const value of ["#445566", "#778899", "#aabbcc", "#bb1111", "#cc2222", "#ff5555", "#654321"]) {
+      expect(svg, `theme entry ${value} never reached the output`).toContain(value);
+    }
+  });
+});
+
+describe("free text renders as text alone (spec 07 §2, #104)", () => {
+  const NOTES = [
+    "map: battlemap",
+    "grid: square 20x12",
+    "scale: 5ft",
+    "[labels]",
+    'note "point anchored" : C9',
+    'note "sprawled across" : sprawl F2..N4',
+    'note "range footprint" : P8..T10',
+  ].join("\n");
+
+  it("no marker at any placement form — a caption promises nothing is there", () => {
+    const { svg } = renderSource(NOTES);
+    for (const label of ["point anchored", "sprawled across", "range footprint"]) {
+      expect(svg).toContain(label);
+    }
+    // The generic-feature fallback tint (spec 04 §4) is what a note used to
+    // get; a marker beside a caption asserts an object at that cell.
+    expect(svg).not.toMatch(/hsl\(\d+ 32% 55%\)/);
+  });
+
+  it("sprawl is letter-spaced, so it differs from a bare range placement", () => {
+    const { svg } = renderSource(NOTES);
+    const sprawled = /<text[^>]*letter-spacing="[\d.]+"[^>]*>sprawled across<\/text>/.exec(svg);
+    expect(sprawled).not.toBeNull();
+    expect(svg).toMatch(/<text(?![^>]*letter-spacing)[^>]*>range footprint<\/text>/);
+  });
+
+  it("a placement this renderer draws nothing for warns rather than vanishing", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 20x12",
+      "scale: 5ft",
+      "[terrain]",
+      "river r1 \"The Rill\" : path A6 T6 width=2",
+      "[labels]",
+      'note "along the rill" : along r1',
+    ].join("\n");
+    const { diagnostics } = renderSource(src);
+    const warning = diagnostics.find((d) => d.severity === "warning" && d.message.includes("along the rill"));
+    expect(warning?.message).toMatch(/draws nothing/);
   });
 });
 

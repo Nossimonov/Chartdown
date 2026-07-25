@@ -206,5 +206,12 @@ export interface DocumentNode {
   levels: string[];
   /** The default level for unqualified content ("" when no levels are declared). */
   defaultLevel: string;
+  /**
+   * Vocabulary entries brought in by `use:` libraries, in import order (#101).
+   * Consumers rebuilding a VocabTable MUST load these between the standard
+   * library and the document's own [vocab] entries — that is the shadowing
+   * order spec 04 §2 defines, and the chain theme lookups walk.
+   */
+  importedVocab: VocabEntryNode[];
   sections: SectionNode[];
 }

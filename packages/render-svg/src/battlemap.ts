@@ -5,7 +5,7 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, structureCells, type Cell } from "./grid";
+import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
 import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
@@ -41,6 +41,28 @@ export function renderBattlemap(
   const layers = {
     areas: [] as string[], paths: [] as string[], crossings: [] as string[], grid: [] as string[],
     structures: [] as string[], openings: [] as string[], roomLabels: [] as string[], features: [] as string[], zones: [] as string[], tokens: [] as string[], labels: [] as string[],
+  };
+
+  /**
+   * Every opening edge on the map, keyed geometrically (#103). Collected across
+   * ALL structures because a shared wall is one wall (spec 06 §3): an opening
+   * declared by either owner perforates it, so either owner's perimeter gaps.
+   */
+  let openEdgeCache: Set<string> | null = null;
+  const openingEdgeKeys = (): Set<string> => {
+    if (openEdgeCache) return openEdgeCache;
+    const keys = new Set<string>();
+    for (const e of model.entities) {
+      if (e.archetype !== "structure") continue;
+      for (const d of e.details) {
+        if (model.archetypeOf(d.typeWord) !== "opening") continue;
+        for (const p of d.placements) {
+          if (p.kind === "edge") keys.add(segKey(edgeSegment(p.at, p.dir)));
+        }
+      }
+    }
+    openEdgeCache = keys;
+    return keys;
   };
 
   // Course-line cells of rendered paths, for crossing composition (spec 06 §6).
@@ -105,6 +127,16 @@ export function renderBattlemap(
     const title = [gmTitleFor(model, e), model.resolvedNotes.get(e)].filter(Boolean).join(" — ");
     const titleEl = title ? svgTitle(title) : "";
     const elevation = pairOf(e.pairs, "elevation");
+
+    // Free text (spec 07 §2) is "a feature whose rendering is its text" — text
+    // ALONE, at every placement form (#104). It was falling through to generic
+    // feature rendering and drawing a marker, so every caption asserted there
+    // was a thing at that spot; on a sheet where every other glyph is
+    // something the party can interact with, a marker is a promise.
+    if (model.chainOf(e.typeWord).includes("note")) {
+      renderFreeText(e, layers.labels, titleEl, anchor);
+      continue;
+    }
 
     if (e.section === "terrain") {
       const chain = model.chainOf(e.typeWord);
@@ -584,8 +616,17 @@ export function renderBattlemap(
 
     // Walls: merged perimeter runs; a `ruined` side word selects runs FACING
     // that direction (whole-side semantics generalized to unions).
+    // Opening edges are SUBTRACTED before merging (#103): an opening is a hole,
+    // and spec 06 §9's UVTT line_of_sight already says so normatively. Drawing
+    // the wall straight across meant the render and the export disagreed about
+    // the same document — and an archway read as unbroken stone.
     const ruinedSides = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
-    for (const run of mergeEdgeRuns(perimeterEdges(cells))) {
+    const openEdges = openingEdgeKeys();
+    const solidEdges = perimeterEdges(cells).filter((pe) => {
+      const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+      return !openEdges.has(segKey(edgeSegment(address, pe.dir)));
+    });
+    for (const run of mergeEdgeRuns(solidEdges)) {
       const ruined = ruinedSides.has(SIDE_NAME[run.dir]) || ruinedSides.has(run.dir);
       parts.push(el("line", { x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2, stroke: INK, "stroke-width": 3, "stroke-dasharray": ruined ? "5 6" : undefined, opacity: ruined ? 0.7 : 1 }));
     }
@@ -599,13 +640,19 @@ export function renderBattlemap(
           : p.dir === "w" ? { x1: o.x, y1: o.y, x2: o.x, y2: o.y + CELL }
           : { x1: o.x + CELL, y1: o.y, x2: o.x + CELL, y2: o.y + CELL };
         // Openings go to their own layer, above every structure's walls (spec 06 §3).
-        if (d.typeWord === "door" || d.typeWord === "gate") {
-          layers.openings.push(el("line", { ...seg, stroke: "#a8763e", "stroke-width": 5 }));
-        } else if (d.typeWord === "window" || d.typeWord === "arrow-slit") {
-          layers.openings.push(el("line", { ...seg, stroke: "#6fa8c9", "stroke-width": 2.5 }));
-        } else {
-          parts.push(el("line", { ...seg, stroke: INK, "stroke-width": 3 }));
+        // Appearance resolves through the vocabulary CHAIN, never the literal
+        // word (#103): `portal : door` is a door. The old literal match sent
+        // every derived opening to an else-branch that drew it in the wall's
+        // own ink at the wall's own weight — invisible, on top of the wall.
+        const openingChain = model.chainOf(d.typeWord);
+        if (model.archetypeOf(d.typeWord) !== "opening") {
+          parts.push(el("line", { ...seg, stroke: model.theme.prop(openingChain, "stroke") ?? INK, "stroke-width": 3 }));
+          continue;
         }
+        const windowLike = openingChain.includes("window") || openingChain.includes("arrow-slit");
+        const stroke = model.theme.prop(openingChain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
+        const width = Number(model.theme.prop(openingChain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
+        layers.openings.push(el("line", { ...seg, stroke, "stroke-width": width }));
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
@@ -686,18 +733,66 @@ export function renderBattlemap(
     return best;
   }
 
+  /**
+   * Free text: the caption and nothing else (spec 07 §2, #104). `sprawl`
+   * spreads it across its range, which is the only thing distinguishing it
+   * from a bare range placement.
+   */
+  function renderFreeText(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
+    const label = e.texts[0] ?? e.name;
+    if (!label) return;
+    const range = e.placements.find((p): p is AddressRange => p.kind === "range");
+    const address = e.placements.find((p): p is Address => p.kind === "address");
+    let at: XY | null = null;
+    let span = 0;
+    if (range) {
+      const r = rangeRect(range);
+      at = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      span = r.w;
+    } else if (address) {
+      at = cellCenter(address);
+    }
+    if (!at) {
+      // Silent data loss is worse than either rendering or rejecting: an
+      // author got no signal that a line of their map did not survive.
+      // Which placements free text may take is #107's decision.
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `free text "${label}" has no cell or range placement — this renderer draws nothing for it (spec 07 §2)`,
+      });
+      return;
+    }
+    const size = 9;
+    const spacing =
+      e.flags.includes("sprawl") && span > 0
+        ? Math.max(0, (span - label.length * size * 0.58) / Math.max(1, label.length - 1))
+        : undefined;
+    into.push(
+      el("g", { id: anchor }, titleEl,
+        text(label, {
+          x: at.x, y: at.y, "font-size": size, "letter-spacing": spacing,
+          fill: INK, "text-anchor": "middle", "font-family": "sans-serif",
+        }),
+      ),
+    );
+  }
+
   function renderZone(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined, elevation: string | undefined): void {
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
     if (!range) return;
     const r = rangeRect(range);
     const gmZone = e.gmOnly;
-    const stroke = gmZone ? "#b5504a" : elevation ? "#6b5d4a" : "#4a9a6a";
+    // A zone's own theme entry wins (#105); the built-in role colours (gm red,
+    // ledge tan, staging green) remain the fallback when nothing is declared.
+    const themed = model.theme.prop(model.chainOf(e.typeWord), "fill");
+    const stroke = themed ?? (gmZone ? "#b5504a" : elevation ? "#6b5d4a" : "#4a9a6a");
     into.push(
       el("g", { id: anchor, class: elevation ? "ledge" : undefined },
         titleEl,
         el("rect", {
           x: r.x, y: r.y, width: r.w, height: r.h,
-          fill: gmZone ? "#b5504a" : elevation ? "#efe6d2" : "#4a9a6a",
+          fill: themed ?? (gmZone ? "#b5504a" : elevation ? "#efe6d2" : "#4a9a6a"),
           opacity: elevation ? 0.7 : 0.12,
         }),
         el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke, "stroke-width": elevation ? 3.5 : 1.5, "stroke-dasharray": elevation ? undefined : "6 4" }),
@@ -720,22 +815,28 @@ export function renderBattlemap(
     const ruined = e.flags.includes("ruined");
     const parts: string[] = [titleEl];
     if (!e.name && !titleEl && e.typeWord) parts.unshift(svgTitle(e.typeWord));
+    // Barriers are theme subjects like any other archetype (#105); the chain
+    // carries derived words (`palisade : fence` keeps the dashes).
+    const themedStroke = model.theme.prop(chain, "stroke");
+    const themedDash = model.theme.prop(chain, "dash")?.replace(",", " ");
+    const themedWidth = model.theme.prop(chain, "width");
     for (const p of e.placements) {
       if (p.kind === "edge") {
         const s = edgeSegment(p.at, p.dir);
         parts.push(
           el("line", {
             x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y,
-            stroke: isFence ? "#8a7a5c" : INK,
-            "stroke-width": isFence ? 2 : 3,
-            "stroke-dasharray": isFence ? "3 3" : ruined ? "5 6" : undefined,
+            stroke: themedStroke ?? (isFence ? "#8a7a5c" : INK),
+            "stroke-width": Number(themedWidth ?? (isFence ? 2 : 3)) || (isFence ? 2 : 3),
+            "stroke-dasharray": ruined && !isFence ? "5 6" : (themedDash ?? (isFence ? "3 3" : undefined)),
             opacity: ruined ? 0.7 : 1,
             "stroke-linecap": "square",
           }),
         );
       } else if (p.kind === "address") {
         const c = cellCenter(p);
-        parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: "#5a5244", stroke: INK, "stroke-width": 1 }));
+        const fill = model.theme.prop(chain, "fill") ?? "#5a5244";
+        parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
