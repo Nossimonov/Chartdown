@@ -3,7 +3,7 @@
  * input here (issue #21 done-state).
  */
 import { describe, expect, it } from "vitest";
-import { parse } from "./index";
+import { checkSource, parse } from "./index";
 
 const errorsOf = (src: string) =>
   parse(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
@@ -89,6 +89,54 @@ describe("one staging-zone spelling (spec 06 §4, ADR 0015)", () => {
   it("gm-only ranges are untouched — they are features, not tokens", () => {
     const src = 'map: battlemap\ngrid: square 20x20\n[gm]\ntrigger ambush : K9..L10 "springs"\n';
     expect(errorsOf(src)).toEqual([]);
+  });
+});
+
+describe("Phase 4 verification round (#125–#129)", () => {
+  it("closed facet sets are enforced, not just documented (#126)", () => {
+    const mk = (v: string): string =>
+      `map: battlemap\ngrid: square 8x6\n[structures]\nbuilding b : B2..E5\n  door : E3.e passes=${v}\n`;
+    for (const ok of ["open", "closed", "none"]) expect(warningsOf(mk(ok)), ok).toEqual([]);
+    expect(warningsOf(mk("bogus")).join()).toMatch(/'passes=bogus' is not one of open, closed, none/);
+    // sight= feeds the same normative transform, so it is enumerated too.
+    const sight = "map: battlemap\ngrid: square 8x6\n[structures]\nbuilding b : B2..E5\n  window w : E3.e sight=partial\n";
+    expect(warningsOf(sight).join()).toMatch(/'sight=partial' is not one of all, none/);
+  });
+
+  it("an undeclared field value warns like any other state (#127)", () => {
+    expect(warningsOf("map: battlemap\ngrid: square 8x6\nlight: chartreuse\n").join())
+      .toMatch(/'chartreuse' is not a declared value of 'light'/);
+    expect(warningsOf("map: battlemap\ngrid: square 8x6\nlight: dark\n")).toEqual([]);
+    const custom = [
+      "map: battlemap", "grid: square 8x6", "radiation: hevy",
+      "[vocab]", "radiation : field states=none,heavy,lethal",
+    ].join("\n");
+    expect(warningsOf(custom).join()).toMatch(/'hevy' is not a declared value of 'radiation'/);
+  });
+
+  it("a barrier word in a detail slot names the real problem (#128)", () => {
+    const src = [
+      "map: battlemap", "grid: square 20x10",
+      "[vocab]", "cave-in : wall",
+      "[structures]", "building a2 : H2..K6", "  cave-in : east",
+    ].join("\n");
+    const msg = warningsOf(src).join();
+    expect(msg).toMatch(/is a barrier, and a structure detail takes an opening or a wall state/);
+    // NOT the old message, which reassured falsely and pointed at a non-fix.
+    expect(msg).not.toMatch(/declare it with states=/);
+    // The `ruined` wall-state form stays exempt and silent.
+    const ruined = "map: battlemap\ngrid: square 20x10\n[structures]\nbuilding a : B2..E6\n  ruined : north east\n";
+    expect(warningsOf(ruined)).toEqual([]);
+  });
+
+  it("an inferred document kind warns once, naming the line to add (#129)", () => {
+    expect(warningsOf("[vocab]\nhall : building\n")).toEqual([]); // parse() alone is silent…
+    const vocab = checkSource("[vocab]\nhall : building\n");
+    expect(vocab.diagnostics.map((d) => d.message).join()).toMatch(/inferred a vocabulary document.*add 'kind: vocabulary'/);
+    const theme = checkSource("[theme]\nbuilding : fill=#112233\n");
+    expect(theme.diagnostics.map((d) => d.message).join()).toMatch(/inferred a theme document/);
+    // Declaring it silences the warning.
+    expect(checkSource("kind: vocabulary\n[vocab]\nhall : building\n").diagnostics).toEqual([]);
   });
 });
 

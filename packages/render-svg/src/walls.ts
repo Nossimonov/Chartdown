@@ -128,9 +128,15 @@ export function collectWalls(model: Model): WallGeometry {
  * is rock too.
  */
 export function impassableCells(model: Model): Map<string, Cell> {
-  const cells = new Map<string, Cell>();
+  // A cell is rock only if `earth` is the WINNING declaration on it, not merely
+  // one that was made (#125). Spec 06 §6: declaration order breaks ties within
+  // a kind, and spec 06 §5's own idiom is to lay ground truth across a level
+  // and paint over it — so testing mere membership counted overpainted grass
+  // as solid stone, and let an opening across open ground pass the check.
+  const winner = new Map<string, { cell: Cell; impassable: boolean }>();
   for (const e of model.entities) {
-    if (!model.chainOf(e.typeWord).includes("earth")) continue;
+    if (e.archetype !== "terrain") continue;
+    const impassable = model.chainOf(e.typeWord).includes("earth");
     // `earth : area A1..Z20` is a SHAPE placement whose args carry the cells;
     // flatten one level so both spellings resolve to the same cell union.
     const flat: Placement[] = [];
@@ -138,8 +144,10 @@ export function impassableCells(model: Model): Map<string, Cell> {
       if (p.kind === "shape") flat.push(...p.args);
       else flat.push(p);
     }
-    for (const [key, cell] of structureCells({ placements: flat })) cells.set(key, cell);
+    for (const [key, cell] of structureCells({ placements: flat })) winner.set(key, { cell, impassable });
   }
+  const cells = new Map<string, Cell>();
+  for (const [key, w] of winner) if (w.impassable) cells.set(key, w.cell);
   // Rooms CARVE the rock: spec 06 §5's idiom is that `earth` "fills everything
   // outside the rooms", so a structure's footprint is floor even where earth
   // was declared across it. Without this every room's own cells read as solid

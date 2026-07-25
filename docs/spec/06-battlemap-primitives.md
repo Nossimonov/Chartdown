@@ -61,6 +61,9 @@ brazier : feature light=20ft
 
 ; play aids
 start : zone
+
+; fields (spec 04 §5) — light is the shipped one
+light : field states=dark,dim,daylight,moonlight
 ```
 
 `light=<range>` is a **generic parameter** — any entity may emit light; the props above merely carry defaults (`campfire : O7 light=30ft` overrides).

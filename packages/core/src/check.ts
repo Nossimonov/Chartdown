@@ -86,13 +86,30 @@ export function checkSource(source: string, options: ParseOptions = {}): CheckRe
           message: `unknown document kind '${declared.value}' — expected vocabulary or theme (a map is spelled by 'map:')`,
         }]
       : [];
+  // A kind reached by INFERENCE says so once (#129): inference is the
+  // compatibility path, not the rule (spec 01 §2), and this warning is the only
+  // thing telling an existing vocabulary or theme document that a positive
+  // spelling now exists — without it, adoption depends on reading a changelog.
+  const inferredKindWarning: Diagnostic[] =
+    kind !== "map" && declared === null
+      ? [
+          {
+            severity: "warning",
+            line: 1,
+            message:
+              "no 'map:' or 'kind:' header — inferred a " + kind +
+              " document from its sections; add 'kind: " + kind + "' as the first header line (spec 01 §2)",
+          },
+        ]
+      : [];
+
   if (kind === "theme") {
-    const diagnostics: Diagnostic[] = [...kindDiagnostics];
+    const diagnostics: Diagnostic[] = [...kindDiagnostics, ...inferredKindWarning];
     parseThemeDocument(source, diagnostics);
     return { kind, diagnostics };
   }
   if (kind === "vocabulary") {
-    const diagnostics: Diagnostic[] = [...kindDiagnostics];
+    const diagnostics: Diagnostic[] = [...kindDiagnostics, ...inferredKindWarning];
     const table = new VocabTable();
     loadStdlib(table);
     parseVocabDocument(source, "library", table, diagnostics);

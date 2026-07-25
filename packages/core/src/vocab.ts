@@ -9,6 +9,33 @@ import type { Pair, Placement, VocabEntryNode } from "./ast";
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize } from "./lex";
 
+/**
+ * Facets with a CLOSED value set (spec 04 §1). Unlike `side=`, which feeds
+ * themes and degrades to a default colour, these feed the normative UVTT
+ * transform (spec 06 §9), where an unknown value has no safe degradation —
+ * and silently mapped to a shut portal, so `passes=opne` produced a locked
+ * door in the VTT with nothing to say so (#126).
+ */
+export const CLOSED_FACETS: Record<string, Set<string>> = {
+  passes: new Set(["open", "closed", "none"]),
+  sight: new Set(["all", "none"]),
+};
+
+/** Warn on a value outside a closed facet set; the facet default then applies. */
+export function checkFacetValues(
+  pairs: { key: string; value: string }[],
+  line: number,
+  diagnostics: Diagnostic[],
+): void {
+  for (const p of pairs) {
+    const allowed = CLOSED_FACETS[p.key];
+    if (!allowed || allowed.has(p.value)) continue;
+    diagnostics.push(
+      warning(line, `'${p.key}=${p.value}' is not one of ${[...allowed].join(", ")} — the vocabulary default applies (spec 04 §1)`),
+    );
+  }
+}
+
 export const ARCHETYPES = new Set([
   "terrain", "path", "feature", "structure", "barrier",
   "opening", "token", "zone", "field",
@@ -121,7 +148,7 @@ brazier : feature light=20ft
 start : zone
 
 ; fields — emanate from sources over an ambient baseline (spec 04 §6)
-light : field
+light : field states=dark,dim,daylight,moonlight
 `;
 
 export class VocabTable {
@@ -237,6 +264,7 @@ export function parseVocabLine(
     else if (t.kind === "chunk") flags.push(t.text);
     else diagnostics.push(error(line, "unexpected token in [vocab] line"));
   }
+  checkFacetValues(pairs, line, diagnostics);
   return {
     kind: "vocab-entry",
     word: first.text,

@@ -828,6 +828,21 @@ describe("openings perforate declared terrain; passes= is enumerated (#113)", ()
     expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   });
 
+  it("solid means the WINNING terrain declaration, not merely one that was made (#125)", () => {
+    const base = ["map: battlemap", "grid: square 12x8", "scale: 5ft", "[terrain]"];
+    // Overpainted: `earth` is declared, then grass wins those cells (spec 06
+    // §6). E4/D4 are walkable, so the gate perforates nothing.
+    const overpainted = [...base, "grass west : area A1..D8", "earth : area E1..L8", "grass east : area E1..H8",
+      "[features]", "gate g1 : E4.w"].join("\n");
+    // Same geometry, no redundant earth underneath.
+    const plain = [...base, "grass west : area A1..D8", "grass east : area E1..H8", "earth : area I1..L8",
+      "[features]", "gate g1 : E4.w"].join("\n");
+    for (const [label, src] of [["overpainted", overpainted], ["plain", plain]] as const) {
+      const err = renderSource(src, { mode: "gm" }).diagnostics.find((d) => d.severity === "error");
+      expect(err?.message, label).toMatch(/no barrier to perforate/);
+    }
+  });
+
   it("an unparented opening may also sit on a wall or a perimeter, as it always could", () => {
     // Regression: the first cut checked only `earth`, so it rejected two forms
     // spec 06 §3 has always permitted — and the error message promised all three.

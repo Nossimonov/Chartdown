@@ -30,6 +30,8 @@ Future spec sections MAY extend this table; documents MUST NOT. Generic paramete
 | `closed` | a leaf that is shut but operable (doors, gates) | los hole + `closed: true` portal |
 | `none` | never passes bodies (windows, arrow-slits, grates) | los per `sight=`, shut portal |
 
+**`sight=`** is closed the same way and for the same reason — `all` (sight passes) or `none` (it does not) — since it decides whether an edge is a hole in `line_of_sight`. A value outside either set **warns** and the vocabulary default applies, consistent with §2's treatment of an undeclared state.
+
 **`open` is the default** when `passes=` is unset, which makes `arch : opening sight=all` — the commonest opening in any dungeon — mean what every reader already takes it to mean. The value resolves through the vocabulary chain like any facet (§2): the entity's own pair, then the word's facet, then its base word's.
 
 ## 2. Vocabulary

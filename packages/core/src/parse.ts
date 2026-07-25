@@ -25,7 +25,7 @@ import type {
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize, type RawLine, type Token } from "./lex";
 import { isCompass, parsePositional, parsePredicate } from "./placements";
-import { inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
+import { checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
@@ -351,6 +351,18 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       if (vocab.archetypeOf(key) === "field") continue;
       diagnostics.push(warning(line, `unknown header key '${key}'`));
     }
+    // A field's ambient value is a state like any other (spec 04 §5, #127):
+    // any value renders, a declared one is silent, a typo warns. Without this
+    // the rule reached predicates but not headers — and an ambient is set once
+    // and never looked at again, so `light: darkk` gave a silently lit dungeon.
+    for (const h of document.header) {
+      if (vocab.archetypeOf(h.key) !== "field") continue;
+      const declared = vocab.statesOf(h.key);
+      if (declared.size === 0 || declared.has(h.value)) continue;
+      diagnostics.push(
+        warning(h.line, `'${h.value}' is not a declared value of '${h.key}' — it still renders; declare it with states= to silence this (spec 04 §5)`),
+      );
+    }
   };
 
   // A declared non-map kind is a complete answer: vocabulary and theme
@@ -523,6 +535,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // names, compass words, `inner`, and states that are OPEN vocabulary by
     // decision. Warning there would fire on every border line in the corpus.
     checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
+    checkFacetValues(predicate.pairs, raw.line, diags);
 
     const entity: EntityNode = {
       kind: "entity",
@@ -560,9 +573,25 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     if (!split) return;
     const subject = parseSubject(split.subject, raw.line, diags);
     const predicate = parsePredicate(split.predicate, raw.line, diags);
-    // Openings and wall-states are usually DETAILS, so the same rule applies
-    // here or the check would miss the case that motivated it (#108).
-    checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
+    // A BARRIER word in a detail slot is silently inert (#128): it draws an
+    // ordinary perimeter wall and takes no styling, so `cave-in : east` reads
+    // like it says something and says nothing. Diagnose the real problem — the
+    // detail grammar takes openings and wall-states, not barriers — because
+    // the generic state warning both reassured falsely ("it still renders")
+    // and pointed at a fix (`states=`) that silences it while changing nothing.
+    if (subject.typeWord !== null && vocabTable.archetypeOf(subject.typeWord) === "barrier") {
+      diags.push(
+        warning(
+          raw.line,
+          `'${subject.typeWord}' is a barrier, and a structure detail takes an opening or a wall state — this line renders as an ordinary wall and takes no styling. Declare it as a freestanding barrier on those edges instead (spec 06 §3)`,
+        ),
+      );
+    } else {
+      // Openings and wall-states are usually DETAILS, so the same rule applies
+      // here or the check would miss the case that motivated it (#108).
+      checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
+    }
+    checkFacetValues(predicate.pairs, raw.line, diags);
 
     const detail: DetailNode = {
       kind: "detail",
