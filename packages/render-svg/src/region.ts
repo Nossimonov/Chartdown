@@ -310,6 +310,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             break;
           }
           case "along": {
+            // `along <ref>` as the ONLY placement (free text, spec 07 §2 #107):
+            // the entity has no course of its own, so it takes the referent's
+            // whole line. With endpoints it splices instead, below.
+            if (!out.polyline) {
+              const whole = lineAspect(p.ref, p.face, null, null, e.line);
+              if (whole) out.polyline = whole;
+              break;
+            }
             if (out.polyline) {
               // `A to B along X`: anchor at both endpoint markers and follow
               // X's shape between their projections — nudged landward so a
@@ -556,6 +564,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     // the sheet, not the fiction.
     if (chain.includes("note")) {
       const label = e.texts[0] ?? e.name;
+      // `along <ref>` sets the text on the referenced course itself (#107).
+      if (label && r.polyline && r.polyline.length > 1) {
+        const pid = `cdnote-${model.doc.docId}-${pathLabelCount++}`;
+        const lp = r.polyline;
+        const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
+        labelBuckets[0]!.push(
+          `<defs><path id="${pid}" d="${d}"/></defs>` +
+            `<text font-size="11" fill="${INK}" opacity="0.85" text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="50%"><tspan dy="-4">${esc(label)}</tspan></textPath></text>`,
+        );
+        continue;
+      }
       const at = r.point ?? (r.polygon ? centroid(r.polygon) : null);
       if (label && at) {
         const span = r.polygon ? Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x)) : 0;

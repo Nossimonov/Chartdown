@@ -884,7 +884,7 @@ describe("free text renders as text alone (spec 07 §2, #104)", () => {
     expect(svg).toMatch(/<text(?![^>]*letter-spacing)[^>]*>range footprint<\/text>/);
   });
 
-  it("a placement this renderer draws nothing for warns rather than vanishing", () => {
+  it("`along` sets the caption on the referenced course (#107, was a warning in 0.3.3)", () => {
     const src = [
       "map: battlemap",
       "grid: square 20x12",
@@ -894,9 +894,20 @@ describe("free text renders as text alone (spec 07 §2, #104)", () => {
       "[labels]",
       'note "along the rill" : along r1',
     ].join("\n");
+    const { svg, diagnostics } = renderSource(src);
+    expect(diagnostics.filter((d) => d.severity !== "error").map((d) => d.message)).toEqual([]);
+    expect(svg).toContain("along the rill");
+    expect(svg).toMatch(/<textPath href="#cdnote-/);
+  });
+
+  it("a course that cannot be resolved still warns rather than vanishing", () => {
+    const src = [
+      "map: battlemap", "grid: square 20x12", "scale: 5ft",
+      "[features]", 'statue s1 "The Watcher" : C4',
+      "[labels]", 'note "beside a point" : along s1',
+    ].join("\n");
     const { diagnostics } = renderSource(src);
-    const warning = diagnostics.find((d) => d.severity === "warning" && d.message.includes("along the rill"));
-    expect(warning?.message).toMatch(/draws nothing/);
+    expect(diagnostics.find((d) => d.severity === "warning")?.message).toMatch(/draws nothing/);
   });
 });
 

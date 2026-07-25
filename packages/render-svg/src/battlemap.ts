@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@
 import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
-import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 interface Frame {
@@ -48,6 +48,9 @@ export function renderBattlemap(
    * ALL structures because a shared wall is one wall (spec 06 §3): an opening
    * declared by either owner perforates it, so either owner's perimeter gaps.
    */
+  // Declared with the other render state: renderFreeText runs inside the
+  // entity loop below, before any later let would initialise.
+  let noteCourseCount = 0;
   let openEdgeCache: Set<string> | null = null;
   const openingEdgeKeys = (): Set<string> => {
     if (openEdgeCache) return openEdgeCache;
@@ -819,6 +822,22 @@ export function renderBattlemap(
     if (parts.length > 1) layers.openings.push(el("g", { id: anchor }, ...parts));
   }
 
+  /** The cell-centre course of a referenced path entity, for `along` captions. */
+  function courseOf(ref: { form: string; value: string }): XY[] | null {
+    const key = ref.value;
+    for (const other of model.entities) {
+      const matches = ref.form === "id" ? other.ids.includes(key) : other.name === key;
+      if (!matches) continue;
+      for (const p of other.placements) {
+        if (p.kind === "shape" && p.shape === "path") {
+          const addresses = p.args.filter((a): a is Address => a.kind === "address");
+          if (addresses.length > 1) return addresses.map(cellCenter);
+        }
+      }
+    }
+    return null;
+  }
+
   /**
    * Free text: the caption and nothing else (spec 07 §2, #104). `sprawl`
    * spreads it across its range, which is the only thing distinguishing it
@@ -839,13 +858,25 @@ export function renderBattlemap(
       at = cellCenter(address);
     }
     if (!at) {
-      // Silent data loss is worse than either rendering or rejecting: an
-      // author got no signal that a line of their map did not survive.
-      // Which placements free text may take is #107's decision.
+      // `along <ref>` sets the caption ON the referenced course (spec 07 §2,
+      // #107) — the placement set is closed, so anything else is a parse error
+      // and this is the only remaining form.
+      const along = e.placements.find((p) => p.kind === "relational" && p.form === "along");
+      const course = along && along.kind === "relational" ? courseOf(along.ref) : null;
+      if (course && course.length > 1) {
+        const pid = `cdnote-${model.doc.docId}-${noteCourseCount++}`;
+        const d = `M${fmt(course[0]!.x)} ${fmt(course[0]!.y)}` + course.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
+        into.push(
+          `<defs><path id="${pid}" d="${d}"/></defs>` +
+            `<text font-size="9" fill="${INK}" text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="50%"><tspan dy="-4">${escapeText(label)}</tspan></textPath></text>`,
+        );
+        return;
+      }
       diagnostics.push({
         severity: "warning",
         line: e.line,
-        message: `free text "${label}" has no cell or range placement — this renderer draws nothing for it (spec 07 §2)`,
+        message: `free text "${label}" has no cell, range, or resolvable course — this renderer draws nothing for it (spec 07 §2)`,
       });
       return;
     }

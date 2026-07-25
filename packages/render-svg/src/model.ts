@@ -132,7 +132,11 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   if (doc.mapType === "battlemap") {
     resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
   }
-  const keys = labelsMode === "keyed" ? assignKeys(entities, hexLines, diagnostics) : new Map<object, number>();
+  // `key=` works outside document-wide keyed mode (#107): a published module
+  // is overwhelmingly "a map WITH a key" — ten numbered pins beside forty
+  // named rooms — not "a map in key mode", which renumbers every display name.
+  // In `names` mode only explicitly pinned entities take a number.
+  const keys = labelsMode === "none" ? new Map<object, number>() : assignKeys(entities, hexLines, diagnostics, labelsMode === "keyed");
   return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, resolvedNotes };
 }
 
@@ -145,6 +149,8 @@ function assignKeys(
   entities: EntityNode[],
   hexLines: HexLineNode[],
   diagnostics: Diagnostic[],
+  /** Keyed mode numbers EVERY name; names mode numbers only `key=` pins (#107). */
+  numberEverything: boolean,
 ): Map<object, number> {
   const keys = new Map<object, number>();
   const named: { node: EntityNode | HexLineNode; pin: number | null; line: number }[] = [];
@@ -171,6 +177,9 @@ function assignKeys(
     used.add(n.pin);
     keys.set(n.node, n.pin);
   }
+  // Only keyed mode fills the unpinned; in names mode a map keeps its names
+  // and just the pinned entities carry numbers.
+  if (!numberEverything) return keys;
   let next = 1;
   for (const n of named) {
     if (keys.has(n.node)) continue;
@@ -324,10 +333,11 @@ export function labelsOn(model: Model, e?: { typeWord?: string | null }): boolea
 /** What a label site draws for a named node: the name — or its key number in keyed mode (spec 07 §3). */
 export function labelTextFor(model: Model, node: { name: string | null }): string | null {
   if (!node.name) return null;
-  if (model.labelsMode === "keyed") {
-    const key = model.keys.get(node);
-    return key !== undefined ? String(key) : null;
-  }
+  // A number wins wherever one was assigned: every name in keyed mode, and
+  // only the explicitly pinned ones in names mode (#107).
+  const key = model.keys.get(node);
+  if (key !== undefined) return String(key);
+  if (model.labelsMode === "keyed") return null;
   return node.name;
 }
 

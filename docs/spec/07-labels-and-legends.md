@@ -28,11 +28,13 @@ Free text renders as **text alone** — no marker, no glyph, at any placement. I
 
 **Hint vocabulary (closed):** `sprawl <range>` · `along <ref>` · `at <point | cell>` · a compass word (label side relative to the entity). Nothing else; typography and color belong to themes.
 
+**Free text's placement set (closed):** `<point | cell>` · `<range>` · `sprawl <range>` · `along <ref>`. Anything else is a parse error. `sprawl` letter-spaces the text across its range, which is what distinguishes it from a bare range; `along <ref>` sets the text **on the referenced course**. The set is stated because free text is the one label kind with no entity to sit beside, so its placement is the only thing positioning it — and an unstated set left three forms behaving three different ways.
+
 ## 3. Label modes
 
 Header key `labels:`, defaulting to `names`:
 
-- `names` — render display names.
+- `names` — render display names. An entity carrying an explicit **`key=<n>`** still shows its number: that is *a map **with** a key* — a numbered route through a named map, which is the shape of nearly every published module — as distinct from *a map in key mode*, which renumbers every display name. Only pinned entities are numbered; the rest keep their names.
 - `keyed` — render numbers; the renderer generates a key (`1. Gate Plaza  2. The Big Top …`) in the legend, module-style. Numbering is document order (deterministic); the generic parameter `key=<n>` pins an entity's number so later insertions cannot renumber published cross-references.
 - `none` — no derived labels (a clean map); `[labels]` free text still renders.
 
