@@ -92,6 +92,30 @@ describe("one staging-zone spelling (spec 06 §4, ADR 0015)", () => {
   });
 });
 
+describe("derivation carries word-keyed behaviour (spec 04 §2, ADR 0016)", () => {
+  it("a word deriving from note is free text in [labels] (#111)", () => {
+    const src = [
+      "map: battlemap",
+      "grid: square 20x20",
+      "[vocab]",
+      "waypoint : note",
+      "[labels]",
+      'waypoint w1 "1 - The West-door" : J8',
+    ].join("\n");
+    expect(errorsOf(src)).toEqual([]);
+  });
+
+  it("but a subject deriving from nothing is still loud", () => {
+    const src = 'map: battlemap\ngrid: square 20x20\n[labels]\nnoet "typo" : J8\n';
+    expect(errorsOf(src).join()).toMatch(/free text requires the 'note' type word/);
+  });
+
+  it("void derives from air, so it is unfloored and separately themeable (#115)", () => {
+    const src = 'map: battlemap\ngrid: square 20x20\n[terrain]\nvoid chasm "The Chasm" : area A1..C3\n';
+    expect(errorsOf(src)).toEqual([]);
+  });
+});
+
 describe("identity and references (spec 03)", () => {
   it("explicit id collisions are parse-time errors", () => {
     const src = "map: battlemap\ngrid: square 9x9\n[features]\ncrates loot : A1\nchest loot : B2\n";

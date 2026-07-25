@@ -102,6 +102,7 @@ earth : terrain
 terrace : terrain
 roof : terrain
 air : terrain
+void : air
 wagon : feature states=overturned
 crates : feature
 barrel : feature

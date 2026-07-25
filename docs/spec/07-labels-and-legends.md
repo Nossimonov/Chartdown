@@ -20,7 +20,7 @@ highkeep : north                               ; label sits on the stated side
 port : at (150,470)                            ; pin the label anchor exactly
 ```
 
-**Free text** — the subject carries the type word `note` (standard library: `note : feature`, a feature whose rendering *is* its text): `note "Here be dragons" : (700,100)`. The required type word is what keeps override typos loud.
+**Free text** — the subject carries the type word `note`, **or any word deriving from `note`** through the vocabulary chain (spec 04 §2), so a document may define `waypoint : note` and style its navigation pins apart from its in-fiction captions. (Standard library: `note : feature`, a feature whose rendering *is* its text.) Example: `note "Here be dragons" : (700,100)`. The required type word is what keeps override typos loud — a subject deriving from nothing is still an error.
 
 Free text renders as **text alone** — no marker, no glyph, at any placement. It is map furniture, not an entity: it names nothing and marks no position. A marker beside a caption asserts that there is a *thing* at that spot, which on a sheet where every other glyph is something the party can interact with is a promise the map cannot keep.
 

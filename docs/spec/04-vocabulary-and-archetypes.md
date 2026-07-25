@@ -34,6 +34,24 @@ hovercart : wagon states=overturned,parked ; derivation with declared states
 
 - **Archetype binding** — `word : <archetype> [facets] [states=…]`.
 - **Derivation** — `word : <vocabulary-word> [overrides]`: inherits the base word's archetype, facets, states, and theme hooks, then applies overrides. Derivation is the sanctioned way to say *"treat it like a forest, but draw lollipops instead of trees"* — semantics inherited in source, motif swapped in theme. Derivation chains resolve in document order (spec 02 §8 order-bounding applies); cycles are errors.
+- **Derivation carries word-keyed behaviour.** Where a spec section attaches behaviour to a *specific standard-library word* — the level surfaces of spec 06 §5, the staging zone of spec 06 §4, the free text of spec 07 §2, the light of spec 06 §2 — that behaviour **is inherited through derivation, exactly as archetype and facets are**. A word deriving from `air` is unfloored; a word deriving from `note` is free text. Renderers that match these behaviours on the literal word are **non-conforming** ([ADR 0016](../decisions/0016-derivation-carries-word-keyed-behaviour.md)).
+
+### Words that carry machinery
+
+Most of the standard library is ordinary vocabulary: a word, an archetype, some facets. A few words are **load-bearing** — a spec section attaches behaviour to them by name. They are listed here because the only alternative is reading all eight sections to find out, and an author who cannot tell which words are special will avoid derivation near the ones that matter.
+
+| Word | Behaviour | Defined in | Inherited? |
+|---|---|---|---|
+| `earth` | solid ground; **impassable** — an opening may perforate it | 06 §3, §5 | yes |
+| `air` | declared absence of floor (a fall to the level below) | 06 §5 | yes |
+| `void` | the same, spelled for underground — a shaft, not a sky | 06 §5 | yes |
+| `roof` | a lower room's ceiling seen from above | 06 §5 | yes |
+| `terrace` | walkable raised ground | 06 §5 | yes |
+| `start` | staging zone (where the party begins) | 06 §4 | yes |
+| `note` | free text — renders as its text, no marker | 07 §2 | yes |
+| `light` | emits light over a range (`light=<measure>`) | 06 §2 | yes |
+
+Every row inherits, per the rule above — a table of exceptions would be a maintenance hazard, and a uniform answer is one an author can predict. **A spec section that attaches behaviour to a word is committing to that behaviour being inheritable, and MUST register the word here** or use a facet instead.
 
 Vocabulary comes from three sources; later **shadows** earlier, silently and deliberately:
 

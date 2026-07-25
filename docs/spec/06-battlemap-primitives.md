@@ -37,7 +37,8 @@ slope : terrain
 earth : terrain             ; solid ground — underground levels declare it around their rooms
 terrace : terrain           ; walkable raised ground (wall-walks, balconies)
 roof : terrain              ; lower rooms' ceilings seen from above — declare with `difficult`
-air : terrain               ; open sky — upper levels declare it where there is no floor
+air : terrain               ; declared absence of floor, open to the sky
+void : air                  ; the same underground — a shaft or chasm, with no sky in it
 
 ; props
 wagon : feature states=overturned
@@ -99,6 +100,10 @@ A **token** takes a cell; `size=<n>` makes it larger. A token word carrying an a
 - **Transitions are vocabulary**: `stairs`, `ramp`, and `slope` are traversable connections, placed spanning a boundary.
 - **Tokens carry no elevation** — a creature's altitude is play-state, which is VTT territory (vision non-goal: Chartdown is not a VTT).
 - **The `drop` flag** marks an area's boundary as a **fall edge**, rendered as the ticked cliff line: `terrace walkway "The Wall-walk" : area M2..V3 drop`. On an upper level (§8) it bounds walkable ground against open air; on any level it is the treacherous edge the table asks about. The reverse case — underground levels — declares solid ground explicitly: `earth : area A1..Z20` in a `[terrain cellar]` section fills everything outside the rooms with rock. Upper levels declare their surfaces the same way: `air : area …` for open sky (everything unfloored is a fall to the level below) and `roof : area … difficult` over lower rooms' ceilings (climbable, not built for walking). In every case, extent is declared, never derived.
+
+The behaviour these words carry is **declared absence of floor**, and it has two spellings: `air` where there is sky, and `void` (`void : air`) where there is not — a shaft under a mountain is unfloored in exactly the same mechanical sense as an open summit, but a theme must be able to tell them apart, and one word for both made `void.edge` (a chasm lip) and `air.edge` (a skyline) collide. Both inherit: a word deriving from either is unfloored (spec 04 §2).
+
+**`earth` is impassable.** Solid rock is not merely a fill — nothing may stand in it, and its boundary is an occluder. Renderers and exporters MUST treat `earth` (and any word deriving from it) as blocking movement and sight; this is what lets an opening perforate it (§3) and what the `door-onto-void` diagnostic tests against.
 
 ## 6. Crossings and terrain layering
 

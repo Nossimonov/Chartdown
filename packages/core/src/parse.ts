@@ -586,14 +586,20 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return;
 
-    // Free text requires the `note` type word (spec 07 §2).
-    if (split.subject[0]?.kind === "chunk" && split.subject[0].text === "note") {
+    // Free text requires the `note` type word — or ANY word deriving from it
+    // through the vocabulary chain (#111, ADR 0016). Matching the literal word
+    // stopped the escalation ladder at the door: `[vocab] waypoint : note` is a
+    // textbook derivation, and rejecting it told authors the vocabulary system
+    // did not apply here. The typo-loudness this rule protects is untouched —
+    // `noet` still derives from nothing and is still an error.
+    const first = split.subject[0];
+    if (first?.kind === "chunk" && vocabTable.chain(first.text).includes("note")) {
       parseEntityLine(raw, tokens, into, table, vocabTable, diags, false);
       return;
     }
 
     if (split.subject.length !== 1) {
-      diags.push(error(raw.line, "a [labels] override subject must be a single reference; free text requires the 'note' type word (spec 07 §2)"));
+      diags.push(error(raw.line, "a [labels] override subject must be a single reference; free text requires the 'note' type word or a word deriving from it (spec 07 §2)"));
       return;
     }
     const t = split.subject[0]!;
