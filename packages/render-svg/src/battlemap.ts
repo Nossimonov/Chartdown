@@ -850,6 +850,24 @@ export function renderBattlemap(
    */
   function renderUnparentedOpening(e: EntityNode, titleEl: string, anchor: string | undefined): void {
     const rock = impassableCells(model);
+    // A barrier to perforate can be any of the three spec 06 §3 allows, and the
+    // error message promises all three: a structure's perimeter, a freestanding
+    // barrier, or (new in #113) a declared impassable surface. Checking only
+    // the last rejected two forms the language has always permitted.
+    const barrierEdges = new Set<string>();
+    for (const other of model.entities) {
+      if (other.archetype === "structure") {
+        const cells = structureCells(other);
+        for (const pe of perimeterEdges(cells)) {
+          const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+          barrierEdges.add(segKey(edgeSegment(address, pe.dir)));
+        }
+      } else if (other.archetype === "barrier") {
+        for (const p of other.placements) {
+          if (p.kind === "edge") barrierEdges.add(segKey(edgeSegment(p.at, p.dir)));
+        }
+      }
+    }
     const chain = model.chainOf(e.typeWord);
     const windowLike = chain.includes("window") || chain.includes("arrow-slit");
     const stroke = model.theme.prop(chain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
@@ -872,9 +890,10 @@ export function renderBattlemap(
         });
         continue;
       }
+      const onBarrier = barrierEdges.has(segKey(edgeSegment(p.at, p.dir)));
       const solidHere = rock.has(`${here.col}:${here.row}`);
       const solidThere = rock.has(`${here.col + n.dc}:${here.row + n.dr}`);
-      if (solidHere === solidThere) {
+      if (!onBarrier && solidHere === solidThere) {
         diagnostics.push({
           severity: "error",
           line: e.line,

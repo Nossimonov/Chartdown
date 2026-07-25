@@ -828,6 +828,24 @@ describe("openings perforate declared terrain; passes= is enumerated (#113)", ()
     expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   });
 
+  it("an unparented opening may also sit on a wall or a perimeter, as it always could", () => {
+    // Regression: the first cut checked only `earth`, so it rejected two forms
+    // spec 06 §3 has always permitted — and the error message promised all three.
+    const src = [
+      "map: battlemap", "grid: square 12x8", "scale: 5ft",
+      "[structures]",
+      "wall palisade : E2.n F2.n G2.n",
+      "gate w1 : F2.n",
+      "building hall : B4..E7",
+      "gate h1 : E5.e",
+    ].join("\n");
+    expect(renderSource(src, { mode: "gm" }).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // …but an opening with no barrier anywhere near it still fails loud.
+    const lonely = "map: battlemap\ngrid: square 9x9\n[features]\ngate lonely : C4.e\n";
+    expect(renderSource(lonely, { mode: "gm" }).diagnostics.find((d) => d.severity === "error")?.message)
+      .toMatch(/no barrier to perforate/);
+  });
+
   it("fails loud with nothing to pass through, or buried in stone", () => {
     // Rooms carve the rock, so F4/F3 are both floor.
     const inRoom = renderSource(mk("arch inner : F4.n"), { mode: "gm" });
