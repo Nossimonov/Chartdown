@@ -40,7 +40,7 @@ Header key `labels:`, defaulting to `names`:
 
 ## 4. Generated furniture
 
-Header keys, all defaulting `off`, all renderer-generated and never hand-maintained:
+Header keys, all defaulting `off`, all renderer-generated and never hand-maintained. Each takes `on` or `off` and **nothing else** — the value is a closed set and anything outside it is an error (spec 01 §2), because a near-miss would otherwise select the default and silently disable the very thing it was asking for:
 
 | Key | Effect |
 |---|---|

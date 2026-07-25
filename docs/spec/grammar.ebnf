@@ -26,7 +26,13 @@ header-key     = "ground" | "chartdown" | "id" | "grid" | "scale" | "extent" | "
                | "use" | "theme" | "labels" | "legend" | "scale-bar"
                | "compass" | "numbers" | "levels" | "level" ;
                  (* "use" is repeatable; unknown keys warn.
-                    levels: physical order topmost first; level: the default *)
+                    levels: physical order topmost first; level: the default.
+                    Values are unconstrained HERE, but five keys carry closed
+                    value sets checked semantically (spec 01 §2):
+                      labels    = "names" | "keyed" | "none" ;
+                      legend | scale-bar | compass | numbers = "on" | "off" ;
+                    plus map-line/kind-line above. Out-of-set = error, never a
+                    silent default. *)
 
 section        = "[" , section-name , [ " " , word ] , "]" , EOL , { content-line } ;
 section-name   = word ;                              (* known names per map type, spec 05/06/07;

@@ -52,6 +52,28 @@ export const KNOWN_HEADER_KEYS = new Set([
 
 /** Document kinds a `kind:` header may name — `map` is spelled by `map:` itself. */
 export const DOCUMENT_KINDS = new Set(["vocabulary", "theme"]);
+
+/**
+ * Header keys whose value is a closed set, and therefore checkable.
+ *
+ * These all fed a bare equality test in the renderer (`=== "on"`), so every
+ * near-miss an author would reasonably write — `legend: yes`, `compass: true`,
+ * `numbers: ON` — silently turned the feature OFF, and `labels: dense` was
+ * silently read as `names`. The document said one thing and rendered another
+ * with nothing to say so.
+ *
+ * These are ERRORS, not warnings, matching `map:` and `kind:` — the language's
+ * other closed header sets. Unlike vocabulary facets there is no open-vocabulary
+ * argument here: the language defines every legal value, so an out-of-set one
+ * cannot be an author extending the language and can only be a mistake.
+ */
+export const CLOSED_HEADER_VALUES: Record<string, Set<string>> = {
+  labels: new Set(["names", "keyed", "none"]),
+  legend: new Set(["on", "off"]),
+  "scale-bar": new Set(["on", "off"]),
+  compass: new Set(["on", "off"]),
+  numbers: new Set(["on", "off"]),
+};
 const UNIVERSAL_SECTIONS = new Set(["vocab", "gm", "labels"]);
 const SECTIONS_BY_TYPE: Record<string, Set<string>> = {
   battlemap: new Set(["terrain", "structures", "features", "tokens"]),
@@ -337,6 +359,13 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       if (document.levels.length < 2) diagnostics.push(error(raw.line, "levels: declares at least two levels, physical order topmost first (spec 06 §8)"));
     } else if (key === "level") {
       document.defaultLevel = value;
+    } else if (CLOSED_HEADER_VALUES[key] !== undefined) {
+      const allowed = CLOSED_HEADER_VALUES[key]!;
+      if (!allowed.has(value)) {
+        diagnostics.push(
+          error(raw.line, `'${key}: ${value}' is not one of ${[...allowed].join(", ")} — the value is a closed set (spec 01 §2)`),
+        );
+      }
     } else if (!KNOWN_HEADER_KEYS.has(key)) {
       // Deferred: a field word declared in a later [vocab] section is a legal
       // ambient key (spec 04 §5), and the header is parsed before we know it.

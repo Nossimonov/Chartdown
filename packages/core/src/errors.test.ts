@@ -333,3 +333,30 @@ describe("labels (spec 07)", () => {
     expect(errorsOf(src).join()).toMatch(/unknown label hint 'swirling'/);
   });
 });
+
+describe("closed header value sets (spec 01 §2)", () => {
+  const hdr = (line: string): string => `# T\nmap: region\nextent: 900x600mi\n${line}\n`;
+
+  it("a near-miss on a furniture toggle is an error, not a silent default", () => {
+    // Each of these used to parse clean and turn the feature OFF: the renderer
+    // tests `=== "on"`, so anything else selects the default in silence.
+    for (const bad of ["legend: yes", "compass: true", "scale-bar: 1", "numbers: ON"]) {
+      expect(errorsOf(hdr(bad)).join(), bad).toMatch(/is not one of on, off/);
+    }
+    for (const ok of ["legend: on", "legend: off", "compass: on", "numbers: off"]) {
+      expect(errorsOf(hdr(ok)), ok).toEqual([]);
+    }
+  });
+
+  it("labels: takes its three modes and nothing else", () => {
+    // `labels: dense` was proposed in #132 precisely because it reads well —
+    // and it parsed clean while meaning `names`.
+    expect(errorsOf(hdr("labels: dense")).join()).toMatch(/is not one of names, keyed, none/);
+    for (const ok of ["names", "keyed", "none"]) expect(errorsOf(hdr(`labels: ${ok}`)), ok).toEqual([]);
+  });
+
+  it("the message names the key, the value, and the legal set", () => {
+    expect(errorsOf(hdr("legend: yes")).join())
+      .toMatch(/'legend: yes' is not one of on, off — the value is a closed set \(spec 01 §2\)/);
+  });
+});
