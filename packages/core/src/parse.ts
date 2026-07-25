@@ -204,6 +204,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     grid: null,
     levels: [],
     defaultLevel: "",
+    importedVocab: [],
     sections: [],
   };
 
@@ -259,7 +260,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       if (lib === undefined) {
         diagnostics.push(warning(raw.line, `library '${value}' not provided to the parser — its vocabulary is unavailable`));
       } else {
-        parseVocabDocument(lib, "library", vocab, diagnostics);
+        document.importedVocab.push(...parseVocabDocument(lib, "library", vocab, diagnostics));
       }
     } else if (key === "id") {
       document.docId = value;

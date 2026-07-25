@@ -39,10 +39,11 @@ export function collectWalls(model: Model): WallGeometry {
   for (const e of model.entities) {
     if (e.archetype !== "structure") continue;
     for (const d of e.details) {
+      // Openings are recognized by ARCHETYPE (#103), so a word bound straight
+      // to `opening` is a portal too — not just words deriving from door.
+      if (model.archetypeOf(d.typeWord) !== "opening") continue;
       const chain = model.chainOf(d.typeWord);
-      const isWindow = chain.includes("window");
-      const isDoor = !isWindow && (chain.includes("door") || chain.includes("gate"));
-      if (!isWindow && !isDoor) continue;
+      const isWindow = chain.includes("window") || chain.includes("arrow-slit");
       for (const p of d.placements) {
         if (p.kind !== "edge") continue;
         const seg = edgeSegment(p.at, p.dir);

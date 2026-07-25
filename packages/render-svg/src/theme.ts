@@ -70,6 +70,14 @@ export const DEFAULT_THEME_SOURCE: string = [
   "ledge : stroke=#6b5d4a",
   "building : fill=#efe9da",
   "building.open : fill=#e3ddc2 ; unroofed interiors read as outdoor ground (spec 06 par.3)",
+  // Openings and barriers are ordinary theme subjects (#105) — they were
+  // hardcoded at the draw site, so four of the nine archetypes ignored the
+  // theme entirely. Derived words reach these through the chain (#103).
+  "door : stroke=#a8763e width=5",
+  "window : stroke=#6fa8c9 width=2.5",
+  "wall : stroke=#3d3629 width=3",
+  "fence : stroke=#8a7a5c width=2 dash=3,3",
+  "pillar : fill=#5a5244",
   ...Object.entries(TERRAIN_FILLS).map(([word, fill]) => `${word} : fill=${fill}`),
   ...Object.entries(PATH_STROKES).map(
     ([word, s]) => `${word} : stroke=${s.stroke}${s.dash ? ` dash=${s.dash.replace(" ", ",")}` : ""}`,

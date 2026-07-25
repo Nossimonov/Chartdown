@@ -22,6 +22,10 @@ port : at (150,470)                            ; pin the label anchor exactly
 
 **Free text** — the subject carries the type word `note` (standard library: `note : feature`, a feature whose rendering *is* its text): `note "Here be dragons" : (700,100)`. The required type word is what keeps override typos loud.
 
+Free text renders as **text alone** — no marker, no glyph, at any placement. It is map furniture, not an entity: it names nothing and marks no position. A marker beside a caption asserts that there is a *thing* at that spot, which on a sheet where every other glyph is something the party can interact with is a promise the map cannot keep.
+
+> Text that marks a **place** is not free text — it is an ordinary entity with a display name (`landmark w9 "9 — The Bridge" : GL78`), which labels itself per §1 and carries a glyph the theme can style. Reach for `note` when there is nothing there, and for an entity when there is.
+
 **Hint vocabulary (closed):** `sprawl <range>` · `along <ref>` · `at <point | cell>` · a compass word (label side relative to the entity). Nothing else; typography and color belong to themes.
 
 ## 3. Label modes

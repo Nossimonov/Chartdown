@@ -8,7 +8,7 @@
  * human decoding errors.
  */
 
-import { parse } from "@chartdown/core";
+import { checkSource, documentKind, parse } from "@chartdown/core";
 import { exportUvttSource, renderSource, type RenderMode } from "@chartdown/render-svg";
 
 const formatDiagnostics = (diagnostics: { severity: string; line: number; message: string }[]): string =>
@@ -21,6 +21,20 @@ export interface ToolText {
 
 /** Parse + render (GM mode: nothing skipped) and report every diagnostic. */
 export function runCheck(source: string): ToolText {
+  // Vocabulary and theme documents need no `map:` (spec 04 §2, spec 08 §1) and
+  // must be validated against their own rules, not the map's (#102).
+  const kind = documentKind(source);
+  if (kind !== "map") {
+    const { diagnostics } = checkSource(source);
+    const errors = diagnostics.filter((d) => d.severity === "error");
+    if (errors.length > 0) {
+      return { isError: true, text: `INVALID — ${errors.length} error(s) in this ${kind} document:\n${formatDiagnostics(errors)}` };
+    }
+    const warnings = diagnostics.filter((d) => d.severity === "warning");
+    return {
+      text: `ok — valid ${kind} document${warnings.length > 0 ? `\n\nwarnings:\n${formatDiagnostics(warnings)}` : ""}`,
+    };
+  }
   const { document, diagnostics } = renderSource(source, { mode: "gm" });
   const errors = diagnostics.filter((d) => d.severity === "error");
   const warnings = diagnostics.filter((d) => d.severity === "warning");

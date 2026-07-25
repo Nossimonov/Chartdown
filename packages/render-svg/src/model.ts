@@ -38,11 +38,19 @@ export interface Model {
   /**
    * Theme fallback chain for a word (spec 04 §4): the word, then its
    * derivation bases — a theme lookup walks it until a word it knows.
-   * Built from the standard library plus the document's [vocab] entries.
-   * (`use:` library vocab is resolved by the parser for archetypes; theme
-   * chains for library-defined derivations are a known gap until #20.)
+   * Built in spec 04 §2's shadowing order: standard library, then `use:`
+   * libraries, then the document's own [vocab] entries. ONE table, matching
+   * the parser's (#101) — a shorter chain here means a theme silently stops
+   * resolving for exactly the vocabulary that was meant to be shared.
    */
   chainOf(word: string | null): string[];
+  /**
+   * The archetype a word resolves to through the same table (spec 04 §2).
+   * Detail lines carry no resolved archetype of their own, so this is how an
+   * opening is recognized whether it is spelled `door`, `portal : door`, or
+   * bound straight to the archetype (`hatch : opening`) — #103.
+   */
+  archetypeOf(word: string | null): string | null;
   /** Vocab facet default for a word (chain-walked); entity pairs override it. */
   facetOf(word: string | null, key: string): string | undefined;
   /**
@@ -106,12 +114,14 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   const vocab = new VocabTable();
   loadStdlib(vocab);
   const scratch: Diagnostic[] = [];
+  for (const entry of doc.importedVocab) vocab.add(entry, scratch);
   for (const section of doc.sections) {
     for (const entry of section.entries) {
       if (entry.kind === "vocab-entry") vocab.add(entry, scratch);
     }
   }
   const chainOf = (word: string | null): string[] => (word ? vocab.chain(word) : []);
+  const archetypeOf = (word: string | null): string | null => (word ? vocab.archetypeOf(word) : null);
   const facetOf = (word: string | null, key: string): string | undefined =>
     word ? vocab.facetOf(word, key) : undefined;
 
@@ -123,7 +133,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
     resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
   }
   const keys = labelsMode === "keyed" ? assignKeys(entities, hexLines, diagnostics) : new Map<object, number>();
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, facetOf, resolvedNotes };
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, resolvedNotes };
 }
 
 /**

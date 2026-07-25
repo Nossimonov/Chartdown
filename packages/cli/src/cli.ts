@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { parse } from "@chartdown/core";
+import { checkSource, documentKind, parse } from "@chartdown/core";
 import { render, type RenderMode } from "@chartdown/render-svg";
 
 const USAGE = [
@@ -66,14 +66,32 @@ for (const header of parse(source).document.header) {
   }
 }
 
+// `check` validates whichever KIND of document this is (#102): a vocabulary
+// and a theme need no `map:` (spec 04 §2, spec 08 §1), and validating them
+// against the map rules discarded them wholesale.
+if (command === "check") {
+  const kind = documentKind(source);
+  let checkDiagnostics;
+  if (kind === "map") {
+    // A map is also RENDERED (output discarded) so render-side diagnostics
+    // are reachable from check (#120) — otherwise the command authors and CI
+    // run reports `ok` for a document containing lines the renderer drops.
+    // GM mode, so nothing is skipped.
+    const parsed = parse(source, { libraries });
+    const rendered = render(parsed.document, themeSources.length > 0 ? { mode: "gm", theme: themeSources } : { mode: "gm" });
+    checkDiagnostics = [...parsed.diagnostics, ...rendered.diagnostics];
+  } else {
+    checkDiagnostics = checkSource(source, { libraries }).diagnostics;
+  }
+  for (const d of checkDiagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
+  const invalid = checkDiagnostics.some((d) => d.severity === "error");
+  console.error(invalid ? "invalid" : `ok (${kind} document)`);
+  process.exit(invalid ? 1 : 0);
+}
+
 const { document, diagnostics } = parse(source, { libraries });
 for (const d of diagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
 const hasErrors = diagnostics.some((d) => d.severity === "error");
-
-if (command === "check") {
-  console.error(hasErrors ? "invalid" : "ok");
-  process.exit(hasErrors ? 1 : 0);
-}
 
 const { svg, diagnostics: renderDiagnostics } = render(
   document,

@@ -230,12 +230,20 @@ export function parseVocabLine(
  * Parse a vocabulary document — an ordinary Chartdown document containing only
  * `[vocab]` sections; `map:` is not required (spec 04 §2). Non-vocab content warns.
  */
+/**
+ * Parse a vocabulary document into `table`, returning the entries it added so
+ * callers can carry them onward. The document must carry its imported
+ * vocabulary (#101): a consumer that rebuilds the table from the AST alone
+ * would otherwise get a SHORTER chain than the parser used, and theme lookups
+ * — which walk that chain (spec 04 §4) — would silently stop resolving.
+ */
 export function parseVocabDocument(
   source: string,
   origin: VocabEntryNode["source"],
   table: VocabTable,
   diagnostics: Diagnostic[],
-): void {
+): VocabEntryNode[] {
+  const added: VocabEntryNode[] = [];
   let inVocab = false;
   for (const raw of splitLines(source)) {
     if (raw.text.startsWith("#")) continue;
@@ -247,8 +255,12 @@ export function parseVocabDocument(
     }
     if (!inVocab) continue;
     const entry = parseVocabLine(raw.text, raw.line, origin, diagnostics);
-    if (entry) table.add(entry, diagnostics);
+    if (entry) {
+      table.add(entry, diagnostics);
+      added.push(entry);
+    }
   }
+  return added;
 }
 
 export function loadStdlib(table: VocabTable): void {

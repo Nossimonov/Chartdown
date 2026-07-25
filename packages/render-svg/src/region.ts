@@ -525,6 +525,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const realmInfos: { e: EntityNode; key: string; poly: XY[]; spans: { ref: string; start: number; end: number }[]; fill: string; frame?: boolean }[] = [];
   const borderDecls: EntityNode[] = [];
 
+  /**
+   * Water wins every overlap (#98). Spec 05 §2 says so for zonal terrain
+   * ("painted beneath water, so seas win where they overlap"), but it is a
+   * property of the map model, not of one terrain kind: on any hand-drawn map
+   * the water edge cuts the mountains cleanly. Terrain draws through a mask
+   * that subtracts every water body, so a range can reach the shore without
+   * bleeding onto it and a gulf can cut one named range in two.
+   */
+  const waterPolys: XY[][] = [];
+  const hasWater = items.some(
+    ({ e, chain }) => e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"),
+  );
+  const landMaskId = `cd-land-${model.doc.docId}`;
+  const landMask = hasWater ? `url(#${landMaskId})` : undefined;
+
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
@@ -536,11 +551,41 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       continue;
     }
 
+    // Free text is text alone — no marker, at any placement (spec 07 §2,
+    // #104). A caption names no entity and marks no position; it belongs to
+    // the sheet, not the fiction.
+    if (chain.includes("note")) {
+      const label = e.texts[0] ?? e.name;
+      const at = r.point ?? (r.polygon ? centroid(r.polygon) : null);
+      if (label && at) {
+        const span = r.polygon ? Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x)) : 0;
+        const size = 11;
+        const spacing =
+          e.flags.includes("sprawl") && span > 0
+            ? Math.max(0, (span - label.length * size * 0.58) / Math.max(1, label.length - 1))
+            : undefined;
+        labelBuckets[0]!.push(
+          text(label, {
+            x: at.x, y: at.y, "font-size": size, "letter-spacing": spacing,
+            fill: INK, opacity: 0.85, "text-anchor": "middle", "font-family": "sans-serif",
+          }),
+        );
+      } else if (label) {
+        diagnostics.push({
+          severity: "warning",
+          line: e.line,
+          message: `free text "${label}" has no point or area placement — this renderer draws nothing for it (spec 07 §2)`,
+        });
+      }
+      continue;
+    }
+
     if (r.halfPlane) {
       const poly = halfPlanePolygon(r.halfPlane, w, h);
       const isWater = e.section === "water";
       const isZone = !isWater && e.archetype === "zone";
       if (isWater) {
+        waterPolys.push(poly);
         layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: theme.terrainFill(["sea"]) })));
       } else if (isZone) {
         // Nations are individuals, not a type: the tint keys on the realm's
@@ -591,6 +636,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // line and the fill follows it exactly. Lakes sit on land: terrain
         // layer. Seas are the floor: water layer.
         const shore = r.polygon;
+        waterPolys.push(shore);
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
             el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
@@ -745,7 +791,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (glyphName) {
         areaParts.push(...scatterGlyphs(r.polygon, glyphName, theme, ink));
       }
-      layers.areas.push(el("g", { id: anchor }, ...areaParts));
+      // Terrain is clipped to the land side (#98); anything else keeps its
+      // own extent (a lake is water, an island is land in the water).
+      layers.areas.push(el("g", { id: anchor, mask: e.archetype === "terrain" ? landMask : undefined }, ...areaParts));
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         deferLabel(3, () => {
           const c = r.point ?? centroid(r.polygon!);
@@ -1064,12 +1112,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     for (const fill of [...new Set(massifs.map((m) => m.fill))]) {
       const mine = massifs.filter((m) => m.fill === fill);
       groups.push(
-        el("g", { opacity: 0.55 },
+        el("g", { opacity: 0.55, mask: landMask },
           ...mine.map((m) => el("g", { id: m.anchor }, m.titleEl, el("polygon", { points: pointsAttr(m.poly), fill }))),
         ),
       );
       groups.push(
-        el("path", { d: mine.map((m) => m.peaks).join(""), fill: "none", stroke: shade(fill), "stroke-width": 1.4, opacity: 0.8, "stroke-linejoin": "round", "stroke-linecap": "round" }),
+        el("path", { d: mine.map((m) => m.peaks).join(""), fill: "none", stroke: shade(fill), "stroke-width": 1.4, opacity: 0.8, "stroke-linejoin": "round", "stroke-linecap": "round", mask: landMask }),
       );
     }
     layers.lines.unshift(...groups);
@@ -1333,6 +1381,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   for (const job of labelJobs) job.run();
   layers.labels.push(...labelBuckets[4]!, ...labelBuckets[3]!, ...labelBuckets[2]!, ...labelBuckets[1]!, ...labelBuckets[0]!);
 
+  // The land mask (#98): white everywhere, black over every water body, so
+  // terrain drawn through it stops at the shore.
+  if (hasWater) {
+    body.push(
+      `<defs><mask id="${landMaskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(w)}" height="${fmt(h)}">` +
+        el("rect", { x: 0, y: 0, width: w, height: h, fill: "#fff" }) +
+        waterPolys.map((poly) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        `</mask></defs>`,
+    );
+  }
   body.push(...layers.water, ...layers.realms, ...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
 }
 

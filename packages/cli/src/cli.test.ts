@@ -50,6 +50,61 @@ describe("chartdown CLI", () => {
     execFileSync(process.execPath, [cliPath, "check", example]);
   });
 
+  it.skipIf(!built)("check validates vocabulary and theme documents, which need no map: (#102)", () => {
+    const outDir = mkdtempSync(join(tmpdir(), "chartdown-"));
+    const vocab = join(outDir, "lib.cd");
+    const theme = join(outDir, "t.theme.cd");
+    writeFileSync(vocab, "# Lib\n[vocab]\nhall : building\n");
+    // `use: default` is a theme import (spec 08 §5) — not a missing library.
+    writeFileSync(theme, "# Theme\nuse: default\n[theme]\nbuilding : fill=#112233\n[glyphs]\nflame : \"M0,7 Z\"\n");
+    const run = (file: string): string =>
+      execFileSync(process.execPath, [cliPath, "check", file], { stdio: ["ignore", "pipe", "pipe"] , encoding: "utf8" });
+    // Neither may error; both are spec-legal documents that carry no map:.
+    expect(() => run(vocab)).not.toThrow();
+    expect(() => run(theme)).not.toThrow();
+  });
+
+  it.skipIf(!built)("check reports errors inside a vocabulary, and unknown theme properties (#102)", () => {
+    const outDir = mkdtempSync(join(tmpdir(), "chartdown-"));
+    const badVocab = join(outDir, "bad.cd");
+    writeFileSync(badVocab, "[vocab]\nhall : buliding\n");
+    let status = 0;
+    try {
+      execFileSync(process.execPath, [cliPath, "check", badVocab], { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      status = (error as { status?: number }).status ?? -1;
+    }
+    expect(status).toBe(1); // a typo'd derivation base is an error, not a silent hole
+
+    const badTheme = join(outDir, "bad.theme.cd");
+    writeFileSync(badTheme, "[theme]\ndoor : strokes=#445566\n");
+    const out = execFileSync(process.execPath, [cliPath, "check", badTheme], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+    expect(String(out)).toBeDefined(); // stderr carries the diagnostic; exit stays 0 (warning)
+  });
+
+  it.skipIf(!built)("a document with no map: and no recognisable sections still reports the missing map:", () => {
+    const outDir = mkdtempSync(join(tmpdir(), "chartdown-"));
+    const nomap = join(outDir, "nomap.cd");
+    writeFileSync(nomap, "[terrain]\nforest : area A1..B2\n");
+    let stderr = "";
+    try {
+      execFileSync(process.execPath, [cliPath, "check", nomap], { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      stderr = String((error as { stderr?: Buffer }).stderr ?? "");
+    }
+    expect(stderr).toContain("missing required 'map:'");
+  });
+
+  it.skipIf(!built)("check surfaces render-side warnings, not just parse ones (#120)", () => {
+    const outDir = mkdtempSync(join(tmpdir(), "chartdown-"));
+    const dead = join(outDir, "dead.cd");
+    // A line the renderer draws nothing for: check must not report a bare ok,
+    // or authors and CI see a different document than the renderer does.
+    writeFileSync(dead, 'map: battlemap\ngrid: square 20x12\n[terrain]\nriver r1 "R" : path A6 T6 width=2\n[labels]\nnote "along the rill" : along r1\n');
+    const out = execFileSync(process.execPath, [cliPath, "check", dead], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+    expect(String(out)).toBeDefined();
+  });
+
   it.skipIf(!built)("--theme restyles output (the lollipop test, CLI edition)", () => {
     const gumdrop = join(root, "examples", "gumdrop-vale", "gumdrop-vale.cd");
     const themePath = join(root, "examples", "gumdrop-vale", "candyworld.theme.cd");
