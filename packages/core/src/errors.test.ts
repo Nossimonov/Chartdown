@@ -92,6 +92,45 @@ describe("one staging-zone spelling (spec 06 §4, ADR 0015)", () => {
   });
 });
 
+describe("declared states (spec 04 §2, #108)", () => {
+  const room = "map: battlemap\ngrid: square 9x9\n[structures]\nbuilding b : B2..D4\n";
+
+  it("an undeclared bare word warns but still renders", () => {
+    expect(warningsOf("map: battlemap\ngrid: square 9x9\n[features]\nwagon x : B2 overturnd\n").join())
+      .toMatch(/'overturnd' is not a declared state of 'wagon'/);
+    expect(errorsOf("map: battlemap\ngrid: square 9x9\n[features]\nwagon x : B2 overturnd\n")).toEqual([]);
+  });
+
+  it("declared states are silent, and derivation carries them (ADR 0016)", () => {
+    expect(warningsOf("map: battlemap\ngrid: square 9x9\n[features]\nwagon x : B2 overturned\n")).toEqual([]);
+    const derived = "map: battlemap\ngrid: square 9x9\n[vocab]\ncart : wagon\n[features]\ncart c : B2 overturned\n";
+    expect(warningsOf(derived)).toEqual([]);
+  });
+
+  it("opening states ship on door, so `gate ... ruined` is now correct rather than accidental (#108 B)", () => {
+    for (const state of ["locked", "barred", "stuck", "ruined"]) {
+      expect(warningsOf(`${room}  gate g : D3.e ${state}\n`), state).toEqual([]);
+    }
+    // window derives from `opening`, not `door`, so it declares none of these.
+    expect(warningsOf(`${room}  window w : D3.e locked\n`).join()).toMatch(/not a declared state of 'window'/);
+  });
+
+  it("exempts what is grammar rather than state", () => {
+    // Wall-state details: `ruined` is the SUBJECT, side words the predicate.
+    expect(warningsOf(`${room}  ruined : north east\n`)).toEqual([]);
+    // Border predicates are open vocabulary by ADR 0012.
+    const border = [
+      "map: region", "extent: 100x100mi", "[realms]",
+      'realm a "A" : area (0,0) (50,0) (50,50)',
+      'realm b "B" : area (50,0) (99,0) (99,50)',
+      "border : a b contested",
+    ].join("\n");
+    expect(warningsOf(border).filter((m) => /declared state/.test(m))).toEqual([]);
+    // Undefined words have nothing to compare against (spec 04 §3).
+    expect(warningsOf("map: battlemap\ngrid: square 9x9\n[features]\nzorbleflax z : B2 shiny\n")).toEqual([]);
+  });
+});
+
 describe("document kind (spec 01 §2, #110)", () => {
   it("the first header line is map: or kind:", () => {
     expect(errorsOf("kind: vocabulary\n[vocab]\nhall : building\n")).toEqual([]);

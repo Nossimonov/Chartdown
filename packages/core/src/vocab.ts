@@ -84,7 +84,7 @@ building : structure states=ruined
 wall : barrier states=ruined
 fence : barrier sight=all
 pillar : barrier
-door : opening passes=closed sight=none
+door : opening passes=closed sight=none states=locked,barred,stuck,ruined
 gate : door
 window : opening passes=none sight=all
 arrow-slit : window
@@ -176,6 +176,25 @@ export class VocabTable {
 
   has(word: string): boolean {
     return this.entries.has(word);
+  }
+
+  /**
+   * Declared states for a word, **unioned along the derivation chain** (spec
+   * 04 §2): `hovercart : wagon states=parked` is parked OR overturned, because
+   * derivation carries states exactly as it carries facets (ADR 0016).
+   */
+  statesOf(word: string): Set<string> {
+    const out = new Set<string>();
+    const seen = new Set<string>();
+    let current = this.entries.get(word);
+    while (current && !seen.has(current.word)) {
+      seen.add(current.word);
+      const declared = current.pairs.find((p) => p.key === "states")?.value;
+      if (declared) for (const s of declared.split(",").map((v) => v.trim()).filter(Boolean)) out.add(s);
+      if (current.baseIsArchetype) break;
+      current = this.entries.get(current.base);
+    }
+    return out;
   }
 
   /**

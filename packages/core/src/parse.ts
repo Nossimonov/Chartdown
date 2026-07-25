@@ -58,7 +58,47 @@ const SECTIONS_BY_TYPE: Record<string, Set<string>> = {
   hexcrawl: new Set(["hexes", "routes", "regions"]),
   region: new Set(["water", "terrain", "paths", "settlements", "features", "realms"]),
 };
-const RESERVED_FLAGS = new Set(["hidden", "nolabel", "difficult", "seen", "unexplored"]);
+// Bare words the LANGUAGE defines, as opposed to states a word declares
+// (spec 01 §5, spec 06): these are never checked against states= (#108).
+const RESERVED_FLAGS = new Set([
+  "hidden", "nolabel", "difficult", "seen", "unexplored", "drop", "open", "sprawl",
+]);
+
+/**
+ * A bare word should be a DECLARED state of the entity's word or an ancestor
+ * (spec 04 §2, #108). Warning, not error: spec 04 §3's promise is that nothing
+ * is blocked on defining, so an undeclared state still renders — but flags
+ * were the one place a misspelling cost a rendered state and said nothing,
+ * while spec 03 §5 and spec 02 §8.3 close exactly that hole everywhere else.
+ *
+ * `border` is exempt: ADR 0012 gives its predicate its own grammar — realm
+ * names, compass words, `inner`, and states that are OPEN vocabulary by
+ * decision. Checking it would warn on every border line in the corpus.
+ */
+function checkDeclaredStates(
+  typeWord: string | null,
+  flags: string[],
+  vocabTable: VocabTable,
+  line: number,
+  diagnostics: Diagnostic[],
+): void {
+  if (typeWord === null || flags.length === 0) return;
+  // Only DEFINED vocabulary is checked. Two reasons, both empirical:
+  //  - an unknown word has no declared states to compare against, and spec 04
+  //    §3 promises you can flag anything without defining it first;
+  //  - a wall-state detail (`ruined : north east`, spec 06 §3) has the state
+  //    as its SUBJECT and side words as its predicate — those are grammar,
+  //    not states of `ruined`, and `ruined` is not vocabulary.
+  if (vocabTable.archetypeOf(typeWord) === null) return;
+  if (vocabTable.chain(typeWord).includes("border")) return;
+  const declared = vocabTable.statesOf(typeWord);
+  for (const flag of flags) {
+    if (RESERVED_FLAGS.has(flag) || declared.has(flag)) continue;
+    diagnostics.push(
+      warning(line, `'${flag}' is not a declared state of '${typeWord}' — it still renders; declare it with states= to silence this (spec 04 §2)`),
+    );
+  }
+}
 
 export function slugify(text: string): string {
   return text
@@ -453,6 +493,18 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       diags.push(error(raw.line, document.levels.length === 0 ? "to= requires a levels: declaration (spec 06 §8)" : `unknown level '${toParam}' — declared levels: ${document.levels.join(" ")}`));
     }
 
+    // A bare word should be a DECLARED state of the entity's word or an
+    // ancestor (spec 04 §2, #108). Warning, not error: spec 04 §3's promise is
+    // that nothing is blocked on defining, so an undeclared state still
+    // renders — but flags were the one place a misspelling cost a rendered
+    // state and said nothing, while spec 03 §5 and spec 02 §8.3 close exactly
+    // that hole everywhere else.
+    //
+    // `border` is exempt: ADR 0012 gives its predicate its own grammar — realm
+    // names, compass words, `inner`, and states that are OPEN vocabulary by
+    // decision. Warning there would fire on every border line in the corpus.
+    checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
+
     const entity: EntityNode = {
       kind: "entity",
       section: into.name,
@@ -489,6 +541,10 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     if (!split) return;
     const subject = parseSubject(split.subject, raw.line, diags);
     const predicate = parsePredicate(split.predicate, raw.line, diags);
+    // Openings and wall-states are usually DETAILS, so the same rule applies
+    // here or the check would miss the case that motivated it (#108).
+    checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
+
     const detail: DetailNode = {
       kind: "detail",
       typeWord: subject.typeWord,

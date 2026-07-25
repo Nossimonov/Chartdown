@@ -14,7 +14,7 @@ building : structure states=ruined
 wall : barrier states=ruined
 fence : barrier sight=all               ; blocks passage, not sight
 pillar : barrier
-door : opening passes=closed sight=none
+door : opening passes=closed sight=none states=locked,barred,stuck,ruined
 gate : door
 window : opening passes=none sight=all
 arrow-slit : window
