@@ -34,6 +34,8 @@ Future spec sections MAY extend this table; documents MUST NOT. Generic paramete
 
 **`open` is the default** when `passes=` is unset, which makes `arch : opening sight=all` — the commonest opening in any dungeon — mean what every reader already takes it to mean. The value resolves through the vocabulary chain like any facet (§2): the entity's own pair, then the word's facet, then its base word's.
 
+An out-of-set value is **skipped at the layer that declares it**, and resolution continues to the next: for `mydoor : door passes=bogus`, the value that applies is `door`'s `closed`, not the archetype's `open`. "The vocabulary default" means the next value up the chain, not the built-in — falling all the way through would silently reopen every derived door, which is the failure mode the closed set exists to prevent.
+
 ## 2. Vocabulary
 
 A vocabulary entry binds a type word to meaning. Two forms:

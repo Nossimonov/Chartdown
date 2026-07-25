@@ -11,7 +11,7 @@
  *   carry their own occlusion state in the VTT (spec 06 §9).
  */
 
-import type { Address, Pair, Placement } from "@chartdown/core";
+import { facetAccepts, type Address, type Pair, type Placement } from "@chartdown/core";
 import { colLetters, type Segment } from "./util";
 import { edgeSegment, perimeterEdges, segKey, structureCells, type Cell, type EdgeFacing } from "./grid";
 import { pairOf, type Model } from "./model";
@@ -40,12 +40,26 @@ export interface WallGeometry {
  * dungeon) exported as a CLOSED portal. An archway has no leaf.
  */
 function passesOf(model: Model, typeWord: string | null, pairs: Pair[]): string {
-  return pairOf(pairs, "passes") ?? model.facetOf(typeWord, "passes") ?? "open";
+  return declared(pairs, "passes") ?? model.facetOf(typeWord, "passes") ?? "open";
 }
 
 /** `sight=` likewise; an opening with no leaf passes sight unless told otherwise. */
 function sightOf(model: Model, typeWord: string | null, pairs: Pair[], passes: string): string {
-  return pairOf(pairs, "sight") ?? model.facetOf(typeWord, "sight") ?? (passes === "open" ? "all" : "none");
+  return declared(pairs, "sight") ?? model.facetOf(typeWord, "sight") ?? (passes === "open" ? "all" : "none");
+}
+
+/**
+ * An entity's own closed-facet value, or `undefined` if it is outside the set
+ * — so resolution falls through to the vocabulary default, which is what the
+ * warning promises (#131). `facetOf` applies the same rule up the chain.
+ *
+ * Without the guard `passes=bogus` merely failed the `!== "open"` test and
+ * became a shut portal, so a typo on an `arch` — an opening whose whole point
+ * is that it has no leaf — exported as blocked.
+ */
+function declared(pairs: Pair[], key: string): string | undefined {
+  const value = pairOf(pairs, key);
+  return value !== undefined && facetAccepts(key, value) ? value : undefined;
 }
 
 export function collectWalls(model: Model): WallGeometry {

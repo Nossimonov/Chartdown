@@ -999,3 +999,27 @@ describe("snapshots", () => {
     });
   }
 });
+
+/**
+ * The `sight=` half of #131. The reporter could not test this and said so:
+ * spec 06 §9 gives `sight=` no distinct UVTT surface, so all four values
+ * export identically. It IS observable in the render — `sight=all` makes the
+ * edge transparent to light — which is where the fallback has to be checked.
+ */
+describe("sight= recovers to the vocabulary default too (#131)", () => {
+  const src = (suffix: string): string =>
+    [
+      "map: battlemap", "grid: square 8x6", "scale: 5ft", "light: dark",
+      "[vocab]", "window2 : window",
+      "[structures]", "building b1 : B2..E5", `  window2 : E3.e${suffix}`,
+      "[features]", "torch t1 : C3 light=20ft",
+    ].join("\n");
+  const svg = (suffix: string): string => renderSource(src(suffix), {}).svg;
+
+  it("an out-of-set value renders as the inherited default, not as blocking", () => {
+    const base = svg(""); // window2 : window, so the default is sight=all
+    expect(svg(" sight=all"), "all").toBe(base);
+    expect(svg(" sight=bogus"), "bogus").toBe(base);
+    expect(svg(" sight=none"), "none").not.toBe(base); // the facet still works
+  });
+});

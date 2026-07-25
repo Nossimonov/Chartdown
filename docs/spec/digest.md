@@ -43,7 +43,7 @@ Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexc
 
 ## Vocabulary (spec 04) — the language knows no nouns
 
-- Nine closed archetypes: `terrain path feature structure barrier opening token zone light` (facets: `passes=`, `sight=` on barrier/opening; `size=`,`side=` on token; `range=` on light).
+- Nine closed archetypes: `terrain path feature structure barrier opening token zone field` (facets: `passes=`, `sight=` on barrier/opening; `size=`,`side=` on token; `occluded=` on field — `light` is the shipped field, not an archetype, per ADR 0018).
 - `[vocab]` entries: `word : archetype [facets]` or **derive** `word : other-word [overrides]` (`licorice-forest : forest` — forest semantics, theme swaps the motif). Sources shadow in order: standard library < `use:` files < document.
 - **Derivation carries word-keyed behaviour** (04 §2, ADR 0016): where a spec section attaches behaviour to a specific stdlib word — `earth`/`air`/`void`/`roof`/`terrace` (level surfaces), `start` (staging zone), `note` (free text), `light` — that behaviour is INHERITED through derivation, exactly as archetype and facets are. A word deriving from `air` is unfloored; from `note` is free text. Matching these on the literal word is non-conforming. Spec 04 §2 carries the registry of load-bearing words.
 - **States SHOULD be declared** (04 §2): a bare word that is not a reserved flag should match a `states=` declaration on the word or an ancestor; an unmatched one still renders but WARNS (typo protection). Only defined vocabulary is checked; wall-state details (`ruined : north east`) and `border` predicates are exempt grammar. Stdlib: `door : … states=locked,barred,stuck,ruined` (inherited by `gate`).
@@ -58,7 +58,7 @@ Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexc
 - **Zones**: realm region border (border = a relationship+state, never a location — see region row)
 - **Crossings/sites**: ford(difficult) bridge keep castle tower ruin dungeon lair camp mine shrine temple port cave landmark stairs ramp
 - **Settlements** (derived tiers): settlement → capital city town village hamlet
-- **Structures triad** (UVTT-aligned): building(ruined) wall(ruined) fence(sight=all) pillar door(passes=closed,sight=none — `passes=` is a CLOSED set: open|closed|none, DEFAULT open, and `sight=` likewise: all|none. A value outside either set WARNS and the vocab default applies. Both resolve through the vocab chain and feed the normative UVTT portal transform) gate window(passes=none,sight=all) arrow-slit
+- **Structures triad** (UVTT-aligned): building(ruined) wall(ruined) fence(sight=all) pillar door(passes=closed,sight=none — `passes=` is a CLOSED set: open|closed|none, DEFAULT open, and `sight=` likewise: all|none. A value outside either set WARNS and is SKIPPED AT ITS OWN LAYER — resolution continues up the chain, so `mydoor : door passes=bogus` gets door's `closed`, NOT the archetype's `open`. Both resolve through the vocab chain and feed the normative UVTT portal transform) gate window(passes=none,sight=all) arrow-slit
 - **Props**: wagon(overturned) crates barrel chest table altar statue well boulder tree pit(difficult) campfire(light=20ft) torch lantern brazier
 - **Zones/misc**: realm region start note
 - **No bestiary by design** — creatures are user words via token inference (`goblins g1 g2 : C12 E13`).

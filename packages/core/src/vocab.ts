@@ -21,6 +21,18 @@ export const CLOSED_FACETS: Record<string, Set<string>> = {
   sight: new Set(["all", "none"]),
 };
 
+/**
+ * Is this value one the facet accepts? Open facets accept anything.
+ *
+ * Resolution and validation MUST agree on this predicate. They did not (#131):
+ * `checkFacetValues` warned that "the vocabulary default applies" while the
+ * renderer passed the bad value straight through to a `!== "open"` test, so a
+ * typo exported a SHUT portal — the exact conformance failure #126 was filed
+ * about, now wearing a warning that said it had been handled.
+ */
+export const facetAccepts = (key: string, value: string): boolean =>
+  CLOSED_FACETS[key]?.has(value) ?? true;
+
 /** Warn on a value outside a closed facet set; the facet default then applies. */
 export function checkFacetValues(
   pairs: { key: string; value: string }[],
@@ -232,11 +244,20 @@ export class VocabTable {
    * are overridable defaults (spec 06 §2: `campfire : feature light=20ft`
    * means every campfire glows unless the entity says otherwise).
    */
+  /**
+   * A word's facet value, walking the derivation chain (spec 04 §2).
+   *
+   * A value outside a closed set is SKIPPED rather than returned, so the walk
+   * continues to the next word up (#131). That is what "the vocabulary default
+   * applies" has to mean on a chain: for `mydoor : door passes=bogus`, the
+   * default is `door`'s `closed`, not the archetype's `open` — dropping all
+   * the way to the built-in would silently reopen every derived door.
+   */
   facetOf(word: string, key: string): string | undefined {
     let current = this.entries.get(word);
     while (current) {
       const pair = current.pairs.find((p) => p.key === key);
-      if (pair) return pair.value;
+      if (pair && facetAccepts(key, pair.value)) return pair.value;
       if (current.baseIsArchetype) return undefined;
       current = this.entries.get(current.base);
     }

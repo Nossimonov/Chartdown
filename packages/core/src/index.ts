@@ -7,7 +7,7 @@
 
 export { parse, slugify, SPEC_VERSION, type ParseOptions, type ParseResult } from "./parse";
 export { checkSource, documentKind, type CheckResult, type DocumentKind } from "./check";
-export { STDLIB_SOURCE, ARCHETYPES, VocabTable, loadStdlib, parseVocabDocument } from "./vocab";
+export { STDLIB_SOURCE, ARCHETYPES, CLOSED_FACETS, facetAccepts, VocabTable, loadStdlib, parseVocabDocument } from "./vocab";
 export { parseThemeDocument, THEME_PROPS, SURFACE_WORDS, ZONE_WORDS, type ThemeDocumentNode, type ThemeEntry } from "./theme";
 export type { Diagnostic, Severity } from "./diagnostics";
 export type * from "./ast";
