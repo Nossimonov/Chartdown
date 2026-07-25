@@ -31,6 +31,8 @@ interface Resolved {
   alongSpans?: { ref: string; refKey?: string; start: number; end: number }[];
 }
 
+
+
 export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
   const { w, h, scale } = size;
   const theme = model.theme;
@@ -991,8 +993,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }
           // On-crest (ridge) text has no inside/outside — only total bend.
           const inside = !isRidge && ((above && signed < 0) || (!above && signed > 0));
-          // Weighted to beat slot-order bias and belt brushes: a mushed
-          // label is worse than an off-center or on-belt one.
+          // Curvature is only a problem past the point where glyph spacing
+          // suffers. Charging for it LINEARLY did not merely avoid harmful
+          // bends, it maximised straightness — so on a winding river the
+          // label landed on the one flat stretch every time, which is the
+          // least characteristic part of the feature. Measured on the
+          // Middle-earth map: the Bruinen's name sat where its river bends
+          // 1.2px while the river itself bends 29px, and the Isen's on 0.7px
+          // of 54.4px. Mathematically on the river; visually laid across it.
           return sum * 80 + (inside ? Math.abs(signed) * 120 : 0);
         };
         const candidatesAt = (size: number): Cand[] => {
@@ -1045,7 +1053,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // A big label brushing an obstacle beats a shrunken migrated one:
           // largest size whose least-bad slot only brushes (≤12% of its own
           // area), then floor-size up to half-covered, then omit (spec 07 §5).
-          const leastBad = (size: number): { c: Cand; score: number } => {
+          // Bend penalty and slot order RANK the candidates; only the ink
+          // that would actually be covered decides whether to accept, shrink
+          // or give up. Mixing them meant a stricter curvature rule pushed
+          // labels off their courses onto the horizontal fallback entirely —
+          // 19 course-following labels became 12 the moment BEND_COST rose.
+          // Same defect as #132 in labels.ts: a preference weighed against a
+          // threshold it has no business meeting.
+          const leastBad = (size: number): { c: Cand; overlap: number } => {
             const finalists = candidatesAt(size);
             let best = finalists[0]!;
             let bestScore = Infinity;
@@ -1056,15 +1071,15 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
                 best = c;
               }
             });
-            return { c: best, score: bestScore };
+            return { c: best, overlap: costOf(best) };
           };
           for (let size = 10; size >= 8 && !pick; size--) {
             const b = leastBad(size);
-            if (b.score <= b.c.wpx * 9 * 0.12) pick = b.c;
+            if (b.overlap <= b.c.wpx * 9 * 0.12) pick = b.c;
           }
           if (!pick) {
             const b = leastBad(8);
-            if (b.score > b.c.wpx * 9 * 0.5) return; // omit before overwriting
+            if (b.overlap > b.c.wpx * 9 * 0.5) return; // omit before overwriting
             pick = b.c;
           }
         }
