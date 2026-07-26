@@ -1270,3 +1270,43 @@ describe("rivers that cross without meeting warn (#94)", () => {
     expect(crossings(doc(['river a "A" : from (200,200) to (200,600)', 'river b "B" : from (700,200) to (700,600)']))).toEqual([]);
   });
 });
+
+
+describe("solitary peak and volcano (#95)", () => {
+  const doc = (lines: string[]): string =>
+    ["map: region", "extent: 1400x900mi", "[terrain]", ...lines].join("\n");
+  const silhouette = (svg: string, id: string): string | null => {
+    const m = svg.match(new RegExp(`<g id="cd-[^"]*${id}"[^>]*>.*?<path d="([^"]+)"`));
+    return m?.[1] ?? null;
+  };
+
+  it("a peak is a mountain silhouette at a point, not a settlement dot", () => {
+    // The whole complaint: `mountains … blob size=` drew a round region, and
+    // a bare point fell through to the settlement marker.
+    const svg = renderSource(doc(['peak erebor "Erebor" : (600,300)']), {}).svg;
+    const d = silhouette(svg, "erebor");
+    expect(d).toBeTruthy();
+    expect((d!.match(/L/g) ?? []).length + 1).toBe(3); // apex triangle
+    expect(svg).toContain("Erebor");
+  });
+
+  it("a volcano reads as one on the map, not only in its name", () => {
+    const svg = renderSource(doc(['volcano orodruin "Orodruin" : (900,600)']), {}).svg;
+    expect((silhouette(svg, "orodruin")!.match(/L/g) ?? []).length + 1).toBe(6); // truncated cone + crater
+  });
+
+  it("volcano derives from peak, so it inherits the point-scale behaviour", () => {
+    // Derivation, not a second implementation: a word deriving from `volcano`
+    // must still place as a peak (spec 04 §2, ADR 0016).
+    const svg = renderSource(doc(["[vocab]", "firemount : volcano", "[terrain]",
+      'firemount m "Mount Ash" : (700,400)'].join("\n").split("\n")), {}).svg;
+    expect(silhouette(svg, "m")).toBeTruthy();
+  });
+
+  it("states are declared, so a typo warns rather than rendering silently", () => {
+    expect(renderSource(doc(['volcano v "V" : (700,400) erupting']), {}).diagnostics
+      .filter((d) => d.severity === "warning")).toEqual([]);
+    expect(renderSource(doc(['volcano v "V" : (700,400) eruptng']), {}).diagnostics
+      .map((d) => d.message).join()).toMatch(/not a declared state/);
+  });
+});

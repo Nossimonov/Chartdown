@@ -67,6 +67,8 @@ forest : terrain
 jungle : terrain
 hills : terrain
 mountains : terrain
+peak : terrain
+volcano : peak states=dormant,erupting
 marsh : terrain states=difficult
 desert : terrain
 dunes : desert

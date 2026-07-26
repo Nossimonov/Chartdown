@@ -1212,6 +1212,48 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       continue;
     }
 
+    // A solitary peak (#95): the massif language at a single point. Erebor's
+    // whole meaning is that it stands alone, and `mountains … blob size=` drew
+    // a small round region — the silhouette that says "one mountain" existed
+    // only inside ridge belts, with no point-scale entry. A theme may swap the
+    // motif (`volcano` for a crater and plume) exactly as `licorice-forest`
+    // swaps a forest's; absent one, the derived word still reads as high
+    // ground because it inherits the peak silhouette.
+    if (r.point && chain.includes("peak")) {
+      const themed = theme.glyphFor(chain, r.point.x, r.point.y);
+      const s = 11;
+      const { x, y } = r.point;
+      const fill = theme.terrainFill(chain);
+      layers.areas.push(
+        el("g", { id: anchor }, titleEl,
+          themed
+            ? glyphEl(themed, x, y, 1, ink)
+            : el("path", {
+                // A volcano is a truncated cone with a crater notch, so the
+                // derivation reads on the map and not only in the name — the
+                // complaint that motivated this was that "nothing volcanic
+                // survives". A theme may still swap the whole motif.
+                d: chain.includes("volcano")
+                  ? `M${fmt(x - s)} ${fmt(y + s * 0.7)}L${fmt(x - s * 0.42)} ${fmt(y - s * 0.55)}L${fmt(x - s * 0.16)} ${fmt(y - s * 0.28)}L${fmt(x + s * 0.16)} ${fmt(y - s * 0.28)}L${fmt(x + s * 0.42)} ${fmt(y - s * 0.55)}L${fmt(x + s)} ${fmt(y + s * 0.7)}Z`
+                  : `M${fmt(x - s)} ${fmt(y + s * 0.7)}L${fmt(x)} ${fmt(y - s)}L${fmt(x + s)} ${fmt(y + s * 0.7)}Z`,
+                fill, stroke: shade(fill), "stroke-width": 1.2, "stroke-linejoin": "round",
+              }),
+        ),
+      );
+      placer.block(x - s, y - s, s * 2, s * 2, 2);
+      if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+        deferLabel(1.2, () => {
+          const lbl = labelTextFor(model, e) ?? e.name!;
+          const spot = placer.placeBesideOrDrop(x + s + 3, x - s - 3, y + 4, lbl, 11);
+          if (!spot) return;
+          labelBuckets[1]!.push(
+            text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, "text-anchor": spot.anchor, "font-family": "sans-serif" }),
+          );
+        });
+      }
+      continue;
+    }
+
     if (r.point) {
       const tier = tierFor(chain);
       const glyphPath = theme.glyphFor(chain, r.point.x, r.point.y);

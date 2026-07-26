@@ -20,6 +20,8 @@ forest : terrain
 jungle : terrain
 hills : terrain
 mountains : terrain
+peak : terrain
+volcano : peak states=dormant,erupting
 marsh : terrain states=difficult
 desert : terrain
 dunes : desert
@@ -71,6 +73,8 @@ border : zone
 ; annotation (see section 07)
 note : feature
 ```
+
+**A solitary mountain is a point, not a small region.** `peak` places one mountain at a position — Erebor's meaning is that it stands *alone*, which `mountains … blob size=` cannot say, because that draws a small mountainous region. `volcano : peak` is an ordinary derivation, so it inherits the point-scale placement and a theme may swap the motif exactly as `licorice-forest` swaps a forest's; absent a theme the renderer still distinguishes the two silhouettes, so the derivation reads on the map rather than only in the display name ([#95](https://github.com/Nossimonov/Chartdown/issues/95)).
 
 The list is deliberately curated: every missing word is one `[vocab]` line away (spec 04 §3's escalation ladder), and a small library is a stable one.
 

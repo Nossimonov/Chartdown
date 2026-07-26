@@ -54,7 +54,7 @@ Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexc
 
 ## Standard library (spec 05/06, curated ~80 words)
 
-- **Terrain**: sea lake plains grassland farmland forest jungle hills mountains marsh(difficult) desert dunes snowfield tundra wasteland | battlemap: mud(difficult) sand grass snow ice(difficult) water(difficult) rubble(difficult) slope
+- **Terrain**: sea lake plains grassland farmland forest jungle hills mountains **peak** (POINT-placed solitary mountain — `peak erebor "Erebor" : (1185,290)`; a blob of `mountains` is a small REGION, not one mountain) **volcano** (`: peak states=dormant,erupting`; inherits the point placement, and the renderer distinguishes the silhouette so the derivation reads on the map and not only in the display name) marsh(difficult) desert dunes snowfield tundra wasteland | battlemap: mud(difficult) sand grass snow ice(difficult) water(difficult) rubble(difficult) slope
 - **Paths**: river stream road trail canal pass coastline
 - **Zones**: realm region border (border = a relationship+state, never a location — see region row)
 - **Crossings/sites**: ford(difficult) bridge keep castle tower ruin dungeon lair camp mine shrine temple port cave landmark stairs ramp
