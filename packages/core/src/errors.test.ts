@@ -114,19 +114,34 @@ describe("Phase 4 verification round (#125–#129)", () => {
     expect(warningsOf(custom).join()).toMatch(/'hevy' is not a declared value of 'radiation'/);
   });
 
-  it("a barrier word in a detail slot names the real problem (#128)", () => {
+  it("a barrier word in a detail slot replaces that side (#130, was #128)", () => {
+    // #128 diagnosed this as an error the author could not fix; #130 made the
+    // spelling mean what it reads as, so the diagnostic is gone rather than
+    // reworded — see the barrier-side render tests for the behaviour.
     const src = [
       "map: battlemap", "grid: square 20x10",
       "[vocab]", "cave-in : wall",
       "[structures]", "building a2 : H2..K6", "  cave-in : east",
     ].join("\n");
-    const msg = warningsOf(src).join();
-    expect(msg).toMatch(/is a barrier, and a structure detail takes an opening or a wall state/);
-    // NOT the old message, which reassured falsely and pointed at a non-fix.
-    expect(msg).not.toMatch(/declare it with states=/);
+    expect(warningsOf(src)).toEqual([]);
+    expect(errorsOf(src)).toEqual([]);
     // The `ruined` wall-state form stays exempt and silent.
-    const ruined = "map: battlemap\ngrid: square 20x10\n[structures]\nbuilding a : B2..E6\n  ruined : north east\n";
+    const ruined = ["map: battlemap", "grid: square 20x10", "[structures]",
+      "building a : B2..E6", "  ruined : north east"].join("\n");
     expect(warningsOf(ruined)).toEqual([]);
+  });
+
+  it("a barrier side must name WHICH side (#130)", () => {
+    const mk = (detail: string): string =>
+      ["map: battlemap", "grid: square 20x10", "[vocab]", "cave-in : wall",
+       "[structures]", "building a2 : H2..K6", `  ${detail}`].join("\n");
+    // Bare: the line says a side is a cave-in without saying which.
+    expect(errorsOf(mk("cave-in :")).join()).toMatch(/name which: a side word/);
+    // A non-side bare word is not a state of the barrier — it is a mistake.
+    expect(errorsOf(mk("cave-in : collapsed")).join()).toMatch(/its predicate is side words or edge tokens/);
+    // Side words and edge tokens both parse clean.
+    expect(errorsOf(mk("cave-in : east"))).toEqual([]);
+    expect(errorsOf(mk("cave-in : K4.e K5.e"))).toEqual([]);
   });
 
   it("an inferred document kind warns once, naming the line to add (#129)", () => {

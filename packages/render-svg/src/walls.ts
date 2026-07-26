@@ -62,6 +62,53 @@ function declared(pairs: Pair[], key: string): string | undefined {
   return value !== undefined && facetAccepts(key, value) ? value : undefined;
 }
 
+/**
+ * Perimeter edges a structure detail has replaced with a different barrier
+ * (#130), keyed geometrically → the barrier's type word.
+ *
+ * `cave-in : east` is the spelling authors reach for, and until now it drew an
+ * ordinary wall and took no styling. The working alternative — a freestanding
+ * barrier on the same edges — is still legal and still merges by the
+ * coincident-wall rule, but it costs one edge token per cell: migrating ten of
+ * these lines on the Moria map took 337 hand-written tokens, because a big
+ * room's side is a long run.
+ *
+ * Shared by the renderer and the UVTT exporter deliberately. They disagreeing
+ * about which edges a side covers is the #126/#131 failure shape — one
+ * definition, two consumers.
+ */
+export function barrierSides(
+  model: Model,
+  e: { details: { typeWord: string | null; flags: string[]; placements: Placement[] }[]; placements: Placement[] },
+): Map<string, string> {
+  const replaced = new Map<string, string>();
+  const details = e.details.filter((d) => model.archetypeOf(d.typeWord) === "barrier");
+  if (details.length === 0) return replaced;
+  const cells = structureCells(e);
+  if (cells.size === 0) return replaced;
+  const perimeter = perimeterEdges(cells);
+  for (const d of details) {
+    const word = d.typeWord!;
+    // Edge tokens name their edges outright; a detail line's placements may be
+    // `at`-prefixed for the parent frame (spec 02 §7), so unwrap those too.
+    for (const p of d.placements) {
+      const edge = p.kind === "edge" ? p : p.kind === "relational" && p.form === "at" && p.target.kind === "edge" ? p.target : null;
+      if (edge) replaced.set(segKey(edgeSegment(edge.at, edge.dir)), word);
+    }
+    // Side words select every perimeter edge FACING that way — so an L-shaped
+    // hall's `east` is all of its east-facing edges, exactly as `ruined` works
+    // on a cell union rather than on a rectangle's whole side.
+    const sides = new Set(d.flags);
+    if (sides.size === 0) continue;
+    for (const pe of perimeter) {
+      if (!sides.has(SIDE_NAME[pe.dir]) && !sides.has(pe.dir)) continue;
+      const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+      replaced.set(segKey(edgeSegment(address, pe.dir)), word);
+    }
+  }
+  return replaced;
+}
+
 export function collectWalls(model: Model): WallGeometry {
   // Openings first, keyed geometrically across ALL owners: an opening declared
   // by either side of a shared edge opens it (spec 06 §3) — and an opening may
@@ -109,10 +156,23 @@ export function collectWalls(model: Model): WallGeometry {
       const cells = structureCells(e);
       if (cells.size === 0) continue;
       const ruined = new Set(e.details.filter((d) => d.typeWord === "ruined").flatMap((d) => d.flags));
+      // A side replaced by another barrier occludes as THAT barrier does
+      // (#130): a portcullis across a hall mouth still stops bodies, and a
+      // `fence`-derived choke passes sight where the wall it replaced did not.
+      const replaced = barrierSides(model, e);
       for (const pe of perimeterEdges(cells)) {
         if (ruined.has(SIDE_NAME[pe.dir]) || ruined.has(pe.dir)) continue;
         const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
-        push(edgeSegment(address, pe.dir));
+        const seg = edgeSegment(address, pe.dir);
+        const word = replaced.get(segKey(seg));
+        // A BARRIER's sight default is the opposite of an opening's: `sightOf`
+        // assumes no leaf means sight passes, which is right for an arch and
+        // exactly wrong for a wall. Reading the facet directly and defaulting
+        // to `none` keeps a cave-in opaque while letting a `fence`-derived
+        // choke pass sight, which is the facet doing the deciding rather than
+        // the word.
+        if (word !== undefined && (model.facetOf(word, "sight") ?? "none") === "all") continue;
+        push(seg);
       }
     } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
       for (const p of e.placements) {

@@ -91,6 +91,17 @@ building tollhouse "Ruined Toll House" : N3..Q6
 ```
 
 - **Side words** (`north east south west`) address whole walls of the footprint; **edge tokens** (spec 02 §5) address specific cell edges. Wall-state lines mark sides or edges; opening lines place doors/windows/gates on the perimeter.
+- **A barrier word replaces that side's perimeter with that barrier** *(from proposal [#130](https://github.com/Nossimonov/Chartdown/issues/130))*. A collapsed passage, a rubble choke, a portcullis across a hall mouth is one side of a room that is no longer an ordinary wall:
+
+  ```chartdown
+  building hall "The Twenty-first Hall" : H2..K6
+    cave-in : east               ; barrier : side words — that side IS the cave-in
+    portcullis : K4.e K5.e       ; edge tokens work here too
+  ```
+
+  The named barrier's own facets apply, so **the facet decides and the word does not**: a `fence`-derived choke passes sight where the wall it replaced did not, while a barrier that declares no `sight=` blocks as a wall does. It takes its own theme entry, and it exports as that barrier. Its predicate is side words or edge tokens — the same grammar `ruined` uses, where the state is the subject and the sides are the predicate — so a bare word that is not a side is an error rather than a state of the barrier.
+
+  A **freestanding barrier** on the same edges remains legal and merges by the coincident-wall rule below; this is the shorter spelling of it, not a replacement. The saving is on a union, where one word replaces a run of edges whose length the author should not have to count. For the same reason `every` (spec 02 §9) does not step over edges: a side word already names the whole run, however long, and survives the structure moving.
 - **Detail addresses may be parent-local** *(from proposal [#34](https://github.com/Nossimonov/Chartdown/issues/34))*: an `at`-prefixed placement (`door : at E2.e`) is interpreted in the parent structure's frame (footprint NW = A1, spec 02 §7) and moves with the parent. A bare address stays absolute — the two idioms coexist per line, same as entity-level relative placement.
 - Details are anonymous by default and may take ids like any line (`door back-door : Q5.e`).
 - **Footprints** are a rect range (`N3..Q6`) or a cell list — the union of the listed cells and ranges. Odd *orthogonal* shapes are therefore fully in scope: an L-shaped hall is `building : K5..M8 K9..K12`, perimeter derived. On a union, a `ruined` **side word selects the perimeter edges facing that direction** (for a plain rectangle that is exactly the whole side). Only **non-axis-aligned geometry** (diagonal walls, curved keep walls, corner-point-traced footprints) is deferred beyond v0.1.

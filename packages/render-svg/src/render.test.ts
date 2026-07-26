@@ -1129,3 +1129,48 @@ describe("detail: reference enlarges the canvas (#139, ADR 0020)", () => {
     expect(ratio).toBeCloseTo(1, 3);
   });
 });
+
+
+/**
+ * #130: a barrier word in a structure detail replaces that side's perimeter
+ * with that barrier — the spelling authors already reach for, which used to
+ * draw an ordinary wall and take no styling.
+ */
+describe("a barrier word replaces a structure side (#130)", () => {
+  const hall = (details: string[]): string =>
+    ["map: battlemap", "grid: square 12x10", "scale: 5ft",
+     "[vocab]", "cave-in : wall", "choke : fence",
+     "[structures]", 'building hall "The Hall" : B2..H8', ...details].join("\n");
+  const losPoints = (src: string): number =>
+    (exportUvttSource(src, {}).uvtt!["line_of_sight"] as unknown[][]).reduce((n, p) => n + p.length, 0);
+
+  it("the side takes the barrier's own theme, not the structure's", () => {
+    const theme = ["kind: theme", "[theme]", "cave-in : stroke=#8a5a3a dash=3,3 width=4"].join("\n");
+    const svg = renderSource(hall(["  cave-in : east"]), { theme }).svg;
+    expect(svg).toMatch(/stroke="#8a5a3a"[^>]*stroke-width="4"/);
+  });
+
+  it("the FACET decides occlusion, not the word", () => {
+    // A `fence`-derived choke passes sight; a `wall`-derived cave-in does not.
+    // `sightOf`'s default is written for openings ("no leaf means sight
+    // passes"), which is exactly wrong for a barrier — a cave-in that stopped
+    // occluding would be silent wrongness of the worst kind.
+    expect(losPoints(hall(["  choke : north"]))).toBeLessThan(losPoints(hall(["  cave-in : north"])));
+    expect(losPoints(hall(["  cave-in : north"]))).toBe(losPoints(hall([])));
+  });
+
+  it("edge tokens select edges directly", () => {
+    expect(renderSource(hall(["  cave-in : C2.n D2.n"]), {}).svg).toBeTruthy();
+    expect(exportUvttSource(hall(["  cave-in : C2.n D2.n"]), {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("a side word selects every perimeter edge FACING that way", () => {
+    // An L-shaped hall's `east` is all of its east-facing edges, not one side
+    // of a bounding box — the same rule `ruined` follows on a cell union.
+    const ell = ["map: battlemap", "grid: square 14x12", "scale: 5ft",
+      "[vocab]", "cave-in : wall",
+      "[structures]", "building ell : B2..E8 F2..H4", "  cave-in : east"].join("\n");
+    expect(exportUvttSource(ell, {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(renderSource(ell, {}).svg).toBeTruthy();
+  });
+});

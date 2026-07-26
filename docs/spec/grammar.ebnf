@@ -50,7 +50,11 @@ section-name   = word ;                              (* known names per map type
                                                         optional qualifier token = level (spec 06 §8) *)
 content-line   = line | detail-line | hex-ledger-line | vocab-line | label-line ;
 line           = subject , ":" , predicate , EOL ;
-detail-line    = INDENT , line ;                     (* structure details only — spec 06 §3 *)
+detail-line    = INDENT , line ;                     (* structure details only — spec 06 §3.
+                                                        subject kinds: opening, wall-state,
+                                                        or a BARRIER word replacing that side
+                                                        (#130) — predicate = side words or
+                                                        edge tokens in all three cases. *)
 
 subject        = [ type-word ] , { id-word } , [ string ] ;
                  (* sections may permit omitting the type word (spec 01 §4);

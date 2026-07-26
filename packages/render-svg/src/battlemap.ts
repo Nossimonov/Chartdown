@@ -9,7 +9,7 @@ import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, merg
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
-import { collectWalls, impassableCells, SIDE_NAME } from "./walls";
+import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 interface Frame {
   cols: number;
@@ -714,6 +714,15 @@ export function renderBattlemap(
       const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
       return !openEdges.has(segKey(edgeSegment(address, pe.dir)));
     });
+    // Sides replaced by another barrier (#130) are drawn as THAT barrier, so
+    // they leave the structure's own perimeter run and merge among themselves
+    // — otherwise a cave-in would inherit the room's stroke and the line would
+    // say one thing while looking like another.
+    const replacedEdges = barrierSides(model, e);
+    const ownEdges = solidEdges.filter((pe) => {
+      const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+      return !replacedEdges.has(segKey(edgeSegment(address, pe.dir)));
+    });
     // A structure's perimeter is a theme subject like every other archetype
     // (#117): the room outline is the most visually defining thing on a
     // battlemap, and it was drawn in literal ink at a literal weight, so no
@@ -723,7 +732,26 @@ export function renderBattlemap(
     const wallCtx = open ? { state: "open" } : {};
     const wallStroke = model.theme.prop(structChain, "stroke", wallCtx) ?? INK;
     const wallWidth = Number(model.theme.prop(structChain, "width", wallCtx) ?? 3) || 3;
-    for (const run of mergeEdgeRuns(solidEdges)) {
+    // Each replaced barrier draws its own merged runs, themed by its own word.
+    for (const word of new Set(replacedEdges.values())) {
+      const mine = solidEdges.filter((pe) => {
+        const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+        return replacedEdges.get(segKey(edgeSegment(address, pe.dir))) === word;
+      });
+      const chain = model.chainOf(word);
+      const stroke = model.theme.prop(chain, "stroke", {}) ?? INK;
+      const width = Number(model.theme.prop(chain, "width", {}) ?? 3) || 3;
+      const dash = model.theme.prop(chain, "dash", {})?.replace(",", " ");
+      for (const run of mergeEdgeRuns(mine)) {
+        parts.push(
+          el("line", {
+            x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
+            stroke, "stroke-width": width, "stroke-dasharray": dash,
+          }),
+        );
+      }
+    }
+    for (const run of mergeEdgeRuns(ownEdges)) {
       const ruined = ruinedAll || ruinedSides.has(SIDE_NAME[run.dir]) || ruinedSides.has(run.dir);
       // `ruined` is a state, so a theme may restyle it — falling back to the
       // built-in collapsed dashes when it says nothing.

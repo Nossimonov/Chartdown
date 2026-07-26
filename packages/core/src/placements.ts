@@ -187,7 +187,14 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     const rangeText = chunkText(peek());
     const range = rangeText ? parsePositional(rangeText) : null;
     if (!range || range.kind !== "range") {
-      diagnostics.push(error(line, "expected a cell range after 'in', e.g. 'every 4 in FH38..GF102' (spec 02 §9)"));
+      // `every` over EDGES is deliberately refused rather than merely unparsed
+      // (#114 with #130). Repetition in edge space is what side words are for:
+      // `cave-in : east` names the whole run however long, and survives the
+      // structure moving, which a stepped edge list would not.
+      const edgeish = rangeText !== null && /^[A-Z]+\d+\.(ne|nw|se|sw|n|e|s|w)\.\./.test(rangeText);
+      diagnostics.push(error(line, edgeish
+        ? "'every' steps over CELLS, not edges — name the side instead ('cave-in : east' replaces that whole run, spec 06 §3), or list the edges (spec 02 §9)"
+        : "expected a cell range after 'in', e.g. 'every 4 in FH38..GF102' (spec 02 §9)"));
       return null;
     }
     i++;

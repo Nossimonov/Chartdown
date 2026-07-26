@@ -650,19 +650,30 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     if (!split) return;
     const subject = parseSubject(split.subject, raw.line, diags);
     const predicate = parsePredicate(split.predicate, raw.line, diags);
-    // A BARRIER word in a detail slot is silently inert (#128): it draws an
-    // ordinary perimeter wall and takes no styling, so `cave-in : east` reads
-    // like it says something and says nothing. Diagnose the real problem — the
-    // detail grammar takes openings and wall-states, not barriers — because
-    // the generic state warning both reassured falsely ("it still renders")
-    // and pointed at a fix (`states=`) that silences it while changing nothing.
+    // A BARRIER word in a detail slot REPLACES that side's perimeter with that
+    // barrier (#130): `cave-in : east` is the spelling authors already reach
+    // for, and it used to draw an ordinary wall and take no styling. Its
+    // predicate is side words or edge tokens — the same grammar `ruined` uses,
+    // where the state is the subject and the sides are the predicate — so the
+    // side words are grammar here, not states of the barrier.
     if (subject.typeWord !== null && vocabTable.archetypeOf(subject.typeWord) === "barrier") {
-      diags.push(
-        warning(
-          raw.line,
-          `'${subject.typeWord}' is a barrier, and a structure detail takes an opening or a wall state — this line renders as an ordinary wall and takes no styling. Declare it as a freestanding barrier on those edges instead (spec 06 §3)`,
-        ),
-      );
+      const sides = predicate.flags.filter((f) => !isCompass(f));
+      const hasEdges = predicate.placements.some((p) => p.kind === "edge" || (p.kind === "relational" && p.form === "at" && p.target.kind === "edge"));
+      if (sides.length > 0) {
+        diags.push(
+          error(
+            raw.line,
+            `'${subject.typeWord}' replaces a side of this structure, so its predicate is side words or edge tokens — '${sides[0]}' is neither (spec 06 §3)`,
+          ),
+        );
+      } else if (predicate.flags.length === 0 && !hasEdges) {
+        diags.push(
+          error(
+            raw.line,
+            `'${subject.typeWord}' replaces a side of this structure — name which: a side word ('${subject.typeWord} : east') or edge tokens ('${subject.typeWord} : K4.e K5.e') (spec 06 §3)`,
+          ),
+        );
+      }
     } else {
       // Openings and wall-states are usually DETAILS, so the same rule applies
       // here or the check would miss the case that motivated it (#108).
