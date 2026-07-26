@@ -15,6 +15,7 @@ building inn "The Gilded Tankard" : B2..H8
   door : E8.s
   window : B4.w
 building snug "The Snug" : F2..H4 key=5   ; pinned: publications cite 5 forever
+  door : G4.s              ; the only way in, off the common room
 wall bar "The Bar" : D6.n E6.n
 
 [features]

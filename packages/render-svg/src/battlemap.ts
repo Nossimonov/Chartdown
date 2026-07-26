@@ -217,7 +217,7 @@ export function renderBattlemap(
   // Coherence lints (#123): things a document can say that no rule forbids and
   // no reader would mean. Warnings only, and reachable from `check` because a
   // map is rendered there (#120) — a lint nobody runs is a lint nobody has.
-  coherenceLints(model, levelCtx?.level ?? model.doc.defaultLevel, diagnostics);
+  coherenceLints(model, levelCtx?.level ?? model.doc.defaultLevel, diagnostics, levelCtx);
 
   // Reciprocal landings (spec 06 §8): connectors on other levels targeting
   // this one show their landing here automatically, unless an explicit

@@ -197,6 +197,28 @@ At battlemap scale, table legibility outranks self-description: **fallback word-
 
 Richer multi-level and roof-aware targets (e.g. Foundry scene levels) remain ecosystem-phase work.
 
+## 10. Coherence lints
+
+*(From proposal [#123](https://github.com/Nossimonov/Chartdown/issues/123), per the [#80](https://github.com/Nossimonov/Chartdown/issues/80) decision.)* Everything above governs what a document may **say**. These six checks govern what a document **means** — geometry that is legal under every rule and that no reader would intend. They exist because a prototype found 32 such defects in a map that passed validation and rendered without a single warning; the failure mode is not a rejected document but a plausible one, drawn confidently and wrong.
+
+**Every one is a warning and never an error**, and the asymmetry is deliberate: these reason about intent, so a false positive must cost an author a line of output and never a blocked render. There is no suppression syntax, also deliberately, until real false positives argue for one.
+
+| Lint | Warns when | A legitimate reading it must not report |
+|---|---|---|
+| `door-onto-void` | An opening in a structure leads out onto a cell that cannot be walked on | A window or arrow-slit (facing open air is its job); an **unparented** opening, where the rock is the barrier and the opening perforates it (§3) |
+| `structure-unsupported` | A footprint cell sits over declared `air` with no structure beneath it on the level below | A room built squarely on the room below — the lower room is its floor, which is why no ceiling was declared under it |
+| `unreachable-room` | A footprint has neither an opening on its perimeter nor a connector inside it | A room whose only way in is a stair **declared on another level**; §8's reciprocal landing is what puts it here |
+| `dangling-connector` | A connector's landing cell cannot be stood on at the far end | A landing inside a room carved out of that surface — a cellar is `earth` with rooms cut into it |
+| `overlapping-structures` | Two footprints on one level share cells | **Containment**: one footprint wholly inside another is a room within a room, and its walls are real interior walls |
+| `terrain-crosses-wall` | A band covers part of a footprint but not all of it | Covering the **whole** footprint (a flooded room); and a band that crosses the perimeter only at edges carrying an **opening** — a road meeting a gatehouse goes through the gate |
+
+Two rules run beneath the table and decide most of the readings in its right-hand column:
+
+- **A room is a floor.** §5's idiom for a level is to lay one word across the whole grid and carve into it — `air` for a storey, `earth` for a cellar — so a structure's footprint overrides the blanket beneath it wherever the two disagree. This is the same carving §3 relies on for openings in unbuilt geometry.
+- **A level is not the document.** Connectors, landings, and the floor a room stands on all live one level away from the thing they are asked about, so these checks read the whole document and not the level being drawn.
+
+Because `check` renders (issue [#120](https://github.com/Nossimonov/Chartdown/issues/120)), these run wherever validation runs — a lint nobody runs is a lint nobody has.
+
 ---
 
 *This document is part of the Chartdown specification and is licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/), per [ADR 0001](../decisions/0001-mit-code-cc-by-spec.md).*

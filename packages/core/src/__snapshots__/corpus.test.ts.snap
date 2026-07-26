@@ -2781,7 +2781,29 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
         {
           "archetype": "structure",
           "archetypeSource": "vocab",
-          "details": [],
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 18,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "G",
+                    "kind": "address",
+                    "row": 4,
+                  },
+                  "dir": "s",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+          ],
           "flags": [],
           "gmOnly": false,
           "ids": [
@@ -2827,7 +2849,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 18,
+          "line": 19,
           "name": "The Bar",
           "pairs": [],
           "placements": [
@@ -2872,7 +2894,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 21,
+          "line": 22,
           "name": null,
           "pairs": [],
           "placements": [
@@ -2905,7 +2927,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 22,
+          "line": 23,
           "name": "Cellar Stairs",
           "pairs": [
             {
@@ -2935,7 +2957,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 23,
+          "line": 24,
           "name": "The Long Table",
           "pairs": [],
           "placements": [
@@ -2966,7 +2988,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 24,
+          "line": 25,
           "name": null,
           "pairs": [],
           "placements": [
@@ -2984,7 +3006,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 20,
+      "line": 21,
       "name": "features",
     },
     {
@@ -2998,7 +3020,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           "ids": [],
           "kind": "entity",
           "level": "",
-          "line": 27,
+          "line": 28,
           "name": "Old Marta",
           "pairs": [],
           "placements": [
@@ -3023,7 +3045,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
           ],
           "kind": "entity",
           "level": "",
-          "line": 28,
+          "line": 29,
           "name": null,
           "pairs": [],
           "placements": [
@@ -3049,7 +3071,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 26,
+      "line": 27,
       "name": "tokens",
     },
     {
@@ -3057,7 +3079,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
         {
           "flags": [],
           "kind": "gm-attachment",
-          "line": 31,
+          "line": 32,
           "pairs": [],
           "target": {
             "form": "name",
@@ -3072,7 +3094,7 @@ exports[`example corpus > gilded-tankard > AST snapshot is stable 1`] = `
       "kind": "section",
       "known": true,
       "level": null,
-      "line": 30,
+      "line": 31,
       "name": "gm",
     },
   ],
