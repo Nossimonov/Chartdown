@@ -290,6 +290,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const resolveEnd = (ep: typeof p.from): { p: XY | null; shore: XY[] | null } => {
               if (ep.at.kind === "point") return { p: toXY(ep.at), shore: null };
               const target = lookup(ep.at);
+              // `join <ref>` (#94): end on the trunk's finished curve. This is
+              // the same projection a river mouth already does against a
+              // coastline — the confluence is a clean Y instead of two lines
+              // ending near each other and hoping. Live, like any anchor:
+              // moving the trunk moves the join.
+              if (ep.join) {
+                if (!target?.polyline) {
+                  diagnostics.push({ severity: "warning", line: e.line, message: `'join ${ep.at.value}' needs a watercourse with a course to meet and that one has none — the endpoint falls back to its position (spec 02 §7)` });
+                  return { p: refPoint(ep.at), shore: null };
+                }
+                return { p: refPoint(ep.at), shore: target.polyline };
+              }
               if (ep.point) {
                 const raw = toXY(ep.point);
                 if (target?.polyline) return { p: nearestOnPolyline(target.polyline, raw), shore: null };

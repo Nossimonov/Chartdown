@@ -90,7 +90,8 @@ relational     = ( "at" , ( point | address | range | edge ) )
                | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] )
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
-               | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
+               | ( "from" , endpoint , [ "via" , point , { point } ] ,
+                   ( ( "to" , endpoint ) | ( "join" , ref ) ) )
                | ( "along" , [ compass , "edge" , "of" ] , ref ) ;
                  (* closed grammar — no other relational forms exist.
                     multiple relational placements constrain jointly; two "on"

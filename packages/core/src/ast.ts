@@ -57,6 +57,13 @@ export interface Ref {
 export interface Endpoint {
   at: Ref | Point;
   point?: Point;
+  /**
+   * `join <ref>` (#94): the endpoint is the nearest point on the referenced
+   * watercourse's finished curve, not a named or literal position. The first
+   * endpoint form that resolves to a DERIVED point — and a live one, so moving
+   * the trunk moves the confluence instead of silently detaching it.
+   */
+  join?: boolean;
 }
 
 export type Relational =

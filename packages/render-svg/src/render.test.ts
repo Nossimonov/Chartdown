@@ -1174,3 +1174,62 @@ describe("a barrier word replaces a structure side (#130)", () => {
     expect(renderSource(ell, {}).svg).toBeTruthy();
   });
 });
+
+
+describe("join lands on the trunk's finished curve (#94)", () => {
+  const src = (terminal: string): string =>
+    ["map: region", "extent: 900x800mi",
+     "[water]", "coastline coast : from (100,0) via (120,400) to (100,800)",
+     "[paths]",
+     "river trunk : from (625,215) via (605,360) (588,500) to coast",
+     `river trib : from (800,320) via (700,440) ${terminal}`].join("\n");
+  const courseOf = (svg: string, id: string): number[][] => {
+    const m = svg.match(new RegExp(`<g id="cd-[^"]*-${id}"><polyline points="([^"]+)"`));
+    if (!m?.[1]) throw new Error(`no rendered course for '${id}'`);
+    return m[1].trim().split(/\s+/).map((s) => s.split(",").map(Number));
+  };
+  const gapToTrunk = (svg: string): number => {
+    const trunk = courseOf(svg, "trunk");
+    const end = courseOf(svg, "trib").at(-1)!;
+    let best = Infinity;
+    for (let i = 1; i < trunk.length; i++) {
+      const a = trunk[i - 1]!, b = trunk[i]!;
+      const dx = b[0]! - a[0]!, dy = b[1]! - a[1]!;
+      const L = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((end[0]! - a[0]!) * dx + (end[1]! - a[1]!) * dy) / L));
+      best = Math.min(best, Math.hypot(a[0]! + dx * t - end[0]!, a[1]! + dy * t - end[1]!));
+    }
+    return best;
+  };
+
+  it("the tributary ends ON the trunk, not near it", () => {
+    expect(gapToTrunk(renderSource(src("join trunk"), {}).svg)).toBeLessThan(0.5);
+  });
+
+  it("the confluence is live — moving the trunk moves it", () => {
+    // The failure this replaces: coincident literal coordinates that detach
+    // silently when the trunk is edited.
+    const moved = src("join trunk").replace("via (605,360) (588,500)", "via (500,360) (480,500)");
+    expect(gapToTrunk(renderSource(moved, {}).svg)).toBeLessThan(0.5);
+    expect(renderSource(moved, {}).svg).not.toBe(renderSource(src("join trunk"), {}).svg);
+  });
+
+  it("'to <river>' still means the midpoint, so the pair reads deliberately", () => {
+    // Both land on the trunk — a midpoint is on the curve too — so what
+    // matters is WHERE. This tributary approaches the trunk's HEAD, far from
+    // its midpoint, which is the discrimination the first fixture lacked:
+    // there the two happened to coincide within 5px and proved nothing.
+    const high = (terminal: string): string =>
+      ["map: region", "extent: 900x800mi",
+       "[paths]",
+       "river trunk : from (600,100) via (600,400) to (600,700)",
+       `river trib : from (850,110) via (750,115) ${terminal}`].join("\n");
+    const endOf = (terminal: string): number[] => courseOf(renderSource(high(terminal), {}).svg, "trib").at(-1)!;
+    const j = endOf("join trunk");
+    const t = endOf("to trunk");
+    // join meets it where the tributary arrives (near y=115); to walks to the
+    // trunk's middle (near y=400).
+    expect(j[1]!).toBeLessThan(250);
+    expect(t[1]!).toBeGreaterThan(300);
+  });
+});

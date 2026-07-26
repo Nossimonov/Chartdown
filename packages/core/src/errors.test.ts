@@ -517,3 +517,29 @@ describe("every composes with local frames (#114, spec 02 §7)", () => {
     expect(errorsOf(doc("pillar : every 0 in C4..K12")).join()).toMatch(/steps by at least 1/);
   });
 });
+
+
+describe("join — a confluence is a relationship (#94, spec 02 §7)", () => {
+  const region = (lines: string[]): string =>
+    ["# T", "map: region", "extent: 900x800mi", "[paths]",
+     "river trunk : from (600,200) via (600,400) to (600,600)", ...lines].join("\n");
+
+  it("takes the watercourse, not a position", () => {
+    expect(errorsOf(region(["river t2 : from (800,300) join (600,400)"])).join())
+      .toMatch(/takes the watercourse to end on, not a position/);
+    expect(errorsOf(region(["river t2 : from (800,300) join trunk at (600,400)"])).join())
+      .toMatch(/finds the meeting point itself/);
+  });
+
+  it("is a terminal endpoint alongside 'to'", () => {
+    expect(errorsOf(region(["river t2 : from (800,300) via (700,350) trunk"])).join())
+      .toMatch(/expected 'to' or 'join'/);
+    expect(errorsOf(region(["river t2 : from (800,300) via (700,350) join trunk"]))).toEqual([]);
+  });
+
+  it("leaves aspect adaptation intact — 'to <river>' still means its midpoint", () => {
+    // The proposal rejected overloading `to` precisely so this stays true for
+    // every archetype; the two spellings are a deliberate pair.
+    expect(errorsOf(region(["river t2 : from (800,300) to trunk"]))).toEqual([]);
+  });
+});

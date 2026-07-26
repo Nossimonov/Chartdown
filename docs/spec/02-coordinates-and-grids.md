@@ -45,7 +45,7 @@ On gridless maps, a point is `(x,y)` in the map's extent units from the northwes
 
 ## 7. Relational placement — the closed grammar
 
-Relational placement is legal **only** in the following forms, built from the closed keyword set `at · on · near · of · from · via · to · along · edge`. Anything else is a syntax error: no free prepositions, no new phrasings without a spec change.
+Relational placement is legal **only** in the following forms, built from the closed keyword set `at · on · near · of · from · via · to · join · along · edge`. Anything else is a syntax error: no free prepositions, no new phrasings without a spec change.
 
 | Form | Example |
 |---|---|
@@ -57,7 +57,13 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `<compass> edge of <ref>` | `town "Dunmere" : south edge of "Thornwood"` |
 | `near <ref \| point>` | `near (720,240)` |
 | `from <endpoint> [via <points>] to <endpoint>` — paths | `river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"` |
+| `from <endpoint> [via <points>] join <ref>` — confluences | `river bruinen : from misty at (665,320) via (628,440) join mitheithel` |
 | `along [<compass> edge of] <ref>` — path shape hint, feature-following line, or a feature-following stretch of an `area` boundary / a border's stretch selector (spec 05 §2, ADRs 0012–0013). The optional face qualifier names WHICH line of an areal referent to follow (`along south edge of westspine`); a line-needing reference to a crestless area without a face is ambiguous and fails loud | `road "Coast Road" : from "Argenport" to "Merrow's Rest" along coast` · `realm khar "Khar" : area (600,80) along spine (620,470) (900,420)` |
+
+**`join <ref>`** ends a course on another watercourse's **finished curve**, at the nearest point to where it arrives. It is the first endpoint that resolves to a *derived* position rather than a named or literal one, and it is **live** like any anchor: moving the trunk moves the confluence, where hand-matched coordinates detach silently and say nothing. It takes the watercourse itself — `join <ref> at <point>` is an error, because finding the meeting point is the whole job.
+
+`join` does not change what `to <ref>` means. Aspect adaptation (spec 03) resolves a line reference in a point slot to its **midpoint**, and it still does, for every archetype — so `to <river>` flows to the middle of that river and `join <river>` flows to where the two meet. Overloading `to` would have bought the same effect by making one archetype's adaptation rule different from the rest; the pair reads as deliberate instead ([#94](https://github.com/Nossimonov/Chartdown/issues/94)).
+
 
 - `<ref>` is a bare id word or quoted display name; resolution is defined by [03 — Identity, References, and Links](03-identity-and-links.md).
 - **Multiple relational placements constrain jointly**: `on coast 70mi north of argenport` means both hold. In particular, two `on` references to path entities place the entity at the **intersection of their bands** — the idiom for crossings (`ford : on redford on tollroad`), whose location is thereby derived rather than restated; see spec 06 §6. If the constraints are satisfiable in more than one place, the placement is ambiguous — a fail-loud error — and an `at <cell|point>` *chooses* among the candidates without redefining extent.

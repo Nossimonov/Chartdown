@@ -378,13 +378,30 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
         }
         if (via.length === 0) diagnostics.push(error(line, "expected at least one point after 'via'"));
       }
-      if (chunkText(peek()) !== "to") {
-        diagnostics.push(error(line, "expected 'to' in from…to placement"));
+      // `join <ref>` is a terminal endpoint alongside `to` (#94): the river
+      // ends on the referenced course rather than at a place. `to <river>`
+      // stays what aspect adaptation says it is — the course's MIDPOINT —
+      // because overloading it would break that rule for one archetype; the
+      // two spellings now read as the deliberate pair they are.
+      const terminal = chunkText(peek());
+      if (terminal !== "to" && terminal !== "join") {
+        diagnostics.push(error(line, "expected 'to' or 'join' in from…to placement (spec 02 §7)"));
         continue;
       }
       i++;
       const to = takeEndpoint();
       if (!to) continue;
+      if (terminal === "join") {
+        if (to.at.kind !== "ref") {
+          diagnostics.push(error(line, "'join' takes the watercourse to end on, not a position — 'join mitheithel' (spec 02 §7)"));
+          continue;
+        }
+        if (to.point) {
+          diagnostics.push(error(line, "'join <ref>' finds the meeting point itself; drop the 'at <point>' (spec 02 §7)"));
+          continue;
+        }
+        to.join = true;
+      }
       result.placements.push({ kind: "relational", form: "from-to", from, via, to });
       continue;
     }
