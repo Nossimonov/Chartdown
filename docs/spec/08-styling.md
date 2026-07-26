@@ -58,6 +58,9 @@ lollipop : "M0,-3 a5,5 0 1,1 0.1,0 M0,2 L0,10"
 | A subject that **does resolve**, whose properties are never read for those entities | `chain : stroke=` with four chains on the map. Nothing written on that line can reach them | *resolves to N entities, but … is not read for them* |
 | A **surface** (`paper`, `ink`, `fog`, …) whose property is never read | A surface is a language-defined subject (§2); no entity ever resolves to one | *is a surface, but … is not read for it* |
 | A `[glyphs]` name **no `glyph=`/`asset=` in any layer references** | Defined and unreachable | — |
+| A `glyph=`/`asset=` naming a glyph **no `[glyphs]` section defines** | The other half of the same loop: referenced and missing. The render falls back to a generic marker (spec 04 §4) and says nothing | *names the glyph '…', which no `[glyphs]` section defines* |
+
+The referenced-and-missing case is checked against the **declared pool**, not against what this render drew: `glyph=a,b,c` picks by position hash (§4), so a member the hash never lands on is still a promise the theme made, and testing the drawn one would make the diagnostic depend on where the entities happen to sit. A name defined in **any** layer counts — a child theme naming a glyph its parent supplies is what inheritance is for. Note that liveness alone cannot find this: the property lookup returns the *name* and registers a read, and the miss happens afterwards in the glyph table, so the line counts as live while drawing nothing.
 
 **Implementations MUST distinguish these**, because the author's fix differs completely between them: the first means "you misspelled something" and the rest mean "nothing you write here will help". Telling a resolving subject that nothing resolves to it starts a hunt for a spelling error that does not exist — and "does this subject resolve?" is a fact about the **document**, which the theme cannot answer from what it happened to be asked for.
 

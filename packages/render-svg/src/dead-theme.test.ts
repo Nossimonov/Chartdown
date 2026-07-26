@@ -28,7 +28,7 @@ well : E4
 
 const deadIn = (theme: string | string[], src = MAP): string[] =>
   renderSource(src, { theme })
-    .diagnostics.filter((d) => d.severity === "warning" && /styles nothing|read for (it|them)|never referenced/.test(d.message))
+    .diagnostics.filter((d) => d.severity === "warning" && /styles nothing|read for (it|them)|never referenced|names the glyph/.test(d.message))
     .map((d) => d.message);
 
 describe("a [theme] entry that styles nothing", () => {
@@ -130,5 +130,39 @@ describe("scope (ADR 0022): only the selected theme is checked", () => {
 
   it("never reports the built-in default, which styles words most maps never use", () => {
     expect(deadIn(`kind: theme\n\n[theme]\nwater : fill=#00ff00\n`)).toEqual([]);
+  });
+});
+
+describe("a glyph= naming a glyph that does not exist (#149)", () => {
+  it("warns, naming both the subject and the missing glyph", () => {
+    const out = deadIn(`kind: theme\n\n[theme]\nwell : glyph=windlass\n`);
+    expect(out.join()).toMatch(/'well' names the glyph 'windlass', which no \[glyphs\] section defines/);
+  });
+
+  it("is silent once that glyph is defined", () => {
+    expect(deadIn(`kind: theme\n\n[theme]\nwell : glyph=windlass\n\n[glyphs]\nwindlass : "M0,0 L1,1"\n`)).toEqual([]);
+  });
+
+  it("checks EVERY member of a variant pool, not the one this render drew", () => {
+    // The pick is a position hash (spec 08 §4), so a member the hash never
+    // lands on is still a promise the theme made. Testing what was drawn would
+    // make the diagnostic depend on where the wells happen to sit.
+    const out = deadIn(`kind: theme\n\n[theme]\nwell : glyph=a,b\n\n[glyphs]\na : "M0,0 L1,1"\n`);
+    expect(out.join()).toMatch(/names the glyph 'b'/);
+    expect(out.join()).not.toMatch(/names the glyph 'a'/);
+  });
+
+  it("counts a definition from ANY layer — a child may name what its parent supplies", () => {
+    const parent = `kind: theme\n\n[glyphs]\nshared : "M0,0 L1,1"\n`;
+    const child = `kind: theme\n\n[theme]\nwell : glyph=shared\n`;
+    expect(deadIn([parent, child])).toEqual([]);
+  });
+
+  it("catches it even though the lookup registered a hit and the line counts as live", () => {
+    // This is why it hid: prop() returns the NAME and marks the property read;
+    // the miss happens later in the glyph table. Liveness alone can never see it.
+    const out = deadIn(`kind: theme\n\n[theme]\nwell : glyph=windlass\n`);
+    expect(out.join()).not.toMatch(/styles nothing|not read for/);
+    expect(out.length).toBe(1);
   });
 });

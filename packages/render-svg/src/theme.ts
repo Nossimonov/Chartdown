@@ -101,6 +101,8 @@ interface OwnEntry {
   key: string;
   props: string[];
   line: number;
+  /** Glyph names this line names, variant pools split — checked against what exists (#149). */
+  names: string[];
 }
 
 export class Theme {
@@ -125,11 +127,13 @@ export class Theme {
     for (const entry of doc.entries) {
       const key = entry.sub ? `${entry.base}.${entry.sub}` : entry.base;
       this.map.set(key, { ...this.map.get(key), ...entry.pairs });
-      if (selected) this.own.push({ key, props: Object.keys(entry.pairs), line: entry.line });
+      const names: string[] = [];
       for (const prop of ["glyph", "asset"]) {
         const value = entry.pairs[prop];
-        if (value) for (const name of value.split(",")) this.glyphRefs.add(name.trim());
+        if (value) for (const name of value.split(",")) names.push(name.trim());
       }
+      for (const name of names) this.glyphRefs.add(name);
+      if (selected) this.own.push({ key, props: Object.keys(entry.pairs), line: entry.line, names });
     }
     Object.assign(this.glyphs, doc.glyphs);
     if (selected) Object.assign(this.ownGlyphs, doc.glyphLines);
@@ -215,6 +219,26 @@ export class Theme {
         line,
         message: `glyph '${name}' is never referenced by a glyph= or asset= property — it is defined and unreachable (spec 08 §3)`,
       });
+    }
+    // The other half of the glyph loop (#149): a name that was REFERENCED and
+    // never defined. This one hid behind the liveness check rather than being
+    // caught by it — `prop(chain, "glyph")` returns the name and registers a
+    // hit, and the miss happens afterwards in the glyph table, so the entry
+    // counted as live and the fallback chain quietly drew a generic marker.
+    //
+    // Checked against the DECLARED pool, not against what this render drew: a
+    // variant pool is picked by position hash (spec 08 §4), so a member the
+    // hash never lands on is still a promise the theme made.
+    for (const entry of this.own) {
+      for (const name of entry.names) {
+        // Defined in ANY layer counts — a child theme may name a glyph its
+        // parent supplies, which is what inheritance is for.
+        if (this.glyphs[name] !== undefined) continue;
+        out.push({
+          line: entry.line,
+          message: `'${entry.key}' names the glyph '${name}', which no [glyphs] section defines — the render falls back to a generic marker (spec 08 §4)`,
+        });
+      }
     }
     return out.sort((a, b) => a.line - b.line);
   }
