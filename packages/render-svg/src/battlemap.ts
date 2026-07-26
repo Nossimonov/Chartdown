@@ -9,6 +9,7 @@ import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, merg
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 interface Frame {
@@ -212,6 +213,11 @@ export function renderBattlemap(
   }
 
   for (const pending of pendingCrossings) renderCrossing(pending);
+
+  // Coherence lints (#123): things a document can say that no rule forbids and
+  // no reader would mean. Warnings only, and reachable from `check` because a
+  // map is rendered there (#120) — a lint nobody runs is a lint nobody has.
+  coherenceLints(model, levelCtx?.level ?? model.doc.defaultLevel, diagnostics);
 
   // Reciprocal landings (spec 06 §8): connectors on other levels targeting
   // this one show their landing here automatically, unless an explicit
