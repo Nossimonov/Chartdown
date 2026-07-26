@@ -529,10 +529,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const layers = { water: [] as string[], realms: [] as string[], areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
   let pathLabelCount = 0;
 
-  // Point labels move LAST (owner: a point label's proximity IS its meaning);
-  // things with room to roam yield. Claims run in priority order — 0 author
-  // overrides (fixed), 1 point markers (capitals before minor features),
-  // 2 curve labels, 3 area names, 4 water/realm sprawls — while paint order
+  // Claims run in priority order — 0 author overrides (fixed), 2 curve
+  // labels, 2.2 point markers (capitals before minor features), 3 area names,
+  // 4 water/realm sprawls. Line labels go first because they are the only
+  // kind with no recovery: a point name can leave its marker and stay legible
+  // on a leader, a river's name cannot leave its river (ADR 0019). — while paint order
   // stacks the reverse, so big faint names sit beneath the small precise
   // ones. Under density each label shrinks before it moves far, and is
   // omitted rather than drawn over other text (spec 07 §5).
@@ -1178,10 +1179,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {
         const pt = r.point;
-        // Within the point tier, importance = marker size: capitals claim
-        // before towns before minor features, so when a name must shrink or
-        // drop under density, it's the less-important one that gives way.
-        deferLabel(1 + (24 - tier.font) / 100, () => {
+        // Claims AFTER line labels (2), not before (ADR 0019). A point name
+        // displaced from its marker recovers via a leader; a river's name set
+        // aside from its river does not — it becomes a caption pointing at
+        // water. So the kind that cannot move claims first. Within the point
+        // tier, importance = marker size: capitals before towns before minor
+        // features, so the less-important name gives way first.
+        deferLabel(2.2 + (24 - tier.font) / 100, () => {
           const spot = placer.placeBesideOrDrop(pt.x + tier.r + 3, pt.x - tier.r - 3, pt.y + 4, label, tier.font);
           if (!spot) {
             // Every adjacent slot failed at every size. Before giving the name
