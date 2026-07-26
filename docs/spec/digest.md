@@ -19,7 +19,7 @@ Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexc
 
 ## The one line grammar
 
-`subject : predicate` — subject = `[type-word] [id-words] ["Display Name"]`; predicate = placements, bare words (flags/vocab), `"strings"` (text), `key=value` pairs. **No parentheses in the language.** Flags: bare words (`hidden`, `difficult`, `overturned`, `ruined`, `nolabel`, `seen`, `unexplored`, `drop`, `open`). Params: `key=value` (`width=2`, `facing=south`, `light=20ft`, `size=2x2`, `elevation=15ft`, `side=party`, `gm="text"`, `link=path`, `detail=map.cd`, `key=3`).
+`subject : predicate` — subject = `[type-word] [id-words] ["Display Name"]`; predicate = placements, bare words (flags/vocab), `"strings"` (text), `key=value` pairs. **No parentheses in the language.** Flags: bare words (`hidden`, `difficult`, `overturned`, `ruined`, `nolabel`, `seen`, `unexplored`, `drop`, `open`). Params: `key=value` (`width=2`, `facing=south`, `light=20ft`, `size=2x2`, `elevation=15ft`, `side=party`, `gm="text"`, `link=path`, `detail=map.cd` (+ `detail-at=<parent-cell>`: anchors the sub-map's A1 in the parent grid, making the seam CHECKABLE — non-integer magnification and an under-covering child grid both fail loud naming both files; `detail=` alone stays a pointer; sub-map sources are supplied by the caller like `use:` libraries, and an unsupplied one reports UNCHECKED rather than passing, #109), `key=3`).
 
 ## Positions (spec 02)
 

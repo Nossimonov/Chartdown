@@ -24,7 +24,7 @@ import type {
 } from "./ast";
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize, type RawLine, type Token } from "./lex";
-import { isCompass, parsePositional, parsePredicate } from "./placements";
+import { isCompass, parseAddress, parsePositional, parsePredicate } from "./placements";
 import { checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
 // The spec and the packages version together (see CHANGELOG): a release's
@@ -34,6 +34,13 @@ export const SPEC_VERSION = "0.3";
 export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
   libraries?: Record<string, string>;
+  /**
+   * Sources for `detail=` sub-maps, keyed by the exact `detail=` value (#109).
+   * Supplied the same way libraries are: the caller resolves paths, the parser
+   * never touches a filesystem. Without them the seam simply goes unchecked —
+   * `detail=` remains the pointer it has always been.
+   */
+  details?: Record<string, string>;
 }
 
 export interface ParseResult {
@@ -615,6 +622,18 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
           : `unknown level '${part}' — declared levels: ${document.levels.join(" ")}`));
       }
     };
+    // `detail-at=` upgrades `detail=` from a pointer to a spatial relationship
+    // (#109): it names the parent cell the sub-map's A1 sits on. Alone it is
+    // meaningless, so it requires the pointer it anchors.
+    const detailAt = predicate.pairs.find((p) => p.key === "detail-at")?.value;
+    if (detailAt !== undefined) {
+      if (predicate.pairs.find((p) => p.key === "detail") === undefined) {
+        diags.push(error(raw.line, "'detail-at=' anchors a 'detail=' sub-map and needs one to anchor (spec 03 §4)"));
+      }
+      if (parseAddress(detailAt) === null) {
+        diags.push(error(raw.line, `'detail-at=${detailAt}' names the parent cell the sub-map's A1 sits on, e.g. 'detail-at=CP12' (spec 03 §4)`));
+      }
+    }
     if (toParam !== undefined) checkLevelSpan("to", toParam);
     if (throughParam !== undefined) {
       checkLevelSpan("through", throughParam);

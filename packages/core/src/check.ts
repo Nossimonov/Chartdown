@@ -117,3 +117,84 @@ export function checkSource(source: string, options: ParseOptions = {}): CheckRe
   }
   return { kind, diagnostics: [...kindDiagnostics, ...parse(source, options).diagnostics] };
 }
+
+/**
+ * The `detail=` seam (#109). With `detail-at=` naming where the sub-map's A1
+ * sits in the parent, the relationship becomes checkable — and the exercise
+ * that raised this produced a real off-by-one to prove it needs checking: a
+ * 42×28 child at 5ft was declared against a 22×21 parent footprint at 10ft,
+ * covering 21×14 parent cells against 22 needed, and both files checked clean.
+ *
+ * The parser never reads a file. Sub-map sources arrive through `options`, the
+ * same way `use:` libraries do, so a caller that supplies nothing simply gets
+ * the unchecked pointer `detail=` has always been.
+ */
+export function checkDetailSeams(source: string, options: ParseOptions = {}): Diagnostic[] {
+  const details = options.details;
+  if (!details) return [];
+  const out: Diagnostic[] = [];
+  const parent = parse(source, options).document;
+  const parentScale = measureOf(parent.header.find((h) => h.key === "scale")?.value);
+  for (const section of parent.sections) {
+    for (const entry of section.entries) {
+      if (entry.kind !== "entity") continue;
+      const path = entry.pairs.find((p) => p.key === "detail")?.value;
+      const anchor = entry.pairs.find((p) => p.key === "detail-at")?.value;
+      if (path === undefined || anchor === undefined) continue;
+      const childSource = details[path];
+      if (childSource === undefined) {
+        out.push({ severity: "warning", line: entry.line, message: `sub-map '${path}' was not provided to the checker — its seam with this document is unchecked (spec 03 §4)` });
+        continue;
+      }
+      const child = parse(childSource, {}).document;
+      const childScale = measureOf(child.header.find((h) => h.key === "scale")?.value);
+      if (parentScale === null || childScale === null) {
+        out.push({ severity: "warning", line: entry.line, message: `both this document and '${path}' need a 'scale:' before their seam can be checked (spec 03 §4)` });
+        continue;
+      }
+      // A window is an integer magnification. 10ft→5ft is 2:1; 10ft→3ft is not
+      // a window onto the same space, it is a different map, and should say so.
+      const ratio = parentScale / childScale;
+      if (!Number.isInteger(ratio) || ratio < 1) {
+        out.push({ severity: "error", line: entry.line, message: `'${path}' is ${childScale}-scaled against this document's ${parentScale}: a sub-map magnifies by a whole number, and ${parentScale}:${childScale} is not one (spec 03 §4)` });
+        continue;
+      }
+      const footprint = footprintSize(entry);
+      if (footprint === null || child.grid === null) continue;
+      const needCols = footprint.cols * ratio;
+      const needRows = footprint.rows * ratio;
+      if (child.grid.cols < needCols || child.grid.rows < needRows) {
+        out.push({
+          severity: "error",
+          line: entry.line,
+          message: `'${path}' is ${child.grid.cols}x${child.grid.rows} at ${childScale}, which covers ${Math.floor(child.grid.cols / ratio)}x${Math.floor(child.grid.rows / ratio)} of this document's cells — the footprint anchored at ${anchor} is ${footprint.cols}x${footprint.rows} and needs ${needCols}x${needRows} (spec 03 §4)`,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Leading number of a measure, or null: "10ft" → 10. */
+function measureOf(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const m = /^(\d+(?:\.\d+)?)/.exec(value);
+  return m ? Number(m[1]) : null;
+}
+
+/** An entity's footprint in cells, from its range placements. */
+function footprintSize(entry: { placements: { kind: string }[] }): { cols: number; rows: number } | null {
+  const colNum = (letters: string): number => {
+    let n = 0;
+    for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+    return n;
+  };
+  for (const p of entry.placements as { kind: string; from?: { col: string; row: number }; to?: { col: string; row: number } }[]) {
+    if (p.kind !== "range" || !p.from || !p.to) continue;
+    return {
+      cols: Math.abs(colNum(p.to.col) - colNum(p.from.col)) + 1,
+      rows: Math.abs(p.to.row - p.from.row) + 1,
+    };
+  }
+  return null;
+}

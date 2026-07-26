@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { checkSource, documentKind, parse } from "@chartdown/core";
+import { checkDetailSeams, checkSource, documentKind, parse } from "@chartdown/core";
 import { render, type RenderMode } from "@chartdown/render-svg";
 
 const USAGE = [
@@ -66,6 +66,21 @@ for (const header of parse(source).document.header) {
   }
 }
 
+// `detail=` sub-maps, loaded the same way, so the seam between two documents
+// can be checked (#109). Only supplied for `check`: rendering a parent has
+// never needed the child, and reading files the render does not use would make
+// a render fail on a missing sub-map that does not affect its output.
+const details: Record<string, string> = {};
+for (const section of parse(source).document.sections) {
+  for (const entry of section.entries) {
+    if (entry.kind !== "entity") continue;
+    const value = entry.pairs.find((p) => p.key === "detail")?.value;
+    if (value === undefined) continue;
+    const detailPath = resolve(dirname(file), value);
+    if (existsSync(detailPath)) details[value] = readFileSync(detailPath, "utf8");
+  }
+}
+
 // `check` validates whichever KIND of document this is (#102): a vocabulary
 // and a theme need no `map:` (spec 04 §2, spec 08 §1), and validating them
 // against the map rules discarded them wholesale.
@@ -78,8 +93,9 @@ if (command === "check") {
     // run reports `ok` for a document containing lines the renderer drops.
     // GM mode, so nothing is skipped.
     const parsed = parse(source, { libraries });
+    const seams = checkDetailSeams(source, { libraries, details });
     const rendered = render(parsed.document, themeSources.length > 0 ? { mode: "gm", theme: themeSources } : { mode: "gm" });
-    checkDiagnostics = [...parsed.diagnostics, ...rendered.diagnostics];
+    checkDiagnostics = [...parsed.diagnostics, ...rendered.diagnostics, ...seams];
   } else {
     checkDiagnostics = checkSource(source, { libraries }).diagnostics;
   }

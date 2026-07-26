@@ -3,7 +3,7 @@
  * input here (issue #21 done-state).
  */
 import { describe, expect, it } from "vitest";
-import { checkSource, parse } from "./index";
+import { checkDetailSeams, checkSource, parse } from "./index";
 
 const errorsOf = (src: string) =>
   parse(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
@@ -541,5 +541,48 @@ describe("join — a confluence is a relationship (#94, spec 02 §7)", () => {
     // The proposal rejected overloading `to` precisely so this stays true for
     // every archetype; the two spellings are a deliberate pair.
     expect(errorsOf(region(["river t2 : from (800,300) to trunk"]))).toEqual([]);
+  });
+});
+
+
+describe("the detail= seam is checkable (#109, spec 03 §4)", () => {
+  const parent = (footprint: string): string =>
+    ["# P", "map: battlemap", "grid: square 260x140", "scale: 10ft", "[structures]",
+     `chamber mazarbul "Mazarbul" : ${footprint} detail="mazarbul.cd" detail-at=CP12`].join("\n");
+  const child = (grid: string, scale: string): string =>
+    ["# C", "map: battlemap", `grid: square ${grid}`, `scale: ${scale}`].join("\n");
+  const seam = (p: string, c?: string): string =>
+    checkDetailSeams(p, c === undefined ? { details: {} } : { details: { "mazarbul.cd": c } })
+      .map((d) => `${d.severity}: ${d.message}`).join(" | ");
+
+  it("catches the coverage gap the exercise actually shipped", () => {
+    // A 42x28 child at 5ft covers 21x14 parent cells against a footprint
+    // needing more — and both files checked clean before this.
+    expect(seam(parent("CP12..DF32"), child("42x28", "5ft"))).toMatch(/error: .*covers 21x14/);
+    expect(seam(parent("CP12..DF32"), child("44x42", "5ft"))).toBe("");
+  });
+
+  it("a non-integer magnification is not a window onto the same space", () => {
+    expect(seam(parent("CP12..DF32"), child("60x60", "3ft"))).toMatch(/magnifies by a whole number/);
+  });
+
+  it("an unsupplied sub-map is unchecked, and says so rather than passing silently", () => {
+    expect(seam(parent("CP12..DF32"))).toMatch(/warning: .*not provided to the checker/);
+  });
+
+  it("detail-at= needs the detail= it anchors, and must name a cell", () => {
+    const bare = ["# P", "map: battlemap", "grid: square 20x10", "[structures]",
+      "chamber c : A1..B2 detail-at=A1"].join("\n");
+    expect(errorsOf(bare).join()).toMatch(/anchors a 'detail=' sub-map and needs one/);
+    const bad = ["# P", "map: battlemap", "grid: square 20x10", "[structures]",
+      'chamber c : A1..B2 detail="x.cd" detail-at=nonsense'].join("\n");
+    expect(errorsOf(bad).join()).toMatch(/names the parent cell the sub-map's A1 sits on/);
+  });
+
+  it("detail= alone is untouched — it stays the pointer it has always been", () => {
+    const pointer = ["# P", "map: battlemap", "grid: square 20x10", "[structures]",
+      'chamber c : A1..B2 detail="x.cd"'].join("\n");
+    expect(errorsOf(pointer)).toEqual([]);
+    expect(checkDetailSeams(pointer, { details: {} })).toEqual([]);
   });
 });
