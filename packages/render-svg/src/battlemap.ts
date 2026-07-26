@@ -219,7 +219,23 @@ export function renderBattlemap(
   if (levelCtx) {
     for (const source of levelCtx.allEntities) {
       const to = pairOf(source.pairs, "to");
-      if (to !== levelCtx.level || source.level === levelCtx.level) continue;
+      if (to === undefined || source.level === levelCtx.level) continue;
+      // A `to=` RANGE lands on every level it names (#112), so one declaration
+      // is one stair with four landings rather than four stairs that nothing
+      // says are the same flight.
+      const lands = levelSpan(levelCtx.levels, to).includes(levelCtx.level);
+      // A `through=` level is occupied but NOT opened onto: the shaft passes
+      // through the rock there. Drawing a landing would invite the party onto
+      // a step that does not exist.
+      const throughValue = pairOf(source.pairs, "through");
+      const passes = throughValue !== undefined && levelSpan(levelCtx.levels, throughValue).includes(levelCtx.level);
+      if (passes) {
+        const atV = pairOf(source.pairs, "at");
+        const shaftAt = atV ? parseCell(atV) : source.placements.find((p): p is Address => p.kind === "address");
+        if (shaftAt) renderShaft(cellCenter(shaftAt), layers.features);
+        continue;
+      }
+      if (!lands) continue;
       const atValue = pairOf(source.pairs, "at");
       const landing = atValue ? parseCell(atValue) : source.placements.find((p): p is Address => p.kind === "address");
       if (!landing) continue;
@@ -560,6 +576,55 @@ export function renderBattlemap(
   }
 
   /**
+   * A shaft passing through a level without opening onto it (#112): the
+   * footprint is drawn as an obstruction — a walled well, hatched — not floor
+   * and not a landing.
+   *
+   * This is the ground truth that was missing. The Endless Stair bores through
+   * six levels, and on every one of them those cells were indistinguishable
+   * from solid rock, so a party standing at that address was standing inside a
+   * stairwell the map called stone.
+   */
+  function renderShaft(c: XY, into: string[]): void {
+    const ink = model.theme.surface("ink", "fill", INK);
+    const half = CELL * 0.42;
+    into.push(
+      el("rect", {
+        x: c.x - half, y: c.y - half, width: half * 2, height: half * 2,
+        fill: "none", stroke: ink, "stroke-width": 1.6,
+      }),
+      el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
+      el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
+    );
+  }
+
+  /**
+   * The levels a `to=`/`through=` value covers (#112). A single name is a
+   * one-level span; `a..b` is every declared level between them inclusive, in
+   * the document's own physical order — so an author need not know which end
+   * they wrote first.
+   */
+  function levelSpan(levels: string[], value: string): string[] {
+    const [a, b] = value.split("..");
+    if (b === undefined) return levels.includes(a!) ? [a!] : [];
+    const i = levels.indexOf(a!);
+    const j = levels.indexOf(b!);
+    if (i === -1 || j === -1) return [];
+    return levels.slice(Math.min(i, j), Math.max(i, j) + 1);
+  }
+
+  /** The nearest landing in the span other than the level being drawn. */
+  function nextLandingIndex(levels: string[], span: string[], from: number): number {
+    let best = -1;
+    for (const name of span) {
+      const idx = levels.indexOf(name);
+      if (idx === -1 || idx === from) continue;
+      if (best === -1 || Math.abs(idx - from) < Math.abs(best - from)) best = idx;
+    }
+    return best;
+  }
+
+  /**
    * A level connector (spec 06 §8): themed via the word's chain with the
    * reserved up/down auto-state (`ladder.up : glyph=…`); default render is a
    * stair glyph. The direction/destination annotation is navigational and
@@ -576,8 +641,17 @@ export function renderBattlemap(
   ): void {
     if (!levelCtx) return;
     const currentIdx = levelCtx.levels.indexOf(levelCtx.level);
-    const targetIdx = levelCtx.levels.indexOf(to);
+    // With a level RANGE (#112) the destination shown is the next landing in
+    // the direction of travel, not the far end of the flight: standing on the
+    // Third Level of one long stair, what matters is that the next landing
+    // down is the First. Naming the bottom of the whole run would misreport
+    // the step the party is about to take.
+    const span = levelSpan(levelCtx.levels, to);
+    const targetIdx = span.length > 1
+      ? nextLandingIndex(levelCtx.levels, span, currentIdx)
+      : levelCtx.levels.indexOf(to);
     const up = targetIdx !== -1 && targetIdx < currentIdx;
+    const shown = levelCtx.levels[targetIdx] ?? to;
     const ink = model.theme.surface("ink", "fill", INK);
     const themed =
       model.theme.glyphFor(chain, c.x, c.y, { state: up ? "up" : "down" }) ?? model.theme.glyphFor(chain, c.x, c.y);
@@ -631,6 +705,8 @@ export function renderBattlemap(
     const chain = model.chainOf(e.typeWord);
     const fill = model.theme.terrainFill(chain);
     const areaParts: string[] = [];
+    // One fall annotation per entity, not one per range in its footprint.
+    let fellAnnotated = false;
     const pathParts: string[] = [];
     for (const p of e.placements) {
       if (p.kind === "shape" && p.shape === "area") {
@@ -640,6 +716,21 @@ export function renderBattlemap(
             areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill }));
             if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
             if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
+            // An unfloored area falls to the level below (spec 06 §5); `to=`
+            // states where it actually lands when that is further down (#112).
+            // The most famous fall in fantasy literature was a GM note,
+            // because the geometry could not carry it.
+            const fallsTo = pairOf(e.pairs, "to");
+            if (fallsTo !== undefined && model.chainOf(e.typeWord).includes("air") && !fellAnnotated) {
+              fellAnnotated = true;
+              areaParts.push(
+                text(`▼ falls to ${fallsTo}`, {
+                  x: r.x + r.w / 2, y: r.y + r.h / 2,
+                  "font-size": 8, fill: model.theme.surface("ledge", "stroke", "#6b5d4a"),
+                  "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif",
+                }),
+              );
+            }
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
             areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));

@@ -61,7 +61,11 @@ subject        = [ type-word ] , { id-word } , [ string ] ;
                     identity/uniqueness rules: spec 03 §1 *)
 predicate      = { token } ;
 token          = placement | word | string | pair ;
-pair           = key , "=" , ( word | string | measure ) ;
+pair           = key , "=" , ( word | string | measure | level-span ) ;
+level-span     = level-name , [ ".." , level-name ] ;
+                 (* `to=`/`through=` accept a RANGE (spec 06 §8, #112):
+                    to=a..b lands on every level between; through=a..b is
+                    occupied but not opened onto and requires a to=. *)
 comment        = ";" , text , EOL ;                  (* legal at end of any line; ";" in strings is content *)
 
 (* ---- placements — spec 02 ---- *)

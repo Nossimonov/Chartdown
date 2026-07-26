@@ -1416,3 +1416,60 @@ describe("area terrain is organically finished (#96)", () => {
       .map((d) => d.message).join()).not.toMatch(/not a declared state/);
   });
 });
+
+
+/**
+ * #112: vertical things that span more than two levels. A connector was a link
+ * between two adjacent panels, so a stair through six levels was invisible on
+ * all six, a stair that stopped at four had to be declared four times, and the
+ * bottom of a fall lived in a GM note.
+ */
+describe("shafts span more than two levels (#112)", () => {
+  const doc = [
+    "map: battlemap", "grid: square 12x8", "scale: 10ft",
+    "levels: top mid low pit", "level: top",
+    "[features top]", 'stairs endless "The Endless Stair" : D4 to=pit through=mid..low',
+    "[features low]", 'stairs descent "The Great Descent" : H4 to=top..pit',
+  ].join("\n");
+  const onLevel = (level: string): { shafts: number; landings: number } => {
+    const svg = renderSource(doc, { level }).svg;
+    return {
+      shafts: (svg.match(/<rect [^>]*fill="none" stroke="[^"]*" stroke-width="1\.6"/g) ?? []).length,
+      landings: (svg.match(/[▲▼]/g) ?? []).length,
+    };
+  };
+
+  it("a pass-through level shows the shaft as an obstruction, and NO landing", () => {
+    // The ground truth that was missing: those cells read as solid rock, so a
+    // party stood inside a stairwell the map called stone.
+    expect(onLevel("mid").shafts).toBe(1);
+    expect(onLevel("low").shafts).toBe(1);
+    expect(onLevel("top").shafts).toBe(0);
+    expect(onLevel("pit").shafts).toBe(0);
+  });
+
+  it("a to= range lands on every level it names, from one declaration", () => {
+    for (const level of ["top", "mid", "low", "pit"]) {
+      expect(onLevel(level).landings, level).toBeGreaterThan(0);
+    }
+  });
+
+  it("the annotation names the NEXT landing, not the far end of the flight", () => {
+    // Standing on a long stair, what matters is the step about to be taken.
+    expect(renderSource(doc, { level: "mid" }).svg).toMatch(/[▲▼] (top|low)/);
+  });
+
+  it("an air area states where the fall lands", () => {
+    const chasm = ["map: battlemap", "grid: square 12x8", "scale: 10ft",
+      "levels: gates deep-one the-pit", "level: gates",
+      "[terrain gates]", 'air chasm "Chasm" : area E1..G8 drop to=the-pit'].join("\n");
+    expect(renderSource(chasm, { level: "gates" }).svg).toContain("falls to the-pit");
+  });
+
+  it("without to= the default is unchanged, so no existing document moves", () => {
+    const plain = ["map: battlemap", "grid: square 12x8", "scale: 10ft",
+      "levels: gates deep-one", "level: gates",
+      "[terrain gates]", 'air chasm "Chasm" : area E1..G8 drop'].join("\n");
+    expect(renderSource(plain, { level: "gates" }).svg).not.toContain("falls to");
+  });
+});

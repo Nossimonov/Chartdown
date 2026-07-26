@@ -597,8 +597,30 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     if (levelParam !== undefined && !validLevel(levelParam)) {
       diags.push(error(raw.line, document.levels.length === 0 ? "level= requires a levels: declaration (spec 06 §8)" : `unknown level '${levelParam}' — declared levels: ${document.levels.join(" ")}`));
     }
-    if (toParam !== undefined && !validLevel(toParam)) {
-      diags.push(error(raw.line, document.levels.length === 0 ? "to= requires a levels: declaration (spec 06 §8)" : `unknown level '${toParam}' — declared levels: ${document.levels.join(" ")}`));
+    // `to=` and `through=` may name a RANGE of levels (#112). A stair from the
+    // Seventh Level to the Gates is one stair; writing it as four connectors
+    // gave it four ids, four chances to typo a column, and nothing anywhere
+    // saying they were the same flight.
+    const throughParam = predicate.pairs.find((p) => p.key === "through")?.value;
+    const checkLevelSpan = (key: string, value: string): void => {
+      const parts = value.split("..");
+      if (parts.length > 2) {
+        diags.push(error(raw.line, `${key}= takes a level or a range of two — '${value}' (spec 06 §8)`));
+        return;
+      }
+      for (const part of parts) {
+        if (validLevel(part)) continue;
+        diags.push(error(raw.line, document.levels.length === 0
+          ? `${key}= requires a levels: declaration (spec 06 §8)`
+          : `unknown level '${part}' — declared levels: ${document.levels.join(" ")}`));
+      }
+    };
+    if (toParam !== undefined) checkLevelSpan("to", toParam);
+    if (throughParam !== undefined) {
+      checkLevelSpan("through", throughParam);
+      if (toParam === undefined) {
+        diags.push(error(raw.line, "'through=' names the levels a connector passes WITHOUT opening onto, so it needs a 'to=' saying where it does open (spec 06 §8)"));
+      }
     }
 
     // A bare word should be a DECLARED state of the entity's word or an
