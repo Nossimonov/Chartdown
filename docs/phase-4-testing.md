@@ -27,6 +27,11 @@ Three branches, deliberately different:
 | `preview` | v0.3.3 plus docs. **Kept releasable as a patch at all times** — no breaking changes. |
 | `0.4-dev` | **Test this.** All Phase 4 work; contains breaking changes. |
 
+### Two things that are expected, not bugs
+
+- **`chartdown: 0.4` warns** that the parser implements 0.3. `SPEC_VERSION` is rewritten from the package version by `npm run bump` at release, deliberately, so the spec version and the packages can never drift apart. Until 0.4.0 ships there is no clean pin for a document using 0.4 features — write no `chartdown:` line while testing. Reported and confirmed as expected in the first Wave 3 round.
+- **Declared states with no theme treatment render alike.** `volcano … erupting` is accepted and silent because `erupting` is declared vocabulary, but the default theme draws it the same as a dormant one. Themes are #74, the phase's capstone; a state being *legal* and being *drawn differently* are separate deliveries.
+
 ## Migrating a 0.3-era document — verified, not remembered
 
 Run an existing map through `check` first. These are the things that will fire:

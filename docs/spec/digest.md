@@ -2,6 +2,8 @@
 
 *Single-file language reference for machine/agent ingestion (issue #12). Informative — the prose sections 01–07 are normative. Maintained in the same commit as any spec change. Companion: [grammar.ebnf](grammar.ebnf).*
 
+> **On this branch this file documents in-progress spec 0.4.** The heading still reads 0.3 because the spec version is rewritten from the package version at release (`npm run bump`), and 0.4.0 has not shipped. Everything below is current for `0.4-dev`; a document targeting it should carry no `chartdown:` pin until then.
+
 Chartdown is a plain-text language for TTRPG maps. A document is a standalone `.cd` file **or** a ` ```chartdown ` fenced block in Markdown — byte-identical content rules.
 
 ## Document skeleton
