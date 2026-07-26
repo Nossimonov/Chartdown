@@ -7,7 +7,7 @@
  * never crosses itself no matter what it is asked for.
  */
 import { describe, expect, it } from "vitest";
-import { deformCurve, isSimple, type PlacedFeature } from "./morphology";
+import { deformCurve, isSimple, isSmooth, type PlacedFeature } from "./morphology";
 import { renderSource } from "./index";
 import type { XY } from "./util";
 
@@ -99,29 +99,25 @@ describe("the simplicity guarantee is hard (ADR 0023)", () => {
     return p;
   };
 
-  it("clamps an over-large feature rather than folding the coast over itself", () => {
-    // Asserting `isSimple` alone would pass even if the clamp never fired, so
-    // this also measures that the amplitude was actually REDUCED. Measured:
-    // 66 units requested, 8.3 delivered, five back-offs.
+  it("REFUSES a feature it cannot draw as declared, rather than shrinking it", () => {
+    // A clamp was written first and rejected on the owner's argument: it
+    // deliberately discards map data, and it makes `size=` a lie — the same
+    // 90mi cape would come out different lengths on different stretches of
+    // coast, so the number in the document would stop determining the map.
     const base = hairpin(12);
     expect(isSimple(base)).toBe(true); // the fixture starts valid
-    const out = deformCurve(base, [feature({ anchor: { x: 100, y: 100 }, size: 120 })]);
-    expect(isSimple(out)).toBe(true);
-    expect(maxOffset(base, out)).toBeLessThan(120 * 0.55 * 0.9);
+    const rejected: string[] = [];
+    const out = deformCurve(base, [feature({ anchor: { x: 100, y: 100 }, size: 120 })], () => rejected.push("x"));
+    expect(rejected).toHaveLength(1);
+    expect(out).toEqual(base); // untouched, not quietly reduced
   });
 
-  it("does NOT clamp when there is room — an open coast gets what it asked for", () => {
-    // The other half: a guard that always backs off would also pass the test
-    // above while quietly shrinking every feature on every map.
+  it("draws at the declared size when it fits — no silent shrinking anywhere", () => {
     const base = straight();
-    const out = deformCurve(base, [feature({ size: 60 })]);
+    const rejected: string[] = [];
+    const out = deformCurve(base, [feature({ size: 60 })], () => rejected.push("x"));
+    expect(rejected).toHaveLength(0);
     expect(maxOffset(base, out)).toBeCloseTo(60 * 0.55, 6);
-  });
-
-  it("clamps harder as the space gets tighter", () => {
-    const roomy = deformCurve(hairpin(12), [feature({ anchor: { x: 100, y: 100 }, size: 60 })]);
-    const tight = deformCurve(hairpin(3), [feature({ anchor: { x: 100, y: 100 }, size: 60 })]);
-    expect(maxOffset(hairpin(3), tight)).toBeLessThan(maxOffset(hairpin(12), roomy));
   });
 
   it("isSimple actually catches a crossing — the guard is not vacuous", () => {
@@ -192,26 +188,42 @@ describe("wired end to end into a region render (#93)", () => {
     });
   };
 
+  /**
+   * Where the coast sits at the anchor's latitude, on each curve. A course
+   * carrying features is sampled far more finely than a bare one, so comparing
+   * vertex i to vertex i compares unrelated places — and taking a global
+   * extremum picks up the ends rather than the bump.
+   */
+  const xAt = (pts: XY[], y: number): number => {
+    let best = Infinity;
+    let x = 0;
+    for (const p of pts) {
+      if (Math.abs(p.y - y) < best) { best = Math.abs(p.y - y); x = p.x; }
+    }
+    return x;
+  };
+  const ANCHOR_Y = 390 * (820 / 900); // (120,390) in map units, scaled to canvas
+
   it("a bay bites LANDWARD, taking its direction from 'sea : west of coast'", () => {
     const plain = coastOf(MAP(""));
     const bitten = coastOf(MAP(`bay "Gull Bay" : on coast at (120,390) size=90mi`));
-    let dx = 0;
-    for (let i = 0; i < plain.length; i++) {
-      if (Math.abs(bitten[i]!.x - plain[i]!.x) > Math.abs(dx)) dx = bitten[i]!.x - plain[i]!.x;
-    }
+    const dx = xAt(bitten, ANCHOR_Y) - xAt(plain, ANCHOR_Y);
     // Sea to the WEST means landward is +x. Getting this backwards would turn
-    // every harbour on the map into a headland.
+    // every harbour on the map into a headland. This anchor sits on a sharp
+    // corner, which an earlier per-vertex-normal model could not bite into at
+    // all — it is exactly the case worth pinning.
     expect(dx).toBeGreaterThan(5);
+    expect(renderSource(MAP(`bay "Gull Bay" : on coast at (120,390) size=90mi`)).diagnostics
+      .filter((d) => d.severity === "error")).toEqual([]);
   });
 
   it("a cape on the same spot juts the other way", () => {
     const plain = coastOf(MAP(""));
     const jutted = coastOf(MAP(`cape "The Ness" : on coast at (120,390) size=90mi`));
-    let dx = 0;
-    for (let i = 0; i < plain.length; i++) {
-      if (Math.abs(jutted[i]!.x - plain[i]!.x) > Math.abs(dx)) dx = jutted[i]!.x - plain[i]!.x;
-    }
-    expect(dx).toBeLessThan(-5);
+    const dx = xAt(jutted, ANCHOR_Y) - xAt(plain, ANCHOR_Y);
+    // The claim is the SIDE, not the size — how much survives depends on
+    // how much room the corner leaves, which the clamp decides.
+    expect(dx).toBeLessThan(0);
   });
 
   it("works for a coast written as a `path` shape too, not just `from`/`to`", () => {
@@ -271,5 +283,31 @@ describe("detached features draw a shape beside the host (#93)", () => {
     const coast = (s: string): string => /id="cd-coast-coast"[^>]*>.*?points="([^"]+)"/s.exec(s)?.[1] ?? "";
     expect(coast(renderSource(ISLE(`island : near coast at (95,250) size=40mi`)).svg))
       .toBe(coast(renderSource(ISLE("")).svg));
+  });
+});
+
+describe("simplicity is not enough — a curve can fold without crossing (#93)", () => {
+  it("isSmooth catches a cusp that isSimple happily passes", () => {
+    // The exact failure the owner spotted by eye on Gull Bay: the coast came
+    // to a point and turned back, never intersecting itself, so the
+    // self-intersection guard reported it fine while the map showed a spike.
+    const cusp = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }, { x: 10, y: 1 }, { x: 0, y: 2 }];
+    expect(isSimple(cusp)).toBe(true);
+    expect(isSmooth(cusp)).toBe(false);
+  });
+
+  it("passes an ordinary gently-curving coast", () => {
+    const arc = Array.from({ length: 60 }, (_, i) => ({ x: i * 5, y: 40 * Math.sin(i / 12) }));
+    expect(isSmooth(arc)).toBe(true);
+  });
+
+  it("the clamp now respects it: a bite into a tight corner stays smooth", () => {
+    // A concave corner is where offsetting along the normals folds first.
+    const corner: XY[] = [];
+    for (let i = 0; i <= 60; i++) corner.push({ x: i * 2, y: 100 - i * 1.6 });
+    for (let i = 1; i <= 60; i++) corner.push({ x: 120 + i * 2, y: 4 + i * 1.6 });
+    const out = deformCurve(corner, [feature({ morph: "bite", anchor: { x: 120, y: 4 }, size: 90 })]);
+    expect(isSimple(out)).toBe(true);
+    expect(isSmooth(out)).toBe(true);
   });
 });

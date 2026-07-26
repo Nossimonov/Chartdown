@@ -115,20 +115,31 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
    * which is exactly what happened to Vessany's Gull Bay.
    */
   const finishCourse = (e: EntityNode, controls: XY[]): XY[] => {
-    const curve = catmullRom(controls, 8);
     const placed = hostKeys(e).flatMap((k) => featuresByHost.get(k) ?? []);
-    if (placed.length === 0) return curve;
-    const out = deformCurve(curve, placed.map((x) => x.f));
-    for (const x of placed) {
-      // A feature that moved nothing was clamped away entirely: the stretch
-      // could not hold it. Silence would leave a line in the document with no
-      // counterpart on the map.
-      const moved = out.some((q, i) => Math.abs(q.x - curve[i]!.x) + Math.abs(q.y - curve[i]!.y) > 1e-6);
-      if (!moved) {
-        diagnostics.push({ severity: "warning", line: x.line, message: `'${x.word}' is too large for this stretch of '${keyOf(e)}' and was reduced until nothing was left — try a smaller size= or a straighter host (spec 05 §4)` });
-      }
-    }
-    return out;
+    if (placed.length === 0) return catmullRom(controls, 8);
+    // A course carrying features is sampled far more finely BEFORE it is
+    // deformed. Eight samples per segment is plenty to draw a smooth spline,
+    // but a feature's window then lands on only a handful of vertices and the
+    // bump comes out a polygon — measured on Vessany's Gull Bay: six vertices
+    // and a 175° turn, which is a spike rather than a bay. Density also keeps
+    // the local normals varying continuously where the host turns a corner,
+    // which is where the fold was worst.
+    const curve = catmullRom(controls, DEFORM_SAMPLES);
+    // Drawn as declared or reported — never quietly resized. A clamp would
+    // make `size=` a lie, since the same 90mi cape would come out different
+    // lengths on different stretches of coast, and a renderer that silently
+    // gives an author something other than what they asked for is the failure
+    // ADR 0023 exists to prevent.
+    const byFeature = new Map(placed.map((x) => [x.f, x] as const));
+    return deformCurve(curve, placed.map((x) => x.f), (f) => {
+      const x = byFeature.get(f);
+      if (!x) return;
+      diagnostics.push({
+        severity: "error",
+        line: x.line,
+        message: `'${x.word}' cannot be drawn at size=${(x.f.size / scale).toFixed(0)} on '${keyOf(e)}' — a bite that deep would fold this stretch of the course back through itself. Use a smaller size=, move it to a straighter stretch, or open out the host's via points (spec 05 §4)`,
+      });
+    });
   };
 
   const refPoint = (ref: Ref): XY | null => {
@@ -253,12 +264,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     // curve, only its own anchor and size — which is why it is resolved here
     // rather than in `finishCourse`.
     //
-    // Its outline is keyed on the PLACED DATA, not on identity. Blobs key on
-    // their id so that moving one slides the same shape, but ADR 0023 requires
-    // that NAMING a morphology feature must not move or reshape it — and an
-    // id-keyed outline would do exactly that the moment an island earned a
-    // name. The two rules genuinely conflict; the ADR's promise wins here,
-    // and the cost is that moving an island reshapes it.
+    // Its outline is keyed on WHAT IT IS — the word and its size — and on
+    // nothing else. Not on identity, so naming it cannot reshape it; not on
+    // position, so moving it slides the same island rather than drawing a
+    // different one; not on the document seed or on declaration order.
+    //
+    // The cost is that two same-word islands of exactly the same size are
+    // twins. That is the honest consequence of two identical declarations, and
+    // it is cheap to escape — differing sizes differ the shape — whereas every
+    // other key has an edit that silently redraws a thing a campaign may have
+    // named. (An earlier draft keyed on position and got the naming case right
+    // while getting the moving case wrong; both must hold.)
     if (model.facetOf(e.typeWord, "morph") === "detached") {
       const anchor = e.placements.find((p): p is Point => p.kind === "point")
         ?? e.placements.flatMap((p) => (p.kind === "relational" && p.form === "at" && p.target.kind === "point" ? [p.target] : []))[0];
@@ -266,7 +282,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (anchor && sizeText !== undefined) {
         const center = toXY(anchor);
         const radius = (measureToNumber(sizeText) / 2) * scale;
-        out.polygon = catmullRom(blob(center, radius, rng(hashSeed(0, Math.round(center.x), Math.round(center.y * 31 + radius)))), 5, true);
+        out.polygon = catmullRom(blob(center, radius, rng(hashSeed(0, hashString(e.typeWord ?? "island"), Math.round(radius * 1000)))), 5, true);
         out.point = center;
         out.radius = radius;
         return out;
@@ -1915,3 +1931,6 @@ function scatterGlyphs(poly: XY[], glyphValue: string, theme: import("./theme").
   }
   return out;
 }
+
+/** Samples per segment for a course carrying placed features (#93). */
+const DEFORM_SAMPLES = 40;

@@ -61,11 +61,20 @@ const MIN_SIZE = 1e-6;
  * they do the later one composes on the earlier — which is the same rule
  * declaration order already gives terrain (spec 06 §6).
  */
-export function deformCurve(curve: XY[], features: PlacedFeature[]): XY[] {
+export function deformCurve(
+  curve: XY[],
+  features: PlacedFeature[],
+  onReject?: (f: PlacedFeature) => void,
+): XY[] {
   let out = curve;
   for (const f of features) {
     if (f.morph === "detached" || f.size < MIN_SIZE) continue;
-    out = applyOne(out, f);
+    const next = applyOne(out, f);
+    if (next === null) {
+      onReject?.(f);
+      continue;
+    }
+    out = next;
   }
   return out;
 }
@@ -75,15 +84,20 @@ export function deformCurve(curve: XY[], features: PlacedFeature[]): XY[] {
  * outward normal, weighted by a raised cosine so the bump meets the
  * undisturbed curve with a matching tangent and leaves no crease.
  *
- * The amplitude is CLAMPED until the result verifies simple (ADR 0023's hard
- * guarantee — a coastline may not cross itself). Backing off is preferred to
- * failing because a slightly-too-large cape is still the feature the author
- * asked for; the caller is told when a clamp bit so an author can find out
- * they asked for more than the stretch could hold.
+ * The feature is drawn at the size it ASKED FOR or not at all. An earlier
+ * draft clamped the amplitude down until the result verified, and that was
+ * rejected on the owner's argument: a clamp deliberately discards map data. It
+ * also makes `size=` a lie — two capes both declared 90mi would render at
+ * different sizes depending on their host's local curvature, so the number in
+ * the document would stop determining what is on the map, which is the whole
+ * thesis of ADR 0023.
+ *
+ * Returning null means "this cannot be drawn as written"; the caller reports
+ * it and the author changes the document.
  */
-function applyOne(curve: XY[], f: PlacedFeature): XY[] {
+function applyOne(curve: XY[], f: PlacedFeature): XY[] | null {
   const anchorIndex = nearestIndex(curve, f.anchor);
-  if (anchorIndex < 0) return curve;
+  if (anchorIndex < 0) return null;
   const half = f.size / 2;
   // A jut goes SEAWARD and a bite goes landward. The seaward side is resolved
   // from the map (see `seawardSign`) at the anchor, then held constant across
@@ -94,28 +108,32 @@ function applyOne(curve: XY[], f: PlacedFeature): XY[] {
   const arc = arcLengths(curve);
   const at = arc[anchorIndex]!;
 
-  let amplitude = f.size * ASPECT;
-  for (let attempt = 0; attempt < CLAMP_STEPS; attempt++) {
-    const moved = displace(curve, arc, at, half, sign * amplitude);
-    if (isSimple(moved)) return moved;
-    amplitude *= CLAMP_FACTOR;
-  }
-  return curve; // nothing survived the clamp: leave the host undisturbed
+  const dir = normalAt(curve, anchorIndex);
+  const moved = displace(curve, arc, at, half, sign * f.size * ASPECT, dir);
+  return isSimple(moved) && isSmooth(moved) ? moved : null;
 }
 
-/** How far the clamp will back off before giving up, and by how much each time. */
-const CLAMP_STEPS = 8;
-const CLAMP_FACTOR = 0.66;
-
-/** Displace vertices within `half` arc-length of `at`, raised-cosine weighted. */
-function displace(curve: XY[], arc: number[], at: number, half: number, amplitude: number): XY[] {
+/**
+ * Displace vertices within `half` arc-length of `at`, raised-cosine weighted,
+ * all in ONE direction — the normal at the anchor.
+ *
+ * Per-vertex normals were tried first and are wrong at exactly the places a
+ * feature is most wanted. On a sharp headland the two arms have normals
+ * pointing tens of degrees apart, so the halves of the bump travel in
+ * different directions and pinch the curve between them; the result folded and
+ * was refused, even though a cartographer would happily draw a bay there.
+ *
+ * A bay is a bite in a direction, not an offset of a curve. Displacing the
+ * whole window along the anchor's normal is both the simpler model and the one
+ * that matches what the word means.
+ */
+function displace(curve: XY[], arc: number[], at: number, half: number, amplitude: number, dir: XY): XY[] {
   return curve.map((p, i) => {
     const d = Math.abs(arc[i]! - at);
     if (d >= half) return p;
     // cos ramp: 1 at the anchor, 0 at the window edge, zero slope at both ends.
     const weight = 0.5 * (1 + Math.cos((Math.PI * d) / half));
-    const n = normalAt(curve, i);
-    return { x: p.x + n.x * amplitude * weight, y: p.y + n.y * amplitude * weight };
+    return { x: p.x + dir.x * amplitude * weight, y: p.y + dir.y * amplitude * weight };
   });
 }
 
@@ -166,6 +184,41 @@ function nearestIndex(curve: XY[], p: XY): number {
  * tested pairwise, which is quadratic and fine at the vertex counts a rendered
  * spine has.
  */
+/**
+ * Sharpest turn a deformed course may make, in degrees.
+ *
+ * This is a FOLD detector, not a gentleness rule. A first attempt at 30° was
+ * measured and rejected: it clamped perfectly legitimate steep bumps on
+ * coarsely-sampled curves, because how sharply a bump turns per vertex depends
+ * on how densely the host was sampled — which is the caller's business, not
+ * the feature's. A right angle is well past anything a coast does naturally
+ * and well short of the 157° cusp this exists to catch.
+ */
+const MAX_TURN_DEGREES = 90;
+
+/**
+ * Does this curve avoid folding to a point? SIMPLICITY IS NOT ENOUGH.
+ *
+ * Displacing a curve along its own normals by an amount near the local radius
+ * of curvature produces a CUSP on the concave side — the classic offset-curve
+ * failure. A cusp comes to a point and turns back without the curve ever
+ * crossing itself, so `isSimple` passes it happily while the map shows a
+ * spike. Measured on Vessany's Gull Bay: non-self-intersecting, and a 157°
+ * turn. Densifying the samples did not help, because the fold was real
+ * geometry rather than coarse drawing — it was caught by eye first, then by
+ * this number.
+ */
+export function isSmooth(curve: XY[], limitDegrees = MAX_TURN_DEGREES): boolean {
+  const limit = (limitDegrees * Math.PI) / 180;
+  for (let i = 1; i + 1 < curve.length; i++) {
+    const a = curve[i - 1]!, b = curve[i]!, c = curve[i + 1]!;
+    let turn = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+    if (turn > Math.PI) turn = 2 * Math.PI - turn;
+    if (turn > limit) return false;
+  }
+  return true;
+}
+
 export function isSimple(curve: XY[]): boolean {
   const first = curve[0];
   const last = curve[curve.length - 1];
