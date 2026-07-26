@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { deformCurve, isSimple, type PlacedFeature } from "./morphology";
+import { renderSource } from "./index";
 import type { XY } from "./util";
 
 /** A straight west-to-east coast, densely sampled the way a spline arrives. */
@@ -133,5 +134,142 @@ describe("detached features do not touch the host", () => {
   it("an island leaves the coastline exactly as it was", () => {
     const base = straight();
     expect(deformCurve(base, [feature({ morph: "detached" })])).toEqual(base);
+  });
+});
+
+describe("direction comes from the map, not from the drawing order (#93)", () => {
+  // `straight()` runs west-to-east, so its normal is VERTICAL and the water
+  // must lie north or south of it. The first draft of these tests put the sea
+  // to the east — perpendicular to the normal, displacing nothing — which is a
+  // reminder that the seaward vector is only meaningful across the line.
+  const north: XY = { x: 0, y: -1 };
+  const at = 40;
+
+  it("a jut goes toward the water and a bite away from it", () => {
+    const base = straight();
+    const cape = deformCurve(base, [feature({ morph: "jut", seaward: north })]);
+    const bay = deformCurve(base, [feature({ morph: "bite", seaward: north })]);
+    expect(cape[at]!.y).toBeLessThan(base[at]!.y); // north is -y
+    expect(bay[at]!.y).toBeGreaterThan(base[at]!.y);
+  });
+
+  it("REVERSING the coastline does not turn headlands into harbours", () => {
+    // The property that rules out a winding convention. `sea : west of coast`
+    // says which side the water is on; whether the author drew the coast
+    // north-to-south or south-to-north is not the map's business. Without
+    // this, editing a `from`/`to` would silently invert every feature on it.
+    const base = straight();
+    const drawn = deformCurve(base, [feature({ morph: "jut", seaward: north })]);
+    const reversed = deformCurve([...base].reverse(), [feature({ morph: "jut", seaward: north })]);
+    expect(drawn[at]!.y).toBeLessThan(base[at]!.y);
+    expect(reversed[reversed.length - 1 - at]!.y).toBeLessThan(base[at]!.y);
+    // And to the same extent — not merely the same side.
+    expect(reversed[reversed.length - 1 - at]!.y).toBeCloseTo(drawn[at]!.y, 6);
+  });
+
+  it("without a declared water side the shape is still drawn, deterministically", () => {
+    // Warned about at the call site rather than silently skipped: a missing
+    // declaration should cost a diagnostic, not a feature.
+    const base = straight();
+    const out = deformCurve(base, [feature()]);
+    expect(maxOffset(base, out)).toBeGreaterThan(1);
+    expect(out).toEqual(deformCurve(base, [feature()]));
+  });
+});
+
+describe("wired end to end into a region render (#93)", () => {
+  const MAP = (bay: string): string =>
+    `# Coast\nmap: region\nextent: 900x600mi\n\n[water]\n` +
+    `coastline coast : from (210,0) via (150,130) (200,300) (120,390) (170,520) to (140,600)\n` +
+    `sea "The Sea" : west of coast\n${bay}\n`;
+
+  const coastOf = (src: string): XY[] => {
+    const m = /id="cd-coast-coast"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg);
+    if (!m) throw new Error("coast polyline not found in render");
+    return m[1]!.trim().split(/\s+/).map((pair) => {
+      const [x, y] = pair.split(",").map(Number) as [number, number];
+      return { x, y };
+    });
+  };
+
+  it("a bay bites LANDWARD, taking its direction from 'sea : west of coast'", () => {
+    const plain = coastOf(MAP(""));
+    const bitten = coastOf(MAP(`bay "Gull Bay" : on coast at (120,390) size=90mi`));
+    let dx = 0;
+    for (let i = 0; i < plain.length; i++) {
+      if (Math.abs(bitten[i]!.x - plain[i]!.x) > Math.abs(dx)) dx = bitten[i]!.x - plain[i]!.x;
+    }
+    // Sea to the WEST means landward is +x. Getting this backwards would turn
+    // every harbour on the map into a headland.
+    expect(dx).toBeGreaterThan(5);
+  });
+
+  it("a cape on the same spot juts the other way", () => {
+    const plain = coastOf(MAP(""));
+    const jutted = coastOf(MAP(`cape "The Ness" : on coast at (120,390) size=90mi`));
+    let dx = 0;
+    for (let i = 0; i < plain.length; i++) {
+      if (Math.abs(jutted[i]!.x - plain[i]!.x) > Math.abs(dx)) dx = jutted[i]!.x - plain[i]!.x;
+    }
+    expect(dx).toBeLessThan(-5);
+  });
+
+  it("works for a coast written as a `path` shape too, not just `from`/`to`", () => {
+    // The two spellings are handled in different branches of the resolver, and
+    // wiring only one of them made every feature on a from/to coast silently
+    // do nothing — which is how Vessany's Gull Bay drew a bay that wasn't there.
+    const asPath = (bay: string): string =>
+      `# Coast\nmap: region\nextent: 900x600mi\n\n[water]\n` +
+      `coastline coast : path (210,0) (150,130) (200,300) (120,390) (170,520) (140,600)\n` +
+      `sea "The Sea" : west of coast\n${bay}\n`;
+    const plain = coastOf(asPath(""));
+    const bitten = coastOf(asPath(`bay : on coast at (120,390) size=90mi`));
+    expect(plain.some((p, i) => Math.abs(p.x - bitten[i]!.x) > 5)).toBe(true);
+  });
+
+  it("says so when nothing declares which side the water is on", () => {
+    const src = `# Coast\nmap: region\nextent: 900x600mi\n\n[water]\ncoastline coast : path (210,0) (150,300) (140,600)\nbay : on coast at (150,300) size=90mi\n`;
+    expect(renderSource(src).diagnostics.map((d) => d.message).join()).toMatch(/nothing declares which side of 'coast' the water is on/);
+  });
+
+  it("says so when a placed feature has no extent", () => {
+    const src = MAP(`bay "Gull Bay" : on coast at (120,390)`);
+    expect(renderSource(src).diagnostics.map((d) => d.message).join()).toMatch(/has no size=/);
+  });
+});
+
+describe("detached features draw a shape beside the host (#93)", () => {
+  const ISLE = (line: string): string =>
+    `# Coast\nmap: region\nextent: 900x600mi\n\n[water]\n` +
+    `coastline coast : path (210,0) (150,300) (140,600)\nsea "The Sea" : west of coast\n${line}\n`;
+
+  it("an island renders a polygon rather than parsing clean and drawing nothing", () => {
+    const svg = renderSource(ISLE(`island : near coast at (95,250) size=40mi`)).svg;
+    const plain = renderSource(ISLE("")).svg;
+    expect(svg.length).toBeGreaterThan(plain.length);
+    expect(svg).toMatch(/<polygon/);
+  });
+
+  it("PROMOTION IS GEOMETRY-STABLE: naming the island does not reshape it", () => {
+    // The reason its outline is keyed on the placed data rather than on its id
+    // the way an ordinary blob is. An id-keyed outline would change shape at
+    // the exact moment a campaign named the island, which ADR 0023 forbids.
+    const anonymous = renderSource(ISLE(`island : near coast at (95,250) size=40mi`)).svg;
+    const named = renderSource(ISLE(`island himling "Himling" : near coast at (95,250) size=40mi`)).svg;
+    const poly = (s: string): string => /points="([^"]+)"[^>]*\/>(?![\s\S]*<polyline)/.exec(s)?.[1] ?? "";
+    const shapeOf = (s: string): string[] => [...s.matchAll(/<polygon points="([^"]+)"/g)].map((m) => m[1]!);
+    expect(shapeOf(named)).toEqual(shapeOf(anonymous));
+    expect(poly(named)).toBe(poly(anonymous));
+  });
+
+  it("says so when a detached feature has no extent", () => {
+    expect(renderSource(ISLE(`island : near coast at (95,250)`)).diagnostics.map((d) => d.message).join())
+      .toMatch(/has no size=/);
+  });
+
+  it("leaves the coastline itself untouched", () => {
+    const coast = (s: string): string => /id="cd-coast-coast"[^>]*>.*?points="([^"]+)"/s.exec(s)?.[1] ?? "";
+    expect(coast(renderSource(ISLE(`island : near coast at (95,250) size=40mi`)).svg))
+      .toBe(coast(renderSource(ISLE("")).svg));
   });
 });

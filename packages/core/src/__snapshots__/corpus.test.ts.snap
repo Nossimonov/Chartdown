@@ -6943,7 +6943,12 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
           "level": "",
           "line": 12,
           "name": "Gull Bay",
-          "pairs": [],
+          "pairs": [
+            {
+              "key": "size",
+              "value": "90mi",
+            },
+          ],
           "placements": [
             {
               "form": "on",

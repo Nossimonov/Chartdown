@@ -22,6 +22,26 @@ export interface PlacedFeature {
   anchor: XY;
   /** Extent along the host, in rendered units. */
   size: number;
+  /**
+   * Which way is SEAWARD, as a unit vector — resolved from the map, not
+   * declared on the feature (spec 05 §4). A cape juts toward this; a bay bites
+   * away from it. Absent, the caller could not tell a headland from a harbour,
+   * so the renderer says so rather than guessing.
+   */
+  seaward?: XY;
+}
+
+/**
+ * Which side of a line the water lies on, from the water's OWN declaration.
+ *
+ * `sea "The Argen Sea" : west of coast` already says it, so an author never
+ * restates it on each cape — and because it is a compass direction rather than
+ * a winding rule, it holds however the coastline happens to be drawn. Reversing
+ * a coastline's `from`/`to` must not turn its headlands into bays.
+ */
+export function seawardSign(normal: XY, seaward: XY | undefined): number {
+  if (!seaward) return 1;
+  return normal.x * seaward.x + normal.y * seaward.y >= 0 ? 1 : -1;
 }
 
 /**
@@ -65,9 +85,12 @@ function applyOne(curve: XY[], f: PlacedFeature): XY[] {
   const anchorIndex = nearestIndex(curve, f.anchor);
   if (anchorIndex < 0) return curve;
   const half = f.size / 2;
-  // `bite` pulls landward, which is the opposite side from a jut. Direction is
-  // resolved from the host, not declared (spec 05 §4) — see `outwardSign`.
-  const sign = f.morph === "bite" ? -1 : 1;
+  // A jut goes SEAWARD and a bite goes landward. The seaward side is resolved
+  // from the map (see `seawardSign`) at the anchor, then held constant across
+  // the window so the bump stays one coherent shape rather than flipping
+  // sides where the curve turns.
+  const facing = seawardSign(normalAt(curve, anchorIndex), f.seaward);
+  const sign = (f.morph === "bite" ? -1 : 1) * facing;
   const arc = arcLengths(curve);
   const at = arc[anchorIndex]!;
 

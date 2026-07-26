@@ -11,6 +11,7 @@
 import type { EntityNode, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
+import { deformCurve, type Morph, type PlacedFeature } from "./morphology";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
@@ -54,6 +55,81 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const lookup = (ref: Ref): Resolved | undefined =>
     resolved.get(ref.form === "id" ? ref.value : (byName.get(ref.value) ?? slugify(ref.value)));
   const toXY = (p: Point): XY => ({ x: p.x * scale, y: p.y * scale });
+
+  // ---------- placed morphology (#93, spec 05 §4, ADR 0023) ----------
+  //
+  // Indexed from the PLACEMENTS before anything resolves, because a feature's
+  // geometry needs only its own data — kind, anchor, size — and the host's
+  // curve. Deforming inside the host's own resolution is what makes the rest
+  // of the pipeline follow for free: an `along`-following border splices the
+  // host's polyline during the same pass, so a realm bounded by a coast picks
+  // up that coast's capes without knowing they exist.
+  const refText = (ref: Ref): string => ref.value;
+  /** Which way the sea lies from a given line, from the water's own half-plane. */
+  const seawardByHost = new Map<string, XY>();
+  for (const e of model.entities) {
+    if (e.section !== "water") continue;
+    for (const p of e.placements) {
+      if (p.kind !== "relational" || p.form !== "side-of") continue;
+      const vec = COMPASS_VECTORS[p.compass];
+      if (vec) seawardByHost.set(refText(p.ref), vec);
+    }
+  }
+  const featuresByHost = new Map<string, { f: PlacedFeature; word: string; line: number }[]>();
+  for (const e of model.entities) {
+    const morph = model.facetOf(e.typeWord, "morph") as Morph | undefined;
+    if (!morph || morph === "detached") continue;
+    for (const p of e.placements) {
+      if (p.kind !== "relational" || p.form !== "on" || !p.point) continue;
+      const host = refText(p.ref);
+      const sizeText = pairOf(e.pairs, "size");
+      if (sizeText === undefined) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `'${e.typeWord}' on '${host}' has no size= — a placed feature needs an extent along its host to be drawn (spec 05 §4)` });
+        continue;
+      }
+      const seaward = seawardByHost.get(host);
+      if (!seaward) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `nothing declares which side of '${host}' the water is on, so '${e.typeWord}' cannot know which way to face — add e.g. 'sea : west of ${host}' (spec 05 §4)` });
+      }
+      const entry: { f: PlacedFeature; word: string; line: number } = {
+        f: { morph, anchor: toXY(p.point), size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}) },
+        word: e.typeWord ?? "feature",
+        line: e.line,
+      };
+      const list = featuresByHost.get(host) ?? [];
+      list.push(entry);
+      featuresByHost.set(host, list);
+    }
+  }
+  /** Every name this entity answers to, since a feature may reference either. */
+  const hostKeys = (e: EntityNode): string[] => [...e.ids, ...(e.name ? [e.name] : [])];
+
+  /**
+   * The finished course of a line: spec 02 §9's noise-free spline, then the
+   * features DECLARED on it (spec 05 §4).
+   *
+   * Both spellings of a course go through here. A coastline may be written
+   * `coastline : path (…) (…)` or `coastline : from (…) via (…) to (…)`, and
+   * those are handled in different branches — wiring the deformation into only
+   * one of them made every feature on a `from`/`to` coast silently do nothing,
+   * which is exactly what happened to Vessany's Gull Bay.
+   */
+  const finishCourse = (e: EntityNode, controls: XY[]): XY[] => {
+    const curve = catmullRom(controls, 8);
+    const placed = hostKeys(e).flatMap((k) => featuresByHost.get(k) ?? []);
+    if (placed.length === 0) return curve;
+    const out = deformCurve(curve, placed.map((x) => x.f));
+    for (const x of placed) {
+      // A feature that moved nothing was clamped away entirely: the stretch
+      // could not hold it. Silence would leave a line in the document with no
+      // counterpart on the map.
+      const moved = out.some((q, i) => Math.abs(q.x - curve[i]!.x) + Math.abs(q.y - curve[i]!.y) > 1e-6);
+      if (!moved) {
+        diagnostics.push({ severity: "warning", line: x.line, message: `'${x.word}' is too large for this stretch of '${keyOf(e)}' and was reduced until nothing was left — try a smaller size= or a straighter host (spec 05 §4)` });
+      }
+    }
+    return out;
+  };
 
   const refPoint = (ref: Ref): XY | null => {
     const r = lookup(ref);
@@ -172,6 +248,33 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const chain = model.chainOf(e.typeWord);
     const out: Resolved = {};
     let onRef: Ref | null = null;
+    // A DETACHED feature is a shape beside its host rather than a deformation
+    // of it (spec 05 §4): an island, an islet, an oxbow. It needs no host
+    // curve, only its own anchor and size — which is why it is resolved here
+    // rather than in `finishCourse`.
+    //
+    // Its outline is keyed on the PLACED DATA, not on identity. Blobs key on
+    // their id so that moving one slides the same shape, but ADR 0023 requires
+    // that NAMING a morphology feature must not move or reshape it — and an
+    // id-keyed outline would do exactly that the moment an island earned a
+    // name. The two rules genuinely conflict; the ADR's promise wins here,
+    // and the cost is that moving an island reshapes it.
+    if (model.facetOf(e.typeWord, "morph") === "detached") {
+      const anchor = e.placements.find((p): p is Point => p.kind === "point")
+        ?? e.placements.flatMap((p) => (p.kind === "relational" && p.form === "at" && p.target.kind === "point" ? [p.target] : []))[0];
+      const sizeText = pairOf(e.pairs, "size");
+      if (anchor && sizeText !== undefined) {
+        const center = toXY(anchor);
+        const radius = (measureToNumber(sizeText) / 2) * scale;
+        out.polygon = catmullRom(blob(center, radius, rng(hashSeed(0, Math.round(center.x), Math.round(center.y * 31 + radius)))), 5, true);
+        out.point = center;
+        out.radius = radius;
+        return out;
+      }
+      if (anchor && sizeText === undefined) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `'${e.typeWord}' has no size= — a placed feature needs an extent to be drawn (spec 05 §4)` });
+      }
+    }
     for (const p of e.placements) {
       if (p.kind === "point") out.point = toXY(p);
       else if (p.kind === "point-range") {
@@ -261,8 +364,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             : literal || e.archetype !== "terrain" || spliced.length < 3 ? spliced
             : organicOutline(spliced, hashSeed(model.seed, hashString(entityAnchor(e) ?? e.typeWord ?? "area"), spliced.length));
         } else {
-          // The TRUE curve: a spline through the declared points, no noise.
-          out.polyline = catmullRom(pts, 8);
+          // The TRUE curve: a spline through the declared points, no noise
+          // (spec 02 §9, affirmed by ADR 0023) — then the features DECLARED
+          // on it, which is a discrete layer rather than roughness.
+          out.polyline = finishCourse(e, pts);
           out.ridge = p.shape === "ridge";
           if (out.ridge) {
             const declared = pairOf(e.pairs, "width");
@@ -348,7 +453,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               const via = p.via.map(toXY);
               const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
               const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
-              out.polyline = catmullRom([a, ...via, b], 8);
+              out.polyline = finishCourse(e, [a, ...via, b]);
               // Coastlines declared from/via/to register their curves too —
               // sea boundaries must reuse them however the coast was written.
               if (chain.includes("coastline")) coastCurves.push({ raw: [a, ...via, b], finished: out.polyline });
