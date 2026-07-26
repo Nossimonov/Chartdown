@@ -67,9 +67,32 @@ Nine issues, all on `0.4-dev`.
 | **Free text placements + `key=`** (#107) | The set is `<point\|cell>`, `<range>`, `sprawl <range>`, `along <ref>`. `along` now draws the caption **on the course**. `key=<n>` works without `labels: keyed` — a numbered route through a named map. |
 | **Fields** (#106, ADR 0018) | `light: dark` (and `light <level>: daylight`) makes a dark map with emitters as pools. Declare your own: `[vocab] radiation : field occluded=none states=none,heavy,lethal`, then `radiation: heavy` and `reactor : F4 radiation=40ft`. |
 
-## Wave 3 — new since the last round, and the focus of this pass
+## Wave 4 — the focus of this pass
 
-Everything below is new language surface. It is the largest batch so far, so a document that exercises several at once is more valuable than one probe each.
+Wave 4 adds **no syntax at all**. Both issues are diagnostics: things a document was always allowed to say, that no reader would mean, and that until now said nothing. So the way to exercise this wave is the opposite of the last one — **run `check` over maps you have already written and believe are correct**, and judge what it says.
+
+That framing matters, because the most valuable finding here is a **false positive**. A warning on something legitimate is a bug in the warning, and most of the exemptions in the second row below were not designed in — they were **caught**, by running the lints over documents already in this repo. The cave mouth is the sharpest case: the lint reported #113, a feature this same phase shipped, as a defect. Run against the whole committed corpus the lints found **one** real defect and five legitimate readings they had to be taught; every one of those is now a test.
+
+| Feature | What to exercise |
+|---|---|
+| **Coherence lints** (#123, spec 06 §10) | Six warning-level checks over resolved battlemap geometry: `door-onto-void`, `structure-unsupported`, `unreachable-room`, `dangling-connector`, `overlapping-structures`, `terrain-crosses-wall`. Build a room with no way in, a stair landing in solid rock, two rooms clipping corners — each should name the line and the spec section. |
+| **…and the readings they must NOT report** | A window facing open air; an **unparented** opening (a cave mouth is rock one side and floor the other by design, #113); an upper room standing on the room below; a room reachable only by a stair declared **on another level**; a room wholly **inside** another (containment is not overlap); terrain covering a **whole** footprint (a flooded room); a road entering a gatehouse **through its gate**. If any of these warns, that is the bug. |
+| **Dead declarations** (#116, ADR 0022, spec 08 §6) | A `[theme]` subject nothing resolves to (`mountian : fill=…`); a subject that *is* styled but whose property is never read for it (`glyph=` on a battlemap's area terrain — it is filled, not marked); a `[glyphs]` name no `glyph=`/`asset=` references; a `[vocab]` word this document neither carries nor derives from. |
+| **…and its scope rule** | Only the theme **selected for this render** and the document's **own** `[vocab]` are checked. A `use:`-imported theme, the built-in default, an imported vocabulary library, and a vocabulary document's own words are all exempt — they exist to offer more than any one map spends. Warnings there would be the bug. |
+| **Theme diagnostics name the theme file** | A warning about a theme line carries a line number in the **theme**, and the CLI now prints it against `--theme`'s path. Previously it was printed against the map's path, so a reader was sent to the wrong file. Surfaces with no path to show say `theme line 4` rather than `line 4`. |
+
+### Two things to know before you file
+
+- **Warnings, never errors.** Every lint and every dead-declaration warning prints and leaves `check` at exit 0. These reason about *intent*, so a false positive must cost you a line of output and never a blocked render. There is deliberately **no suppression syntax** yet — the first real false positive should shape the escape hatch rather than have it guessed in advance, which is exactly what we want from this pass.
+- **Theme liveness is only as complete as the render.** An entry is live if the render *asked for* it, so rendering a single level of a multi-level battlemap — the `level` option, reachable through the MCP `render` tool and `RenderOptions`, though not the CLI — can leave a genuinely useful entry looking dead. Known and recorded in ADR 0022; a full render is the reference case, and it is what `check` does.
+
+### One committed example changed
+
+**The Gilded Tankard's Snug had no door.** The lints found it in our own showcase — a full perimeter with no opening, which is exactly what `unreachable-room` is for. The example now reads `door : G4.s` and both its SVGs are regenerated. If you have that map memorized, the change is the fix.
+
+## Wave 3 — verified in the previous round
+
+Cleared by both testing agents with no bugs. Listed here as the current language surface, not as this pass's focus.
 
 | Feature | What to exercise |
 |---|---|
@@ -90,9 +113,9 @@ Everything below is new language surface. It is the largest batch so far, so a d
 
 A **feature line with several cells drew only the first** (`torch : D8 H8 L8` rendered one torch). Barriers always drew all of them; features did not, silently, for as long as features have existed. If you have a map with multi-cell feature lines, its render will change — that change is the fix.
 
-## Fixed since the last round — please re-verify these five
+## Bug fixes from the Wave 2 battlemap round — already re-verified
 
-All from the battlemap exercise, all on `0.4-dev`. Your original repros should now behave as marked.
+Kept as a record of what changed and why; these were confirmed fixed in an earlier pass and need no re-testing unless something below looks wrong in passing.
 
 | Issue | What was wrong | What to check now |
 |---|---|---|
@@ -110,27 +133,34 @@ All from the battlemap exercise, all on `0.4-dev`. Your original repros should n
 
 Accepted and specified, but **not implemented**:
 
-- **#123** the six coherence lints (`door-onto-void`, `overlapping-structures`, `terrain-crosses-wall`, …)
-- **#116** dead-declaration warnings
 - **#124** staged revelation (`hidden=<group>`, `[gm <group>]`, `--reveal`)
 - **#93** placed coast/river morphology (`cape`, `cove`, `island` on a spine)
 
 Also open: **#74** (themes fleshed out), which is the phase's capstone.
 
+Known and already filed — **please don't re-report**:
+
+- **#145** — a path's terminus is drawn to the **cell centre**, so a road ending at a boundary visibly stops mid-square. Found while judging a #123 lint result: Fairwater Manor's King's Road was written one cell *inside* the gatehouse to work around it, which is the document being bent to fit the render.
+- **#141** — a river does not thicken past a confluence. Renderer work, deferred deliberately.
+- **#138** — point labels do not rotate into diagonal gaps.
+
+Still expected, not bugs (repeated from above because they keep getting reported): **`chartdown: 0.4` warns**, and **declared states with no theme treatment render alike** (that is #74).
+
 ## What feedback is most useful
 
-The two previous exercises worked because they authored something real at scale and reported what could not be *said*, not just what looked wrong. Same again:
+The previous exercises worked because they authored something real at scale and reported what could not be *said*, not just what looked wrong. Most of that still applies — but **this wave inverts the priority order**, because Wave 4 ships no syntax, only judgement about existing documents.
 
-1. **Workarounds you had to invent.** If you wrote something awkward to get an effect, that is the finding — say what you wanted to write.
-2. **Silent wrongness.** Anything that renders plausibly but is not what the document says. This has been the most valuable category by far.
-3. **Diagnostics that misled you.** A wrong or unhelpful error message is a bug; one of them (`"a parent structure, a freestanding wall, or a declared impassable surface"` promising more than the code checked) is how a real regression was caught while writing this document.
-4. **Whether the new noise is worth it.** 0.4 warns in places 0.3 did not. If a warning fires on something legitimate, that is a false positive worth reporting — two classes were already found and exempted this way.
+1. **False positives — the top priority this round.** A lint or dead-declaration warning that fires on something legitimate is a bug in the warning. Say what you meant by the line, not just that it warned; the reading you intended is what the exemption has to be written against. Three were caught this way before #123 shipped and each became a test.
+2. **True positives you disagree with.** A warning can be technically right and still not worth its noise. If a lint is correct but you would not want it on your maps, that is a finding — the alternative is a suppression syntax, and we would rather narrow the lint than add one.
+3. **Diagnostics that misled you.** A message that names the wrong problem, or points at the wrong file or line, is a bug. Wave 4 changed *where* theme diagnostics are reported — if one still sends you to the wrong place, say so.
+4. **Silent wrongness.** Still the most valuable category overall: anything that renders plausibly but is not what the document says. These two issues exist to shrink it, so anything they *missed* is worth as much as anything they got wrong.
+5. **Workarounds you had to invent.** If you wrote something awkward to get an effect, say what you wanted to write. #145 came from exactly this — a road written one cell inside a gatehouse because the render stopped short.
 
 Reproductions in the style of #101–#105 (a minimal document, the command, expected vs actual) are ideal and made the last batch quick to fix.
 
 ## Current state
 
-- **310 tests** green, typecheck clean, committed example SVGs regenerated where Wave 3 changed them (Gumdrop Vale's forest, Vessany's and Sundered Reach's labels) and verified against the renderer.
-- Phase 4: **30 of 37 issues closed**. Milestone: *Phase 4 — Language depth (v0.4)*.
-- ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md), [0019](decisions/0019-line-labels-claim-before-point-labels.md), [0020](decisions/0020-render-resolution-is-editorial.md), [0021](decisions/0021-a-map-is-the-sum-of-its-files.md).
+- **355 tests** green, typecheck clean. The only committed example changed by Wave 4 is the Gilded Tankard (the Snug's door); the corpus verifies unchanged otherwise, through the same action driver CI uses.
+- Phase 4: **39 issues, 31 closed, 8 open.** Two of the open ones — **#123** and **#116** — are implemented and committed on this branch; they close when Phase 4 merges, since `Closes #n` only fires on the default branch.
+- ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md), [0019](decisions/0019-line-labels-claim-before-point-labels.md), [0020](decisions/0020-render-resolution-is-editorial.md), [0021](decisions/0021-a-map-is-the-sum-of-its-files.md), [0022](decisions/0022-a-declaration-is-a-promise.md).
 - The language reference for agents is `docs/spec/digest.md` **on this branch** — the published `llms-full.txt` is 0.3.3 and does not describe any of the above.
