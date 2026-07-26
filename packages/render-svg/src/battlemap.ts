@@ -710,6 +710,18 @@ export function renderBattlemap(
   function renderTerrain(e: EntityNode, titleEl: string, anchor: string | undefined): void {
     const chain = model.chainOf(e.typeWord);
     const fill = model.theme.terrainFill(chain);
+    // Appearance zones on an AREA (spec 08 §2, #150): the boundary band in the
+    // edge style, the interior in core. A rect union bands per rect — an inset
+    // rect is the interior, and the base rect showing round it is the band.
+    const zones = model.theme.zones(chain, fill);
+    const bandRect = (r: { x: number; y: number; w: number; h: number }): string => {
+      if (!zones) return el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill });
+      const inset = Math.min(zones.width, r.w / 2, r.h / 2);
+      return (
+        el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: zones.edge }) +
+        el("rect", { x: r.x + inset, y: r.y + inset, width: r.w - 2 * inset, height: r.h - 2 * inset, fill: zones.core })
+      );
+    };
     const areaParts: string[] = [];
     // One fall annotation per entity, not one per range in its footprint.
     let fellAnnotated = false;
@@ -719,7 +731,7 @@ export function renderBattlemap(
         for (const arg of p.args) {
           if (arg.kind === "range") {
             const r = rangeRect(arg);
-            areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill }));
+            areaParts.push(bandRect(r));
             if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
             if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
             // An unfloored area falls to the level below (spec 06 §5); `to=`
@@ -739,7 +751,7 @@ export function renderBattlemap(
             }
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
-            areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
+            areaParts.push(bandRect({ x: o.x, y: o.y, w: CELL, h: CELL }));
           }
         }
       } else if (p.kind === "shape" && p.shape === "path") {
@@ -748,7 +760,18 @@ export function renderBattlemap(
         extendToFrame(pts, addresses, frame);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = model.theme.pathStroke(chain);
-        pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        const bandStroke = chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke;
+        // Zones on a path BAND (spec 08 §2, #150): the full width in the edge
+        // style, then a narrower centre strip in core — a metalled road with
+        // verges, a river with shallows.
+        const pathZones = model.theme.zones(chain, bandStroke);
+        if (pathZones) {
+          pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: pathZones.edge, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          const coreWidth = Math.max(width - 2 * pathZones.width, 1);
+          pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        } else {
+          pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        }
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
@@ -1058,6 +1081,10 @@ export function renderBattlemap(
   function renderFreeText(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
     const label = e.texts[0] ?? e.name;
     if (!label) return;
+    // A caption takes the word's own `fill` (spec 08 §3), with the `ink`
+    // surface as the default. `note : fill=` reached nothing before (#150),
+    // and a caption you cannot colour disappears into the paper on a dark map.
+    const textFill = model.theme.prop(model.chainOf(e.typeWord), "fill") ?? model.theme.surface("ink", "fill", INK);
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
     const address = e.placements.find((p): p is Address => p.kind === "address");
     let at: XY | null = null;
@@ -1080,7 +1107,7 @@ export function renderBattlemap(
         const d = `M${fmt(course[0]!.x)} ${fmt(course[0]!.y)}` + course.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
         into.push(
           `<defs><path id="${pid}" d="${d}"/></defs>` +
-            `<text font-size="9" fill="${INK}" text-anchor="middle" font-family="sans-serif">` +
+            `<text font-size="9" fill="${textFill}" text-anchor="middle" font-family="sans-serif">` +
             `<textPath href="#${pid}" startOffset="50%"><tspan dy="-4">${escapeText(label)}</tspan></textPath></text>`,
         );
         return;
@@ -1101,7 +1128,7 @@ export function renderBattlemap(
       el("g", { id: anchor }, titleEl,
         text(label, {
           x: at.x, y: at.y, "font-size": size, "letter-spacing": spacing,
-          fill: INK, "text-anchor": "middle", "font-family": "sans-serif",
+          fill: textFill, "text-anchor": "middle", "font-family": "sans-serif",
         }),
       ),
     );

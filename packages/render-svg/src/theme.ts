@@ -263,6 +263,44 @@ export class Theme {
     return fill;
   }
 
+  /**
+   * Appearance zones for a chain (spec 08 §2): on an area, blob, or ridge
+   * `edge` is the boundary band and `core` the interior; on a path band `edge`
+   * is the two side margins and `core` the centre strip.
+   *
+   * Returns null when the theme declares neither, so a caller can keep its
+   * plain single-fill path untouched — which is what every caller did before
+   * (#150), leaving one of the four spec'd combinations implemented.
+   */
+  zones(chain: string[], base: string): { edge: string; core: string; width: number } | null {
+    const edge = this.zoneProp(chain, "edge");
+    const core = this.zoneProp(chain, "core");
+    if (edge === undefined && core === undefined) return null;
+    // Declaring only one zone means the other keeps the word's plain fill: an
+    // author naming a shoreline band should not have to restate the interior.
+    return { edge: edge ?? base, core: core ?? base, width: this.edgeWidth(chain) ?? 4 };
+  }
+
+  /**
+   * A zone's colour, and ONLY from a `word.core`/`word.edge` entry.
+   *
+   * `prop(chain, key, { zone })` deliberately falls back to the bare word, so
+   * asking it whether a zone is declared always answers yes for any word with
+   * a fill — which made "is this banded?" unanswerable, and would have banded
+   * every area on every map the moment a caller started asking (#150).
+   */
+  private zoneProp(chain: string[], zone: "core" | "edge"): string | undefined {
+    for (const word of chain) {
+      const record = this.map.get(`${word}.${zone}`);
+      const value = record?.["fill"] ?? record?.["stroke"];
+      if (value !== undefined) {
+        this.hit(`${word}.${zone}`, record?.["fill"] !== undefined ? "fill" : "stroke");
+        return value;
+      }
+    }
+    return undefined;
+  }
+
   /** Edge-zone thickness in px, if the theme styles an edge for this chain. */
   edgeWidth(chain: string[]): number | null {
     const styled = chain.find((word) => this.map.has(`${word}.edge`));

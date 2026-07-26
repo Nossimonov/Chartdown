@@ -683,7 +683,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
         labelBuckets[0]!.push(
           `<defs><path id="${pid}" d="${d}"/></defs>` +
-            `<text font-size="11" fill="${INK}" opacity="0.85" text-anchor="middle" font-family="sans-serif">` +
+            `<text font-size="11" fill="${theme.prop(chain, "fill") ?? theme.surface("ink", "fill", INK)}" opacity="0.85" text-anchor="middle" font-family="sans-serif">` +
             `<textPath href="#${pid}" startOffset="50%"><tspan dy="-4">${esc(label)}</tspan></textPath></text>`,
         );
         continue;
@@ -904,12 +904,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         continue;
       }
       const areaParts: string[] = [titleEl];
-      const edgeFill = r.alongSpans?.length ? undefined : theme.prop(chain, "fill", { zone: "edge" });
-      if (edgeFill) {
-        // Edge zone (spec 08 §2): boundary band in the edge style, interior in core.
-        const edgeW = theme.edgeWidth(chain) ?? 4;
-        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: edgeFill, stroke: shade(edgeFill), "stroke-width": 1 }));
-        areaParts.push(el("polygon", { points: pointsAttr(shrinkPolygon(r.polygon, edgeW * 2)), fill: wordFill }));
+      const zones = r.alongSpans?.length ? null : theme.zones(chain, wordFill);
+      if (zones) {
+        // Zones (spec 08 §2): boundary band in the edge style, interior in
+        // core. The interior used the word's plain fill, so `forest.core` was
+        // the one half of the sentence nothing read (#150).
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: zones.edge, stroke: shade(zones.edge), "stroke-width": 1 }));
+        areaParts.push(el("polygon", { points: pointsAttr(shrinkPolygon(r.polygon, zones.width * 2)), fill: zones.core }));
       } else if (r.alongSpans?.length) {
         // An area whose boundary FOLLOWS features doesn't stroke itself —
         // the followed features own their lines (the coast draws the coast,
@@ -1026,9 +1027,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             }),
           );
         }
+        // A path band's CORE is its centre strip (spec 08 §2, #150). Only the
+        // edge margins were read here, so half the sentence was inert.
+        const coreStroke = theme.prop(chain, "fill", { zone: "core" }) ?? theme.prop(chain, "stroke", { zone: "core" }) ?? stroke.stroke;
         lineParts.push(
           el("polyline", {
-            points: pointsAttr(r.polyline), fill: "none", stroke: stroke.stroke,
+            points: pointsAttr(r.polyline), fill: "none", stroke: coreStroke,
             "stroke-width": width, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
           }),
         );

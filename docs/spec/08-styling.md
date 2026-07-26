@@ -30,7 +30,7 @@ lollipop : "M0,-3 a5,5 0 1,1 0.1,0 M0,2 L0,10"
 - **State variants** — `word.state` (`wagon.overturned`), for states the vocabulary declares.
 - **Appearance zones** — `word.core` and `word.edge`, **reserved suffixes** a vocabulary MUST NOT declare as states. Zones are renderer-geometric roles: on path bands, `edge` is the two side margins and `core` the center strip; on areas, blobs, and ridges, `edge` is the boundary band and `core` the interior (foothills are `mountains.edge`; a treeline is `forest.edge`). The bare word is shorthand for core.
 - **The `side.` namespace** — `side.<word>` colors token allegiances (`side.party`, `side.hive-swarm`).
-- **Surface words** — a closed set the renderer owns: `paper`, `grid`, `fog`, `ink`, `light`, `ledge`, `leader` (the hairline connecting a displaced label to its marker, spec 07 §5).
+- **Surface words** — a closed set the renderer owns: `paper`, `grid`, `fog`, `ink`, `light`, `ledge`, `leader` (the hairline connecting a displaced label to its marker, spec 07 §5). **Each surface is one colour and reads exactly one property** — `fill` for `paper`/`fog`/`ink`/`light`, `stroke` for `grid`/`ledge`/`leader`. Any other property on a surface is inert and reported as such (§6); `ink : stroke` and `fog : opacity` are not second spellings of the colour. A surface is not an entity, so it has no zones and no states.
 
 ## 3. The appearance vocabulary (closed)
 
