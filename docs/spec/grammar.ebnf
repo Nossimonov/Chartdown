@@ -23,6 +23,7 @@ map-type       = "battlemap" | "hexcrawl" | "region" ;
                  (* experimental types carry a -beta suffix *)
 header-line    = header-key , ":" , predicate , EOL ;
 header-key     = "ground" | "chartdown" | "id" | "grid" | "scale" | "extent" | "seed"
+               | "detail"
                | "use" | "theme" | "labels" | "legend" | "scale-bar"
                | "compass" | "numbers" | "levels" | "level" ;
                  (* "use" is repeatable; unknown keys warn.
@@ -30,6 +31,7 @@ header-key     = "ground" | "chartdown" | "id" | "grid" | "scale" | "extent" | "
                     Values are unconstrained HERE, but five keys carry closed
                     value sets checked semantically (spec 01 §2):
                       labels    = "names" | "keyed" | "none" ;
+                      detail    = "overview" | "reference" ;
                       legend | scale-bar | compass | numbers = "on" | "off" ;
                     plus map-line/kind-line above. Out-of-set = error, never a
                     silent default.

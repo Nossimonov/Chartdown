@@ -29,3 +29,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0017](0017-openings-perforate-terrain.md) | Openings may perforate declared terrain; `passes=` is a closed value set | Accepted |
 | [0018](0018-fields-generalize-light.md) | Ambient conditions are content; the vacant `light` archetype becomes `field` | Accepted |
 | [0019](0019-line-labels-claim-before-point-labels.md) | Line labels claim before point labels — leaders gave points a way to move that lines lack | Accepted |
+| [0020](0020-render-resolution-is-editorial.md) | Render resolution is an author choice (`detail: overview\|reference`), not a fixed canvas | Accepted |

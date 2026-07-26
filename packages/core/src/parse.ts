@@ -47,26 +47,12 @@ const MAP_TYPES = new Set(["battlemap", "hexcrawl", "region"]);
 export const KNOWN_HEADER_KEYS = new Set([
   "map", "kind", "chartdown", "id", "grid", "scale", "extent", "seed",
   "use", "theme", "labels", "legend", "scale-bar", "compass", "numbers",
-  "levels", "level", "ground",
+  "levels", "level", "ground", "detail",
 ]);
 
 /** Document kinds a `kind:` header may name — `map` is spelled by `map:` itself. */
 export const DOCUMENT_KINDS = new Set(["vocabulary", "theme"]);
 
-/**
- * Header keys whose value is a closed set, and therefore checkable.
- *
- * These all fed a bare equality test in the renderer (`=== "on"`), so every
- * near-miss an author would reasonably write — `legend: yes`, `compass: true`,
- * `numbers: ON` — silently turned the feature OFF, and `labels: dense` was
- * silently read as `names`. The document said one thing and rendered another
- * with nothing to say so.
- *
- * These are ERRORS, not warnings, matching `map:` and `kind:` — the language's
- * other closed header sets. Unlike vocabulary facets there is no open-vocabulary
- * argument here: the language defines every legal value, so an out-of-set one
- * cannot be an author extending the language and can only be a mistake.
- */
 /**
  * Header keys whose value is a FORMAT rather than a value set.
  *
@@ -96,8 +82,23 @@ export const HEADER_FORMATS: Record<string, { re: RegExp; expected: string }> = 
 const formatMessage = (key: string, value: string): string =>
   `'${key}: ${value}' is malformed — expected ${HEADER_FORMATS[key]!.expected} (spec 01 §2)`;
 
+/**
+ * Header keys whose value is a closed set, and therefore checkable.
+ *
+ * These all fed a bare equality test in the renderer (`=== "on"`), so every
+ * near-miss an author would reasonably write — `legend: yes`, `compass: true`,
+ * `numbers: ON` — silently turned the feature OFF, and `labels: dense` was
+ * silently read as `names`. The document said one thing and rendered another
+ * with nothing to say so.
+ *
+ * These are ERRORS, not warnings, matching `map:` and `kind:` — the language's
+ * other closed header sets. Unlike vocabulary facets there is no open-vocabulary
+ * argument here: the language defines every legal value, so an out-of-set one
+ * cannot be an author extending the language and can only be a mistake.
+ */
 export const CLOSED_HEADER_VALUES: Record<string, Set<string>> = {
   labels: new Set(["names", "keyed", "none"]),
+  detail: new Set(["overview", "reference"]),
   legend: new Set(["on", "off"]),
   "scale-bar": new Set(["on", "off"]),
   compass: new Set(["on", "off"]),
@@ -421,6 +422,16 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // any value renders, a declared one is silent, a typo warns. Without this
     // the rule reached predicates but not headers — and an ambient is set once
     // and never looked at again, so `light: darkk` gave a silently lit dungeon.
+    // `detail:` sets the render resolution of a GRIDLESS canvas (#139). A
+    // battlemap or hexcrawl sizes itself from its grid, so the key is inert
+    // there — and an inert key that parses clean is the failure this project
+    // has spent a phase removing (#126, #131, #135, #136).
+    for (const h of document.header) {
+      if (h.key !== "detail" || document.mapType === "region") continue;
+      diagnostics.push(
+        warning(h.line, `'detail:' sets the render resolution of a gridless canvas and does nothing on a ${document.mapType} — its size comes from its grid (spec 02 §5)`),
+      );
+    }
     for (const h of document.header) {
       if (vocab.archetypeOf(h.key) !== "field") continue;
       const declared = vocab.statesOf(h.key);

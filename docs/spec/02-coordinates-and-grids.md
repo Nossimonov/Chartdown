@@ -6,6 +6,7 @@
 
 - Grids are 1-indexed. Row 1 (grids) and y=0 (gridless) are north; columns/x grow east, rows/y grow south. The origin is always northwest.
 - `scale:` (grid maps) gives the real size of one cell: `scale: 5ft`, `scale: 6mi`.
+- `detail:` (gridless maps) chooses the **render resolution** — how much canvas the map is drawn onto, and therefore how much detail survives label arbitration. `overview` (default) is readable taken in whole; `reference` doubles the canvas for a map meant to be studied at zoom, keeping fine names a smaller frame would shrink or drop. Font sizes are absolute, so the trade runs both ways: a reference map's text is proportionally smaller when the whole map is shown at once. Closed value set; inert on grid maps, whose size comes from the grid, and using it there warns ([ADR 0020](../decisions/0020-render-resolution-is-editorial.md)).
 - `extent:` (gridless maps) gives the map's world size: `extent: 900x600mi`.
 - Bare numbers in placements are cells (grid maps) or world units (gridless maps). Explicit units (`70mi`, `20ft`) are always legal and MUST match the map's unit dimension.
 - The optional header key `seed:` takes an integer that varies deterministic organic rendering (§8). Same document + same seed → same geometry, always.

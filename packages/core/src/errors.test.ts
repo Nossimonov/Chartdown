@@ -404,3 +404,22 @@ describe("header formats are checked, not silently defaulted (#136)", () => {
     expect(errorsOf(region("extent: 900x600mi\nground: nonsense"))).toEqual([]);
   });
 });
+
+describe("detail: chooses render resolution (#139, ADR 0020)", () => {
+  const region = (line: string): string => `# T\nmap: region\nextent: 900x600mi\n${line}\n`;
+
+  it("takes its two values and nothing else", () => {
+    for (const ok of ["overview", "reference"]) expect(errorsOf(region(`detail: ${ok}`)), ok).toEqual([]);
+    expect(errorsOf(region("detail: high")).join()).toMatch(/is not one of overview, reference/);
+  });
+
+  it("warns rather than sitting inert on a grid map", () => {
+    // A battlemap sizes itself from its grid, so the key does nothing there —
+    // and a key that parses clean while doing nothing is the defect this phase
+    // removed from five other places (#126, #131, #135, #136).
+    const bm = "# T\nmap: battlemap\ngrid: square 8x6\ndetail: reference\n";
+    expect(warningsOf(bm).join()).toMatch(/does nothing on a battlemap/);
+    expect(errorsOf(bm)).toEqual([]);
+    expect(warningsOf(region("detail: reference"))).toEqual([]);
+  });
+});

@@ -1102,3 +1102,30 @@ describe("leader lines rescue labels that would be omitted (#133)", () => {
     expect(renderSource(crowded, {}).svg).toBe(renderSource(crowded, {}).svg);
   });
 });
+
+describe("detail: reference enlarges the canvas (#139, ADR 0020)", () => {
+  const map = (hdr: string): string =>
+    ["# T", "map: region", "extent: 1750x1550mi", hdr, "[settlements]",
+     'capital hk "Highkeep" : (900,700)'].filter(Boolean).join("\n");
+  const widthOf = (svg: string): number => Number(svg.match(/viewBox="0 0 ([\d.]+)/)![1]);
+
+  it("overview is the default, so existing documents do not move", () => {
+    expect(widthOf(renderSource(map(""), {}).svg)).toBe(820);
+    expect(renderSource(map("detail: overview"), {}).svg).toBe(renderSource(map(""), {}).svg);
+  });
+
+  it("reference doubles the canvas, and the map scales with it", () => {
+    const ref = renderSource(map("detail: reference"), {}).svg;
+    expect(widthOf(ref)).toBe(1640);
+    // Same document, so the marker sits at the same FRACTION of the canvas.
+    // Compare CENTRES, not the rect's x: x is `cx - r` and the tier radius is
+    // an absolute size that deliberately does not scale with the canvas, so
+    // the corner drifts ~0.7% while the centre is exact.
+    const centre = (svg: string): number => {
+      const m = svg.match(/<rect x="([\d.]+)"[^>]*width="([\d.]+)"[^>]*transform="rotate\(45/)!;
+      return Number(m[1]) + Number(m[2]) / 2;
+    };
+    const ratio = centre(ref) / 1640 / (centre(renderSource(map(""), {}).svg) / 820);
+    expect(ratio).toBeCloseTo(1, 3);
+  });
+});
