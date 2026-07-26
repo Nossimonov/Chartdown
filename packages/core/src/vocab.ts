@@ -19,6 +19,11 @@ import { splitLines, tokenize } from "./lex";
 export const CLOSED_FACETS: Record<string, Set<string>> = {
   passes: new Set(["open", "closed", "none"]),
   sight: new Set(["all", "none"]),
+  // How a placed morphology feature relates to the line it sits on (spec 05
+  // §4, ADR 0023). The WORD says what a thing is and how it is coloured; this
+  // says what its geometry does to the host — so `bay` and `cove` both bite,
+  // and `island` and `oxbow` are both detached while being land and water.
+  morph: new Set(["jut", "bite", "detached"]),
 };
 
 /**
@@ -84,6 +89,23 @@ trail : road
 canal : river
 pass : path
 coastline : path
+
+; placed morphology (spec 05 §4, ADR 0023) — discrete features ON a line, each
+; a real addressable entity rather than generated noise. \`morph=\` says what the
+; geometry does to the host line; the word says what the thing IS, which is what
+; a theme colours, so a bite can be water and a jut can be land.
+cape : terrain morph=jut
+headland : cape
+peninsula : cape
+spit : cape
+bay : terrain morph=bite
+cove : bay
+sound : bay
+fjord : sound
+island : terrain morph=detached
+islet : island
+atoll : island
+oxbow : terrain morph=detached
 
 ; crossings
 ford : feature states=difficult

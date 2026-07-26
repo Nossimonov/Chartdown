@@ -72,6 +72,11 @@ border : zone
 
 ; annotation (see section 07)
 note : feature
+
+; placed morphology (§4)
+cape : terrain morph=jut        headland : cape     peninsula : cape    spit : cape
+bay : terrain morph=bite        cove : bay          sound : bay         fjord : sound
+island : terrain morph=detached islet : island      atoll : island      oxbow : terrain morph=detached
 ```
 
 **A solitary mountain is a point, not a small region.** `peak` places one mountain at a position — Erebor's meaning is that it stands *alone*, which `mountains … blob size=` cannot say, because that draws a small mountainous region. `volcano : peak` is an ordinary derivation, so it inherits the point-scale placement and a theme may swap the motif exactly as `licorice-forest` swaps a forest's; absent a theme the renderer still distinguishes the two silhouettes, so the derivation reads on the map rather than only in the display name ([#95](https://github.com/Nossimonov/Chartdown/issues/95)).
@@ -124,7 +129,30 @@ The first vocabulary word is the hex's terrain; subsequent feature words are its
 
 **`[routes]`** — path-archetype words with ordered address sequences (adjacency rules per spec 02 §4). **`[regions]`** — zone-archetype words with address sets and ranges; the renderer derives the boundary.
 
-## 4. Cross-cutting
+## 4. Placed morphology
+
+*(From proposal [#93](https://github.com/Nossimonov/Chartdown/issues/93), decided in [ADR 0023](../decisions/0023-detail-is-data-not-noise.md).)* Matching a hand-drawn coast with `via` points alone costs hundreds of coordinates, and a bare vertex is **not a nameable thing** — you cannot hang a `gm=` note or a `detail=` sub-map on "the third wiggle". Morphology words place the **discrete features** that give a coast or a river life, each a first-class entity:
+
+```chartdown
+[water]
+coastline coast : from (250,20) via (150,182) (112,262) (272,322) to (250,600)
+cape : on coast at (150,182) size=22mi                       ; a nameless headland — real, and pointable-at
+cove : on coast at (196,300) size=15mi                       ; a landward bite
+island himling "Himling" : near coast at (95,250) size=8mi   ; born named
+```
+
+- **Placement** uses the existing relational forms (spec 02 §7): `on <line> at <point>` for a feature that deforms its host, `near <line> at <point>` for a detached one. `size=` is a measure giving its extent along the host.
+- **`morph=` says what the geometry does; the word says what the thing is.** The facet is a closed set — `jut` pushes the host line away from the water, `bite` pulls it landward, `detached` draws a separate shape offset from it. The two are independent on purpose: `bay` and `cove` both bite while being water, `island` and `oxbow` are both detached while being land and water respectively, and a theme colours each by its word.
+- **Direction is inferred from the host, not declared.** A `jut` on a coastline goes seaward and a `bite` goes landward, resolved from which side of the line the water lies on; an author never restates what the coast already knows.
+- **Geometry is a pure function of the placed data** — kind, anchor, size — and is independent of `seed:` and of every other entity. A feature therefore never drifts under an unrelated edit, which is the whole point of ADR 0023.
+- **Promotion is geometry-stable** (spec 03). `island : near coast at (95,250) size=8mi` and `island himling "Himling" : near coast at (95,250) size=8mi` render **identically**. Naming adds a story, not a shape — otherwise a feature would move at the moment a campaign named it.
+- **A coastline may not cross itself.** Where a feature deforms its host, the renderer MUST keep the resulting curve simple: clamp the deformation amplitude (widening its footprint if needed) until the curve verifies non-self-intersecting, or **fail loud** naming the feature and its host. Silently drawing a crossing is not conforming.
+
+Spec 02 §9's noise-free spline is **affirmed, not revised**: the connecting curve stays a smooth spline through the declared controls, and this is a discrete layer on top of it. The complementary case is [#96](https://github.com/Nossimonov/Chartdown/issues/96)'s organic finishing of terrain area outlines — a wood's edge is *texture*, which may be generated; a cape is a *feature*, which may not. That boundary is why organic finishing is refused for `[water]` and for `along`-following outlines (§2).
+
+**Staged, not omitted:** line-*branching* morphology — `delta`, `fork` (the inverse of `join`, [#94](https://github.com/Nossimonov/Chartdown/issues/94)), and cut-off meanders — is a different geometric problem from deforming a single spine and is deliberately not specified here. Those words are not in the standard library yet, so a document using one gets spec 04 §3's unknown-word treatment rather than a silently inert declaration.
+
+## 5. Cross-cutting
 
 - `difficult` is a terrain/feature flag with archetype-level meaning (movement cost), carried into VTT export.
 - Crossings compose with paths by relation (`ford : on "The Redford" at K9`) or direct placement at battlemap scale — there is no crossing archetype.

@@ -6934,7 +6934,7 @@ exports[`example corpus > vessany > AST snapshot is stable 1`] = `
         },
         {
           "archetype": "terrain",
-          "archetypeSource": "inferred-section",
+          "archetypeSource": "vocab",
           "details": [],
           "flags": [],
           "gmOnly": false,
