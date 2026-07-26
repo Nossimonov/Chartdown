@@ -89,7 +89,10 @@ describe("a feature is a pure function of its own data (ADR 0023)", () => {
     const b = feature({ anchor: { x: 300, y: 100 }, size: 40 });
     const both = deformCurve(base, [a, b]);
     const movedB = deformCurve(base, [a, { ...b, anchor: { x: 320, y: 100 } }]);
-    const nearA = (i: number): boolean => Math.abs(base[i]!.x - 100) < 21;
+    // Indexed off `both`, not `base`: spacing adapts to the smallest feature
+    // (#161), so a curve carrying features is sampled differently from a bare
+    // one. The two outputs share a spacing, which is what makes them comparable.
+    const nearA = (i: number): boolean => Math.abs(both[i]!.x - 100) < 21;
     expect(both.filter((_, i) => nearA(i))).toEqual(movedB.filter((_, i) => nearA(i)));
   });
 });
@@ -258,7 +261,7 @@ describe("wired end to end into a region render (#93)", () => {
 
   it("says so when nothing declares which side the water is on", () => {
     const src = `# Coast\nmap: region\nextent: 900x600mi\n\n[water]\ncoastline coast : path (210,0) (150,300) (140,600)\nbay : on coast at (150,300) size=90mi\n`;
-    expect(renderSource(src).diagnostics.map((d) => d.message).join()).toMatch(/nothing declares which side of 'coast' the water is on/);
+    expect(renderSource(src).diagnostics.map((d) => d.message).join()).toMatch(/nothing on this map says which side of 'coast' the water is on/);
   });
 
   it("says so when a placed feature has no extent", () => {
@@ -456,9 +459,18 @@ describe("Wave 5 regressions (#153–#156)", () => {
   });
 
   it("#156 the refusal quotes the size as written, names the entity, and matches the shape", () => {
-    const src = doc(`${COAST}spit dungeness "Dungeness Spit" : on shore at (300,600) size=1.5mi reach=90`);
+    // A big jut off a sharply turning coast: this one genuinely folds, which a
+    // needle on a straight coast does not — a huge reach there is absurd to
+    // look at but geometrically valid, and the check is about geometry.
+    const src = doc(
+      `coastline shore : from (300,0) via (100,300) (500,600) (100,900) to (300,1200)
+` +
+      `sea "W" : west of shore
+` +
+      `spit dungeness "Dungeness Spit" : on shore at (500,600) size=300.5mi reach=200`,
+    );
     const msg = errorsOf(src).join();
-    expect(msg).toMatch(/size=1\.5mi/);          // not rounded to 2, unit kept
+    expect(msg).toMatch(/size=300\.5mi/);        // not rounded, unit kept
     expect(msg).toMatch(/'Dungeness Spit' \(spit\)/); // the entity, not just the word
     expect(msg).toMatch(/a jut that long/);      // not "a bite that deep"
     expect(msg).not.toMatch(/a bite that deep/);

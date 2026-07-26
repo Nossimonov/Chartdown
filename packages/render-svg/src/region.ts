@@ -67,12 +67,40 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const refText = (ref: Ref): string => ref.value;
   /** Which way the sea lies from a given line, from the water's own half-plane. */
   const seawardByHost = new Map<string, XY>();
+  /**
+   * Rough centres of any BOUNDED water body, for coasts no half-plane names.
+   *
+   * An enclosed sea has no side to be on (#157): Puget Sound, the Baltic, the
+   * Mediterranean and most interesting water on a continent lie BETWEEN two
+   * shores, and a half-plane can only describe an open ocean. The idiom that
+   * draws them — `sea : area (…) along westshore (…) along eastshore` — states
+   * no direction at all, so every feature on either coast warned and the map
+   * could not be made.
+   *
+   * The literal points of that declaration are enough. Their centroid is
+   * inside the water by construction, and only the SIGN of the dot product
+   * with the coast's normal is needed — so an approximate direction settles it
+   * exactly. Taken from the declaration rather than the resolved polygon
+   * because the polygon FOLLOWS the coast, and the coast is what is being
+   * resolved: reading it there would be circular.
+   */
+  const waterCentres: XY[] = [];
   for (const e of model.entities) {
     if (e.section !== "water") continue;
     for (const p of e.placements) {
-      if (p.kind !== "relational" || p.form !== "side-of") continue;
-      const vec = COMPASS_VECTORS[p.compass];
-      if (vec) seawardByHost.set(refText(p.ref), vec);
+      if (p.kind === "relational" && p.form === "side-of") {
+        const vec = COMPASS_VECTORS[p.compass];
+        if (vec) seawardByHost.set(refText(p.ref), vec);
+        continue;
+      }
+      if (p.kind !== "shape" || (p.shape !== "area" && p.shape !== "blob")) continue;
+      const pts = p.args.filter((a): a is Point => a.kind === "point").map(toXY);
+      if (pts.length >= 3) {
+        waterCentres.push({
+          x: pts.reduce((t, q) => t + q.x, 0) / pts.length,
+          y: pts.reduce((t, q) => t + q.y, 0) / pts.length,
+        });
+      }
     }
   }
   interface PlacedRef {
@@ -97,20 +125,40 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         diagnostics.push({ severity: "warning", line: e.line, message: `'${e.typeWord}' on '${host}' has no size= — a placed feature needs an extent along its host to be drawn (spec 05 §4)` });
         continue;
       }
-      const seaward = seawardByHost.get(host);
+      // The water's own half-plane if it has one; otherwise the nearest
+      // bounded water body, which is how an enclosed sea says it (#157).
+      const anchorXY = toXY(p.point);
+      let seaward = seawardByHost.get(host);
+      if (!seaward && waterCentres.length > 0) {
+        let best = waterCentres[0]!;
+        for (const c of waterCentres) {
+          if (Math.hypot(c.x - anchorXY.x, c.y - anchorXY.y) < Math.hypot(best.x - anchorXY.x, best.y - anchorXY.y)) best = c;
+        }
+        const dx = best.x - anchorXY.x;
+        const dy = best.y - anchorXY.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 1e-9) seaward = { x: dx / len, y: dy / len };
+      }
       if (!seaward) {
-        diagnostics.push({ severity: "warning", line: e.line, message: `nothing declares which side of '${host}' the water is on, so '${e.typeWord}' cannot know which way to face — add e.g. 'sea : west of ${host}' (spec 05 §4)` });
+        diagnostics.push({ severity: "warning", line: e.line, message: `nothing on this map says which side of '${host}' the water is on, so '${e.typeWord}' cannot know which way to face — declare an open coast's sea with 'sea : west of ${host}', or an enclosed one as an area following its shores (spec 05 §4)` });
       }
       // How far across the host it reaches, as a multiple of size= — the thing
       // that makes a fjord long and narrow where a cove is a shallow scoop.
       // From the vocabulary, so derivation carries it (ADR 0016).
-      const reachText = pairOf(e.pairs, "reach") ?? model.facetOf(e.typeWord, "reach");
-      const reach = reachText === undefined ? undefined : Number(reachText);
-      if (reachText !== undefined && !Number.isFinite(reach)) {
-        diagnostics.push({ severity: "warning", line: e.line, message: `'reach=${reachText}' is not a number — the vocabulary default applies (spec 05 §4)` });
-      }
+      const numericFacet = (key: string): number | undefined => {
+        const text = pairOf(e.pairs, key) ?? model.facetOf(e.typeWord, key);
+        if (text === undefined) return undefined;
+        const value = Number(text);
+        if (!Number.isFinite(value)) {
+          diagnostics.push({ severity: "warning", line: e.line, message: `'${key}=${text}' is not a number — the vocabulary default applies (spec 05 §4)` });
+          return undefined;
+        }
+        return value;
+      };
+      const reach = numericFacet("reach");
+      const taper = numericFacet("taper");
       const entry: PlacedRef = {
-        f: { morph, anchor: toXY(p.point), size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined && Number.isFinite(reach) ? { reach } : {}) },
+        f: { morph, anchor: anchorXY, size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined ? { reach } : {}), ...(taper !== undefined ? { taper } : {}) },
         // The ENTITY as the author would recognise it: three `sound`s on one
         // coast all reported as "'sound'" gave nothing to tell them apart
         // (#156). And `sizeText` is carried verbatim rather than recomputed

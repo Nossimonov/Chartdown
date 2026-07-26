@@ -93,15 +93,18 @@ coastline : path
 ; placed morphology (spec 05 §4, ADR 0023) — discrete features ON a line, each
 ; a real addressable entity rather than generated noise. \`morph=\` says what the
 ; geometry does to the host line; the word says what the thing IS, which is what
-; a theme colours, so a bite can be water and a jut can be land.
+; a theme colours, so a bite can be water and a jut can be land. \`reach=\` is
+; depth as a multiple of mouth width and \`taper=\` is how much of the mouth is
+; spent narrowing — calibrated against Puget Sound (#161), where the measured
+; ratios run from Point No Point at 0.33 to Hood Canal at 27.
 cape : terrain morph=jut reach=0.55
 headland : cape
-peninsula : cape reach=0.8
-spit : cape reach=1.3
-bay : terrain morph=bite reach=0.5
-cove : bay reach=0.3
-sound : bay reach=1.4
-fjord : sound reach=2
+peninsula : cape reach=1.6
+spit : cape reach=5 taper=0.5
+bay : terrain morph=bite reach=1
+cove : bay reach=3 taper=0.7
+sound : bay reach=6 taper=0.4
+fjord : sound reach=20 taper=0.15
 island : terrain morph=detached
 islet : island
 atoll : island

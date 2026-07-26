@@ -39,6 +39,20 @@ export interface PlacedFeature {
    * so derivation carries it and an author can override it per entity.
    */
   reach?: number;
+  /**
+   * What fraction of the window is spent tapering, 0..1 (#158).
+   *
+   * 1 is a pure raised cosine: the widest point is the mouth and the shape
+   * narrows to a point — a wedge. That is right for a cove and wrong for
+   * everything glacial. Hood Canal, Dabob Bay, Case Inlet and Carr Inlet are
+   * near PARALLEL-SIDED, because a drowned valley is a trench rather than a
+   * notch, and at a wedge profile the only way to get their depth was a
+   * hairline needle that read as a spine on the coast.
+   *
+   * Below 1 the middle of the window is displaced flat and only the ends
+   * taper, which is a trench with rounded corners.
+   */
+  taper?: number;
 }
 
 /**
@@ -62,6 +76,8 @@ const MIN_SIZE = 1e-6;
 
 /** Uniform vertex spacing, in rendered units, before any feature is applied. */
 const SPACING = 2;
+/** Vertices a feature's window needs to read as a curve rather than a polygon. */
+const WINDOW_VERTICES = 24;
 /** Backstop so a pathological extent cannot allocate without bound. */
 const MAX_POINTS = 6000;
 
@@ -116,7 +132,12 @@ export function deformCurve(
   // At a fixed spacing the turn per vertex is proportional to curvature, so
   // the fold check measures geometry and the same request succeeds or fails
   // the same way however the host was written.
-  let out = resample(curve, SPACING);
+  // The spacing has to suit the SMALLEST feature on the course, not a fixed
+  // guess: a 0.5mi inlet on a 120mi map is a three-pixel mouth, and at a flat
+  // 2-unit spacing its window held two vertices and could not be drawn at all.
+  const smallest = features.reduce((m, f) => (f.morph === "detached" ? m : Math.min(m, f.size)), Infinity);
+  const spacing = Number.isFinite(smallest) ? Math.min(SPACING, smallest / WINDOW_VERTICES) : SPACING;
+  let out = resample(curve, spacing);
   for (const f of features) {
     if (f.morph === "detached" || f.size < MIN_SIZE) continue;
     const next = applyOne(out, f);
@@ -159,7 +180,7 @@ function applyOne(curve: XY[], f: PlacedFeature): XY[] | null {
   const at = arc[anchorIndex]!;
 
   const dir = normalAt(curve, anchorIndex);
-  const moved = displace(curve, arc, at, half, sign * f.size * (f.reach ?? ASPECT), dir);
+  const moved = displace(curve, arc, at, half, sign * f.size * (f.reach ?? ASPECT), dir, f.taper ?? 1);
   return isSimple(moved) && isSmooth(moved) ? moved : null;
 }
 
@@ -177,12 +198,16 @@ function applyOne(curve: XY[], f: PlacedFeature): XY[] | null {
  * whole window along the anchor's normal is both the simpler model and the one
  * that matches what the word means.
  */
-function displace(curve: XY[], arc: number[], at: number, half: number, amplitude: number, dir: XY): XY[] {
+function displace(curve: XY[], arc: number[], at: number, half: number, amplitude: number, dir: XY, taper: number): XY[] {
   return curve.map((p, i) => {
     const d = Math.abs(arc[i]! - at);
     if (d >= half) return p;
-    // cos ramp: 1 at the anchor, 0 at the window edge, zero slope at both ends.
-    const weight = 0.5 * (1 + Math.cos((Math.PI * d) / half));
+    // Tukey window: flat across the middle, cosine tapers at the ends, with
+    // `taper` setting how much of the half-window is spent on the ramp. At
+    // taper=1 this is exactly the raised cosine it replaces.
+    const ramp = Math.max(taper, 1e-6) * half;
+    const flat = half - ramp;
+    const weight = d <= flat ? 1 : 0.5 * (1 + Math.cos((Math.PI * (d - flat)) / ramp));
     return { x: p.x + dir.x * amplitude * weight, y: p.y + dir.y * amplitude * weight };
   });
 }
