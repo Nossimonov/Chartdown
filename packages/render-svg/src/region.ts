@@ -889,7 +889,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // Polygon water (#76): a [water] entity with an area/blob placement is
       // a bounded sea or lake — full water fill and a shore line, not the
       // faint zone tint. This is what lets a world have TWO continents.
-      if (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water")) {
+      // AN ISLAND IS LAND, even declared among the water it sits in. Spec 05
+      // §2 already says so — "islands are the converse and stay land: an
+      // island rises above the sea that surrounds it" — but this branch
+      // painted anything in `[water]` with the sea's own fill, by section
+      // rather than by word. Unreachable until #93 made `island` a placeable
+      // stdlib word; on a coastline map every island came out invisible
+      // against the sound. `oxbow` stays water, which is why the test is the
+      // word and not the `detached` facet.
+      const landInWater = chain.includes("island");
+      if (!landInWater && (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"))) {
         const isLake = chain.includes("lake");
         const waterFill = theme.terrainFill(isLake ? ["lake"] : ["sea"]);
         // The boundary already reuses coastline curves (assembleWaterBoundary)

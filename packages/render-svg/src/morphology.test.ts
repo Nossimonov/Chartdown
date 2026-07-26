@@ -346,3 +346,31 @@ describe("a word carries its own proportions (#93)", () => {
     expect(many.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   });
 });
+
+describe("an island is LAND, even declared among the water (#93)", () => {
+  const SRC = `# Isles\nmap: region\nextent: 400x400mi\n\n[water]\n` +
+    `coastline coast : from (300,0) via (290,200) to (300,400)\n` +
+    `sea "The Sound" : west of coast\n` +
+    `island vashon "Vashon" : near coast at (150,150) size=60mi\n`;
+
+  const fillsOf = (svg: string, id: string): string[] => {
+    const m = new RegExp(`id="cd-isles-${id}">(.{0,4000}?)</g>`, "s").exec(svg);
+    return m ? [...m[1]!.matchAll(/fill="([^"]+)"/g)].map((x) => x[1]!) : [];
+  };
+
+  it("does not take the sea's fill just because it sits in [water]", () => {
+    // Spec 05 §2 says an island rises ABOVE the sea that surrounds it, but the
+    // water branch painted by SECTION rather than by word — so every island on
+    // a coastline map came out invisible against the sound. Unreachable until
+    // #93 made `island` a placeable standard-library word.
+    const svg = renderSource(SRC).svg;
+    const sea = renderSource(SRC).svg.match(/fill="#b9d3e6"/g) ?? [];
+    expect(fillsOf(svg, "vashon")).not.toContain("#b9d3e6");
+    expect(sea.length).toBe(1); // the sea itself, and nothing else
+  });
+
+  it("gets the land surface and a coastline stroke, like a continent", () => {
+    const m = /id="cd-isles-vashon">(.{0,4000}?)<\/g>/s.exec(renderSource(SRC).svg);
+    expect(m![1]).toMatch(/stroke="#8fa8b8"/); // the coastline stroke
+  });
+});
