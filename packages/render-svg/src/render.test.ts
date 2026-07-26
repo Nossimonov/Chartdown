@@ -1364,3 +1364,55 @@ describe("a framed shape travels with its referent (#142)", () => {
       .toBeCloseTo(leftEdge(moved, "arm2") - leftEdge(two, "arm2"), 5);
   });
 });
+
+
+/**
+ * #96: spec 02 §9 has always promised the renderer finishes a sketch
+ * organically. Coastlines, blobs and ridge belts got it; `area` did not, so a
+ * shaped forest rendered as a straight-edged polygon and the only way to fake
+ * curves was thirty hand-placed points.
+ */
+describe("area terrain is organically finished (#96)", () => {
+  const doc = (line: string, extra: string[] = []): string =>
+    ["map: region", "extent: 1400x900mi", "seed: 7", ...extra, "[terrain]", line].join("\n");
+  const verts = (src: string, id: string): number => {
+    const m = renderSource(src, {}).svg.match(new RegExp(`<g id="cd-[^"]*${id}"[^>]*><polygon points="([^"]+)"`));
+    return m?.[1] ? m[1].trim().split(/\s+/).length : 0;
+  };
+  const WOOD = 'forest wood "Wood" : area (905,190) (975,180) (1045,235) (1070,360) (1050,470) (995,560)';
+
+  it("a shaped patch gains a finished outline instead of straight edges", () => {
+    expect(verts(doc(WOOD), "wood")).toBeGreaterThan(50);
+  });
+
+  it("`raw` opts back into literal edges", () => {
+    // Surveyed parcels and political enclaves want a hard boundary.
+    expect(verts(doc(`${WOOD} raw`), "wood")).toBe(6);
+  });
+
+  it("finishing is deterministic, and the seed governs it (spec 02 §8.2)", () => {
+    expect(renderSource(doc(WOOD), {}).svg).toBe(renderSource(doc(WOOD), {}).svg);
+    expect(renderSource(doc(WOOD), {}).svg).not.toBe(renderSource(doc(WOOD).replace("seed: 7", "seed: 8"), {}).svg);
+  });
+
+  it("an outline that FOLLOWS a feature stays literal", () => {
+    // `along` splices the feature's own finished curve (ADR 0012). Re-splining
+    // it would pull the boundary off the thing it is defined to follow, which
+    // is the one property that idiom exists to guarantee.
+    const src = ["map: region", "extent: 1400x900mi", "seed: 7",
+      "[paths]", "river spine : from (900,100) via (950,300) to (1000,600)",
+      "[terrain]", 'forest wood "Wood" : area (905,190) along spine (1050,470) (995,560)'].join("\n");
+    const svg = renderSource(src, {}).svg;
+    const m = svg.match(/<g id="cd-[^"]*wood"[^>]*><polygon points="([^"]+)"/);
+    if (!m?.[1]) throw new Error("the feature-following wood did not render");
+    const pts = m[1].trim().split(/\s+/);
+    // The spliced course dominates the vertex list; no organic resampling on top.
+    expect(renderSource(src, {}).svg).toBe(svg);
+    expect(pts.length).toBeGreaterThan(3);
+  });
+
+  it("`raw` is a reserved flag, not an undeclared state", () => {
+    expect(renderSource(doc(`${WOOD} raw`), {}).diagnostics
+      .map((d) => d.message).join()).not.toMatch(/not a declared state/);
+  });
+});

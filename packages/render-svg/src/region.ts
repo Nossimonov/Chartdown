@@ -243,7 +243,23 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             }
           }
           if (spans.length) out.alongSpans = spans;
-          out.polygon = e.section === "water" ? assembleWaterBoundary(spliced) : spliced;
+          // Spec 02 §9 promises the renderer finishes a sketch organically.
+          // Coastlines, blobs and ridge belts got that; `area` did not, so a
+          // shaped forest came out a straight-edged polygon and the only way
+          // to fake curves was thirty hand-placed points (#96).
+          //
+          // Three things stay literal, each for its own reason:
+          //  - `raw`, the author's explicit opt-out (surveyed parcels, enclaves);
+          //  - water, whose coastlines carry their OWN finishing — smoothing
+          //    the assembled boundary would fight it;
+          //  - any outline with `along` spans, because those segments ARE a
+          //    feature's finished curve (ADR 0012) and re-splining them would
+          //    pull the border off the thing it is defined to follow.
+          const literal = e.flags.includes("raw") || e.section === "water" || spans.length > 0;
+          out.polygon =
+            e.section === "water" ? assembleWaterBoundary(spliced)
+            : literal || e.archetype !== "terrain" || spliced.length < 3 ? spliced
+            : organicOutline(spliced, hashSeed(model.seed, hashString(entityAnchor(e) ?? e.typeWord ?? "area"), spliced.length));
         } else {
           // The TRUE curve: a spline through the declared points, no noise.
           out.polyline = catmullRom(pts, 8);
@@ -1626,6 +1642,42 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
  * do NOT count: a tributary that ends on its trunk meets it, and reporting
  * that as a crossing would fire on every correct confluence (#94).
  */
+/**
+ * Organic finishing for an `area` outline (#96). Spec 02 §9 has always said a
+ * renderer "finishes organically"; coastlines, blobs and ridge belts got it and
+ * `area` did not, so a forest drawn as a shaped silhouette came out a
+ * straight-edged polygon — a surveyor's boundary, not a wood. The only way to
+ * fake curves was thirty hand-placed points per patch.
+ *
+ * Control points are subdivided and nudged perpendicular to the local edge, at
+ * an amplitude proportional to that edge's own length, so a large patch ripples
+ * at the scale of a large patch and a small one does not dissolve. Then the
+ * whole ring is splined. Seeded by identity, so the same document renders the
+ * same wood every time (spec 02 §8.2).
+ */
+function organicOutline(pts: XY[], seed: number): XY[] {
+  const random = rng(seed);
+  const out: XY[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]!;
+    const b = pts[(i + 1) % pts.length]!;
+    out.push(a);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 8) continue;
+    const nx = -dy / len;
+    const ny = dx / len;
+    // Two intermediate points per edge: enough to read as ragged, few enough
+    // that the author's silhouette still governs the shape.
+    for (const t of [0.34, 0.68]) {
+      const amp = (random() - 0.5) * Math.min(len * 0.22, 16);
+      out.push({ x: a.x + dx * t + nx * amp, y: a.y + dy * t + ny * amp });
+    }
+  }
+  return catmullRom(out, 5, true);
+}
+
 function firstCrossing(a: XY[], b: XY[]): XY | null {
   const NEAR = 1.5;
   const ends = [a[0]!, a[a.length - 1]!, b[0]!, b[b.length - 1]!];

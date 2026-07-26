@@ -113,7 +113,7 @@ const SECTIONS_BY_TYPE: Record<string, Set<string>> = {
 // Bare words the LANGUAGE defines, as opposed to states a word declares
 // (spec 01 §5, spec 06): these are never checked against states= (#108).
 const RESERVED_FLAGS = new Set([
-  "hidden", "nolabel", "difficult", "seen", "unexplored", "drop", "open", "sprawl",
+  "hidden", "nolabel", "difficult", "seen", "unexplored", "drop", "open", "sprawl", "raw",
 ]);
 
 /**

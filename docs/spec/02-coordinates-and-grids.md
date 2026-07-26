@@ -92,7 +92,7 @@ Shape tokens whose geometry the renderer finishes organically (deterministically
 
 | Shape | Form | Meaning |
 |---|---|---|
-| `area` | `area <range \| cell/point list>` | polygon or block |
+| `area` | `area <range \| cell/point list>` | polygon or block. **Terrain outlines are organically finished** — the points are a silhouette the renderer splines and roughens, so a shaped wood reads hand-drawn rather than surveyed. `raw` opts back into literal edges (enclaves, surveyed parcels); water areas are literal already, because their coastlines carry their own finishing, and an outline with `along` spans stays literal because those segments ARE a feature's finished curve and re-splining would pull the boundary off it (ADR 0012, [#96](https://github.com/Nossimonov/Chartdown/issues/96)) |
 | `path` | `path <cell/point sequence> [width=N]` | polyline |
 | `blob` | `blob <point \| cell> size=<measure>` | organic mass around a center |
 | `ridge` | `ridge <point sequence> [width=<measure>]` | elongated organic mass along a spine; `width=` declares the mass's breadth — the belt, not the centerline, is the feature's footprint (a mountain range is terrain with dimensions, not a string of peaks). `ridge (…) area (…)` on one entity refines the extent while the crest survives for references — refinement is additive, never a swap (ADR 0013) |

@@ -82,7 +82,10 @@ point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                  [ "on" , ref , "at" ] , { placement | pair } ;
-                 (* with `on <ref> at`, the points are OFFSETS in the
+                 (* `raw` flag on an area = literal edges; without it a
+                    TERRAIN area outline is organically finished (spec 02 §9,
+                    #96). Water areas and `along`-spliced outlines are literal.
+                    with `on <ref> at`, the points are OFFSETS in the
                     referent's frame and the WHOLE shape moves with it —
                     spec 02 §9, #142. Anchoring one point deforms the shape. *)
                  (* inside an "area" point list, "along" , ref between two
