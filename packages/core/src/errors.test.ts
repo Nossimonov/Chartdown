@@ -478,7 +478,9 @@ describe("repeated placement — every (#114, spec 02 §9)", () => {
   });
 
   it("the unimplemented along form says so instead of doing nothing (#140)", () => {
-    expect(errorsOf(bm("lamp : every 6 along gallery")).join()).toMatch(/not implemented yet/);
+    // Implemented in #140. A bare count is still refused — the along form
+    // spaces by a MEASURE, since a course has length rather than cell count.
+    expect(errorsOf(bm("lamp : every 6 along gallery")).join()).toMatch(/unresolved reference|spaces by a MEASURE/);
   });
 });
 

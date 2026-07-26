@@ -91,7 +91,14 @@ export type Relational =
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
   | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }
-  | { kind: "relational"; form: "along"; ref: Ref; face?: string };
+  | { kind: "relational"; form: "along"; ref: Ref; face?: string }
+  /**
+   * `every <measure> along <ref>` (#140): entities spaced down the referent's
+   * course. Unlike `every … in <range>`, which is arithmetic the parser can do
+   * itself, this needs geometry that only a renderer has resolved — so it
+   * survives parsing as a placement and is expanded where the course is known.
+   */
+  | { kind: "relational"; form: "every-along"; measure: string; ref: Ref };
 
 export type Placement = Address | AddressRange | Point | PointRange | Edge | Shape | Relational;
 

@@ -177,10 +177,9 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     }
     const kw = chunkText(peek());
     if (kw !== "in") {
-      const hint = kw === "along"
-        ? "'every … along <ref>' is not implemented yet — space the entities along the course by hand, or use 'in <range>' (#140)"
-        : "'every <n>' is followed by 'in <range>' (spec 02 §9)";
-      diagnostics.push(error(line, hint));
+      diagnostics.push(error(line, kw === "along"
+        ? "'every … along <ref>' spaces by a MEASURE, not a count — 'every 6ft along gallery' (spec 02 §9)"
+        : "'every <n>' is followed by 'in <range>' (spec 02 §9)"));
       return null;
     }
     i++;
@@ -298,6 +297,18 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     // silently broke the moment the hall moved.
     if (c === "every") {
       i++;
+      // `every <measure> along <ref>` (#140) needs geometry the parser does not
+      // have, so it survives as a placement for the renderer to expand. The
+      // `along` keyword is what disambiguates it from `every 4 in …`, since a
+      // bare integer is also a legal measure.
+      const stepText = chunkText(peek());
+      if (stepText !== null && isMeasure(stepText) && chunkText(peek(1)) === "along") {
+        i += 2;
+        const ref = takeRef("along");
+        if (!ref) continue;
+        result.placements.push({ kind: "relational", form: "every-along", measure: stepText, ref });
+        continue;
+      }
       const cells = takeRepeat();
       if (cells === null) continue;
       result.placements.push(...cells);

@@ -126,7 +126,14 @@ This is a **qualifier on a placement**, not a tenth relational form — §7's cl
 
 A repeat expanding past **4096** cells is an error rather than a hang.
 
-*`every <measure> along <ref>` — regular spacing down a course — is specified but not yet implemented ([#140](https://github.com/Nossimonov/Chartdown/issues/140)); it needs geometry resolved after parsing, and using it is a loud error rather than a silent no-op.*
+`every <measure> along <ref>` spaces entities down a referent's course — lamp-rows down a corridor, mile-markers along a road. It takes a **measure**, not a count, because a course has length rather than a cell count:
+
+```chartdown
+lamp : every 40ft along kings-gallery light=30ft
+landmark : every 100mi along coast-road
+```
+
+On a grid map it walks the **cells the course covers**, not its vertices — `path B4 Z4` is two addresses spanning twenty-five cells. On a gridless map it walks arc length. Either way it expands to ordinary placements, so everything downstream behaves as though the cells had been written out.
 
 ## 10. Grammar sketch additions
 

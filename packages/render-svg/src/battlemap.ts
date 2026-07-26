@@ -1281,8 +1281,30 @@ export function renderBattlemap(
     });
   }
 
+  /**
+   * A feature line places one entity per cell it names — `torch : D8 H8 L8`
+   * is three torches, exactly as `pillar : D8 H8 L8` is three pillars.
+   *
+   * Only the FIRST address was drawn (#140). Barriers had always drawn every
+   * placement, so the two archetypes disagreed about what a cell list means,
+   * and the feature reading was the wrong one: a row of lamps down a gallery
+   * rendered as a single lamp at its head, silently, however many cells the
+   * author listed. `every … along` made it visible by generating such lists
+   * automatically, but the bug predates it and bites hand-written lines too.
+   *
+   * Only the first address takes the LABEL: the set is named once, not once
+   * per cell (spec 07 §1).
+   */
   function renderFeature(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined): void {
-    const address = e.placements.find((p): p is Address => p.kind === "address");
+    const addresses = e.placements.filter((p): p is Address => p.kind === "address");
+    if (addresses.length > 1) {
+      addresses.forEach((a, idx) => {
+        const one: EntityNode = { ...e, placements: [a], name: idx === 0 ? e.name : null };
+        renderFeature(one, into, labels, idx === 0 ? titleEl : "", idx === 0 ? anchor : undefined);
+      });
+      return;
+    }
+    const address = addresses[0];
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
     if (!address && !range) return;
 

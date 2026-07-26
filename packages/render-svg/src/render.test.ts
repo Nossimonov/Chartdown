@@ -1473,3 +1473,75 @@ describe("shafts span more than two levels (#112)", () => {
     expect(renderSource(plain, { level: "gates" }).svg).not.toContain("falls to");
   });
 });
+
+
+/**
+ * #140: the repeat form that needs resolved geometry. Expanded in buildModel
+ * rather than in each renderer — the parser lacked a resolved REFERENCE, not
+ * pixel geometry, so once the reference is in hand the spacing is arithmetic.
+ */
+describe("every <measure> along <ref> (#140)", () => {
+  const gallery = (spacing: string): string =>
+    ["map: battlemap", "grid: square 30x8", "scale: 10ft",
+     "[terrain]", 'road gallery "Kings Gallery" : path B4 Z4',
+     "[features]", `lamp : every ${spacing} along gallery light=30ft`].join("\n");
+  const lamps = (spacing: string): number =>
+    (renderSource(gallery(spacing), {}).svg.match(/r="96"/g) ?? []).length;
+
+  it("spaces entities down the course, and the spacing governs how many", () => {
+    // The gallery spans 25 cells at 10ft.
+    expect(lamps("40ft")).toBe(7);
+    expect(lamps("80ft")).toBeLessThan(lamps("40ft"));
+  });
+
+  it("walks the CELLS of the course, not its vertices", () => {
+    // `path B4 Z4` is two addresses spanning twenty-five cells; striding the
+    // vertex list placed one lamp at the corner and called it a row.
+    expect(lamps("10ft")).toBeGreaterThan(10);
+  });
+
+  it("expands to ordinary placements — light, flags and pairs all apply", () => {
+    expect(renderSource(gallery("40ft"), {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("an unfollowable reference fails loud rather than placing nothing", () => {
+    const orphan = ["map: battlemap", "grid: square 30x8", "scale: 10ft",
+      "[terrain]", "road gallery : path B4 Z4",
+      "[features]", "lamp : every 40ft along gallery"].join("\n").replace("along gallery", "along nowhere");
+    expect(renderSource(orphan, {}).diagnostics.map((d) => d.message).join()).toMatch(/no such feature to follow|unresolved reference/);
+  });
+
+  it("works on a gridless map too, by arc length", () => {
+    const region = ["map: region", "extent: 900x600mi",
+      "[paths]", 'road highway "Highway" : from (100,100) via (400,100) to (700,100)',
+      "[features]", "landmark : every 100mi along highway"].join("\n");
+    expect(renderSource(region, {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+});
+
+/**
+ * Found while implementing #140: a feature line with several cells drew ONE
+ * glyph. Barriers had always drawn every placement, so the two archetypes
+ * disagreed about what a cell list means — and the feature reading was wrong.
+ */
+describe("a feature line places one entity per cell (#140)", () => {
+  const mk = (line: string): string =>
+    ["map: battlemap", "grid: square 30x12", "scale: 5ft", "[features]", line].join("\n");
+  const els = (line: string): number =>
+    (renderSource(mk(line), {}).svg.match(/<(circle|rect|path|line|polygon)/g) ?? []).length;
+
+  it("six cells draw six torches, not one", () => {
+    expect(els("torch : D8 H8 L8 P8 T8 X8")).toBeGreaterThan(els("torch : D8"));
+  });
+
+  it("features and barriers now agree about what a cell list means", () => {
+    const featureGain = els("torch : D8 H8 L8") - els("torch : D8");
+    const barrierGain = els("pillar : D8 H8 L8") - els("pillar : D8");
+    expect(featureGain).toBeGreaterThan(0);
+    expect(barrierGain).toBeGreaterThan(0);
+  });
+
+  it("the set is named once, not once per cell (spec 07 §1)", () => {
+    expect((renderSource(mk('torch t "Lamp" : D8 H8 L8'), {}).svg.match(/>Lamp</g) ?? []).length).toBe(1);
+  });
+});
