@@ -1011,6 +1011,44 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // stdlib word; on a coastline map every island came out invisible
       // against the sound. `oxbow` stays water, which is why the test is the
       // word and not the `detached` facet.
+      // A NAMED STRETCH OF WATER is a name, not a mass (#160). A zone declared
+      // among the water — "Central Basin", "Admiralty Inlet" — is part of the
+      // sea it sits in, so it takes a label and at most a faint boundary in
+      // the water's own tint, never a fill. The same restraint the frontier
+      // register already uses for zonal terrain (spec 05 §2).
+      //
+      // Neither existing register was right: in `[terrain]` a zone drew a land
+      // tint sitting ON the water, and in `[water]` it drew an opaque
+      // sea-coloured polygon that occluded whatever lay beneath it.
+      if (e.archetype === "zone" && e.section === "water") {
+        const tint = theme.terrainFill(["sea"]);
+        layers.water.push(
+          el("g", { id: anchor }, titleEl,
+            el("polygon", {
+              points: pointsAttr(r.polygon), fill: "none", stroke: shade(tint),
+              "stroke-width": 1, "stroke-dasharray": "1 5", opacity: 0.55, "stroke-linejoin": "round",
+            }),
+          ),
+        );
+        if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+          deferLabel(4, () => {
+            const c = centroid(r.polygon!);
+            const label = (model.labelsMode === "keyed" ? labelTextFor(model, e) : null) ?? e.name!;
+            const bboxW = Math.max(...r.polygon!.map((q) => q.x)) - Math.min(...r.polygon!.map((q) => q.y === q.y ? q.x : q.x));
+            const { size, spacing } = fitLabel(label, Math.max(bboxW * 0.8, 40), 10, 1);
+            const width = label.length * (size * 0.58 + spacing);
+            const cx = Math.min(Math.max(c.x, width / 2 + 10), w - width / 2 - 10);
+            labelBuckets[4]!.push(
+              text(label, {
+                x: cx, y: placer.place(cx, c.y, label, size, "middle", width),
+                "font-size": size, "letter-spacing": spacing, fill: "#5a7a96",
+                opacity: 0.75, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif",
+              }),
+            );
+          });
+        }
+        continue;
+      }
       const landInWater = chain.includes("island");
       if (!landInWater && (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"))) {
         const isLake = chain.includes("lake");

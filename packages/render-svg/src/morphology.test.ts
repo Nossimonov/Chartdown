@@ -525,3 +525,38 @@ describe("a detached feature has two dials as well (#159)", () => {
     expect(named).toEqual(anon);
   });
 });
+
+describe("a named stretch of water is a name, not a mass (#160)", () => {
+  const MAP = (section: string, line: string): string =>
+    `# Basins\nmap: region\nextent: 200x300mi\n\n[water]\n` +
+    `coastline coast : from (110,0) via (105,150) to (110,300)\nsea "The Sound" : west of coast\n` +
+    (section === "water" ? `${line}\n` : `\n[terrain]\n${line}\n`);
+  const attrsOf = (svg: string, id: string): string[] => {
+    const g = new RegExp(`id="cd-basins-${id}">(.{0,3000}?)</g>`, "s").exec(svg);
+    return g ? [...g[1]!.matchAll(/fill="([^"]+)"/g)].map((m) => m[1]!) : [];
+  };
+
+  it("takes no fill — neither the sea's nor a land tint", () => {
+    // In [terrain] a zone drew a land tint sitting ON the water; in [water] it
+    // drew an opaque sea-coloured polygon that occluded whatever lay beneath.
+    // Neither is what a reader means by naming part of a sea.
+    const svg = renderSource(MAP("water", `region central "Central Basin" : area (40,90) (95,100) (90,180) (35,170)`)).svg;
+    expect(attrsOf(svg, "central")).toEqual(["none"]);
+  });
+
+  it("still carries its name onto the map", () => {
+    const svg = renderSource(MAP("water", `region central "Central Basin" : area (40,90) (95,100) (90,180) (35,170)`)).svg;
+    expect(svg).toContain("Central Basin");
+  });
+
+  it("is a real entity — it takes an id, and gm= stays GM-only", () => {
+    const src = MAP("water", `region central "Central Basin" : area (40,90) (95,100) (90,180) (35,170) gm="Smugglers work the north end."`);
+    expect(renderSource(src, { mode: "gm" }).svg).toContain("Smugglers work the north end.");
+    expect(renderSource(src, { mode: "player" }).svg).not.toContain("Smugglers work the north end.");
+  });
+
+  it("a zone on LAND is untouched — it still takes its realm tint", () => {
+    const svg = renderSource(MAP("terrain", `region inland "The Weald" : area (140,90) (190,100) (185,180) (135,170)`)).svg;
+    expect(attrsOf(svg, "inland").filter((f) => f !== "none").length).toBeGreaterThan(0);
+  });
+});
