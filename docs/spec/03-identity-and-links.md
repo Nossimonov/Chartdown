@@ -57,7 +57,19 @@ Paths resolve relative to the document. An entity may carry both. Renderers that
 
 `detail=` **alone is unchanged** and remains a pointer, so no existing document moves. The checker never reads a file: sub-map sources are supplied by the caller exactly as `use:` libraries are, and an unsupplied sub-map reports that its seam went unchecked rather than passing in silence.
 
-*The reciprocal `inset:` declaration — the child naming its parent — is **not** part of this. It would make a child document's meaning depend on an edit in another file, which is a different and larger question than validating a relationship the parent already declares.*
+**The child declares the other end.** `inset: <document> at <entity>` states which entity of which document this map is a window onto:
+
+```chartdown
+; mazarbul.cd
+map: battlemap
+grid: square 44x42
+scale: 5ft
+inset: khazad-dum.cd at mazarbul
+```
+
+A child document is therefore not self-contained, and that is a stated property rather than an accident — opening the sheet cold tells you where you are. It is sound because **a map is the sum of the files that make it up** ([ADR 0021](../decisions/0021-a-map-is-the-sum-of-its-files.md)): an inset is not a reusable component that several maps might include, it is a close-up at one unique point, and there is nothing to be gained by keeping it ignorant of where that is.
+
+**Both ends are validated against each other.** Where both documents are available, every way the pair can disagree is an error naming both files: a parent with no `detail=` pointing back, a parent with no `detail-at=` to agree about, a named entity that does not exist, or a scale or coverage mismatch. The relationship being declared twice is what makes it checkable; two declarations that could drift silently would be worse than one.
 ## 5. `[gm]` lines are attachments
 
 Within a `[gm]` section:

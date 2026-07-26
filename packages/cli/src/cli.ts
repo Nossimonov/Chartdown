@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { checkDetailSeams, checkSource, documentKind, parse } from "@chartdown/core";
+import { checkDetailSeams, checkInset, checkSource, documentKind, parse } from "@chartdown/core";
 import { render, type RenderMode } from "@chartdown/render-svg";
 
 const USAGE = [
@@ -71,6 +71,13 @@ for (const header of parse(source).document.header) {
 // never needed the child, and reading files the render does not use would make
 // a render fail on a missing sub-map that does not affect its output.
 const details: Record<string, string> = {};
+// A child declares its parent with `inset: <doc> at <entity>` (#143), so the
+// seam is checkable from either end — a map is the sum of its files (ADR 0021).
+for (const header of parse(source).document.header) {
+  if (header.key !== "inset") continue;
+  const parentPath = resolve(dirname(file), header.value.split(/\s+at\s+/)[0]!.trim());
+  if (existsSync(parentPath)) details[header.value.split(/\s+at\s+/)[0]!.trim()] = readFileSync(parentPath, "utf8");
+}
 for (const section of parse(source).document.sections) {
   for (const entry of section.entries) {
     if (entry.kind !== "entity") continue;
@@ -93,7 +100,7 @@ if (command === "check") {
     // run reports `ok` for a document containing lines the renderer drops.
     // GM mode, so nothing is skipped.
     const parsed = parse(source, { libraries });
-    const seams = checkDetailSeams(source, { libraries, details });
+    const seams = [...checkDetailSeams(source, { libraries, documents: details }), ...checkInset(source, { libraries, documents: details })];
     const rendered = render(parsed.document, themeSources.length > 0 ? { mode: "gm", theme: themeSources } : { mode: "gm" });
     checkDiagnostics = [...parsed.diagnostics, ...rendered.diagnostics, ...seams];
   } else {

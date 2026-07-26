@@ -35,12 +35,13 @@ export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
   libraries?: Record<string, string>;
   /**
-   * Sources for `detail=` sub-maps, keyed by the exact `detail=` value (#109).
-   * Supplied the same way libraries are: the caller resolves paths, the parser
-   * never touches a filesystem. Without them the seam simply goes unchecked —
-   * `detail=` remains the pointer it has always been.
+   * Other documents this one is joined to, keyed by the exact path written in
+   * `detail=` or `inset:` (#109, #143). A map is the sum of the files that make
+   * it up (ADR 0021), and this is how the other files reach a checker: the
+   * caller resolves paths, the parser never touches a filesystem. Without them
+   * the seam simply goes unchecked.
    */
-  details?: Record<string, string>;
+  documents?: Record<string, string>;
 }
 
 export interface ParseResult {
@@ -54,7 +55,7 @@ const MAP_TYPES = new Set(["battlemap", "hexcrawl", "region"]);
 export const KNOWN_HEADER_KEYS = new Set([
   "map", "kind", "chartdown", "id", "grid", "scale", "extent", "seed",
   "use", "theme", "labels", "legend", "scale-bar", "compass", "numbers",
-  "levels", "level", "ground", "detail",
+  "levels", "level", "ground", "detail", "inset",
 ]);
 
 /** Document kinds a `kind:` header may name — `map` is spelled by `map:` itself. */

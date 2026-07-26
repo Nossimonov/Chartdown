@@ -25,8 +25,10 @@ header-line    = header-key , ":" , predicate , EOL ;
 header-key     = "ground" | "chartdown" | "id" | "grid" | "scale" | "extent" | "seed"
                | "detail"
                | "use" | "theme" | "labels" | "legend" | "scale-bar"
-               | "compass" | "numbers" | "levels" | "level" ;
+               | "compass" | "numbers" | "levels" | "level" | "inset" ;
                  (* "use" is repeatable; unknown keys warn.
+                    inset = doc-path , "at" , ref — the child half of a
+                    sub-map seam, validated against the parent (#143). 
                     levels: physical order topmost first; level: the default.
                     Values are unconstrained HERE, but five keys carry closed
                     value sets checked semantically (spec 01 §2):

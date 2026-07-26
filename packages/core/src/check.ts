@@ -130,7 +130,7 @@ export function checkSource(source: string, options: ParseOptions = {}): CheckRe
  * the unchecked pointer `detail=` has always been.
  */
 export function checkDetailSeams(source: string, options: ParseOptions = {}): Diagnostic[] {
-  const details = options.details;
+  const details = options.documents;
   if (!details) return [];
   const out: Diagnostic[] = [];
   const parent = parse(source, options).document;
@@ -197,4 +197,44 @@ function footprintSize(entry: { placements: { kind: string }[] }): { cols: numbe
     };
   }
   return null;
+}
+
+/**
+ * The child side of the seam (#143, ADR 0021): `inset: <document> at <entity>`.
+ *
+ * The owner's acceptance of a child referencing its parent was explicitly
+ * conditional on catching disagreements between the two, so every way the pair
+ * can contradict each other is an error naming both files. Two declarations
+ * that could drift silently would be worse than the one declaration this
+ * replaces.
+ */
+export function checkInset(source: string, options: ParseOptions = {}): Diagnostic[] {
+  const parsed = parse(source, options);
+  const header = parsed.document.header.find((h) => h.key === "inset");
+  if (!header) return [];
+  const match = /^(\S+)\s+at\s+(\S+)$/.exec(header.value.trim());
+  if (!match) {
+    return [{ severity: "error", line: header.line, message: `'inset:' names the document and the entity this is a window onto — 'inset: khazad-dum.cd at mazarbul' (spec 03 §4)` }];
+  }
+  const [, parentPath, entityRef] = match as unknown as [string, string, string];
+  const parentSource = options.documents?.[parentPath];
+  if (parentSource === undefined) {
+    return [{ severity: "warning", line: header.line, message: `parent document '${parentPath}' was not provided to the checker — this inset's seam is unchecked (spec 03 §4)` }];
+  }
+  const parent = parse(parentSource, {}).document;
+  const owner = parent.sections
+    .flatMap((s) => s.entries)
+    .find((e) => e.kind === "entity" && (e.ids.includes(entityRef) || e.name === entityRef));
+  if (!owner || owner.kind !== "entity") {
+    return [{ severity: "error", line: header.line, message: `'${parentPath}' has no entity '${entityRef}' for this document to be a window onto (spec 03 §4)` }];
+  }
+  const out: Diagnostic[] = [];
+  const detail = owner.pairs.find((p) => p.key === "detail")?.value;
+  if (detail === undefined) {
+    out.push({ severity: "error", line: header.line, message: `'${entityRef}' in '${parentPath}' has no 'detail=' pointing back at this document — the two ends of a seam must agree (spec 03 §4)` });
+  }
+  if (owner.pairs.find((p) => p.key === "detail-at") === undefined) {
+    out.push({ severity: "error", line: header.line, message: `'${entityRef}' in '${parentPath}' has no 'detail-at=', so there is no anchor for this inset to agree with (spec 03 §4)` });
+  }
+  return out;
 }

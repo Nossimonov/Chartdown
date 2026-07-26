@@ -3,7 +3,7 @@
  * input here (issue #21 done-state).
  */
 import { describe, expect, it } from "vitest";
-import { checkDetailSeams, checkSource, parse } from "./index";
+import { checkDetailSeams, checkInset, checkSource, parse } from "./index";
 
 const errorsOf = (src: string) =>
   parse(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
@@ -552,7 +552,7 @@ describe("the detail= seam is checkable (#109, spec 03 §4)", () => {
   const child = (grid: string, scale: string): string =>
     ["# C", "map: battlemap", `grid: square ${grid}`, `scale: ${scale}`].join("\n");
   const seam = (p: string, c?: string): string =>
-    checkDetailSeams(p, c === undefined ? { details: {} } : { details: { "mazarbul.cd": c } })
+    checkDetailSeams(p, c === undefined ? { documents: {} } : { documents: { "mazarbul.cd": c } })
       .map((d) => `${d.severity}: ${d.message}`).join(" | ");
 
   it("catches the coverage gap the exercise actually shipped", () => {
@@ -583,6 +583,55 @@ describe("the detail= seam is checkable (#109, spec 03 §4)", () => {
     const pointer = ["# P", "map: battlemap", "grid: square 20x10", "[structures]",
       'chamber c : A1..B2 detail="x.cd"'].join("\n");
     expect(errorsOf(pointer)).toEqual([]);
-    expect(checkDetailSeams(pointer, { details: {} })).toEqual([]);
+    expect(checkDetailSeams(pointer, { documents: {} })).toEqual([]);
+  });
+});
+
+
+/**
+ * #143 / ADR 0021: a map is the sum of its files, so a child may declare which
+ * parent it is a window onto. The owner's acceptance was conditional on
+ * catching disagreements, so each way the pair can contradict is tested.
+ */
+describe("inset: the child half of the seam (#143)", () => {
+  const parentDoc = (entity: string): string =>
+    ["# P", "map: battlemap", "grid: square 260x140", "scale: 10ft", "[structures]", entity].join("\n");
+  const AGREEING = 'chamber mazarbul "Mazarbul" : CP12..DF32 detail="mazarbul.cd" detail-at=CP12';
+  const child = (inset: string): string =>
+    ["# C", "map: battlemap", "grid: square 44x42", "scale: 5ft", inset].join("\n");
+  const run = (insetLine: string, parent?: string): string =>
+    checkInset(child(insetLine), parent === undefined ? { documents: {} } : { documents: { "khazad-dum.cd": parent } })
+      .map((d) => `${d.severity}: ${d.message}`).join(" | ");
+
+  it("an agreeing pair is silent", () => {
+    expect(run("inset: khazad-dum.cd at mazarbul", parentDoc(AGREEING))).toBe("");
+  });
+
+  it("a parent that does not point back is an error naming both", () => {
+    expect(run("inset: khazad-dum.cd at mazarbul", parentDoc('chamber mazarbul "Mazarbul" : CP12..DF32')))
+      .toMatch(/no 'detail=' pointing back at this document/);
+  });
+
+  it("an anchorless parent is an error — there is nothing to agree about", () => {
+    expect(run("inset: khazad-dum.cd at mazarbul", parentDoc('chamber mazarbul "M" : CP12..DF32 detail="mazarbul.cd"')))
+      .toMatch(/no 'detail-at='/);
+  });
+
+  it("a missing entity is an error", () => {
+    expect(run("inset: khazad-dum.cd at nonesuch", parentDoc(AGREEING))).toMatch(/has no entity 'nonesuch'/);
+  });
+
+  it("a malformed inset says what the form is", () => {
+    expect(run("inset: khazad-dum.cd", parentDoc(AGREEING))).toMatch(/names the document and the entity/);
+  });
+
+  it("an unsupplied parent is UNCHECKED, not passing", () => {
+    // The distinction this phase has drawn repeatedly: not looked at is not
+    // the same as verified.
+    expect(run("inset: khazad-dum.cd at mazarbul")).toMatch(/warning: .*unchecked/);
+  });
+
+  it("a document with no inset: is untouched", () => {
+    expect(checkInset(["# C", "map: battlemap", "grid: square 44x42"].join("\n"), { documents: {} })).toEqual([]);
   });
 });

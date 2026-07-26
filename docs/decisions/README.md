@@ -30,3 +30,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0018](0018-fields-generalize-light.md) | Ambient conditions are content; the vacant `light` archetype becomes `field` | Accepted |
 | [0019](0019-line-labels-claim-before-point-labels.md) | Line labels claim before point labels — leaders gave points a way to move that lines lack | Accepted |
 | [0020](0020-render-resolution-is-editorial.md) | Render resolution is an author choice (`detail: overview\|reference`), not a fixed canvas | Accepted |
+| [0021](0021-a-map-is-the-sum-of-its-files.md) | A map is the sum of its files; cross-document references are in scope, and validated in both directions | Accepted |
