@@ -13,7 +13,7 @@
 
 import { facetAccepts, type Address, type Pair, type Placement } from "@chartdown/core";
 import { colLetters, type Segment } from "./util";
-import { edgeSegment, perimeterEdges, segKey, structureCells, type Cell, type EdgeFacing } from "./grid";
+import { edgeSegment, perimeterEdges, segKey, structureCells, surfaceCells, type Cell, type EdgeFacing } from "./grid";
 import { pairOf, type Model } from "./model";
 
 export const SIDE_NAME: Record<EdgeFacing, string> = { n: "north", s: "south", w: "west", e: "east" };
@@ -207,18 +207,18 @@ export function impassableCells(model: Model): Map<string, Cell> {
   // a kind, and spec 06 §5's own idiom is to lay ground truth across a level
   // and paint over it — so testing mere membership counted overpainted grass
   // as solid stone, and let an opening across open ground pass the check.
+  // A PATH overpaints the area beneath it too (#147). Spec 06 §6 layers area
+  // terrain beneath path bands, so a road driven through rock is a cut
+  // passage, not stone — the Deep-road under Moria is the case. Reading only
+  // `terrain` here made a great highway occlude like bedrock, and made every
+  // door opening onto it a door onto solid rock.
   const winner = new Map<string, { cell: Cell; impassable: boolean }>();
   for (const e of model.entities) {
-    if (e.archetype !== "terrain") continue;
+    if (e.archetype !== "terrain" && e.archetype !== "path") continue;
     const impassable = model.chainOf(e.typeWord).includes("earth");
     // `earth : area A1..Z20` is a SHAPE placement whose args carry the cells;
-    // flatten one level so both spellings resolve to the same cell union.
-    const flat: Placement[] = [];
-    for (const p of e.placements) {
-      if (p.kind === "shape") flat.push(...p.args);
-      else flat.push(p);
-    }
-    for (const [key, cell] of structureCells({ placements: flat })) winner.set(key, { cell, impassable });
+    // a `path` shape carries only its corners and covers its band.
+    for (const [key, cell] of surfaceCells(e)) winner.set(key, { cell, impassable });
   }
   const cells = new Map<string, Cell>();
   for (const [key, w] of winner) if (w.impassable) cells.set(key, w.cell);

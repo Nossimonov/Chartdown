@@ -5,7 +5,7 @@
  * `use: default` or are layered on top when passed to the renderer.
  */
 
-import { parseThemeDocument, type Diagnostic, type ThemeDocumentNode } from "@chartdown/core";
+import { parseThemeDocument, SURFACE_WORDS, type Diagnostic, type ThemeDocumentNode } from "@chartdown/core";
 
 export const PAPER = "#f9f5ea";
 export const GRID_LINE = "#c9c2b0";
@@ -175,21 +175,38 @@ export class Theme {
    * only "was `mountain` touched?" would call a dead `glyph=` live because the
    * default's `fill=` was read.
    */
-  deadDeclarations(): { line: number; message: string }[] {
+  deadDeclarations(subjects: Map<string, number> = new Map()): { line: number; message: string }[] {
     const out: { line: number; message: string }[] = [];
     for (const entry of this.own) {
       if (this.hits.has(`${entry.key}\u0000*`)) continue;
       if (entry.props.some((prop) => this.hits.has(`${entry.key}\u0000${prop}`))) continue;
-      // Two different mistakes wear the same shape, and telling an author which
-      // one they made is most of the value. A misspelled subject matched no
-      // entity at all; a real subject carrying the wrong property matched
-      // plenty and was asked for something the renderer never wants from it
-      // (`glyph=` on a battlemap's area terrain, which is filled, not marked).
+      // Three different mistakes wear the same shape, and telling an author
+      // which one they made is most of the value — the fix differs completely.
+      //
+      // Whether the SUBJECT resolves is a fact about the DOCUMENT, not about
+      // what the theme was asked for, and reading it off theme hits got that
+      // wrong (#148): `chain : stroke=…` with four chains on the map was told
+      // "no entity resolves to it", which starts a hunt for a spelling error
+      // that does not exist. The count comes from the model.
+      const resolved = subjects.get(entry.key) ?? 0;
+      // A SURFACE is not an entity and never resolves to one, so "no entity
+      // resolves to it" is the wrong category rather than a harsher wording of
+      // the right one: `ink`, `paper`, and `fog` are language-defined subjects
+      // that always exist (spec 08 §2). Sending their author hunting for a
+      // misspelling is the same failure #148 reports for `chain`.
+      const isSurface = SURFACE_WORDS.has(entry.key.split(".")[0]!);
+      const props = entry.props.map((p) => `'${p}'`).join(", ");
+      const isAre = entry.props.length === 1 ? "is" : "are";
       out.push({
         line: entry.line,
-        message: this.subjectHits.has(entry.key)
-          ? `'${entry.key}' is styled elsewhere, but ${entry.props.map((p) => `'${p}'`).join(", ")} on this line ${entry.props.length === 1 ? "is" : "are"} never read for it — the property does not apply to this kind of subject (spec 08 §3)`
-          : `'${entry.key}' styles nothing in this document — no entity resolves to it, so every property on this line is inert (spec 08 §5)`,
+        message:
+          isSurface
+            ? `'${entry.key}' is a surface, but ${props} ${isAre} not read for it in this render — nothing written here will reach the map (spec 08 §2)`
+          : resolved > 0
+            ? `'${entry.key}' resolves to ${resolved} ${resolved === 1 ? "entity" : "entities"}, but ${props} ${isAre} not read for ${resolved === 1 ? "it" : "them"} in this render — nothing written here will reach the map (spec 08 §6)`
+            : this.subjectHits.has(entry.key)
+              ? `'${entry.key}' is styled elsewhere, but ${props} on this line ${isAre} never read for it — the property does not apply to this kind of subject (spec 08 §3)`
+              : `'${entry.key}' styles nothing in this document — no entity resolves to it, so every property on this line is inert (spec 08 §5)`,
       });
     }
     for (const [name, line] of Object.entries(this.ownGlyphs)) {

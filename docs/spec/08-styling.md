@@ -52,11 +52,14 @@ lollipop : "M0,-3 a5,5 0 1,1 0.1,0 M0,2 L0,10"
 
 *(From proposal [#116](https://github.com/Nossimonov/Chartdown/issues/116), decided in [ADR 0022](../decisions/0022-a-declaration-is-a-promise.md).)* A theme line that styles nothing is a promise the render did not keep, and it used to say nothing at all — the exercise that motivated this shipped a theme with **19 of 80 entries inert**, discovered by reading the render. Three warnings close that, all warning-level and never blocking:
 
-| Warns | Because |
-|---|---|
-| A `[theme]` subject **no entity in this document resolves to** | The usual cause is a misspelling: `mountian : fill=#ff0000` is a legal line that styles nothing |
-| A `[theme]` subject that IS styled, whose **properties are never read for it** | `glyph=` on a battlemap's area terrain, which is filled rather than marked. A different author mistake from the one above, so it gets a different message |
-| A `[glyphs]` name **no `glyph=`/`asset=` in any layer references** | Defined and unreachable |
+| Warns | Because | And says |
+|---|---|---|
+| A `[theme]` subject **no entity in this document resolves to** | The usual cause is a misspelling: `mountian : fill=#ff0000` is a legal line that styles nothing | *no entity resolves to it* |
+| A subject that **does resolve**, whose properties are never read for those entities | `chain : stroke=` with four chains on the map. Nothing written on that line can reach them | *resolves to N entities, but … is not read for them* |
+| A **surface** (`paper`, `ink`, `fog`, …) whose property is never read | A surface is a language-defined subject (§2); no entity ever resolves to one | *is a surface, but … is not read for it* |
+| A `[glyphs]` name **no `glyph=`/`asset=` in any layer references** | Defined and unreachable | — |
+
+**Implementations MUST distinguish these**, because the author's fix differs completely between them: the first means "you misspelled something" and the rest mean "nothing you write here will help". Telling a resolving subject that nothing resolves to it starts a hunt for a spelling error that does not exist — and "does this subject resolve?" is a fact about the **document**, which the theme cannot answer from what it happened to be asked for.
 
 Two rules make these usable:
 

@@ -6,12 +6,12 @@
  * Runtime dependencies: @chartdown/core only (ADR 0007).
  */
 
-import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type ParseOptions, type Placement } from "@chartdown/core";
+import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type Pair, type ParseOptions, type Placement } from "@chartdown/core";
 import { battlemapFrame, renderBattlemap } from "./battlemap";
 import { titleBand } from "./grid";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildLegend } from "./legend";
-import { buildModel, type RenderMode } from "./model";
+import { buildModel, pairOf, type Model, type RenderMode } from "./model";
 import { renderRegion } from "./region";
 import { INK, PAPER, Theme } from "./theme";
 import { colLetters, colToNumber, el, fmt, text } from "./util";
@@ -149,13 +149,48 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
   // Dead declarations in the selected theme (#116, ADR 0022). Last, because
   // liveness is measured by what the render just asked for: a theme entry is
   // live if it was consulted, and nothing can say so until the drawing is done.
-  for (const dead of theme.deadDeclarations()) diagnostics.push({ severity: "warning", source: "theme", ...dead });
+  for (const dead of theme.deadDeclarations(themeSubjects(model))) {
+    diagnostics.push({ severity: "warning", source: "theme", ...dead });
+  }
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fmt(w)} ${fmt(h)}" width="${fmt(w)}" height="${fmt(h)}" font-family="sans-serif">` +
     body.join("") +
     `</svg>`;
   return { svg, diagnostics };
+}
+
+/**
+ * How many entities each theme SUBJECT resolves to (#148).
+ *
+ * "Does this subject resolve?" is a fact about the document, and the theme
+ * cannot answer it — it only knows what the render asked it for. Told to guess
+ * from its own hits, it reported `chain : stroke=…` as matching nothing while
+ * four chains sat on the map, which sends an author looking for a typo that is
+ * not there.
+ *
+ * Keyed exactly as `[theme]` subjects are written (spec 08 §2), so each form
+ * answers for itself: a bare word counts everything deriving from it, a
+ * `word.state` counts only entities actually in that state, a zone counts by
+ * its base, and `side.<x>` counts by allegiance.
+ */
+function themeSubjects(model: Model): Map<string, number> {
+  const counts = new Map<string, number>();
+  const bump = (key: string): void => void counts.set(key, (counts.get(key) ?? 0) + 1);
+  const walk = (typeWord: string | null, flags: string[], pairs: Pair[]): void => {
+    for (const word of model.chainOf(typeWord)) {
+      bump(word);
+      for (const zone of ["core", "edge"]) bump(`${word}.${zone}`);
+      for (const flag of flags) bump(`${word}.${flag}`);
+    }
+    const side = pairOf(pairs, "side");
+    if (side !== undefined) bump(`side.${side}`);
+  };
+  for (const e of model.entities) {
+    walk(e.typeWord, e.flags, e.pairs);
+    for (const d of e.details) walk(d.typeWord, d.flags, d.pairs);
+  }
+  return counts;
 }
 
 /** Cells an entity's placements cover, as "col:row" keys (addresses, ranges, and area shapes). */

@@ -59,6 +59,9 @@ roof : area L11..N12 difficult   ; the Gatehouse's
 
 [terrain cellar]
 earth : area A1..Z20        ; solid ground — there is nothing to break through to
+; the Fairwater seeps in: standing water in one corner of the Undercroft,
+; covering part of its floor and touching none of its walls
+water : area F8..H9 difficult
 
 [structures cellar]
 building undercroft "The Undercroft" : E7..K10

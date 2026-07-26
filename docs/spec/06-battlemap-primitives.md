@@ -120,7 +120,7 @@ building tollhouse "Ruined Toll House" : N3..Q6
   gate great-gates "The Great Gates" : IQ69.e IQ70.e IQ71.e   ; opens onto rock, no parent
   ```
 
-  Rooms **carve** the rock: a structure's footprint is floor even where `earth` was declared across it, which is what "fills everything outside the rooms" (§5) means. An opening with **passable cells on both sides** (nothing to pass through) or **impassable on both** (buried in stone) is a fail-loud error naming the cell and edge. The impassable boundary is an occluder, so it exports as `line_of_sight` and the opening as a portal (§9) — previously a cave system exported with no occlusion at all except where an author had faked walls.
+  Rooms **carve** the rock: a structure's footprint is floor even where `earth` was declared across it, which is what "fills everything outside the rooms" (§5) means. **So does a path**: §6 layers area terrain beneath path bands, so a road driven through rock is a cut passage and not stone — it is neither an occluder nor a door onto nothing. Solidity is always the **winning** declaration on a cell, never merely one that was made. An opening with **passable cells on both sides** (nothing to pass through) or **impassable on both** (buried in stone) is a fail-loud error naming the cell and edge. The impassable boundary is an occluder, so it exports as `line_of_sight` and the opening as a portal (§9) — previously a cave system exported with no occlusion at all except where an author had faked walls.
 
 ## 4. Tokens — no bestiary, by design
 
@@ -205,17 +205,18 @@ Richer multi-level and roof-aware targets (e.g. Foundry scene levels) remain eco
 
 | Lint | Warns when | A legitimate reading it must not report |
 |---|---|---|
-| `door-onto-void` | An opening in a structure leads out onto a cell that cannot be walked on | A window or arrow-slit (facing open air is its job); an **unparented** opening, where the rock is the barrier and the opening perforates it (§3) |
+| `door-onto-void` | An opening in a structure leads out onto a cell that cannot be walked on | A window or arrow-slit (facing open air is its job); an **unparented** opening, where the rock is the barrier and the opening perforates it (§3); a door onto a **road, bridge, or ford** — a building fronting onto a street |
 | `structure-unsupported` | A footprint cell sits over declared `air` with no structure beneath it on the level below | A room built squarely on the room below — the lower room is its floor, which is why no ceiling was declared under it |
 | `unreachable-room` | A footprint has neither an opening on its perimeter nor a connector inside it | A room whose only way in is a stair **declared on another level**; §8's reciprocal landing is what puts it here |
 | `dangling-connector` | A connector's landing cell cannot be stood on at the far end | A landing inside a room carved out of that surface — a cellar is `earth` with rooms cut into it |
 | `overlapping-structures` | Two footprints on one level share cells | **Containment**: one footprint wholly inside another is a room within a room, and its walls are real interior walls |
-| `terrain-crosses-wall` | A band covers part of a footprint but not all of it | Covering the **whole** footprint (a flooded room); and a band that crosses the perimeter only at edges carrying an **opening** — a road meeting a gatehouse goes through the gate |
+| `terrain-crosses-wall` | Terrain lies partly **inside and partly outside** one footprint, crossing its perimeter | Terrain **wholly inside** a room — a pool in a hall, a dais on a chamber floor, a rubble heap in a corner, which touch no wall at all; terrain covering the **whole** footprint (a flooded room, and the blanket ground layer §5 lays across a level); and a band crossing the perimeter only at edges carrying an **opening** — a road meeting a gatehouse goes through the gate |
 
-Two rules run beneath the table and decide most of the readings in its right-hand column:
+Three rules run beneath the table and decide most of the readings in its right-hand column:
 
 - **A room is a floor.** §5's idiom for a level is to lay one word across the whole grid and carve into it — `air` for a storey, `earth` for a cellar — so a structure's footprint overrides the blanket beneath it wherever the two disagree. This is the same carving §3 relies on for openings in unbuilt geometry.
 - **A level is not the document.** Connectors, landings, and the floor a room stands on all live one level away from the thing they are asked about, so these checks read the whole document and not the level being drawn.
+- **A path is its band, and a band is ground.** A path's placement names only its corners (`road : path A8 T8 width=3` names two cells and covers fifty-seven), and §6 layers area terrain *beneath* path bands — so a road is what its cells have on them, including where it is driven through rock. Counting a path's corners instead of its band, or reading only `terrain` as surface, made a street both invisible to the room it fronts and unwalkable to the door opening onto it.
 
 Because `check` renders (issue [#120](https://github.com/Nossimonov/Chartdown/issues/120)), these run wherever validation runs — a lint nobody runs is a lint nobody has.
 

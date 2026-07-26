@@ -28,7 +28,7 @@ well : E4
 
 const deadIn = (theme: string | string[], src = MAP): string[] =>
   renderSource(src, { theme })
-    .diagnostics.filter((d) => d.severity === "warning" && /styles nothing|never read for it|never referenced/.test(d.message))
+    .diagnostics.filter((d) => d.severity === "warning" && /styles nothing|read for (it|them)|never referenced/.test(d.message))
     .map((d) => d.message);
 
 describe("a [theme] entry that styles nothing", () => {
@@ -52,14 +52,33 @@ describe("a [theme] entry that styles nothing", () => {
     // terrain is never asked for — it is filled, not marked. Tracking liveness
     // per SUBJECT rather than per PROPERTY would call this live off the
     // default's `fill` hit and report nothing.
-    expect(deadIn(`kind: theme\n\n[theme]\nwater : glyph=lonely\n\n[glyphs]\nlonely : "M0,0 L1,1"\n`).join()).toMatch(/'water' is styled elsewhere, but 'glyph' on this line is never read/);
+    expect(deadIn(`kind: theme\n\n[theme]\nwater : glyph=lonely\n\n[glyphs]\nlonely : "M0,0 L1,1"\n`).join()).toMatch(/'water' resolves to 1 entity, but 'glyph' is not read for it/);
   });
 
-  it("distinguishes a misspelled subject from a real subject given the wrong property", () => {
-    // Both lines are inert and the author's mistake is different in each; a
-    // single message would send half of them looking in the wrong place.
-    expect(deadIn(`kind: theme\n\n[theme]\nmountian : fill=#ff0000\n`).join()).toMatch(/no entity resolves to it/);
-    expect(deadIn(`kind: theme\n\n[theme]\nwater : glyph=lonely\n\n[glyphs]\nlonely : "M0,0 L1,1"\n`).join()).toMatch(/does not apply to this kind of subject/);
+  it("never tells a subject that DOES resolve that nothing resolves to it (#148)", () => {
+    // The author's fix differs completely between the two messages — one means
+    // "you misspelled something", the other "nothing you write here will
+    // help" — so giving a resolving subject the misspelling message starts a
+    // hunt for a typo that does not exist.
+    const out = deadIn(`kind: theme\n\n[theme]\nmountian : fill=#ff0000\nwell : stroke=#00ff00\n`);
+    expect(out.join()).toMatch(/'mountian' styles nothing in this document — no entity resolves to it/);
+    expect(out.join()).toMatch(/'well' resolves to 1 entity, but 'stroke' is not read for it/);
+    expect(out.join()).not.toMatch(/'well'.*no entity resolves to it/);
+  });
+
+  it("counts every entity the subject reaches, derivations included", () => {
+    // `capstan : well` derives, so a `well` theme line reaches it too (spec 08
+    // §2's chain rule). The count is what makes the message actionable — "one"
+    // and "thirteen" send an author to very different places.
+    const src = `# Counting\nmap: battlemap\ngrid: square 12x8\nscale: 5ft\n\n[vocab]\ncapstan : well\n\n[features]\nwell : E4\nwell : F4\ncapstan : G4\n`;
+    expect(deadIn(`kind: theme\n\n[theme]\nwell : dash=4,2\n`, src).join()).toMatch(/'well' resolves to 3 entities/);
+  });
+
+  it("tells a SURFACE it is a surface rather than hunting for an entity", () => {
+    // `ink` and `paper` are language-defined subjects (spec 08 §2). No entity
+    // ever resolves to one, so "no entity resolves to it" is the wrong
+    // category rather than a blunter wording of the right one.
+    expect(deadIn(`kind: theme\n\n[theme]\nink : stroke=#111111\n`).join()).toMatch(/'ink' is a surface, but 'stroke' is not read for it/);
   });
 
   it("reports its line in the theme, not the map", () => {

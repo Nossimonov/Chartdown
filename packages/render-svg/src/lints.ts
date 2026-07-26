@@ -15,7 +15,7 @@
 
 import type { Address, EntityNode } from "@chartdown/core";
 import { colLetters, type Segment } from "./util";
-import { cellKey, edgeSegment, perimeterEdges, segKey, structureCells, type Cell } from "./grid";
+import { cellKey, edgeSegment, perimeterEdges, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { impassableCells } from "./walls";
 import type { Model } from "./model";
 
@@ -31,59 +31,37 @@ interface Lint {
 }
 
 /**
- * Cells a terrain or path entity covers.
- *
- * `area` shapes flatten to their ranges, but a `path` is a POLYLINE and its
- * args are only its corners — `path M20 M12` names two cells and runs through
- * nine. Counting corners alone made the King's Road look like it touched the
- * gatehouse without ever entering it, which is the difference between a road
- * through a gate and a road through a wall.
- */
-function terrainCells(e: EntityNode): Map<string, Cell> {
-  const cells = new Map<string, Cell>();
-  const add = (c: Cell): void => void cells.set(cellKey(c), c);
-  for (const p of e.placements) {
-    if (p.kind === "shape" && p.shape === "path") {
-      const pts = p.args.filter((a): a is Address => a.kind === "address");
-      for (let i = 0; i + 1 < pts.length; i++) for (const c of walkBetween(pts[i]!, pts[i + 1]!)) add(c);
-      if (pts.length === 1) add({ col: colNum(pts[0]!.col), row: pts[0]!.row });
-      continue;
-    }
-    const flat = p.kind === "shape" ? p.args : [p];
-    for (const [, c] of structureCells({ placements: flat })) add(c);
-  }
-  return cells;
-}
-
-/** Every cell a straight run between two addresses passes through, ends included. */
-function walkBetween(a: Address, b: Address): Cell[] {
-  const from = { col: colNum(a.col), row: a.row };
-  const to = { col: colNum(b.col), row: b.row };
-  const steps = Math.max(Math.abs(to.col - from.col), Math.abs(to.row - from.row));
-  if (steps === 0) return [from];
-  const out: Cell[] = [];
-  for (let i = 0; i <= steps; i++) {
-    out.push({
-      col: from.col + Math.round(((to.col - from.col) * i) / steps),
-      row: from.row + Math.round(((to.row - from.row) * i) / steps),
-    });
-  }
-  return out;
-}
-
-/**
- * The WINNING terrain word per cell on one level (spec 06 §6: declaration
+ * The WINNING surface word per cell on one level (spec 06 §6: declaration
  * order breaks ties). The same rule `impassableCells` follows, and for the same
  * reason — spec 06 §5's idiom is to lay ground truth across a level and paint
  * over it, so mere membership is not coverage.
+ *
+ * PATHS count as surface (#147). Spec 06 §6 layers area terrain beneath path
+ * bands, so a road is what a cell has on it; reading only `terrain` here made
+ * a door onto a street a door onto whatever the street was painted over.
  */
 function surfaceByCell(entities: EntityNode[], level: string): Map<string, string> {
   const winner = new Map<string, string>();
   for (const e of entities) {
-    if (e.archetype !== "terrain" || e.level !== level) continue;
-    for (const key of terrainCells(e).keys()) winner.set(key, e.typeWord ?? "");
+    if (e.level !== level || !laysSurface(e)) continue;
+    for (const key of surfaceCells(e).keys()) winner.set(key, e.typeWord ?? "");
   }
   return winner;
+}
+
+/**
+ * Whether an entity puts ground under your feet.
+ *
+ * Terrain and paths do by archetype. So does a FEATURE drawn as a band: a
+ * bridge or a ford is stdlib `feature` (spec 05 §2 files them under crossings),
+ * and `bridge span : path A8 T8 width=3` is a walkway however the word is
+ * classified. Barriers and tokens are excluded — a wall drawn along a line is
+ * not a floor, and a token stands ON ground rather than being it.
+ */
+function laysSurface(e: EntityNode): boolean {
+  if (e.archetype === "terrain" || e.archetype === "path") return true;
+  if (e.archetype !== "feature") return false;
+  return e.placements.some((p) => p.kind === "shape" && p.shape === "path");
 }
 
 /**
@@ -137,14 +115,22 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   const walkable = (c: Cell): boolean => {
     const key = cellKey(c);
     if (roomsHere.has(key)) return true; // a room is a floor, whatever is painted under it
-    if (rock.has(key)) return false;
+    // The WINNING surface decides, and it is asked FIRST. `rock` is a narrower
+    // reading of the same question — it counts only terrain and paths, where
+    // this counts a bridge drawn as a band too — so asking it first let the
+    // narrower answer overrule the wider one. Two definitions of "solid"
+    // disagreeing is the shape of #131; this keeps one and demotes the other
+    // to a backstop for cells the surface map never mentions.
     const word = surface.get(key);
-    if (word === undefined) return true; // undeclared ground is ordinary floor
-    const chain = model.chainOf(word);
-    // `terrace` is walkable raised ground; `air`/`void` are declared absence of
-    // floor, which is the whole point of the word (spec 06 §5).
-    if (chain.includes("terrace")) return true;
-    return !chain.includes("air");
+    if (word !== undefined) {
+      const chain = model.chainOf(word);
+      // `terrace` is walkable raised ground; `air`/`void` are declared absence
+      // of floor and `earth` is solid rock (spec 06 §5).
+      if (chain.includes("terrace")) return true;
+      return !chain.includes("air") && !chain.includes("earth");
+    }
+    if (rock.has(key)) return false;
+    return true; // undeclared ground is ordinary floor
   };
 
   // 1 — door-onto-void: an opening whose far side is not walkable. Windows and
@@ -297,18 +283,36 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
     }
   }
 
-  // 6 — terrain-crosses-wall: a band covering PART of a footprint. Covering the
-  // whole footprint is a flooded room, which is legitimate layering.
+  // 6 — terrain-crosses-wall: terrain that is partly inside a room and partly
+  // OUT of it. The question is whether the terrain ESCAPES the footprint, not
+  // whether it fills it (#146).
+  //
+  // The original test — covers some cells but not all — made the ordinary case
+  // a defect. A pool in a hall, a dais on a chamber floor, a rubble heap in one
+  // corner: terrain wholly inside a room, covering part of it, touching no
+  // wall. Sixteen of seventeen warnings on a real map were this, and the
+  // message asserted "a band running through a wall" about a pool that touched
+  // nothing. A room with a uniform floor edge to edge is the exception.
+  //
+  // Under "does it escape", whole-footprint coverage stops needing its own
+  // exemption: a flooded room is terrain that does not leave the room.
   const openingSegs = new Set(openingEdges.map((o) => segKey(o.seg)));
   for (const s of structures) {
     const cells = structureCells(s);
     if (cells.size === 0) continue;
     for (const t of on(model.entities)) {
       if (t.archetype !== "terrain" && t.archetype !== "path") continue;
-      const tc = terrainCells(t);
+      const tc = surfaceCells(t);
       if (tc.size === 0) continue;
-      const covered = [...cells.keys()].filter((k) => tc.has(k)).length;
-      if (covered === 0 || covered === cells.size) continue;
+      const inside = [...tc.keys()].filter((k) => cells.has(k)).length;
+      if (inside === 0) continue; // never enters
+      if (inside === tc.size) continue; // never leaves — a pool, a dais, a rubble heap (#146)
+      // Covering the WHOLE footprint is not crossing a wall either: the wall is
+      // submerged, not breached. This is the flooded room, and it is also what
+      // keeps `earth : area A1..T20` — spec 06 §5's blanket ground layer, which
+      // escapes every footprint on the level by construction — from reporting
+      // every room on the map.
+      if (inside === cells.size) continue;
       // A road that meets a gatehouse is a road going THROUGH THE GATE. What
       // makes a band through a wall a defect is that it crosses where there is
       // no way through, so find the perimeter edges this band actually crosses
@@ -331,7 +335,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       diagnostics.push({
         severity: "warning",
         line: t.line,
-        message: `'${t.typeWord ?? "terrain"}' covers part of a structure's footprint but not all of it — a band running through a wall; covering the whole footprint is a flooded room and is fine (spec 06 §6)`,
+        message: `'${t.typeWord ?? "terrain"}' runs both inside and outside a structure's footprint, crossing its wall where there is no opening — terrain that stays wholly inside a room (a pool, a dais) is fine, as is terrain that crosses at a door (spec 06 §6)`,
       });
       break;
     }

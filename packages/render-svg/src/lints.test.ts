@@ -123,7 +123,7 @@ describe("5 — overlapping-structures", () => {
 });
 
 describe("6 — terrain-crosses-wall", () => {
-  const BAND = "but not all of it";
+  const BAND = "runs both inside and outside";
 
   it("warns when a river runs through a wall with no way through", () => {
     expect(has(map(`[terrain]\nriver : path A5 T5\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s`), BAND)).toBe(true);
@@ -131,6 +131,23 @@ describe("6 — terrain-crosses-wall", () => {
 
   it("is silent when the whole footprint is covered — a flooded room", () => {
     expect(has(map(`[terrain]\nwater : area C3..F6\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s`), BAND)).toBe(false);
+  });
+
+  it("is silent for a pool WHOLLY INSIDE a room, covering part of its floor (#146)", () => {
+    // The ordinary case, and the one the first predicate got backwards: a pool
+    // in a hall, a dais on a chamber floor, a rubble heap in one corner. Terrain
+    // that touches no wall cannot be crossing one. Sixteen of seventeen
+    // warnings on a real map were this shape.
+    expect(has(map(`[terrain]\nearth : area A1..T20\nwater pool : area E4..F5 difficult\n\n[structures]\nbuilding hall : C3..H8\n  door : D8.s`), BAND)).toBe(false);
+  });
+
+  it("is silent for a single cell of rubble inside a hall (#146)", () => {
+    expect(has(map(`[terrain]\nearth : area A1..T20\nrubble : E5\n\n[structures]\nbuilding hall : C3..H8\n  door : D8.s`), BAND)).toBe(false);
+  });
+
+  it("still warns for the same pool once it runs out through the east wall (#146)", () => {
+    // The ONLY difference from the pool above is that this one escapes.
+    expect(has(map(`[terrain]\nearth : area A1..T20\nwater pool : area E4..R5\n\n[structures]\nbuilding hall : C3..H8\n  door : D8.s`), BAND)).toBe(true);
   });
 
   it("is silent for a road that enters a gatehouse through its gate", () => {
@@ -144,5 +161,30 @@ describe("6 — terrain-crosses-wall", () => {
     // `path M20 M12` names two cells and covers nine. Counting corners made a
     // road look like it never entered the room it ran the length of.
     expect(has(map(`[terrain]\nroad : path M20 M12\n\n[structures]\nbuilding hall : L14..N16`), BAND)).toBe(true);
+  });
+});
+
+describe("a path is its BAND, not its centreline (#147)", () => {
+  const VOID = "leads out onto ground that cannot be walked on";
+
+  it("a door onto a road is not a door onto nothing", () => {
+    // The road is painted over `earth`, and spec 06 §6 layers area terrain
+    // beneath path bands — so the road is what that cell has on it. Reading
+    // only `terrain` made a shop fronting onto a street open onto bedrock.
+    expect(has(map(`[terrain]\nearth : area A1..T20\nroad highstreet : path A8 T8 width=3\n\n[structures]\nbuilding shop : D2..H6\n  door : F6.s`), VOID)).toBe(false);
+  });
+
+  it("still warns for a door onto genuine rock beside that road", () => {
+    expect(has(map(`[terrain]\nearth : area A1..T20\nroad highstreet : path A18 T18 width=3\n\n[structures]\nbuilding shop : D2..H6\n  door : F6.s`), VOID)).toBe(true);
+  });
+
+  it("counts the band's WIDTH — a door two cells off the centreline of a width=3 road", () => {
+    // `width=3` reaches one cell either side of A8..T8, so F7 is road. With the
+    // centreline alone this cell is bedrock and the door warns.
+    expect(has(map(`[terrain]\nearth : area A1..T20\nroad : path A8 T8 width=3\n\n[structures]\nbuilding shop : D2..H6\n  door : F6.s`), VOID)).toBe(false);
+  });
+
+  it("a bridge band counts as walkable too", () => {
+    expect(has(map(`[terrain]\nearth : area A1..T20\nbridge span : path A8 T8 width=3\n\n[structures]\nbuilding shop : D2..H6\n  door : F6.s`), VOID)).toBe(false);
   });
 });
