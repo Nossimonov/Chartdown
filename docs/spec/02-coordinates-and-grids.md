@@ -97,6 +97,22 @@ Shape tokens whose geometry the renderer finishes organically (deterministically
 | `blob` | `blob <point \| cell> size=<measure>` | organic mass around a center |
 | `ridge` | `ridge <point sequence> [width=<measure>]` | elongated organic mass along a spine; `width=` declares the mass's breadth — the belt, not the centerline, is the feature's footprint (a mountain range is terrain with dimensions, not a string of peaks). `ridge (…) area (…)` on one entity refines the extent while the crest survives for references — refinement is additive, never a swap (ADR 0013) |
 
+### A shape may be declared in a referent's frame
+
+`<shape> on <ref> at <points…>` reads the points as **offsets from the referent**, so the whole shape travels when the referent moves — spurs radiating off a peak, an outwork hugging a keep, a marsh that belongs to its lake:
+
+```chartdown
+peak erebor "Erebor" : (700,300)
+mountains westarm "Western Spur" : ridge on erebor at (-70,100) (-90,170) width=40mi
+mountains eastarm "Eastern Spur" : ridge on erebor at (75,100) (95,170) width=40mi
+```
+
+This is §7's local frame — *"a cell/range/edge after `at` is LOCAL to the referent; moving the structure moves its contents"* — reaching the one construct it had not: shapes took literal coordinates only, so a spur was hand-matched to its mountain's position and detached silently when the mountain moved.
+
+**The whole shape travels, not one end of it.** Anchoring only a shape's first point deforms it — the anchored end follows and the rest stays, which is worse than detaching cleanly, because the geometry silently changes rather than merely sitting in the wrong place. A shape that belongs to a feature needs a frame, not an anchor point.
+
+Offsets are Cartesian and therefore lose nothing against a bearing-and-range spelling: the two are interconvertible, so any spine one can describe the other can, and the choice is which reads better to write ([#142](https://github.com/Nossimonov/Chartdown/issues/142)).
+
 ### Repeated placement
 
 `every <n> in <range>` places one entity per cell whose offset from the range's **north-west corner** is a multiple of `n` on both axes; `every <n>x<m>` steps columns and rows independently. The first cell is always placed, so `every 4 in A1..A9` gives A1, A5, A9 — what a reader counting bays expects.

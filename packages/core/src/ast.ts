@@ -45,6 +45,16 @@ export interface Shape {
   kind: "shape";
   shape: ShapeKind;
   args: Placement[];
+  /**
+   * `ridge on erebor at (…) (…)` (#142): the shape's points are offsets in the
+   * referent's frame, so the WHOLE shape travels when the referent moves.
+   *
+   * Anchoring only the first point was measured and rejected — it drags one
+   * end and leaves the rest, stretching a 60-unit spur to 183. A shape that
+   * belongs to a feature needs a frame, not an anchor point, which is the same
+   * conclusion spec 02 §7 reached for structure contents.
+   */
+  frame?: Ref;
 }
 
 /** A reference to another entity: bare word = id lookup, quoted = display-name lookup (spec 03 §2). */

@@ -179,7 +179,23 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const b = toXY(p.to);
         out.polygon = [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
       } else if (p.kind === "shape") {
-        const pts = p.args.filter((arg): arg is Point => arg.kind === "point").map(toXY);
+        // A framed shape's points are offsets from the referent (#142), so the
+        // WHOLE shape travels with it. Anchoring only the first point was
+        // measured and rejected: it drags one end and leaves the rest, turning
+        // a 60-unit spur into a 183-unit smear — worse than today's clean
+        // detachment, because the shape deforms instead of merely sitting in
+        // the wrong place.
+        let origin: XY | null = null;
+        if (p.frame) {
+          origin = refPoint(p.frame);
+          if (!origin) {
+            diagnostics.push({ severity: "warning", line: e.line, message: `'${p.frame.value}' has no position to frame this ${p.shape} against — its offsets are read as absolute (spec 02 §9)` });
+          }
+        }
+        const framed = (pt: XY): XY => (origin ? { x: origin.x + pt.x, y: origin.y + pt.y } : pt);
+        const pts = p.args
+          .filter((arg): arg is Point => arg.kind === "point")
+          .map((arg) => (origin ? framed({ x: arg.x * scale, y: arg.y * scale }) : toXY(arg)));
         if (p.shape === "blob") {
           const center = pts[0] ?? out.point ?? { x: w / 2, y: h / 2 };
           const radius = (measureToNumber(pairOf(e.pairs, "size") ?? "40") / 2) * scale;

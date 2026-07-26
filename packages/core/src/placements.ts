@@ -252,6 +252,23 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
 
     if (SHAPES.has(c)) {
       i++;
+      // `ridge on <ref> at (…) (…)` (#142): the points that follow are offsets
+      // in the referent's frame, so the whole shape travels with it. Spec 02
+      // §7 already says exactly this for a structure's contents; a spur off a
+      // peak is the same relationship, and shapes were the one place the
+      // live-anchor promise did not reach.
+      let frame: Ref | undefined;
+      if (chunkText(peek()) === "on") {
+        i++;
+        const ref = takeRef("on");
+        if (!ref) continue;
+        if (chunkText(peek()) !== "at") {
+          diagnostics.push(error(line, `'${c} on ${ref.value}' needs 'at' and the offsets that follow it — '${c} on ${ref.value} at (-70,100) (-90,170)' (spec 02 §9)`));
+          continue;
+        }
+        i++;
+        frame = ref;
+      }
       const args: Placement[] = [];
       while (i < tokens.length) {
         const next = tokens[i]!;
@@ -270,7 +287,7 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
         args.push(pos);
         i++;
       }
-      result.placements.push({ kind: "shape", shape: c as ShapeKind, args });
+      result.placements.push(frame ? { kind: "shape", shape: c as ShapeKind, args, frame } : { kind: "shape", shape: c as ShapeKind, args });
       continue;
     }
 

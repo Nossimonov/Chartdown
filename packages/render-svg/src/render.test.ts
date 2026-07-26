@@ -1310,3 +1310,57 @@ describe("solitary peak and volcano (#95)", () => {
       .map((d) => d.message).join()).toMatch(/not a declared state/);
   });
 });
+
+
+/**
+ * #142: a shape may be declared in a referent's frame, so it travels with it.
+ * Anchoring only the first point was measured and rejected — it drags one end
+ * and leaves the rest, deforming the shape instead of moving it.
+ */
+describe("a framed shape travels with its referent (#142)", () => {
+  const doc = (peakAt: string, spur: string): string =>
+    ["map: region", "extent: 1400x900mi", "[terrain]",
+     `peak erebor "Erebor" : ${peakAt}`,
+     `mountains arm "Spur" : ${spur} width=40mi`].join("\n");
+  const boxOf = (src: string): { x: number; y: number; w: number; h: number } => {
+    const m = renderSource(src, {}).svg.match(/<g id="cd-[^"]*arm"><polygon points="([^"]+)"/);
+    if (!m?.[1]) throw new Error("spur did not render");
+    const pts = m[1].trim().split(/\s+/).map((t) => t.split(",").map(Number));
+    const xs = pts.map((q) => q[0]!), ys = pts.map((q) => q[1]!);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+
+  const FRAMED = "ridge on erebor at (-70,100) (-90,170)";
+
+  it("moving the referent TRANSLATES the shape — size is unchanged", () => {
+    // The assertion is the bounding box, not a coordinate: a coordinate check
+    // passes for a deformed shape, which is exactly the bug this replaces.
+    const a = boxOf(doc("(700,300)", FRAMED));
+    const b = boxOf(doc("(900,300)", FRAMED));
+    expect(b.x).toBeGreaterThan(a.x);
+    expect(b.w).toBeCloseTo(a.w, 5);
+    expect(b.h).toBeCloseTo(a.h, 5);
+    expect(b.y).toBeCloseTo(a.y, 5);
+  });
+
+  it("an unframed shape still does not move — the old behaviour is untouched", () => {
+    const plain = "ridge (630,400) (610,470)";
+    expect(boxOf(doc("(700,300)", plain))).toEqual(boxOf(doc("(900,300)", plain)));
+  });
+
+  it("two spurs share one frame, so a massif moves as a unit", () => {
+    const two = ["map: region", "extent: 1400x900mi", "[terrain]",
+      'peak erebor "Erebor" : (700,300)',
+      'mountains arm "West" : ridge on erebor at (-70,100) (-90,170) width=40mi',
+      'mountains arm2 "East" : ridge on erebor at (75,100) (95,170) width=40mi'].join("\n");
+    const leftEdge = (src: string, id: string): number => {
+      const m = renderSource(src, {}).svg.match(new RegExp(`<g id="cd-[^"]*${id}"><polygon points="([0-9.]+),`));
+      if (!m?.[1]) throw new Error(`no polygon for ${id}`);
+      return Number(m[1]);
+    };
+    const moved = two.replace("(700,300)", "(900,300)");
+    // Both arms shift by the same amount: the massif is one rigid thing.
+    expect(leftEdge(moved, "arm") - leftEdge(two, "arm"))
+      .toBeCloseTo(leftEdge(moved, "arm2") - leftEdge(two, "arm2"), 5);
+  });
+});

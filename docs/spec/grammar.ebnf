@@ -80,7 +80,11 @@ range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
 point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
-shape          = ( "area" | "path" | "blob" | "ridge" ) , { placement | pair } ;
+shape          = ( "area" | "path" | "blob" | "ridge" ) ,
+                 [ "on" , ref , "at" ] , { placement | pair } ;
+                 (* with `on <ref> at`, the points are OFFSETS in the
+                    referent's frame and the WHOLE shape moves with it —
+                    spec 02 §9, #142. Anchoring one point deforms the shape. *)
                  (* inside an "area" point list, "along" , ref between two
                     vertices makes the boundary follow the feature's curve
                     between their projections — spec 05 §2, ADR 0012 *)
