@@ -637,3 +637,48 @@ describe("inset: the child half of the seam (#143)", () => {
     expect(checkInset(["# C", "map: battlemap", "grid: square 44x42"].join("\n"), { documents: {} })).toEqual([]);
   });
 });
+
+
+/**
+ * #144: the seam is checked from BOTH ends. The child validated the linkage
+ * and not the geometry, so the two failures an author is most likely to create
+ * were catchable only from the parent — and the child is the sheet an author
+ * actually has open.
+ */
+describe("the sub-map seam is symmetric (#144)", () => {
+  const parentDoc = ["# P", "map: battlemap", "grid: square 20x12", "scale: 10ft",
+    "[structures]", 'chamber room "The Room" : E4..H9 detail="child.cd" detail-at=E4'].join("\n");
+  const childDoc = (grid: string, scale: string): string =>
+    ["# C", "map: battlemap", `grid: square ${grid}`, `scale: ${scale}`, "inset: parent.cd at room"].join("\n");
+  const fromParent = (child: string): string =>
+    checkDetailSeams(parentDoc, { documents: { "child.cd": child } }).map((d) => d.message).join(" | ");
+  const fromChild = (child: string): string =>
+    checkInset(child, { documents: { "parent.cd": parentDoc } }).map((d) => `${d.severity}: ${d.message}`).join(" | ");
+
+  it("an under-covering grid fails from EITHER end", () => {
+    const under = childDoc("6x10", "5ft");
+    expect(fromParent(under)).toMatch(/needs 8x12/);
+    expect(fromChild(under)).toMatch(/needs 8x12/);
+  });
+
+  it("a non-integer magnification fails from EITHER end", () => {
+    const odd = childDoc("20x40", "3ft");
+    expect(fromParent(odd)).toMatch(/magnifies by a whole number/);
+    expect(fromChild(odd)).toMatch(/magnifies by a whole number/);
+  });
+
+  it("an agreeing pair is silent from either end", () => {
+    const good = childDoc("8x12", "5ft");
+    expect(fromParent(good)).toBe("");
+    expect(fromChild(good)).toBe("");
+  });
+
+  it("the linkage checks the child already had are unchanged", () => {
+    const orphanParent = ["# P", "map: battlemap", "grid: square 20x12", "scale: 10ft",
+      "[structures]", 'chamber room "The Room" : E4..H9'].join("\n");
+    expect(checkInset(childDoc("8x12", "5ft"), { documents: { "parent.cd": orphanParent } })
+      .map((d) => d.message).join()).toMatch(/no 'detail=' pointing back/);
+    expect(checkInset(childDoc("8x12", "5ft"), { documents: {} })
+      .map((d) => `${d.severity}`).join()).toBe("warning");
+  });
+});

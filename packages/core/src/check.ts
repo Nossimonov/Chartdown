@@ -236,5 +236,41 @@ export function checkInset(source: string, options: ParseOptions = {}): Diagnost
   if (owner.pairs.find((p) => p.key === "detail-at") === undefined) {
     out.push({ severity: "error", line: header.line, message: `'${entityRef}' in '${parentPath}' has no 'detail-at=', so there is no anchor for this inset to agree with (spec 03 §4)` });
   }
+
+  // The GEOMETRY, from this end too (#144). Validating only the linkage here
+  // left the two failures an author is most likely to create — an
+  // under-covering grid and a non-whole magnification — catchable solely by
+  // checking the parent. The child is the sheet an author actually has open,
+  // so that was the one loop with no signal: the Moria sub-map reported `ok`
+  // from the side where all the work was being done, while the parent caught
+  // it immediately.
+  //
+  // The data is already in hand by this point — resolving `detail=` above
+  // proves the parent is loaded and parsed — so this is the same comparison
+  // the parent performs, phrased from the other side.
+  const parentScale = measureOf(parent.header.find((h) => h.key === "scale")?.value);
+  const childScale = measureOf(parsed.document.header.find((h) => h.key === "scale")?.value);
+  if (parentScale === null || childScale === null) {
+    out.push({ severity: "warning", line: header.line, message: `both this document and '${parentPath}' need a 'scale:' before their seam can be checked (spec 03 §4)` });
+    return out;
+  }
+  const ratio = parentScale / childScale;
+  if (!Number.isInteger(ratio) || ratio < 1) {
+    out.push({ severity: "error", line: header.line, message: `this document is ${childScale}-scaled against '${parentPath}''s ${parentScale}: a sub-map magnifies by a whole number, and ${parentScale}:${childScale} is not one (spec 03 §4)` });
+    return out;
+  }
+  const footprint = footprintSize(owner);
+  const grid = parsed.document.grid;
+  if (footprint && grid) {
+    const needCols = footprint.cols * ratio;
+    const needRows = footprint.rows * ratio;
+    if (grid.cols < needCols || grid.rows < needRows) {
+      out.push({
+        severity: "error",
+        line: header.line,
+        message: `this document is ${grid.cols}x${grid.rows} at ${childScale}; '${entityRef}' in '${parentPath}' is ${footprint.cols}x${footprint.rows} at ${parentScale} and needs ${needCols}x${needRows} (spec 03 §4)`,
+      });
+    }
+  }
   return out;
 }
