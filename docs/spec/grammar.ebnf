@@ -62,7 +62,15 @@ comment        = ";" , text , EOL ;                  (* legal at end of any line
 
 (* ---- placements — spec 02 ---- *)
 
-placement      = address | range | edge | point | point-range | shape | relational ;
+placement      = address | range | edge | point | point-range | shape | relational
+               | repeat ;
+repeat         = "every" , step , "in" , range ;
+step           = number , [ "x" , number ] ;
+                 (* a QUALIFIER, not a relational form — spec 02 §9.
+                    Expands at parse time to one address per stepped cell,
+                    offsets measured from the range NW corner; >4096 = error.
+                    `every <measure> along <ref>` is specified but unimplemented
+                    (#140) and errors rather than silently doing nothing. *)
 address        = col-letters , row-number ;          (* chess-style, all grid types; AA past Z *)
 range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)

@@ -89,6 +89,21 @@ Shape tokens whose geometry the renderer finishes organically (deterministically
 | `blob` | `blob <point \| cell> size=<measure>` | organic mass around a center |
 | `ridge` | `ridge <point sequence> [width=<measure>]` | elongated organic mass along a spine; `width=` declares the mass's breadth — the belt, not the centerline, is the feature's footprint (a mountain range is terrain with dimensions, not a string of peaks). `ridge (…) area (…)` on one entity refines the extent while the crest survives for references — refinement is additive, never a swap (ADR 0013) |
 
+### Repeated placement
+
+`every <n> in <range>` places one entity per cell whose offset from the range's **north-west corner** is a multiple of `n` on both axes; `every <n>x<m>` steps columns and rows independently. The first cell is always placed, so `every 4 in A1..A9` gives A1, A5, A9 — what a reader counting bays expects.
+
+```chartdown
+pillar : every 4 in FH38..GF102      ; a colonnade, one line
+crates : every 3x2 in FF100..FK108
+```
+
+This is a **qualifier on a placement**, not a tenth relational form — §7's closed list is untouched. Spacing is authorial data, not renderer judgement: the repeat is arithmetic fixed by the document, so it expands to ordinary placements and §8.2's determinism holds trivially. Everything downstream treats the result as though the cells had been written out, including local frames — `on second-hall at every 4 in C4..AB60` puts the colonnade in the hall's own coordinates (§7), so moving the hall moves all of it, which hand-written addresses do not.
+
+A repeat expanding past **4096** cells is an error rather than a hang.
+
+*`every <measure> along <ref>` — regular spacing down a course — is specified but not yet implemented ([#140](https://github.com/Nossimonov/Chartdown/issues/140)); it needs geometry resolved after parsing, and using it is a loud error rather than a silent no-op.*
+
 ## 10. Grammar sketch additions
 
 Extends spec 01 §9's `placement` production (informal; to be made normative per [#12](https://github.com/Nossimonov/Chartdown/issues/12)):

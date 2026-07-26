@@ -39,6 +39,49 @@ export function parseAddress(text: string): Address | null {
   return m ? { kind: "address", col: m[1]!, row: Number(m[2]!) } : null;
 }
 
+/** Column letters to 1-based number and back: A=1, Z=26, AA=27 (spec 02 §1). */
+const colToNumber = (letters: string): number => {
+  let n = 0;
+  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+};
+const numberToCol = (n: number): string => {
+  let out = "";
+  let v = n;
+  while (v > 0) {
+    const r = (v - 1) % 26;
+    out = String.fromCharCode(65 + r) + out;
+    v = Math.floor((v - 1) / 26);
+  }
+  return out;
+};
+
+/**
+ * A repeat expands to ordinary cell placements at parse time (#114). Spacing
+ * is authorial data, not renderer judgement — the arithmetic is fixed by the
+ * document, so nothing downstream needs to know the line was written compactly
+ * and the determinism contract (spec 02 §8.2) holds trivially.
+ *
+ * Offsets are measured from the range's NW corner, so the first cell is always
+ * placed: `every 4 in A1..A9` gives A1, A5, A9, which is what a reader counting
+ * bays expects.
+ */
+const REPEAT_LIMIT = 4096;
+function expandRepeat(range: AddressRange, stepX: number, stepY: number): Address[] {
+  const c0 = Math.min(colToNumber(range.from.col), colToNumber(range.to.col));
+  const c1 = Math.max(colToNumber(range.from.col), colToNumber(range.to.col));
+  const r0 = Math.min(range.from.row, range.to.row);
+  const r1 = Math.max(range.from.row, range.to.row);
+  const out: Address[] = [];
+  for (let r = r0; r <= r1; r += stepY) {
+    for (let c = c0; c <= c1; c += stepX) {
+      out.push({ kind: "address", col: numberToCol(c), row: r });
+      if (out.length > REPEAT_LIMIT) return out;
+    }
+  }
+  return out;
+}
+
 export function parsePositional(text: string): Address | AddressRange | Point | PointRange | Edge | null {
   const range = RANGE_RE.exec(text);
   if (range) {
@@ -112,6 +155,50 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     return undefined;
   };
 
+  /**
+   * `every <n>[x<m>] in <range>` after the keyword has been consumed (#114).
+   * Returns the expanded cells, or null having already reported why not — one
+   * implementation for both the bare form and the `on <ref> at every …` form,
+   * so the two can never drift into different diagnostics.
+   */
+  const takeRepeat = (): Address[] | null => {
+    const stepText = chunkText(peek());
+    const m = stepText ? /^(\d+)(?:x(\d+))?$/.exec(stepText) : null;
+    if (!m) {
+      diagnostics.push(error(line, "'every' takes a whole-number step: 'every 4 in <range>', or 'every 4x6 in <range>' for independent column and row steps (spec 02 §9)"));
+      return null;
+    }
+    const stepX = Number(m[1]);
+    const stepY = m[2] === undefined ? stepX : Number(m[2]);
+    i++;
+    if (stepX < 1 || stepY < 1) {
+      diagnostics.push(error(line, "'every' steps by at least 1 cell (spec 02 §9)"));
+      return null;
+    }
+    const kw = chunkText(peek());
+    if (kw !== "in") {
+      const hint = kw === "along"
+        ? "'every … along <ref>' is not implemented yet — space the entities along the course by hand, or use 'in <range>' (#140)"
+        : "'every <n>' is followed by 'in <range>' (spec 02 §9)";
+      diagnostics.push(error(line, hint));
+      return null;
+    }
+    i++;
+    const rangeText = chunkText(peek());
+    const range = rangeText ? parsePositional(rangeText) : null;
+    if (!range || range.kind !== "range") {
+      diagnostics.push(error(line, "expected a cell range after 'in', e.g. 'every 4 in FH38..GF102' (spec 02 §9)"));
+      return null;
+    }
+    i++;
+    const cells = expandRepeat(range, stepX, stepY);
+    if (cells.length > REPEAT_LIMIT) {
+      diagnostics.push(error(line, `'every ${stepText} in ${rangeText}' expands past ${REPEAT_LIMIT} cells — narrow the range or widen the step (spec 02 §9)`));
+      return null;
+    }
+    return cells;
+  };
+
   const takeEndpoint = (): Endpoint | null => {
     const t = tokens[i];
     if (t?.kind === "chunk") {
@@ -180,6 +267,19 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       continue;
     }
 
+    // `every <n> in <range>` / `every <n>x<m> in <range>` (#114): a repeat
+    // QUALIFIER, not a tenth relational form — spec 02 §7's closed list is
+    // untouched. A dwarf-hall IS its colonnade, and writing one meant 56
+    // hand-computed addresses that said nothing about the regularity and
+    // silently broke the moment the hall moved.
+    if (c === "every") {
+      i++;
+      const cells = takeRepeat();
+      if (cells === null) continue;
+      result.placements.push(...cells);
+      continue;
+    }
+
     if (c === "at") {
       i++;
       const targetText = chunkText(peek());
@@ -203,6 +303,17 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       // crossing chooser of spec 06 §6 rides this same form).
       let point: Point | undefined;
       let at: Address | AddressRange | Edge | undefined;
+      if (chunkText(peek()) === "at" && chunkText(peek(1)) === "every") {
+        // `on <ref> at every <n> in <range>` — the repeat lands in the
+        // REFERENT's frame, which is the whole point of #114: a colonnade
+        // written in its hall's own coordinates moves when the hall moves,
+        // where fifty-six absolute addresses silently do not.
+        i += 2;
+        const cells = takeRepeat();
+        if (cells === null) continue;
+        for (const cell of cells) result.placements.push({ kind: "relational", form: "on", ref, at: cell });
+        continue;
+      }
       if (chunkText(peek()) === "at") {
         const after = chunkText(peek(1));
         const parsed = after ? parsePositional(after) : null;

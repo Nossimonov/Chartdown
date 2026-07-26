@@ -423,3 +423,82 @@ describe("detail: chooses render resolution (#139, ADR 0020)", () => {
     expect(warningsOf(region("detail: reference"))).toEqual([]);
   });
 });
+
+describe("repeated placement — every (#114, spec 02 §9)", () => {
+  const bm = (line: string): string => `# T\nmap: battlemap\ngrid: square 40x30\nscale: 10ft\n[features]\n${line}\n`;
+  const cellsOf = (src: string): string[] => {
+    const ents = parse(src).document.sections.flatMap((s) => s.entries).filter((e) => e.kind === "entity");
+    return (ents[0]?.placements ?? []).map((p) => (p.kind === "address" ? `${p.col}${p.row}` : p.kind));
+  };
+
+  it("expands from the NW corner, so the first cell always lands", () => {
+    // A reader counting bays expects A1 A5 A9, not A5 A9.
+    expect(cellsOf(bm("pillar : every 4 in A1..A9"))).toEqual(["A1", "A5", "A9"]);
+  });
+
+  it("steps both axes, and independently with NxM", () => {
+    expect(cellsOf(bm("pillar : every 2 in A1..C3"))).toEqual(["A1", "C1", "A3", "C3"]);
+    expect(cellsOf(bm("pillar : every 2x1 in A1..C2"))).toEqual(["A1", "C1", "A2", "C2"]);
+  });
+
+  it("crosses the Z boundary correctly", () => {
+    expect(cellsOf(bm("pillar : every 2 in Y1..AC1"))).toEqual(["Y1", "AA1", "AC1"]);
+  });
+
+  it("expands to ORDINARY placements — nothing downstream sees a repeat", () => {
+    const one = cellsOf(bm("pillar : every 4 in A1..A9"));
+    const hand = cellsOf(bm("pillar : A1 A5 A9"));
+    expect(one).toEqual(hand);
+  });
+
+  it("fails loud on every malformed form", () => {
+    expect(errorsOf(bm("pillar : every in A1..C3")).join()).toMatch(/takes a whole-number step/);
+    expect(errorsOf(bm("pillar : every 4 A1..C3")).join()).toMatch(/followed by 'in <range>'/);
+    expect(errorsOf(bm("pillar : every 4 in A1")).join()).toMatch(/expected a cell range after 'in'/);
+    expect(errorsOf(bm("pillar : every 0 in A1..C3")).join()).toMatch(/steps by at least 1/);
+  });
+
+  it("a runaway expansion is an error, not a hang", () => {
+    expect(errorsOf(bm("pillar : every 1 in A1..ZZ400")).join()).toMatch(/expands past 4096 cells/);
+  });
+
+  it("the unimplemented along form says so instead of doing nothing (#140)", () => {
+    expect(errorsOf(bm("lamp : every 6 along gallery")).join()).toMatch(/not implemented yet/);
+  });
+});
+
+describe("every composes with local frames (#114, spec 02 §7)", () => {
+  const doc = (pillars: string): string =>
+    ["# T", "map: battlemap", "grid: square 40x30", "scale: 10ft",
+     "[structures]", "building hall : B2..AB28", "[features]", pillars].join("\n");
+  const pillarsOf = (src: string) => {
+    const ents = parse(src).document.sections.flatMap((s) => s.entries).filter((e) => e.kind === "entity");
+    return ents.find((e) => e.typeWord === "pillar")!.placements;
+  };
+
+  it("`on <ref> at every …` puts the colonnade in the referent's frame", () => {
+    // This is the whole point of the proposal: 56 absolute addresses silently
+    // stop meaning anything when the hall moves; these do not.
+    const ps = pillarsOf(doc("pillar : on hall at every 4 in C4..K12"));
+    expect(ps).toHaveLength(9);
+    for (const p of ps) expect(p.kind === "relational" && p.form === "on" && p.ref.value).toBe("hall");
+    expect(ps.every((p) => p.kind === "relational" && p.form === "on" && p.at?.kind === "address")).toBe(true);
+  });
+
+  it("moving the anchor moves every repeated cell — the addresses do not change", () => {
+    const near = pillarsOf(doc("pillar : on hall at every 4 in C4..K12"));
+    const far = pillarsOf(
+      doc("pillar : on hall at every 4 in C4..K12").replace("building hall : B2..AB28", "building hall : M2..AM28"),
+    );
+    // Identical local addresses against a moved parent: the placement is
+    // relational, so the hall's new position carries them.
+    const local = (ps: typeof near): string[] =>
+      ps.map((p) => (p.kind === "relational" && p.form === "on" && p.at?.kind === "address" ? `${p.at.col}${p.at.row}` : ""));
+    expect(local(far)).toEqual(local(near));
+  });
+
+  it("both spellings share one implementation, so diagnostics match", () => {
+    expect(errorsOf(doc("pillar : on hall at every 0 in C4..K12")).join()).toMatch(/steps by at least 1/);
+    expect(errorsOf(doc("pillar : every 0 in C4..K12")).join()).toMatch(/steps by at least 1/);
+  });
+});
