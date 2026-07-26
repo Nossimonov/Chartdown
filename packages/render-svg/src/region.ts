@@ -75,7 +75,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (vec) seawardByHost.set(refText(p.ref), vec);
     }
   }
-  const featuresByHost = new Map<string, { f: PlacedFeature; word: string; line: number }[]>();
+  interface PlacedRef {
+    f: PlacedFeature;
+    /** How the author names it — a name, else an id, else the bare word. */
+    label: string;
+    word: string;
+    /** Exactly as written, unit and all. */
+    sizeText: string;
+    morph: Morph;
+    line: number;
+  }
+  const featuresByHost = new Map<string, PlacedRef[]>();
   for (const e of model.entities) {
     const morph = model.facetOf(e.typeWord, "morph") as Morph | undefined;
     if (!morph || morph === "detached") continue;
@@ -94,14 +104,22 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // How far across the host it reaches, as a multiple of size= — the thing
       // that makes a fjord long and narrow where a cove is a shallow scoop.
       // From the vocabulary, so derivation carries it (ADR 0016).
-      const reachText = model.facetOf(e.typeWord, "reach");
+      const reachText = pairOf(e.pairs, "reach") ?? model.facetOf(e.typeWord, "reach");
       const reach = reachText === undefined ? undefined : Number(reachText);
       if (reachText !== undefined && !Number.isFinite(reach)) {
         diagnostics.push({ severity: "warning", line: e.line, message: `'reach=${reachText}' is not a number — the vocabulary default applies (spec 05 §4)` });
       }
-      const entry: { f: PlacedFeature; word: string; line: number } = {
+      const entry: PlacedRef = {
         f: { morph, anchor: toXY(p.point), size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined && Number.isFinite(reach) ? { reach } : {}) },
+        // The ENTITY as the author would recognise it: three `sound`s on one
+        // coast all reported as "'sound'" gave nothing to tell them apart
+        // (#156). And `sizeText` is carried verbatim rather than recomputed
+        // from pixels, because rounding it turned `size=1.5mi` into `size=2`
+        // and read as though the edit had not been saved.
+        label: e.name ?? e.ids[0] ?? e.typeWord ?? "feature",
         word: e.typeWord ?? "feature",
+        sizeText,
+        morph,
         line: e.line,
       };
       const list = featuresByHost.get(host) ?? [];
@@ -125,14 +143,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const finishCourse = (e: EntityNode, controls: XY[]): XY[] => {
     const placed = hostKeys(e).flatMap((k) => featuresByHost.get(k) ?? []);
     if (placed.length === 0) return catmullRom(controls, 8);
-    // A course carrying features is sampled far more finely BEFORE it is
-    // deformed. Eight samples per segment is plenty to draw a smooth spline,
-    // but a feature's window then lands on only a handful of vertices and the
-    // bump comes out a polygon — measured on Vessany's Gull Bay: six vertices
-    // and a 175° turn, which is a spike rather than a bay. Density also keeps
-    // the local normals varying continuously where the host turns a corner,
-    // which is where the fold was worst.
-    const curve = catmullRom(controls, DEFORM_SAMPLES);
+    // Density is `deformCurve`'s business now, not the caller's: it resamples
+    // to a uniform spacing so a feature behaves the same however many `via`
+    // points the host happens to carry (#154, #155).
+    const curve = catmullRom(controls, 8);
     // Drawn as declared or reported — never quietly resized. A clamp would
     // make `size=` a lie, since the same 90mi cape would come out different
     // lengths on different stretches of coast, and a renderer that silently
@@ -142,10 +156,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return deformCurve(curve, placed.map((x) => x.f), (f) => {
       const x = byFeature.get(f);
       if (!x) return;
+      const shape = x.morph === "jut" ? "a jut that long" : "a bite that deep";
+      const named = x.label === x.word ? `'${x.word}'` : `'${x.label}' (${x.word})`;
       diagnostics.push({
         severity: "error",
         line: x.line,
-        message: `'${x.word}' cannot be drawn at size=${(x.f.size / scale).toFixed(0)} on '${keyOf(e)}' — a bite that deep would fold this stretch of the course back through itself. Use a smaller size=, move it to a straighter stretch, or open out the host's via points (spec 05 §4)`,
+        message: `${named} cannot be drawn at size=${x.sizeText} on '${keyOf(e)}' — ${shape} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch (spec 05 §4)`,
       });
     });
   };
@@ -1948,6 +1964,3 @@ function scatterGlyphs(poly: XY[], glyphValue: string, theme: import("./theme").
   }
   return out;
 }
-
-/** Samples per segment for a course carrying placed features (#93). */
-const DEFORM_SAMPLES = 40;

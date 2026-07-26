@@ -60,6 +60,35 @@ const ASPECT = 0.55;
 /** Below this a feature is smaller than the curve's own sampling and cannot read. */
 const MIN_SIZE = 1e-6;
 
+/** Uniform vertex spacing, in rendered units, before any feature is applied. */
+const SPACING = 2;
+/** Backstop so a pathological extent cannot allocate without bound. */
+const MAX_POINTS = 6000;
+
+/**
+ * Re-space a polyline's vertices evenly along its arc length, preserving its
+ * shape. Endpoints are kept exactly; everything between is interpolated.
+ */
+export function resample(curve: XY[], spacing: number): XY[] {
+  if (curve.length < 2) return curve;
+  const arc = arcLengths(curve);
+  const total = arc[arc.length - 1]!;
+  if (total <= 0) return curve;
+  const steps = Math.min(Math.max(Math.ceil(total / spacing), 2), MAX_POINTS);
+  const out: XY[] = [];
+  let seg = 0;
+  for (let i = 0; i <= steps; i++) {
+    const target = (total * i) / steps;
+    while (seg + 2 < curve.length && arc[seg + 1]! < target) seg++;
+    const a = curve[seg]!;
+    const b = curve[seg + 1]!;
+    const span = arc[seg + 1]! - arc[seg]!;
+    const t = span > 0 ? (target - arc[seg]!) / span : 0;
+    out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  }
+  return out;
+}
+
 /**
  * Apply every feature hosted on this curve, in one pass.
  *
@@ -72,7 +101,22 @@ export function deformCurve(
   features: PlacedFeature[],
   onReject?: (f: PlacedFeature) => void,
 ): XY[] {
-  let out = curve;
+  // RESAMPLED TO A UNIFORM SPACING FIRST, and this is load-bearing rather than
+  // tidying (#154, #155).
+  //
+  // Everything downstream measures the polyline: the window is an arc-length
+  // span, and the fold check reads the turn at each vertex. Both therefore
+  // depended on how densely the host happened to be drawn, which is a function
+  // of how many `via` points an author typed rather than of the shape. Adding
+  // COLLINEAR points to a straight coast — changing nothing about the line —
+  // doubled the deepest drawable feature. And a `from … to` course with no via
+  // points splines to two points, so the window covered the whole coast and
+  // each feature displaced an endpoint instead of drawing anything.
+  //
+  // At a fixed spacing the turn per vertex is proportional to curvature, so
+  // the fold check measures geometry and the same request succeeds or fails
+  // the same way however the host was written.
+  let out = resample(curve, SPACING);
   for (const f of features) {
     if (f.morph === "detached" || f.size < MIN_SIZE) continue;
     const next = applyOne(out, f);

@@ -11,9 +11,13 @@ import { deformCurve, isSimple, isSmooth, type PlacedFeature } from "./morpholog
 import { renderSource } from "./index";
 import type { XY } from "./util";
 
-/** A straight west-to-east coast, densely sampled the way a spline arrives. */
+/**
+ * A straight west-to-east coast, already at the uniform spacing `deformCurve`
+ * imposes (#155) — so a test may compare its output to this baseline by index.
+ * Deforming with NO features is exactly that resampling and nothing else.
+ */
 const straight = (n = 81, len = 400): XY[] =>
-  Array.from({ length: n }, (_, i) => ({ x: (i / (n - 1)) * len, y: 100 }));
+  deformCurve(Array.from({ length: n }, (_, i) => ({ x: (i / (n - 1)) * len, y: 100 })), []);
 
 const feature = (over: Partial<PlacedFeature> = {}): PlacedFeature => ({
   morph: "jut", anchor: { x: 200, y: 100 }, size: 60, ...over,
@@ -96,7 +100,7 @@ describe("the simplicity guarantee is hard (ADR 0023)", () => {
     const p: XY[] = [];
     for (let i = 0; i <= 40; i++) p.push({ x: i * 5, y: 100 });
     for (let i = 1; i <= 40; i++) p.push({ x: 200 - i * 5, y: 100 + gap });
-    return p;
+    return deformCurve(p, []); // the uniform-spacing baseline, as above
   };
 
   it("REFUSES a feature it cannot draw as declared, rather than shrinking it", () => {
@@ -109,7 +113,10 @@ describe("the simplicity guarantee is hard (ADR 0023)", () => {
     const rejected: string[] = [];
     const out = deformCurve(base, [feature({ anchor: { x: 100, y: 100 }, size: 120 })], () => rejected.push("x"));
     expect(rejected).toHaveLength(1);
-    expect(out).toEqual(base); // untouched, not quietly reduced
+    // Compared against the SAME no-feature pass, so this isolates the
+    // feature's effect from resampling (which is not perfectly idempotent on
+    // a curve — about 0.17px on this hairpin).
+    expect(maxOffset(deformCurve(base, []), out)).toBeLessThan(1e-9);
   });
 
   it("draws at the declared size when it fits — no silent shrinking anywhere", () => {
@@ -139,12 +146,21 @@ describe("direction comes from the map, not from the drawing order (#93)", () =>
   // to the east — perpendicular to the normal, displacing nothing — which is a
   // reminder that the seaward vector is only meaningful across the line.
   const north: XY = { x: 0, y: -1 };
-  const at = 40;
+  /** The anchor's index, found by POSITION — the curve is resampled, so a
+   *  hardcoded index no longer points at the feature (#155). */
+  const anchorIndex = (pts: XY[]): number => {
+    let best = 0;
+    for (let i = 0; i < pts.length; i++) {
+      if (Math.abs(pts[i]!.x - 200) < Math.abs(pts[best]!.x - 200)) best = i;
+    }
+    return best;
+  };
 
   it("a jut goes toward the water and a bite away from it", () => {
     const base = straight();
     const cape = deformCurve(base, [feature({ morph: "jut", seaward: north })]);
     const bay = deformCurve(base, [feature({ morph: "bite", seaward: north })]);
+    const at = anchorIndex(base);
     expect(cape[at]!.y).toBeLessThan(base[at]!.y); // north is -y
     expect(bay[at]!.y).toBeGreaterThan(base[at]!.y);
   });
@@ -155,6 +171,7 @@ describe("direction comes from the map, not from the drawing order (#93)", () =>
     // north-to-south or south-to-north is not the map's business. Without
     // this, editing a `from`/`to` would silently invert every feature on it.
     const base = straight();
+    const at = anchorIndex(base);
     const drawn = deformCurve(base, [feature({ morph: "jut", seaward: north })]);
     const reversed = deformCurve([...base].reverse(), [feature({ morph: "jut", seaward: north })]);
     expect(drawn[at]!.y).toBeLessThan(base[at]!.y);
@@ -303,9 +320,10 @@ describe("simplicity is not enough — a curve can fold without crossing (#93)",
 
   it("the clamp now respects it: a bite into a tight corner stays smooth", () => {
     // A concave corner is where offsetting along the normals folds first.
-    const corner: XY[] = [];
-    for (let i = 0; i <= 60; i++) corner.push({ x: i * 2, y: 100 - i * 1.6 });
-    for (let i = 1; i <= 60; i++) corner.push({ x: 120 + i * 2, y: 4 + i * 1.6 });
+    const raw: XY[] = [];
+    for (let i = 0; i <= 60; i++) raw.push({ x: i * 2, y: 100 - i * 1.6 });
+    for (let i = 1; i <= 60; i++) raw.push({ x: 120 + i * 2, y: 4 + i * 1.6 });
+    const corner = deformCurve(raw, []);
     const out = deformCurve(corner, [feature({ morph: "bite", anchor: { x: 120, y: 4 }, size: 90 })]);
     expect(isSimple(out)).toBe(true);
     expect(isSmooth(out)).toBe(true);
@@ -372,5 +390,77 @@ describe("an island is LAND, even declared among the water (#93)", () => {
   it("gets the land surface and a coastline stroke, like a continent", () => {
     const m = /id="cd-isles-vashon">(.{0,4000}?)<\/g>/s.exec(renderSource(SRC).svg);
     expect(m![1]).toMatch(/stroke="#8fa8b8"/); // the coastline stroke
+  });
+});
+
+describe("Wave 5 regressions (#153–#156)", () => {
+  const doc = (body: string): string =>
+    `map: region\nextent: 600x1200mi\n\n[water]\n${body}\n`;
+  const errorsOf = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
+  const warningsOf = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
+
+  const COAST = `coastline shore : from (300,0) via (300,600) to (300,1200)\nsea "W" : west of shore\n`;
+
+  it("#153 reach= on the ENTITY line wins over the vocabulary word's value", () => {
+    // The spec promised a per-entity override and the code read only the
+    // vocabulary, so every reach= on an entity was silently ignored.
+    const shallow = doc(`${COAST}bay a : on shore at (300,600) size=50mi reach=0.2`);
+    const deep = doc(`${COAST}bay a : on shore at (300,600) size=50mi reach=3`);
+    const spanOf = (src: string): number => {
+      const m = /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)!;
+      const xs = m[1]!.trim().split(/\s+/).map((p) => Number(p.split(",")[0]));
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(spanOf(deep)).toBeGreaterThan(spanOf(shallow) * 2);
+  });
+
+  it("#153 a bad reach= on an entity line is validated, as it is on a vocab line", () => {
+    expect(warningsOf(doc(`${COAST}bay a : on shore at (300,600) size=50mi reach=banana`)).join())
+      .toMatch(/'reach=banana' is not a number/);
+  });
+
+  it("#154 a from…to course with NO via points still draws its features", () => {
+    // Two controls spline to two points, so the window covered the whole coast
+    // and each feature displaced an endpoint instead of drawing anything —
+    // silently, with a plausible-looking map. This is the shortest document
+    // anyone writes to try the feature out.
+    const src = `map: region\nextent: 300x400mi\n\n[water]\n` +
+      `coastline coast : from (150,0) to (150,400)\nsea "W" : west of coast\n` +
+      `cape "A cape" : on coast at (150,100) size=60mi\nbay "A bay" : on coast at (150,300) size=60mi\n`;
+    const m = /id="cd-document-coast"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)!;
+    const pts = m[1]!.trim().split(/\s+/);
+    expect(pts.length).toBeGreaterThan(100); // not the two-point degenerate curve
+    const xs = pts.map((p) => Number(p.split(",")[0]));
+    // Both features present: the coast reaches west of its line AND east of it.
+    const line = xs[0]!;
+    expect(Math.min(...xs)).toBeLessThan(line - 10);
+    expect(Math.max(...xs)).toBeGreaterThan(line + 10);
+  });
+
+  it("#155 whether a feature fits does NOT depend on how many via points were typed", () => {
+    // Collinear via points change nothing about the line. They used to double
+    // the deepest drawable feature each time they doubled, because the fold
+    // check read per-vertex turn on the rendered polyline.
+    const straightCoast = (nvia: number): string => {
+      const via = Array.from({ length: nvia }, (_, i) => `(300,${Math.round((1200 * (i + 1)) / (nvia + 1))})`).join(" ");
+      return doc(
+        `coastline shore : from (300,0) ${via ? `via ${via} ` : ""}to (300,1200)\n` +
+        `sea "W" : west of shore\nbay a : on shore at (300,600) size=50mi reach=6\n`,
+      );
+    };
+    for (const n of [0, 1, 3, 7, 15]) {
+      expect(errorsOf(straightCoast(n)), `${n} via points`).toEqual([]);
+    }
+  });
+
+  it("#156 the refusal quotes the size as written, names the entity, and matches the shape", () => {
+    const src = doc(`${COAST}spit dungeness "Dungeness Spit" : on shore at (300,600) size=1.5mi reach=90`);
+    const msg = errorsOf(src).join();
+    expect(msg).toMatch(/size=1\.5mi/);          // not rounded to 2, unit kept
+    expect(msg).toMatch(/'Dungeness Spit' \(spit\)/); // the entity, not just the word
+    expect(msg).toMatch(/a jut that long/);      // not "a bite that deep"
+    expect(msg).not.toMatch(/a bite that deep/);
   });
 });
