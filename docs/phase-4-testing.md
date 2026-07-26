@@ -67,7 +67,32 @@ Nine issues, all on `0.4-dev`.
 | **Free text placements + `key=`** (#107) | The set is `<point\|cell>`, `<range>`, `sprawl <range>`, `along <ref>`. `along` now draws the caption **on the course**. `key=<n>` works without `labels: keyed` — a numbered route through a named map. |
 | **Fields** (#106, ADR 0018) | `light: dark` (and `light <level>: daylight`) makes a dark map with emitters as pools. Declare your own: `[vocab] radiation : field occluded=none states=none,heavy,lethal`, then `radiation: heavy` and `reactor : F4 radiation=40ft`. |
 
-## Wave 4 — the focus of this pass
+## Wave 5 — the focus of this pass
+
+**Placed morphology** (#93, spec 05 §4, [ADR 0023](decisions/0023-detail-is-data-not-noise.md)) — discrete coast and river features that are *declared data* rather than generated noise. This is the largest region-side piece in the phase and it wants a **real coastline**, not a probe: somewhere like Puget Sound, where a large coastline feature is itself filled with smaller ones, is the shape that pushes it to its limit.
+
+The thesis is worth knowing before you test against it, because it decides what counts as a bug. A roughness generator was built for this and **rejected**: generated features are not persistent, addressable things, so a player who becomes intrigued by an island in a river and names it would find it gone after one seed change. Every feature here is a real entity — pointable-at, annotatable, promotable from anonymous to named, and unchanged by that promotion.
+
+| Feature | What to exercise |
+|---|---|
+| **The two dials** | `size=` is the extent **along** the host; `reach=` is how far it carries **across**, as a multiple of that size. `cove : on coast at (…) size=60mi` and `fjord : …` at the same size are deliberately different shapes — 27px against 236px on a test coast. `reach=` is a vocabulary facet, so derivation carries it and you can override it per entity. |
+| **The words** | `cape headland peninsula spit` (jut seaward) · `bay cove sound fjord` (bite landward) · `island islet atoll oxbow` (a separate shape beside the host). All standard library; derive your own (`skerry : island`) and it inherits the geometry. |
+| **Direction is inferred, never declared** | A jut goes seaward and a bite goes landward, resolved from the water's own half-plane — so a coast needs something like `sea "The Sound" : west of coast`, and then no cape ever restates it. Reversing a coastline's `from`/`to` must **not** turn its headlands into harbours. |
+| **Promotion is geometry-stable** | `island : near coast at (…) size=8mi` and `island vashon "Vashon" : near coast at (…) size=8mi` must render **identically**. If naming something moves or reshapes it, that is a bug of the first order — it means the map changed under the campaign that named it. |
+| **Moving is stable too** | Moving an island slides the same island; it must not redraw a different one. Same for editing an unrelated line elsewhere in the document. |
+| **Refusals are diagnostics, not obstacles** | A feature that cannot be drawn as written is an **error** naming the feature, its size and its host — never a silently smaller feature. **Please report refusals rather than working around them**; the last two were both the renderer's fault rather than the request's, and each one found a real defect. |
+
+### Known gaps — please don't report these
+
+- **`delta` and `fork` are not in the standard library.** Branching a course is a different geometric problem from deforming one, and shipping the words without the geometry would give you a line that parses clean and draws nothing. A river delta is currently unexpressible; that is deliberate and staged.
+- **`reach=` values are a first guess** (cove 0.3 · bay 0.5 · cape 0.55 · peninsula 0.8 · spit 1.3 · sound 1.4 · fjord 2). Telling us they are wrong against a real coastline *is* the exercise — that is a finding, not a bug report.
+- **Nothing has been tested past four features on one coast**, and no island cluster at all. Scale behaviour is unknown territory, which is why this map was chosen.
+
+Also in this wave, and smaller: **#149** — a theme naming a glyph no `[glyphs]` section defines now says so, rather than falling through to a generic marker in silence.
+
+## Wave 4 — verified in the previous round
+
+Cleared by the battlemap agent, whose findings (#146, #147, #148, and #150) were all confirmed and fixed. Listed here as current surface, not as this pass's focus.
 
 Wave 4 adds **no syntax at all**. Both issues are diagnostics: things a document was always allowed to say, that no reader would mean, and that until now said nothing. So the way to exercise this wave is the opposite of the last one — **run `check` over maps you have already written and believe are correct**, and judge what it says.
 
@@ -133,8 +158,12 @@ Kept as a record of what changed and why; these were confirmed fixed in an earli
 
 Accepted and specified, but **not implemented**:
 
-- **#124** staged revelation (`hidden=<group>`, `[gm <group>]`, `--reveal`)
-- **#93** placed coast/river morphology (`cape`, `cove`, `island` on a spine)
+- **line-branching morphology** — `delta` and `fork` (the inverse of #94's `join`). Part of #93 and deliberately staged out; see the Wave 5 gaps above. A river delta is currently unexpressible.
+
+Moved OUT of Phase 4, to the new **Map state tracking** milestone — don't test for these here:
+
+- **#124** staged revelation. Its accepted design put the reveal set on the render invocation; [#151](https://github.com/Nossimonov/Chartdown/issues/151) settles that a map describes a *place* while state describes an *occasion*, which makes the reveal set state-document content. Deferred rather than dropped.
+- **#152** UVTT token export.
 
 Also open: **#74** (themes fleshed out), which is the phase's capstone.
 
@@ -148,19 +177,20 @@ Still expected, not bugs (repeated from above because they keep getting reported
 
 ## What feedback is most useful
 
-The previous exercises worked because they authored something real at scale and reported what could not be *said*, not just what looked wrong. Most of that still applies — but **this wave inverts the priority order**, because Wave 4 ships no syntax, only judgement about existing documents.
+The previous exercises worked because they authored something real at scale and reported what could not be *said*, not just what looked wrong. **Wave 5 returns to that mode** after Wave 4's judge-the-diagnostics round: author a real coastline and report what the language could not express, or what it drew wrongly. In rough priority for this round:
 
-1. **False positives — the top priority this round.** A lint or dead-declaration warning that fires on something legitimate is a bug in the warning. Say what you meant by the line, not just that it warned; the reading you intended is what the exemption has to be written against. Three were caught this way before #123 shipped and each became a test.
-2. **True positives you disagree with.** A warning can be technically right and still not worth its noise. If a lint is correct but you would not want it on your maps, that is a finding — the alternative is a suppression syntax, and we would rather narrow the lint than add one.
-3. **Diagnostics that misled you.** A message that names the wrong problem, or points at the wrong file or line, is a bug. Wave 4 changed *where* theme diagnostics are reported — if one still sends you to the wrong place, say so.
-4. **Silent wrongness.** Still the most valuable category overall: anything that renders plausibly but is not what the document says. These two issues exist to shrink it, so anything they *missed* is worth as much as anything they got wrong.
-5. **Workarounds you had to invent.** If you wrote something awkward to get an effect, say what you wanted to write. #145 came from exactly this — a road written one cell inside a gatehouse because the render stopped short.
+1. **Look at it.** Placed morphology fails visually before it fails a test. A bay that came out a 157° spike passed every check that existed at the time and was caught by eye; so was an island rendered in the sea's own colour. Screenshot the map and read it as a map.
+2. **Say what you wanted to write.** A coastline you had to fake with `via` points, a landform with no word, a shape the two dials could not reach — that is the finding this feature exists to collect. #145 came from exactly this shape of report.
+3. **Silent wrongness.** The most valuable category across every round: anything that renders plausibly but is not what the document says. A feature quietly smaller than its `size=`, a name that moved when you gave it, a declaration that drew nothing and said nothing.
+4. **False positives.** A refusal or a warning that fires on something legitimate is a bug in the check, not in your document. Say what you meant by the line; the reading you intended is what the exemption gets written against. Both morphology refusals so far were the renderer's fault rather than the request's.
+5. **Diagnostics that misled you.** A message naming the wrong problem, or pointing at the wrong file or line, is a bug.
+6. **True positives you disagree with.** A warning can be technically right and still not worth its noise — we would rather narrow a check than add a suppression syntax.
 
 Reproductions in the style of #101–#105 (a minimal document, the command, expected vs actual) are ideal and made the last batch quick to fix.
 
 ## Current state
 
-- **355 tests** green, typecheck clean. The only committed example changed by Wave 4 is the Gilded Tankard (the Snug's door); the corpus verifies unchanged otherwise, through the same action driver CI uses.
-- Phase 4: **39 issues, 31 closed, 8 open.** Two of the open ones — **#123** and **#116** — are implemented and committed on this branch; they close when Phase 4 merges, since `Closes #n` only fires on the default branch.
-- ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md), [0019](decisions/0019-line-labels-claim-before-point-labels.md), [0020](decisions/0020-render-resolution-is-editorial.md), [0021](decisions/0021-a-map-is-the-sum-of-its-files.md), [0022](decisions/0022-a-declaration-is-a-promise.md).
+- **418 tests** green, typecheck clean. Examples changed since the last round: the Gilded Tankard (the Snug's door, Wave 4) and Vessany (Gull Bay gains a `size=` and renders as a real inlet, Wave 5). The corpus verifies otherwise unchanged, through the same action driver CI uses.
+- Phase 4: **43 issues, 31 closed, 12 open** — but seven of the twelve (**#116**, **#123**, **#146**, **#147**, **#148**, **#149**, **#150**) are implemented and committed on this branch and close when Phase 4 merges, since `Closes #n` only fires on the default branch. **#93** is committed in stages and stays open pending this round.
+- ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md), [0019](decisions/0019-line-labels-claim-before-point-labels.md), [0020](decisions/0020-render-resolution-is-editorial.md), [0021](decisions/0021-a-map-is-the-sum-of-its-files.md), [0022](decisions/0022-a-declaration-is-a-promise.md), [0023](decisions/0023-detail-is-data-not-noise.md).
 - The language reference for agents is `docs/spec/digest.md` **on this branch** — the published `llms-full.txt` is 0.3.3 and does not describe any of the above.
