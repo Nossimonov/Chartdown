@@ -476,3 +476,52 @@ describe("Wave 5 regressions (#153–#156)", () => {
     expect(msg).not.toMatch(/a bite that deep/);
   });
 });
+
+describe("a detached feature has two dials as well (#159)", () => {
+  const MAP = (line: string): string =>
+    `# Isles\nmap: region\nextent: 120x240mi\n\n[water]\n` +
+    `coastline shore : from (75,0) via (72,80) (74,160) to (75,240)\n` +
+    `sea "The Sound" : west of shore\n${line}\n`;
+
+  const bbox = (src: string, id: string): { w: number; h: number } => {
+    const g = new RegExp(`id="cd-isles-${id}">(.{0,9000}?)</g>`, "s").exec(renderSource(src).svg)!;
+    const pts = /points="([^"]+)"/.exec(g[1]!)![1]!.trim().split(/\s+/)
+      .map((p) => p.split(",").map(Number) as [number, number]);
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+
+  it("reach= elongates it — Whidbey is 40mi long and a few wide, not a 40mi circle", () => {
+    const b = bbox(MAP(`island whidbey "W" : near shore at (55,60) size=40mi reach=0.15`), "whidbey");
+    expect(b.h / b.w).toBeGreaterThan(4);
+  });
+
+  it("the long axis follows the HOST — a shore-parallel island, as every long one in a sound is", () => {
+    // The shore here runs north-south, so an elongated island must be taller
+    // than it is wide. Inferred rather than declared, the way direction is.
+    const b = bbox(MAP(`island whidbey "W" : near shore at (55,60) size=40mi reach=0.15`), "whidbey");
+    expect(b.h).toBeGreaterThan(b.w);
+  });
+
+  it("reach=1 and an absent reach= are identical, so no existing render moves", () => {
+    const absent = bbox(MAP(`island a "A" : near shore at (55,60) size=40mi`), "a");
+    const one = bbox(MAP(`island a "A" : near shore at (55,60) size=40mi reach=1`), "a");
+    expect(one).toEqual(absent);
+    expect(absent.w / absent.h).toBeCloseTo(1, 1); // round
+  });
+
+  it("derivation carries it: `skerry : island reach=0.2` inherits the shape", () => {
+    const src = `# Isles\nmap: region\nextent: 120x240mi\n\n[vocab]\nskerry : island reach=0.2\n\n[water]\n` +
+      `coastline shore : from (75,0) via (72,80) (74,160) to (75,240)\nsea "S" : west of shore\n` +
+      `skerry s "S1" : near shore at (55,60) size=40mi\n`;
+    const b = bbox(src, "s");
+    expect(b.h / b.w).toBeGreaterThan(3);
+  });
+
+  it("stays a pure function of its data — naming it does not reshape it (ADR 0023)", () => {
+    const anon = bbox(MAP(`island a : near shore at (55,60) size=40mi reach=0.15`), "a");
+    const named = bbox(MAP(`island a "Whidbey Island" : near shore at (55,60) size=40mi reach=0.15`), "a");
+    expect(named).toEqual(anon);
+  });
+});

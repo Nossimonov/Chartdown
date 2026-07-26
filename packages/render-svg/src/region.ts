@@ -8,7 +8,7 @@
  * sit on a marker declared later in the document.
  */
 
-import type { EntityNode, Point, Ref } from "@chartdown/core";
+import type { EntityNode, Placement, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
 import { deformCurve, type Morph, type PlacedFeature } from "./morphology";
@@ -84,6 +84,27 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
    * because the polygon FOLLOWS the coast, and the coast is what is being
    * resolved: reading it there would be circular.
    */
+  /**
+   * Declared control points per line id/name, for orienting a detached feature
+   * along its host (#159). From the DECLARATION rather than the resolved
+   * curve, for the same reason as `waterCentres`: an island may be written
+   * before its coast, and only a direction is needed.
+   */
+  const hostControls = new Map<string, XY[]>();
+  for (const e of model.entities) {
+    const pts: XY[] = [];
+    for (const p of e.placements) {
+      if (p.kind === "shape") pts.push(...p.args.filter((a): a is Point => a.kind === "point").map(toXY));
+      else if (p.kind === "relational" && p.form === "from-to") {
+        for (const ep of [p.from, ...p.via, p.to]) {
+          const at = "at" in ep ? ep.at : ep;
+          if (at && (at as { kind?: string }).kind === "point") pts.push(toXY(at as unknown as Point));
+        }
+      }
+    }
+    if (pts.length >= 2) for (const k of [...e.ids, ...(e.name ? [e.name] : [])]) hostControls.set(k, pts);
+  }
+
   const waterCentres: XY[] = [];
   for (const e of model.entities) {
     if (e.section !== "water") continue;
@@ -354,7 +375,36 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (anchor && sizeText !== undefined) {
         const center = toXY(anchor);
         const radius = (measureToNumber(sizeText) / 2) * scale;
-        out.polygon = catmullRom(blob(center, radius, rng(hashSeed(0, hashString(e.typeWord ?? "island"), Math.round(radius * 1000)))), 5, true);
+        // `size=` is the LONG axis and `reach=` the short one as a multiple of
+        // it — the same "the other dimension" `reach=` already means for juts
+        // and bites (#159). At 1 this is the circle it has always drawn, so no
+        // existing render moves. Real islands are rarely round and the ones
+        // that matter least of all: Whidbey is 40mi by 2–9mi.
+        const reachText = pairOf(e.pairs, "reach") ?? model.facetOf(e.typeWord, "reach");
+        const reachNum = reachText === undefined ? 1 : Number(reachText);
+        if (reachText !== undefined && !Number.isFinite(reachNum)) {
+          diagnostics.push({ severity: "warning", line: e.line, message: `'reach=${reachText}' is not a number — the vocabulary default applies (spec 05 §4)` });
+        }
+        const shortRatio = Number.isFinite(reachNum) && reachNum > 0 ? reachNum : 1;
+        // The long axis lies along the HOST, inferred rather than declared:
+        // every long island in a sound parallels the shore it sits off,
+        // because the same glacier cut both.
+        const hostRef = e.placements.find((p): p is Extract<Placement, { kind: "relational"; form: "near" }> =>
+          p.kind === "relational" && p.form === "near" && p.target.kind === "ref");
+        const controls = hostRef && hostRef.target.kind === "ref" ? hostControls.get(hostRef.target.value) : undefined;
+        const angle = controls ? tangentAngle(controls, center) : 0;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const raw = blob({ x: 0, y: 0 }, radius, rng(hashSeed(0, hashString(e.typeWord ?? "island"), Math.round(radius * 1000))));
+        out.polygon = catmullRom(
+          raw.map((q) => {
+            const sx = q.x;
+            const sy = q.y * shortRatio;
+            return { x: center.x + sx * cos - sy * sin, y: center.y + sx * sin + sy * cos };
+          }),
+          5,
+          true,
+        );
         out.point = center;
         out.radius = radius;
         return out;
@@ -2011,4 +2061,21 @@ function scatterGlyphs(poly: XY[], glyphValue: string, theme: import("./theme").
     }
   }
   return out;
+}
+
+/** Direction of the declared course nearest a point, as an angle in radians. */
+function tangentAngle(controls: XY[], at: XY): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i + 1 < controls.length; i++) {
+    const a = controls[i]!;
+    const b = controls[i + 1]!;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const d = Math.hypot(mid.x - at.x, mid.y - at.y);
+    if (d < bestD) {
+      bestD = d;
+      best = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+  }
+  return best;
 }
