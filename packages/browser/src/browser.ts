@@ -8,7 +8,7 @@
  * `<script src=... data-mode="gm">` opts into the GM view page-wide.
  */
 
-import { renderSource, type RenderMode } from "@chartdown/render-svg";
+import { locationOf, renderSource, type RenderMode } from "@chartdown/render-svg";
 
 const script = document.currentScript as HTMLScriptElement | null;
 const mode: RenderMode = script?.dataset["mode"] === "gm" ? "gm" : "player";
@@ -31,7 +31,7 @@ function renderBlocks(): void {
     if (errors.length > 0) {
       const list = document.createElement("pre");
       list.className = "chartdown-errors";
-      list.textContent = errors.map((d) => `line ${d.line}: ${d.message}`).join("\n");
+      list.textContent = errors.map((d) => `${locationOf(d)}: ${d.message}`).join("\n");
       figure.append(list);
     }
     host.replaceWith(figure);

@@ -5,7 +5,7 @@
  * the URL fragment, which never leaves the browser.
  */
 
-import { exportUvttSource, renderSource, type RenderMode } from "@chartdown/render-svg";
+import { exportUvttSource, locationOf, renderSource, type RenderMode } from "@chartdown/render-svg";
 import brenmark from "../../examples/brenmark/brenmark.cd";
 import tankard from "../../examples/gilded-tankard/gilded-tankard.cd";
 import manor from "../../examples/fairwater-manor/fairwater-manor.cd";
@@ -79,7 +79,7 @@ function renderNow(): void {
   preview.innerHTML = svg;
   const errors = diagnostics.filter((d) => d.severity === "error").length;
   const warnings = diagnostics.length - errors;
-  diagnosticsEl.textContent = diagnostics.map((d) => `line ${d.line}: ${d.severity}: ${d.message}`).join("\n");
+  diagnosticsEl.textContent = diagnostics.map((d) => `${locationOf(d)}: ${d.severity}: ${d.message}`).join("\n");
   diagnosticsEl.hidden = diagnostics.length === 0;
   statusEl.textContent = errors > 0 ? `${errors} error${errors === 1 ? "" : "s"}${warnings ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : ""}` : warnings > 0 ? `${warnings} warning${warnings === 1 ? "" : "s"}` : "ok";
   statusEl.dataset["level"] = errors > 0 ? "error" : warnings > 0 ? "warning" : "ok";

@@ -89,6 +89,10 @@ The word itself is **never inspected** — there is no suffix or morphology matc
 
 This produces the **escalation ladder**, every rung optional: a bare unknown word just works → a `[vocab]` line adds archetype/state precision → a `use:` library shares it → a theme gives it art. Nothing is ever blocked on defining, and no definition is wasted.
 
+**"Unknown words never fail" is about the author who never promised anything; it does not cover a promise that was broken** *(from proposal [#116](https://github.com/Nossimonov/Chartdown/issues/116), decided in [ADR 0022](../decisions/0022-a-declaration-is-a-promise.md)).* Writing `gazebo : F4` with no definition anywhere is protected by the rule above and always will be. Writing `[vocab] gazbeo : feature` and then never using it is a different act: a declaration was made, it matched nothing, and until now nothing said so. **A `[vocab]` word this document neither carries on any entity nor derives another word from is reported at warning level**, naming the line and the word.
+
+Only the document's **own** `[vocab]` section is checked. A `use:`-imported library exists to offer more words than any one map spends, and a *vocabulary document's* words are its product rather than its spending — silence there is the normal condition, not a defect. The same scope rule governs themes (spec 08 §6).
+
 ## 4. Themes and the fallback chain
 
 - A theme maps vocabulary words and their states to appearance: glyph, color, line/fill treatment, and user art assets. **Asset references live in themes only, never in map source** (vision principle 4).

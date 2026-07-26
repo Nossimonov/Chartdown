@@ -48,7 +48,24 @@ lollipop : "M0,-3 a5,5 0 1,1 0.1,0 M0,2 L0,10"
 - **Selection**: a map's `theme:` header remains a *suggestion* (spec 04 §4); the renderer and its user always win. Reference implementation surfaces: `RenderOptions.theme` (theme source), CLI `--theme <file>`, browser `data-theme="<url>"`.
 - **The default theme is itself a theme document** — the reference renderer generates and parses `DEFAULT_THEME_SOURCE` through the same machinery user themes use. There is no privileged styling path.
 
-## 6. Conformance
+## 6. Dead declarations
+
+*(From proposal [#116](https://github.com/Nossimonov/Chartdown/issues/116), decided in [ADR 0022](../decisions/0022-a-declaration-is-a-promise.md).)* A theme line that styles nothing is a promise the render did not keep, and it used to say nothing at all — the exercise that motivated this shipped a theme with **19 of 80 entries inert**, discovered by reading the render. Three warnings close that, all warning-level and never blocking:
+
+| Warns | Because |
+|---|---|
+| A `[theme]` subject **no entity in this document resolves to** | The usual cause is a misspelling: `mountian : fill=#ff0000` is a legal line that styles nothing |
+| A `[theme]` subject that IS styled, whose **properties are never read for it** | `glyph=` on a battlemap's area terrain, which is filled rather than marked. A different author mistake from the one above, so it gets a different message |
+| A `[glyphs]` name **no `glyph=`/`asset=` in any layer references** | Defined and unreachable |
+
+Two rules make these usable:
+
+- **Only the SELECTED theme is checked** — the one chosen for this render. Themes it inherits through `use:`, and the built-in default, are exempt: a shared theme deliberately styles words no single map uses, and reporting that would make the best-factored themes the noisiest. §5's shadowing puts the selected theme last in the layering, so "selected" needs no separate declaration. The same scope rule governs `[vocab]` (spec 04 §3).
+- **Liveness is measured per property, not per subject.** The default theme and the user's may both carry a `water` line and their pairs merge into one record; asking only whether `water` was touched would call a dead `glyph=` live because the default's `fill=` was read.
+
+Because liveness is measured by what the render actually asked for, it is only as complete as the render: a property consulted on a path this render did not take reads as dead. This is why these are warnings, and why **there is no suppression syntax** — the first real false positives should shape the escape hatch rather than have it guessed in advance. A diagnostic from a theme carries a line number in the **theme file**, not the map, and implementations MUST report it against the theme's path.
+
+## 7. Conformance
 
 Themes MUST NOT alter geometry, placement, or archetype semantics (spec 04 §4) — the property set makes violations inexpressible. Zone rendering quality is tiered by intent: the primitive renderer draws zones as cartographic edging (edge strokes under core strips; inset boundary bands); texture blending across zones is supporting-renderer territory that the format enables but does not mandate. Label prominence continues to flow from vocabulary tiers (spec 07 §1); typography is deliberately absent from v0.1's property set.
 

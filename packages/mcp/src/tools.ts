@@ -8,11 +8,11 @@
  * human decoding errors.
  */
 
-import { checkSource, documentKind, parse } from "@chartdown/core";
+import { checkSource, documentKind, locationOf, parse, type Diagnostic } from "@chartdown/core";
 import { exportUvttSource, renderSource, type RenderMode } from "@chartdown/render-svg";
 
-const formatDiagnostics = (diagnostics: { severity: string; line: number; message: string }[]): string =>
-  diagnostics.map((d) => `line ${d.line}: ${d.severity}: ${d.message}`).join("\n");
+const formatDiagnostics = (diagnostics: Diagnostic[]): string =>
+  diagnostics.map((d) => `${locationOf(d)}: ${d.severity}: ${d.message}`).join("\n");
 
 export interface ToolText {
   text: string;

@@ -96,33 +96,110 @@ export interface ResolveContext {
   zone?: "core" | "edge" | undefined;
 }
 
+/** One line of the SELECTED theme, kept so it can be asked whether it did anything (#116). */
+interface OwnEntry {
+  key: string;
+  props: string[];
+  line: number;
+}
+
 export class Theme {
   private map = new Map<string, Record<string, string>>();
   readonly glyphs: Record<string, string> = {};
 
-  private merge(doc: ThemeDocumentNode): void {
+  /**
+   * Dead-declaration bookkeeping (#116, ADR 0022). Only the SELECTED theme is
+   * recorded: an inherited or built-in theme deliberately styles words no one
+   * map uses, so silence there is its normal condition rather than a defect.
+   */
+  private own: OwnEntry[] = [];
+  private ownGlyphs: Record<string, number> = {};
+  /** Every glyph name any layer's `glyph=`/`asset=` can reach, variant pools split. */
+  private glyphRefs = new Set<string>();
+  /** `key\0prop` for every lookup that actually RETURNED a value. */
+  private hits = new Set<string>();
+  /** Subjects any lookup resolved to at all, whatever property was wanted. */
+  private subjectHits = new Set<string>();
+
+  private merge(doc: ThemeDocumentNode, selected: boolean): void {
     for (const entry of doc.entries) {
       const key = entry.sub ? `${entry.base}.${entry.sub}` : entry.base;
       this.map.set(key, { ...this.map.get(key), ...entry.pairs });
+      if (selected) this.own.push({ key, props: Object.keys(entry.pairs), line: entry.line });
+      for (const prop of ["glyph", "asset"]) {
+        const value = entry.pairs[prop];
+        if (value) for (const name of value.split(",")) this.glyphRefs.add(name.trim());
+      }
     }
     Object.assign(this.glyphs, doc.glyphs);
+    if (selected) Object.assign(this.ownGlyphs, doc.glyphLines);
+  }
+
+  private hit(key: string, prop: string): void {
+    this.hits.add(`${key}\u0000${prop}`);
+    this.subjectHits.add(key);
   }
 
   /**
    * Build a theme: the default document, then an optional user theme source.
    * A `use: default` inside the user theme is honored (and implicit layering
    * on top of the default applies regardless, per spec 08 §5 selection).
+   *
+   * The LAST source is the selected theme. That is not a calling convention —
+   * spec 08 §5's shadowing requires the theme chosen for this render to be
+   * merged last, or its own entries would lose to the ones it inherits.
    */
   static resolve(userSource: string | string[] | undefined, diagnostics: Diagnostic[]): Theme {
     const theme = new Theme();
-    theme.merge(parseThemeDocument(DEFAULT_THEME_SOURCE, diagnostics));
+    theme.merge(parseThemeDocument(DEFAULT_THEME_SOURCE, diagnostics), false);
     const sources = userSource === undefined ? [] : Array.isArray(userSource) ? userSource : [userSource];
-    for (const source of sources) {
+    for (const [i, source] of sources.entries()) {
       // `use:` values other than 'default' are the consumer's to pre-resolve
       // into this list (the CLI reads them from disk); 'default' is implicit.
-      theme.merge(parseThemeDocument(source, diagnostics));
+      // Their diagnostics carry line numbers in the THEME file, so they are
+      // tagged rather than left to be read against the map's path.
+      const themeDiagnostics: Diagnostic[] = [];
+      theme.merge(parseThemeDocument(source, themeDiagnostics), i === sources.length - 1);
+      for (const d of themeDiagnostics) diagnostics.push({ ...d, source: "theme" });
     }
     return theme;
+  }
+
+  /**
+   * Declarations in the selected theme that did nothing (#116). Call AFTER the
+   * render, since liveness is measured by what the render actually asked for.
+   *
+   * An entry is live if any property IT declares was returned to a caller. Per
+   * property, not per subject: the default theme and the user's can both carry
+   * a `mountain` line, and the merged record holds both their pairs — asking
+   * only "was `mountain` touched?" would call a dead `glyph=` live because the
+   * default's `fill=` was read.
+   */
+  deadDeclarations(): { line: number; message: string }[] {
+    const out: { line: number; message: string }[] = [];
+    for (const entry of this.own) {
+      if (this.hits.has(`${entry.key}\u0000*`)) continue;
+      if (entry.props.some((prop) => this.hits.has(`${entry.key}\u0000${prop}`))) continue;
+      // Two different mistakes wear the same shape, and telling an author which
+      // one they made is most of the value. A misspelled subject matched no
+      // entity at all; a real subject carrying the wrong property matched
+      // plenty and was asked for something the renderer never wants from it
+      // (`glyph=` on a battlemap's area terrain, which is filled, not marked).
+      out.push({
+        line: entry.line,
+        message: this.subjectHits.has(entry.key)
+          ? `'${entry.key}' is styled elsewhere, but ${entry.props.map((p) => `'${p}'`).join(", ")} on this line ${entry.props.length === 1 ? "is" : "are"} never read for it — the property does not apply to this kind of subject (spec 08 §3)`
+          : `'${entry.key}' styles nothing in this document — no entity resolves to it, so every property on this line is inert (spec 08 §5)`,
+      });
+    }
+    for (const [name, line] of Object.entries(this.ownGlyphs)) {
+      if (this.glyphRefs.has(name)) continue;
+      out.push({
+        line,
+        message: `glyph '${name}' is never referenced by a glyph= or asset= property — it is defined and unreachable (spec 08 §3)`,
+      });
+    }
+    return out.sort((a, b) => a.line - b.line);
   }
 
   /** Chain-walking property lookup: word.state > word.zone > word; earlier chain words win. */
@@ -136,14 +213,20 @@ export class Theme {
       for (const candidate of candidates) {
         if (!candidate) continue;
         const value = this.map.get(candidate)?.[key];
-        if (value !== undefined) return value;
+        if (value !== undefined) {
+          this.hit(candidate, key);
+          return value;
+        }
       }
     }
     return undefined;
   }
 
   surface(name: string, key: "fill" | "stroke", fallback: string): string {
-    return this.map.get(name)?.[key] ?? fallback;
+    const value = this.map.get(name)?.[key];
+    if (value === undefined) return fallback;
+    this.hit(name, key);
+    return value;
   }
 
   terrainFill(chain: string[], ctx: ResolveContext = {}): string {
@@ -157,13 +240,20 @@ export class Theme {
   }
 
   side(word: string | undefined): string {
-    return (word && this.map.get(`side.${word}`)?.["fill"]) || "#8a6ab5";
+    const fill = word && this.map.get(`side.${word}`)?.["fill"];
+    if (!fill) return "#8a6ab5";
+    this.hit(`side.${word}`, "fill");
+    return fill;
   }
 
   /** Edge-zone thickness in px, if the theme styles an edge for this chain. */
   edgeWidth(chain: string[]): number | null {
-    const styled = chain.some((word) => this.map.has(`${word}.edge`));
-    if (!styled) return null;
+    const styled = chain.find((word) => this.map.has(`${word}.edge`));
+    if (styled === undefined) return null;
+    // Membership alone is the answer here — a `word.edge` line makes the zone
+    // exist whether or not it carries `edge=` — so the whole entry counts as
+    // used, not one property of it.
+    this.hit(`${styled}.edge`, "*");
     return Number(this.prop(chain, "edge") ?? 4) || 4;
   }
 

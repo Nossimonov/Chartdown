@@ -291,6 +291,57 @@ function parseGrid(value: string, line: number, diagnostics: Diagnostic[]): Grid
   return spec;
 }
 
+/**
+ * Dead `[vocab]` declarations (#116, ADR 0022): a word this document defines
+ * and then never spends.
+ *
+ * Spec 04 §3's "unknown words never fail" is about AUTHORING FREEDOM — an
+ * author who never promised anything gets a sensible default. It has been read
+ * as "a declaration that matches nothing never warns," which is a different
+ * thing: a broken promise. `mountian : terrain` is a perfectly legal line that
+ * styles, derives, and validates nothing, and the author finds out by reading
+ * the render.
+ *
+ * Only the document's OWN words are checked. A `use:`-imported library exists
+ * to offer more words than any one map spends, so silence is its normal
+ * condition — the same reason a shared theme is exempt on the theme side.
+ */
+function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): void {
+  if (document.mapType === "") return; // a vocabulary document's words ARE its product
+  const spent = new Set<string>();
+  // Header keys AND values: a `field` word is spent by `light: dim`, and
+  // `ground: heath` names a terrain word (spec 05 §2).
+  for (const h of document.header) {
+    spent.add(h.key);
+    for (const word of h.value.split(/[\s,]+/)) if (word) spent.add(word);
+  }
+  const declared: VocabEntryNode[] = [];
+  for (const section of document.sections) {
+    for (const entry of section.entries) {
+      if (entry.kind === "vocab-entry") {
+        if (entry.source === "document") declared.push(entry);
+        spent.add(entry.base); // derivation spends the parent word
+        continue;
+      }
+      if (entry.kind !== "entity") continue;
+      if (entry.typeWord) spent.add(entry.typeWord);
+      for (const d of entry.details) if (d.typeWord) spent.add(d.typeWord);
+      // Flags are open vocabulary (states), but a word declared as a state's
+      // home is spent by carrying it — `volcano : peak states=erupting` is
+      // spent by `volcano ... erupting`, which the typeWord above covers.
+    }
+  }
+  for (const entry of declared) {
+    if (spent.has(entry.word)) continue;
+    diagnostics.push(
+      warning(
+        entry.line,
+        `'${entry.word}' is declared here and never used — nothing in this document carries the word or derives from it (spec 04 §3)`,
+      ),
+    );
+  }
+}
+
 export function parse(source: string, options: ParseOptions = {}): ParseResult {
   const diagnostics: Diagnostic[] = [];
   const lines = splitLines(source);
@@ -550,6 +601,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   finishSection();
 
   reportUnknownHeaderKeys();
+  reportDeadVocab(document, diagnostics);
   return { document, diagnostics };
 
   // ---------- line parsers ----------

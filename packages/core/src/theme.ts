@@ -22,12 +22,14 @@ export interface ThemeEntry {
 export interface ThemeDocumentNode {
   entries: ThemeEntry[];
   glyphs: Record<string, string>;
+  /** Where each glyph was declared, so a glyph nothing references can name its line (#116). */
+  glyphLines: Record<string, number>;
   /** `use:` values, in order, to be resolved by the consumer. */
   uses: string[];
 }
 
 export function parseThemeDocument(source: string, diagnostics: Diagnostic[]): ThemeDocumentNode {
-  const doc: ThemeDocumentNode = { entries: [], glyphs: {}, uses: [] };
+  const doc: ThemeDocumentNode = { entries: [], glyphs: {}, glyphLines: {}, uses: [] };
   let section: "theme" | "glyphs" | "other" | null = null;
   let first = true;
 
@@ -80,6 +82,7 @@ export function parseThemeDocument(source: string, diagnostics: Diagnostic[]): T
         continue;
       }
       doc.glyphs[name.text] = path.value;
+      doc.glyphLines[name.text] = raw.line;
       continue;
     }
 

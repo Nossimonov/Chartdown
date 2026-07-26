@@ -4,7 +4,7 @@
  * per obsidianmd/prefer-create-el); tests provide a minimal shim for them.
  */
 
-import { renderSource } from "@chartdown/render-svg";
+import { locationOf, renderSource } from "@chartdown/render-svg";
 
 export type RenderMode = "player" | "gm";
 
@@ -23,7 +23,7 @@ export function renderChartdownBlock(source: string, el: HTMLElement, mode: Rend
   if (errors.length > 0) {
     const box = el.createDiv({ cls: "chartdown-diagnostics" });
     for (const d of errors) {
-      box.createDiv({ text: `line ${d.line}: ${d.message}` });
+      box.createDiv({ text: `${locationOf(d)}: ${d.message}` });
     }
   }
 }

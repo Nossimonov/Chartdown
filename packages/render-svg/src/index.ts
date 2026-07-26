@@ -146,6 +146,11 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     }
   }
 
+  // Dead declarations in the selected theme (#116, ADR 0022). Last, because
+  // liveness is measured by what the render just asked for: a theme entry is
+  // live if it was consulted, and nothing can say so until the drawing is done.
+  for (const dead of theme.deadDeclarations()) diagnostics.push({ severity: "warning", source: "theme", ...dead });
+
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fmt(w)} ${fmt(h)}" width="${fmt(w)}" height="${fmt(h)}" font-family="sans-serif">` +
     body.join("") +
@@ -238,5 +243,8 @@ export function renderSource(source: string, options: RenderOptions & ParseOptio
 }
 
 export type { RenderMode } from "./model";
+// Re-exported so a consumer that only depends on the renderer can still say
+// WHERE a diagnostic is — a theme-sourced line is not a line of the map (#116).
+export { locationOf } from "@chartdown/core";
 export { readProvenance, stampProvenance, type Provenance } from "./provenance";
 export { exportUvtt, exportUvttSource, type UvttOptions, type UvttResult, type UvttSourceResult } from "./uvtt";

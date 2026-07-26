@@ -59,7 +59,7 @@ export function renderCdFile(path: string, source: string, opts: ActionOptions):
     if (opts.theme !== undefined) options.theme = opts.theme;
     const { svg, diagnostics } = renderSource(source, options);
     for (const d of diagnostics) {
-      if (d.severity === "error") report.errors.push(`${path}:${d.line}: ${d.message}`);
+      if (d.severity === "error") report.errors.push(`${d.source === "theme" ? "theme" : path}:${d.line}: ${d.message}`);
     }
     const outPath = outName(base, mode);
     report.jobs.push({
@@ -85,7 +85,7 @@ export function renderMarkdownFile(path: string, markdown: string, opts: ActionO
       if (opts.theme !== undefined) options.theme = opts.theme;
       const { svg, diagnostics } = renderSource(source, options);
       for (const d of diagnostics) {
-        if (d.severity === "error") report.errors.push(`${path} (fence ${docId}):${d.line}: ${d.message}`);
+        if (d.severity === "error") report.errors.push(`${d.source === "theme" ? "theme" : `${path} (fence ${docId})`}:${d.line}: ${d.message}`);
       }
       const outPath = outName(`${base}.${docId}${suffix}`, mode);
       report.jobs.push({

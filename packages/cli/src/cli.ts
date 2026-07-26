@@ -55,6 +55,11 @@ if (themePath) {
   themeSources.push(themeSource);
 }
 
+// A theme-sourced diagnostic's line number is a line of the THEME, so it must
+// not be printed against the map's path — a reader sent to line 22 of the wrong
+// file is worse served than by no diagnostic at all (#116).
+const where = (d: { source?: string }): string => (d.source === "theme" && themePath ? themePath : file);
+
 const source = readFileSync(file, "utf8");
 
 // First parse discovers use: libraries; load them from disk relative to the document.
@@ -106,21 +111,21 @@ if (command === "check") {
   } else {
     checkDiagnostics = checkSource(source, { libraries }).diagnostics;
   }
-  for (const d of checkDiagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
+  for (const d of checkDiagnostics) console.error(`${where(d)}:${d.line}: ${d.severity}: ${d.message}`);
   const invalid = checkDiagnostics.some((d) => d.severity === "error");
   console.error(invalid ? "invalid" : `ok (${kind} document)`);
   process.exit(invalid ? 1 : 0);
 }
 
 const { document, diagnostics } = parse(source, { libraries });
-for (const d of diagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
+for (const d of diagnostics) console.error(`${where(d)}:${d.line}: ${d.severity}: ${d.message}`);
 const hasErrors = diagnostics.some((d) => d.severity === "error");
 
 const { svg, diagnostics: renderDiagnostics } = render(
   document,
   themeSources.length > 0 ? { mode, theme: themeSources } : { mode },
 );
-for (const d of renderDiagnostics) console.error(`${file}:${d.line}: ${d.severity}: ${d.message}`);
+for (const d of renderDiagnostics) console.error(`${where(d)}:${d.line}: ${d.severity}: ${d.message}`);
 const outPath = out ?? `${file.replace(/\.cd$/, "")}.svg`;
 writeFileSync(outPath, svg);
 console.error(`${hasErrors ? "rendered with errors" : "rendered"}: ${outPath}`);
