@@ -389,6 +389,50 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     items.push({ e, r, chain });
   }
 
+  // Two watercourses that cross without meeting are nonsense on the ground:
+  // water does not flow over water. Nothing governed this before — the
+  // Baranduin and the Gwathló were routed to adjacent mouths and drew a visible
+  // X near Tharbad in silence, because no rule covered two linear features
+  // sharing space (#94). The battlemap has a crossing rule (spec 06 §6) but it
+  // is cell-based and does not reach region maps.
+  //
+  // A `join` is exactly the declaration that makes a meeting intentional, so
+  // the check is: courses that touch must be related. Shared endpoints count
+  // too — `from <river>` is a distributary leaving its trunk, equally declared.
+  const watercourses = items.filter((it) => it.chain.includes("river") && it.r.polyline);
+  const joinRefs = new Map<string, Set<string>>();
+  for (const it of watercourses) {
+    const named = new Set<string>();
+    for (const p of it.e.placements) {
+      if (p.kind !== "relational") continue;
+      if (p.form === "from-to") {
+        for (const ep of [p.from, p.to]) if (ep.at.kind === "ref") named.add(ep.at.value);
+      }
+    }
+    joinRefs.set(keyOf(it.e), named);
+  }
+  const relatedByName = (a: Item, b: Item): boolean => {
+    const names = (it: Item): string[] => [...it.e.ids, ...(it.e.name ? [it.e.name] : [])];
+    const aRefs = joinRefs.get(keyOf(a.e)) ?? new Set<string>();
+    const bRefs = joinRefs.get(keyOf(b.e)) ?? new Set<string>();
+    return names(b).some((n) => aRefs.has(n)) || names(a).some((n) => bRefs.has(n));
+  };
+  for (let i = 0; i < watercourses.length; i++) {
+    for (let j = i + 1; j < watercourses.length; j++) {
+      const a = watercourses[i]!;
+      const b = watercourses[j]!;
+      if (relatedByName(a, b)) continue;
+      const hit = firstCrossing(a.r.polyline!, b.r.polyline!);
+      if (!hit) continue;
+      const label = (it: Item): string => it.e.name ?? it.e.ids[0] ?? it.e.typeWord ?? "a watercourse";
+      diagnostics.push({
+        severity: "warning",
+        line: b.e.line,
+        message: `'${label(a)}' and '${label(b)}' cross at (${Math.round(hit.x)},${Math.round(hit.y)}) without meeting — water does not flow over water; 'join' one to the other, or route them apart (spec 02 §7)`,
+      });
+    }
+  }
+
   // Paths serving as ZONAL FRONTIERS (a tundra's frostline) render in the
   // frontier register — a fine dotted line in the zone's tint — because any
   // solid line at river weight reads as a river (owner note).
@@ -1519,6 +1563,34 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
  * Shrink a letter-spaced label until it fits `maxPx` (floor 8px, spacing
  * scaled proportionally) — no label is too big to exist on the map.
  */
+/**
+ * Where two polylines first cross, or null. Endpoints touching within a hair
+ * do NOT count: a tributary that ends on its trunk meets it, and reporting
+ * that as a crossing would fire on every correct confluence (#94).
+ */
+function firstCrossing(a: XY[], b: XY[]): XY | null {
+  const NEAR = 1.5;
+  const ends = [a[0]!, a[a.length - 1]!, b[0]!, b[b.length - 1]!];
+  for (let i = 1; i < a.length; i++) {
+    for (let j = 1; j < b.length; j++) {
+      const hit = segmentIntersection(a[i - 1]!, a[i]!, b[j - 1]!, b[j]!);
+      if (!hit) continue;
+      if (ends.some((e) => Math.hypot(e.x - hit.x, e.y - hit.y) <= NEAR)) continue;
+      return hit;
+    }
+  }
+  return null;
+}
+
+function segmentIntersection(p1: XY, p2: XY, p3: XY, p4: XY): XY | null {
+  const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+  if (Math.abs(d) < 1e-9) return null; // parallel: a shared bank, not a crossing
+  const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+  const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+}
+
 function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing: number): { size: number; spacing: number } {
   // Prefer a BIGGER font with tighter tracking over a smaller font with
   // airy tracking: at each size, natural spacing if it fits, else the

@@ -1233,3 +1233,40 @@ describe("join lands on the trunk's finished curve (#94)", () => {
     expect(t[1]!).toBeGreaterThan(300);
   });
 });
+
+
+/**
+ * #94, second half: two watercourses that cross without meeting are nonsense
+ * on the ground. Nothing governed this before — the battlemap crossing rule
+ * (spec 06 §6) is cell-based and does not reach region maps, so a visible X
+ * between two rivers drew in silence.
+ */
+describe("rivers that cross without meeting warn (#94)", () => {
+  const doc = (lines: string[]): string => ["map: region", "extent: 900x800mi", "[paths]", ...lines].join("\n");
+  const crossings = (src: string): string[] =>
+    renderSource(src, {}).diagnostics.filter((d) => /cross at/.test(d.message)).map((d) => d.message);
+
+  const A = 'river a "River A" : from (200,200) via (450,400) to (700,600)';
+
+  it("flags a genuine X", () => {
+    expect(crossings(doc([A, 'river b "River B" : from (700,200) via (450,400) to (200,600)']))).toHaveLength(1);
+    expect(crossings(doc([A, 'river b "River B" : from (700,200) via (450,400) to (200,600)']))[0])
+      .toMatch(/'River A' and 'River B' cross at \(\d+,\d+\) without meeting/);
+  });
+
+  it("a declared meeting is not a crossing — in either direction", () => {
+    // join: tributary ends on the trunk. from <river>: a distributary leaves
+    // it. Both are declared relationships, and firing on them would make the
+    // check useless on exactly the documents that use the feature correctly.
+    expect(crossings(doc([A, 'river b "River B" : from (700,200) via (500,300) join a']))).toEqual([]);
+    expect(crossings(doc([A, 'river b "River B" : from a via (500,300) to (700,200)']))).toEqual([]);
+  });
+
+  it("leaves roads alone — a road crossing a river is a ford, not an error", () => {
+    expect(crossings(doc([A, 'road r "The Road" : from (700,200) via (450,400) to (200,600)']))).toEqual([]);
+  });
+
+  it("says nothing when they do not cross", () => {
+    expect(crossings(doc(['river a "A" : from (200,200) to (200,600)', 'river b "B" : from (700,200) to (700,600)']))).toEqual([]);
+  });
+});

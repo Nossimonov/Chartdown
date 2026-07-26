@@ -62,6 +62,8 @@ Relational placement is legal **only** in the following forms, built from the cl
 
 **`join <ref>`** ends a course on another watercourse's **finished curve**, at the nearest point to where it arrives. It is the first endpoint that resolves to a *derived* position rather than a named or literal one, and it is **live** like any anchor: moving the trunk moves the confluence, where hand-matched coordinates detach silently and say nothing. It takes the watercourse itself — `join <ref> at <point>` is an error, because finding the meeting point is the whole job.
 
+**Two watercourses whose courses cross without a declared meeting are a warning.** Water does not flow over water, and until the network was recorded nothing could say so: two rivers routed to adjacent mouths drew a visible X in silence, because no rule governed two linear features sharing space. A `join`, or one river beginning `from` the other, is the declaration that makes a meeting intentional; anything else that touches is reported with both names and the position. Roads are untouched — a road crossing a river is a ford or a bridge, which spec 06 §6 governs at battle scale.
+
 `join` does not change what `to <ref>` means. Aspect adaptation (spec 03) resolves a line reference in a point slot to its **midpoint**, and it still does, for every archetype — so `to <river>` flows to the middle of that river and `join <river>` flows to where the two meet. Overloading `to` would have bought the same effect by making one archetype's adaptation rule different from the rest; the pair reads as deliberate instead ([#94](https://github.com/Nossimonov/Chartdown/issues/94)).
 
 
