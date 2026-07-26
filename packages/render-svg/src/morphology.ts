@@ -29,6 +29,16 @@ export interface PlacedFeature {
    * so the renderer says so rather than guessing.
    */
   seaward?: XY;
+  /**
+   * How far the feature reaches ACROSS the host, as a multiple of `size`.
+   *
+   * Without it a word is decorative: `cove`, `sound` and `fjord` at the same
+   * size drew the identical shape and differed only in colour, which is no use
+   * on a coast whose whole character is that Hood Canal is long and narrow
+   * while a cove is a shallow scoop. It comes from the vocabulary (`reach=`),
+   * so derivation carries it and an author can override it per entity.
+   */
+  reach?: number;
 }
 
 /**
@@ -44,11 +54,7 @@ export function seawardSign(normal: XY, seaward: XY | undefined): number {
   return normal.x * seaward.x + normal.y * seaward.y >= 0 ? 1 : -1;
 }
 
-/**
- * Amplitude as a fraction of `size`. A headland reads as a headland when it is
- * appreciably longer than it is wide; much above this it stops looking like
- * coast and starts looking like a spike.
- */
+/** Fallback reach for a word that declares none. */
 const ASPECT = 0.55;
 
 /** Below this a feature is smaller than the curve's own sampling and cannot read. */
@@ -109,7 +115,7 @@ function applyOne(curve: XY[], f: PlacedFeature): XY[] | null {
   const at = arc[anchorIndex]!;
 
   const dir = normalAt(curve, anchorIndex);
-  const moved = displace(curve, arc, at, half, sign * f.size * ASPECT, dir);
+  const moved = displace(curve, arc, at, half, sign * f.size * (f.reach ?? ASPECT), dir);
   return isSimple(moved) && isSmooth(moved) ? moved : null;
 }
 
@@ -187,14 +193,13 @@ function nearestIndex(curve: XY[], p: XY): number {
 /**
  * Sharpest turn a deformed course may make, in degrees.
  *
- * This is a FOLD detector, not a gentleness rule. A first attempt at 30° was
- * measured and rejected: it clamped perfectly legitimate steep bumps on
- * coarsely-sampled curves, because how sharply a bump turns per vertex depends
- * on how densely the host was sampled — which is the caller's business, not
- * the feature's. A right angle is well past anything a coast does naturally
- * and well short of the 157° cusp this exists to catch.
+ * This is a FOLD detector, not a gentleness rule, and it has been loosened
+ * twice under measurement. At 30° it refused legitimate steep bumps on
+ * coarsely-sampled curves; at 90° it refused a FJORD, which is a landform
+ * whose entire character is being long, narrow and steep-sided. Only a
+ * REVERSAL is wrong — the cusp this exists to catch measured 157°.
  */
-const MAX_TURN_DEGREES = 90;
+const MAX_TURN_DEGREES = 135;
 
 /**
  * Does this curve avoid folding to a point? SIMPLICITY IS NOT ENOUGH.

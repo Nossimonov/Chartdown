@@ -311,3 +311,38 @@ describe("simplicity is not enough — a curve can fold without crossing (#93)",
     expect(isSmooth(out)).toBe(true);
   });
 });
+
+describe("a word carries its own proportions (#93)", () => {
+  const MAP = (line: string): string =>
+    `# Sound\nmap: region\nextent: 400x800mi\n\n[water]\n` +
+    `coastline coast : from (200,0) via (210,200) (205,400) (215,600) to (200,800)\n` +
+    `sea "The Sound" : west of coast\n${line}\n`;
+  const reachOf = (word: string): number => {
+    const pts = (s: string): number => {
+      const m = /id="cd-sound-coast"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(s).svg)!;
+      return Math.max(...m[1]!.trim().split(/\s+/).map((p) => Number(p.split(",")[0])));
+    };
+    return pts(MAP(`${word} : on coast at (210,200) size=60mi`)) - pts(MAP(""));
+  };
+
+  it("a fjord is deeper than a sound, which is deeper than a cove — at the SAME size", () => {
+    // Without `reach=` these three drew the identical shape and differed only
+    // in colour, which is useless on a coast whose character is that one inlet
+    // is long and narrow while another is a shallow scoop.
+    expect(reachOf("cove")).toBeLessThan(reachOf("sound"));
+    expect(reachOf("sound")).toBeLessThan(reachOf("fjord"));
+  });
+
+  it("derivation carries it: fjord inherits from sound and deepens it", () => {
+    expect(reachOf("fjord")).toBeGreaterThan(0);
+    expect(reachOf("headland")).toBeCloseTo(reachOf("cape") as number, 0);
+  });
+
+  it("several features on one coast all draw, with no errors", () => {
+    const many = renderSource(MAP(
+      `cape : on coast at (210,120) size=50mi\nfjord : on coast at (205,300) size=90mi\n` +
+      `cove : on coast at (215,520) size=40mi\nisland : near coast at (150,250) size=30mi`,
+    ));
+    expect(many.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+});

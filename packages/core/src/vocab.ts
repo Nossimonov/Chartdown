@@ -94,14 +94,14 @@ coastline : path
 ; a real addressable entity rather than generated noise. \`morph=\` says what the
 ; geometry does to the host line; the word says what the thing IS, which is what
 ; a theme colours, so a bite can be water and a jut can be land.
-cape : terrain morph=jut
+cape : terrain morph=jut reach=0.55
 headland : cape
-peninsula : cape
-spit : cape
-bay : terrain morph=bite
-cove : bay
-sound : bay
-fjord : sound
+peninsula : cape reach=0.8
+spit : cape reach=1.3
+bay : terrain morph=bite reach=0.5
+cove : bay reach=0.3
+sound : bay reach=1.4
+fjord : sound reach=2
 island : terrain morph=detached
 islet : island
 atoll : island

@@ -91,8 +91,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       if (!seaward) {
         diagnostics.push({ severity: "warning", line: e.line, message: `nothing declares which side of '${host}' the water is on, so '${e.typeWord}' cannot know which way to face — add e.g. 'sea : west of ${host}' (spec 05 §4)` });
       }
+      // How far across the host it reaches, as a multiple of size= — the thing
+      // that makes a fjord long and narrow where a cove is a shallow scoop.
+      // From the vocabulary, so derivation carries it (ADR 0016).
+      const reachText = model.facetOf(e.typeWord, "reach");
+      const reach = reachText === undefined ? undefined : Number(reachText);
+      if (reachText !== undefined && !Number.isFinite(reach)) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `'reach=${reachText}' is not a number — the vocabulary default applies (spec 05 §4)` });
+      }
       const entry: { f: PlacedFeature; word: string; line: number } = {
-        f: { morph, anchor: toXY(p.point), size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}) },
+        f: { morph, anchor: toXY(p.point), size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined && Number.isFinite(reach) ? { reach } : {}) },
         word: e.typeWord ?? "feature",
         line: e.line,
       };
