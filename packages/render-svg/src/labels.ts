@@ -77,14 +77,18 @@ export type Anchor = "start" | "middle" | "end";
  * the more important the place, the further the eye will follow a line — but
  * every settlement tier has a radius between 2.5 and 6, so any sane multiple
  * lands inside the same tens of pixels and the proportionality never decides
- * anything. Measured: 45 and 60 produce identical maps. Rather than dress a
- * constant up as a rule that does no work, it is a constant.
+ * anything. Rather than dress a constant up as a rule that does no work, it is
+ * a constant.
  *
- * 45 is where the recovery plateaus: below it leaders cannot reach open space
- * (at 30 only one label is rescued), above it nothing further is gained, which
- * is the signal that the bound is limiting wandering rather than placement.
+ * 100 is where coverage completes and then plateaus: on the Middle-earth map
+ * it places every declared name, and 140 and 200 render identically. The
+ * plateau is the important part — it says the bound is capping how far a
+ * desperate label MAY reach, not pushing labels outward. Candidates are swept
+ * nearest-first, so raising the cap does not move a label that already had a
+ * near slot: five of the six leaders drawn at 45 keep their exact lengths at
+ * 100, and only the previously-omitted names take the long ones (78-92).
  */
-const LEADER_REACH = 45;
+const LEADER_REACH = 100;
 /** Below this a leader is pointless — the label is close enough to read as adjacent. */
 const LEADER_MIN = 14;
 

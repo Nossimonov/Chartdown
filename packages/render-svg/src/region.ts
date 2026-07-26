@@ -1079,7 +1079,40 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }
           if (!pick) {
             const b = leastBad(8);
-            if (b.overlap > b.c.wpx * 9 * 0.5) return; // omit before overwriting
+            if (b.overlap > b.c.wpx * 9 * 0.5) {
+              // Nothing on the course will take this name. Before dropping it,
+              // offer it open space with a leader back to the course, the same
+              // rung point markers get (spec 07 §5 rule 3, #133 extended).
+              // This is the wall #137 ended at: a river whose whole course is
+              // built over — the Entwash under Fangorn, three roads under the
+              // settlements they connect — cannot be scored onto a free slot
+              // that does not exist, and relocation is the only move left.
+              // A leader may meet the course anywhere along it, so the anchor
+              // is swept like any other candidate — mid-course first, then
+              // outward. Anchoring only at the midpoint left names on rivers
+              // whose middle is the most built-over part of them.
+              let anchor: XY | null = null;
+              let led: ReturnType<typeof placer.placeWithLeader> = null;
+              for (const f of [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9]) {
+                const a = alongAt(lp, f).p;
+                const attempt = placer.placeWithLeader(a.x, a.y, lbl, 10);
+                if (attempt) {
+                  anchor = a;
+                  led = attempt;
+                  break;
+                }
+              }
+              if (!led || !anchor) return; // omit before overwriting (spec 07 §5 rule 4)
+              const lead = theme.surface("leader", "stroke", ink);
+              labelBuckets[2]!.push(
+                el("line", {
+                  x1: led.from.x, y1: led.from.y, x2: anchor.x, y2: anchor.y,
+                  stroke: lead, "stroke-width": 0.6, opacity: 0.55,
+                }),
+                text(lbl, { x: led.x, y: led.y, "font-size": led.size, fill: ink, opacity: 0.75, "text-anchor": led.anchor, "font-style": "italic", "font-family": "sans-serif" }),
+              );
+              return;
+            }
             pick = b.c;
           }
         }
