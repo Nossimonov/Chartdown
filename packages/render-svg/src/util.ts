@@ -127,15 +127,69 @@ export function meander(points: XY[], amount: number, random: () => number): XY[
   return current;
 }
 
-/** Organic blob: radial jitter around a center. */
-export function blob(center: XY, radius: number, random: () => number, segments = 14): XY[] {
-  const pts: XY[] = [];
+/**
+ * How far the finishing may pull the boundary in from the declared extent.
+ * Texture, not silhouette (#96): enough to read as drawn rather than plotted,
+ * never enough to make the shape a different shape.
+ */
+const INSET = 0.38;
+
+/**
+ * A mass of DECLARED EXTENT: an outline whose long axis measures exactly
+ * `size`, centred on `center`, turned by `angle`, with its short axis
+ * `size × shortRatio`.
+ *
+ * A BLOB DECLARES AN EXTENT, NOT AN OUTLINE (#173, ADR 0025). The shape this
+ * replaces was fourteen points of radial jitter keyed on the document seed, the
+ * entity's identity and its ordinal among same-size siblings, which meant
+ * naming a blob reshaped it, swapping two lines in the file swapped two
+ * islands' outlines, and three `size=40mi` blobs measured 42.5, 42.0 and
+ * 41.6mi across. Spec 05 §4 already forbids that last one in terms — "it makes
+ * `size=` a lie … the number in the document would stop determining what is on
+ * the map" — so the language was carrying two opposite contracts on one pair.
+ *
+ * Here the extent is exact by construction: the boundary is perturbed INWARD
+ * only, and the result is normalised so its long axis is precisely `size`. The
+ * perturbation is texture the renderer owns and nothing may reference — the
+ * same standing `area` outlines already have under spec 02 §9 — and it is a
+ * pure function of the arguments, so it carries no seed, no ordinal and no
+ * identity.
+ */
+export function organicMass(
+  center: XY, size: number, shortRatio: number, angle: number,
+  random: () => number, segments = 14,
+): XY[] {
+  // Generated ROUND and then fitted to the declared extent, rather than
+  // generated elongated. The texture is then the same character whatever
+  // `reach=` says, so stretching an island does not also re-texture it.
+  const raw: XY[] = [];
   for (let i = 0; i < segments; i++) {
-    const angle = (i / segments) * Math.PI * 2;
-    const r = radius * (0.78 + random() * 0.4);
-    pts.push({ x: center.x + Math.cos(angle) * r, y: center.y + Math.sin(angle) * r });
+    const a = (i / segments) * Math.PI * 2;
+    const r = 1 - INSET * random();
+    raw.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
   }
-  return pts;
+  // Smoothed BEFORE fitting, because a spline may overshoot its controls —
+  // measuring the extent of the drawn curve is the only way `size=` is exact
+  // in the thing a reader actually sees.
+  const smooth = catmullRom(raw, 5, true);
+  const xs = smooth.map((p) => p.x);
+  const ys = smooth.map((p) => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  // BOTH axes are fitted, not just the long one. Fitting only the long axis
+  // left `reach=1` — which the spec calls a circle — measurably oval, because
+  // an inward-only perturbation shrinks the two axes by different amounts.
+  const kx = x1 > x0 ? size / (x1 - x0) : 1;
+  const ky = y1 > y0 ? (size * shortRatio) / (y1 - y0) : 1;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return smooth.map((p) => {
+    const x = (p.x - cx) * kx;
+    const y = (p.y - cy) * ky;
+    return { x: center.x + x * cos - y * sin, y: center.y + x * sin + y * cos };
+  });
 }
 
 export function nearestOnPolyline(pts: XY[], target: XY): XY {

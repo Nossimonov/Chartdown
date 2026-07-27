@@ -15,10 +15,117 @@ describe("determinism (spec 02 §8.2)", () => {
     expect(renderSource(src).svg).toBe(renderSource(src).svg);
   });
 
-  it("a different seed changes organic geometry", () => {
-    const src = example("vessany");
+  it("a different seed changes an AREA's organic finishing", () => {
+    // `seed:` re-rolls the finishing of an outline the author DECLARED — the
+    // roughening of an `area`'s silhouette (spec 02 §9).
+    const src = `map: region\nextent: 400x400mi\n\n[terrain]\n` +
+      `forest w "The Weald" : area (100,100) (300,120) (280,300) (120,280)\n`;
     const reseeded = src.replace("map: region", "map: region\nseed: 99");
     expect(renderSource(reseeded).svg).not.toBe(renderSource(src).svg);
+  });
+
+  it("a different seed does NOT change a blob — its shape is declared, not rolled (#173)", () => {
+    // The complaint that started #173: an unrelated `seed:` header reshaped
+    // every blob on the map. A blob declares an EXTENT, and its finishing is a
+    // pure function of the word and the size, so there is nothing for a seed
+    // to re-roll. Vessany is all blobs and ridges, so its whole render is now
+    // seed-independent — which is the fix, not a gap in it.
+    const src = example("vessany");
+    const reseeded = src.replace("map: region", "map: region\nseed: 99");
+    expect(renderSource(reseeded).svg).toBe(renderSource(src).svg);
+  });
+});
+
+describe("a blob declares an EXTENT, not an outline (#173, ADR 0025)", () => {
+  const SCALE = 820 / 400; // canvas units per map mile at this extent
+  const DOC = (body: string, header = ""): string =>
+    `# Isles\nmap: region\nextent: 400x400mi\n${header}\n[terrain]\n${body}\n`;
+  const shapes = (svg: string): { at: string; form: string; w: number; h: number }[] =>
+    [...svg.matchAll(/<polygon points="([^"]+)"/g)].map((m) => {
+      const p = m[1]!.trim().split(/\s+/).map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+      const cx = p.reduce((s, q) => s + q.x, 0) / p.length;
+      const cy = p.reduce((s, q) => s + q.y, 0) / p.length;
+      return {
+        at: `${cx.toFixed(0)},${cy.toFixed(0)}`,
+        // The outline relative to its own centre: same form = same shape,
+        // wherever it sits. Comparing absolute points would only ever say
+        // "these are in different places", which is not the question.
+        form: p.map((q) => `${(q.x - cx).toFixed(2)},${(q.y - cy).toFixed(2)}`).join(" "),
+        w: (Math.max(...p.map((q) => q.x)) - Math.min(...p.map((q) => q.x))) / SCALE,
+        h: (Math.max(...p.map((q) => q.y)) - Math.min(...p.map((q) => q.y))) / SCALE,
+      };
+    });
+  const only = (src: string): { at: string; form: string; w: number; h: number } => shapes(renderSource(src).svg)[0]!;
+
+  it("SIZE IS EXACT: the declared measure is what gets drawn", () => {
+    // Three `size=40mi` blobs measured 42.5, 42.0 and 41.6mi across before
+    // this. Spec 05 §4 already forbade that in terms — "it makes `size=` a lie
+    // … the number in the document would stop determining what is on the map"
+    // — so the language was carrying two opposite contracts on one pair.
+    for (const size of [40, 17, 123]) {
+      const drawn = only(DOC(`forest w : blob (200,200) size=${size}mi`));
+      expect(drawn.w, `size=${size}mi`).toBeCloseTo(size, 2);
+      expect(drawn.h, `size=${size}mi`).toBeCloseTo(size, 2);
+    }
+  });
+
+  it("PROMOTION IS GEOMETRY-STABLE: naming it does not reshape it", () => {
+    const anon = only(DOC(`island : blob (200,200) size=40mi`));
+    const named = only(DOC(`island midholm "Midholm" : blob (200,200) size=40mi`));
+    expect(named.form).toBe(anon.form);
+  });
+
+  it("DOCUMENT ORDER IS NOT GEOMETRY: reordering two lines changes nothing", () => {
+    // The sharpest of the original defects: swapping two lines swapped two
+    // islands' outlines, in different places on the map, with nothing else
+    // changed. Same-size siblings were distinguished by an ordinal.
+    const a = `island : blob (100,100) size=40mi`;
+    const b = `island : blob (300,300) size=40mi`;
+    const forward = shapes(renderSource(DOC(`${a}\n${b}`)).svg);
+    const reversed = shapes(renderSource(DOC(`${b}\n${a}`)).svg);
+    const byPlace = (list: typeof forward): string[] => list.map((s) => `${s.at} ${s.form}`).sort();
+    expect(byPlace(reversed)).toEqual(byPlace(forward));
+  });
+
+  it("POSITION IS NOT GEOMETRY: moving a blob slides the same shape", () => {
+    expect(only(DOC(`forest w : blob (300,120) size=40mi`)).form)
+      .toBe(only(DOC(`forest w : blob (200,200) size=40mi`)).form);
+  });
+
+  it("the word distinguishes it — a forest and an island are not the same shape", () => {
+    // Otherwise every mass on the map is one silhouette at different scales,
+    // which reads as a bug rather than as restraint.
+    expect(only(DOC(`forest w : blob (200,200) size=40mi`)).form)
+      .not.toBe(only(DOC(`island w : blob (200,200) size=40mi`)).form);
+  });
+
+  it("twins are the honest consequence of two identical declarations", () => {
+    // ADR 0023 already took this trade for detached features: the escape is to
+    // differ the size, and the alternative keys each had an edit that silently
+    // redrew a landform a campaign may already have named.
+    const pair = shapes(renderSource(DOC(
+      `island : blob (100,100) size=40mi\nisland : blob (300,300) size=40mi`,
+    )).svg);
+    expect(pair[0]!.form).toBe(pair[1]!.form);
+  });
+
+  it("a PLACED feature is held to the same contract (spec 05 §4)", () => {
+    // "drawn at its DECLARED size or reported — never quietly resized". The
+    // shared generator overshot it by a few percent in a direction nothing
+    // measured, on the one path whose spec text promises exactness.
+    const src = `# Isles\nmap: region\nextent: 400x400mi\n\n[water]\n` +
+      `coastline shore : from (300,0) via (300,200) to (300,400)\nsea "S" : west of shore\n` +
+      `island w "W" : near shore at (150,200) size=60mi reach=0.2\n`;
+    const g = /id="cd-isles-w">(.{0,40000}?)<\/g>/s.exec(renderSource(src).svg)!;
+    const p = /points="([^"]+)"/.exec(g[1]!)![1]!.trim().split(/\s+/)
+      .map((q) => { const [x, y] = q.split(",").map(Number) as [number, number]; return { x, y }; });
+    const long = (Math.max(...p.map((q) => q.y)) - Math.min(...p.map((q) => q.y))) / SCALE;
+    const short = (Math.max(...p.map((q) => q.x)) - Math.min(...p.map((q) => q.x))) / SCALE;
+    expect(long).toBeCloseTo(60, 2);        // size= is the long axis, exactly
+    expect(short).toBeCloseTo(60 * 0.2, 2); // reach= is the short one, exactly
   });
 });
 

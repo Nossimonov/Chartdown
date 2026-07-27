@@ -15,8 +15,8 @@ import { ASPECT, deformCurve, type Morph, type PlacedFeature } from "./morpholog
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
-  blob, catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
-  nearestOnPolyline, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
+  catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
+  nearestOnPolyline, organicMass, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
 } from "./util";
 
 interface Resolved {
@@ -301,10 +301,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // run through the same points reuse the coastline's exact curve, so the sea
   // fill and the shore line cannot mismatch (owner round-three note).
   const coastCurves: { raw: XY[]; finished: XY[] }[] = [];
-  // Ordinals for identity-keyed blobs: nth anonymous blob of a given
-  // word+size keeps its shape when MOVED (shape belongs to the thing, not
-  // the place); only inserting an identical sibling before it renumbers.
-  const blobOrdinals = new Map<string, number>();
+  /**
+   * The finishing for a mass of this word at this extent (#173, ADR 0025).
+   *
+   * The WORD and the SIZE, and deliberately nothing else — not the document
+   * seed, not the entity's id or name, not its position, not its ordinal among
+   * siblings. Each of those was in the key it replaces, and each had an edit
+   * that silently redrew a landform a campaign may already have named.
+   *
+   * The cost is that two same-word masses of exactly the same size are twins.
+   * ADR 0023 already took that trade for detached features on the same
+   * reasoning: it is the honest consequence of two identical declarations, and
+   * it is cheap to escape by differing the size.
+   */
+  const massRng = (word: string | undefined, size: number): (() => number) =>
+    rng(hashSeed(hashString(word ?? "mass"), Math.round(size * 1000)));
 
   const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
   const runMatches = (pts: XY[], start: number, raw: XY[], reversed: boolean): boolean => {
@@ -449,18 +460,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           p.kind === "relational" && p.form === "near" && p.target.kind === "ref");
         const controls = hostRef && hostRef.target.kind === "ref" ? hostControls.get(hostRef.target.value) : undefined;
         const angle = channelAxisAt(center) ?? (controls ? tangentAngle(controls, center) : 0);
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
-        const raw = blob({ x: 0, y: 0 }, radius, rng(hashSeed(0, hashString(e.typeWord ?? "island"), Math.round(radius * 1000))));
-        out.polygon = catmullRom(
-          raw.map((q) => {
-            const sx = q.x;
-            const sy = q.y * shortRatio;
-            return { x: center.x + sx * cos - sy * sin, y: center.y + sx * sin + sy * cos };
-          }),
-          5,
-          true,
-        );
+        // Same generator, same contract as a `blob` (#173, ADR 0025): the long
+        // axis measures exactly `size=`. Spec 05 §4 promises a placed feature
+        // is "drawn at its DECLARED size or reported — never quietly resized",
+        // and the outline it was given overshot that by a few percent in a
+        // direction nothing measured.
+        out.polygon = organicMass(center, radius * 2, shortRatio, angle, massRng(e.typeWord ?? undefined, radius * 2));
         out.point = center;
         out.radius = radius;
         return out;
@@ -495,17 +500,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           .map((arg) => (origin ? framed({ x: arg.x * scale, y: arg.y * scale }) : toXY(arg)));
         if (p.shape === "blob") {
           const center = pts[0] ?? out.point ?? { x: w / 2, y: h / 2 };
-          const radius = (measureToNumber(pairOf(e.pairs, "size") ?? "40") / 2) * scale;
-          // Identity-keyed shape: id (or word) + size + doc seed — MOVING a
-          // blob slides the same shape (owner round three); same-size
-          // anonymous siblings differ by ordinal. Never keyed by position or
-          // by document order at large.
-          const idKey = `${entityAnchor(e) ?? e.typeWord ?? "blob"}:${radius}`;
-          const n = blobOrdinals.get(idKey) ?? 0;
-          blobOrdinals.set(idKey, n + 1);
-          out.polygon = catmullRom(blob(center, radius, rng(hashSeed(model.seed, radius, hashString(idKey), n))), 5, true);
+          const diameter = measureToNumber(pairOf(e.pairs, "size") ?? "40") * scale;
+          // A BLOB DECLARES AN EXTENT (#173, ADR 0025): a round mass measuring
+          // exactly `size=` across, keyed on the WORD AND THE SIZE and nothing
+          // else. The key it replaces carried the document seed, the entity's
+          // identity and its ordinal among same-size siblings, so naming a
+          // blob reshaped it, adding a `seed:` reshaped every blob on the map,
+          // and swapping two lines in the file swapped two islands' outlines.
+          out.polygon = organicMass(center, diameter, 1, 0, massRng(e.typeWord ?? undefined, diameter));
           out.point = center;
-          out.radius = radius;
+          out.radius = diameter / 2;
         } else if (p.shape === "area") {
           // Boundary segments may FOLLOW features (#81): `along <ref>`
           // between two vertices splices the feature's rendered curve

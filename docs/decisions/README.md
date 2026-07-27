@@ -34,3 +34,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0022](0022-a-declaration-is-a-promise.md) | A declaration is a promise; the file that made it for this map is the one that is checked | Accepted |
 | [0023](0023-detail-is-data-not-noise.md) | Detail is data, not noise: anything a story can attach to must be declared | Accepted |
 | [0024](0024-a-feature-takes-its-bearing-from-the-water-it-sits-in.md) | A detached feature takes its bearing from the water it sits in, read from that water's own declaration | Accepted |
+| [0025](0025-a-blob-declares-an-extent-not-an-outline.md) | A blob declares an extent, not an outline; finishing is texture and may never decide a dimension | Accepted |
