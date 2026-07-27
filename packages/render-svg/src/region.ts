@@ -57,6 +57,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const toXY = (p: Point): XY => ({ x: p.x * scale, y: p.y * scale });
   /** A map coordinate an author can paste back into the document. */
   const round1 = (n: number): string => String(Math.round(n * 10) / 10);
+  /** The unit `extent:` was written in, so a reported distance carries it. */
+  const mapUnit = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "")?.[3] ?? "";
 
   // ---------- placed morphology (#93, spec 05 §4, ADR 0023) ----------
   //
@@ -1958,12 +1960,20 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // opening a channel would be the renderer inventing water nobody
       // declared, against "drawn as declared or reported". The author's fixes
       // are real: widen the channel, move it, or stop calling it an island.
-      const wet = surroundedByWater(poly, waters);
+      const { wet, at, depth } = surroundedByWater(poly, waters);
       if (wet >= 0.98) continue;
+      // Stated as the CONTACT, not as the clearance. "98% of its shore has
+      // water beyond it" is true and reads like a clean island, which is the
+      // opposite of what it means — at any contact the union welds and the
+      // island is gone. The touching share, where it touches, and how far to
+      // move it are the three things an author needs to fix it in one edit.
+      const share = Math.max(1, Math.round((1 - wet) * 100));
+      const where = at ? ` near (${round1(at.x / scale)},${round1(at.y / scale)})` : "";
+      const far = depth > 0 ? `, reaching about ${round1(depth / scale)}${mapUnit} inland` : "";
       diagnostics.push({
         severity: "warning",
         line: e.line,
-        message: `${named} is joined to the mainland — the water declared around it does not separate it (${Math.round(wet * 100)}% of its shore has water beyond it). Widen the channel, move it, or declare it as land rather than an island (spec 05 §2)`,
+        message: `${named} touches the mainland along ${share}% of its shore${where}${far}, so the two are drawn as one landmass and it is no longer an island. Widen the channel, move it clear, or declare it as land rather than an island (spec 05 §2)`,
       });
     }
   }
@@ -2498,12 +2508,22 @@ function coversWater(poly: XY[], waters: XY[][]): boolean {
  * — is probed correctly along its notch rather than from a centroid that lies
  * outside it.
  */
-function surroundedByWater(poly: XY[], waters: XY[][]): number {
-  if (poly.length < 3) return 1;
+interface Contact {
+  /** Fraction of the ring outside the outline that lies in water. */
+  wet: number;
+  /** The worst point of contact, or null where there is none. */
+  at: XY | null;
+  /** How far that point is from open water — how far the island must move. */
+  depth: number;
+}
+
+function surroundedByWater(poly: XY[], waters: XY[][]): Contact {
+  if (poly.length < 3) return { wet: 1, at: null, depth: 0 };
   const xs = poly.map((p) => p.x);
   const ys = poly.map((p) => p.y);
   const diag = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
   const step = Math.max(0.5, diag * 0.01);
+  const dry: XY[] = [];
   let wet = 0;
   let total = 0;
   for (let i = 0; i < poly.length; i++) {
@@ -2519,8 +2539,33 @@ function surroundedByWater(poly: XY[], waters: XY[][]): number {
     const probe = { x: mid.x + n.x * step, y: mid.y + n.y * step };
     total++;
     if (waters.some((water) => pip(probe, water))) wet++;
+    else dry.push(probe);
   }
-  return total === 0 ? 1 : wet / total;
+  if (total === 0) return { wet: 1, at: null, depth: 0 };
+  // WHERE IT TOUCHES, AND HOW FAR IN. A bare percentage is not actionable, and
+  // at 98% it actively misleads — that reads like a clean island when it means
+  // the union has welded the two. The author still has to find which end is
+  // touching and guess how far to move it, which on a long island is several
+  // edits. The deepest dry probe is the worst point of contact, and its
+  // distance to open water is how far the island has to move to clear it.
+  let at: XY | null = null;
+  let depth = 0;
+  for (const p of dry) {
+    let best = Infinity;
+    for (const water of waters) {
+      for (let i = 0; i < water.length; i++) {
+        const a = water[i]!;
+        const b = water[(i + 1) % water.length]!;
+        const q = nearestOnSegment(a, b, p);
+        best = Math.min(best, Math.hypot(q.x - p.x, q.y - p.y));
+      }
+    }
+    if (Number.isFinite(best) && best >= depth) {
+      depth = best;
+      at = p;
+    }
+  }
+  return { wet: wet / total, at, depth };
 }
 
 /** The point on segment a..b nearest to p. */

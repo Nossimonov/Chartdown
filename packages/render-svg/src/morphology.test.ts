@@ -1397,8 +1397,11 @@ island i "An Isle" : near shore at (${x},50) area (0,-6) (2,-3) (2.5,3) (1,6) (-
     // touches the shore at x=50.
     for (const x of [48, 49, 50, 51]) {
       const [msg] = messages(x);
-      expect(msg, `x=${x}`).toMatch(/is joined to the mainland/);
-      expect(msg, `x=${x}`).toMatch(/\d+% of its shore has water beyond it/);
+      expect(msg, `x=${x}`).toMatch(/touches the mainland along \d+% of its shore/);
+      // Where it touches and how far in — a bare share is not actionable, and
+      // near the threshold it reads like a clean island.
+      expect(msg, `x=${x}`).toMatch(/near \(-?[\d.]+,-?[\d.]+\)/);
+      expect(msg, `x=${x}`).toMatch(/reaching about [\d.]+mi inland/);
     }
   });
 
