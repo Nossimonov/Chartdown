@@ -77,6 +77,21 @@ await build({
   logLevel: "info",
 });
 
+// Measurement (#181, ADR 0028): its own binary rather than a verb on the CLI,
+// so a GM who never measures anything installs nothing extra. Zero runtime
+// dependencies like the core — `node:zlib` does the only heavy lifting
+// (ADR 0029).
+await build({
+  entryPoints: ["packages/measure/src/measure.ts"],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  alias: sourceAliases,
+  banner: { js: "#!/usr/bin/env node" },
+  outfile: "packages/measure/dist/measure.js",
+  logLevel: "info",
+});
+
 // Obsidian plugin (issue #38): CommonJS main.js with the `obsidian` module
 // external (the app provides it); dist/ is the complete sideloadable folder.
 await build({
