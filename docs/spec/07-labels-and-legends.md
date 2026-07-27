@@ -53,7 +53,11 @@ Header keys, all defaulting `off`, all renderer-generated and never hand-maintai
 
 Renderers SHOULD avoid label collisions and MUST place labels deterministically (spec 02 §8.2 — seeded, stable across re-renders); explicit hints always win over automatic placement. Labels of `hidden` entities and `[gm]` content appear only in GM mode, per the fail-closed rule (spec 01 §6).
 
-When a map holds more detail than its size can sustain, renderers resolve label pressure the way a cartographer would, in this order:
+**A label is drawn in map space, and scales with the map.** Zooming in makes a name larger along with the ground it names, and this is deliberate rather than incidental: it is what lets a crowded atlas be authored at all. Names may be set small, on the understanding that a reader who needs one **zooms to it** — so density is resolved by the reader's attention as well as by the rules below, and a map need not fit every name legibly at one scale in order to be a good map.
+
+Two things follow. A renderer MUST NOT hold labels at a constant apparent size while the map scales, which would make zooming in *worsen* crowding by growing the text relative to the shrinking space between features. And a **surface that cannot zoom cannot show a dense map**: the conduct below is what such a surface falls back on, not the whole answer. (`detail: reference`, [ADR 0020](../decisions/0020-render-resolution-is-editorial.md), is the same problem answered for a fixed-size reader.)
+
+When a map holds more detail than its size can sustain **at the scale it is being read**, renderers resolve label pressure the way a cartographer would, in this order:
 
 1. **The label that cannot move claims first.** A line feature's name reads as that feature's name *because it lies along the feature*; set aside, it becomes a caption pointing at nothing, and no connector repairs it. A point marker's name has a recovery — rule 3's leader — so it yields first. **Line-feature labels therefore claim before point labels, which claim before names with room to roam** (areas, realms, seas). Within the point tier, more important markers (larger tiers) claim before minor ones.
 
