@@ -901,6 +901,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   );
   const landMaskId = `cd-land-${model.doc.docId}`;
   const landMask = hasWater ? `url(#${landMaskId})` : undefined;
+  /** One per island: shows its shore only where it meets water, not other land (#165). */
+  const shoreMaskId = (i: number): string => `cd-shore-${model.doc.docId}-${i}`;
+  /** Hides the mainland's coastline wherever an island has merged with it (#165). */
+  const coastMaskId = `cd-coast-union-${model.doc.docId}`;
+  // Known BEFORE the draw loop, because a coastline may be drawn long before
+  // the islands that merge with it are reached — and a mask reference to a
+  // definition that never gets emitted is an error, not a no-op.
+  const hasIslands = model.entities.some((e) => model.chainOf(e.typeWord ?? "").includes("island"));
 
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
@@ -1175,11 +1183,20 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // Checked AFTER the loop, not here: `waterPolys` is filled as the
         // items are walked, so an island declared before its sea would be
         // measured against water that does not exist yet (#164).
+        const islandIndex = islandInfos.length;
         islandInfos.push({ e, poly: r.polygon });
         const coast = theme.pathStroke(["coastline"]);
+        // FILL AND STROKE ARE SEPARATE SHAPES so only the stroke is masked
+        // (#165). The fill is land wherever it lands — paper over paper where
+        // it meets the mainland, which is invisible and correct — while the
+        // shore is drawn only where there is water to have a shore against.
         layers.areas.push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: groundFill ?? theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 1.2, "stroke-linejoin": "round" }),
+            el("polygon", { points: pointsAttr(r.polygon), fill: groundFill ?? theme.surface("paper", "fill", "#f9f5ea") }),
+            el("polygon", {
+              points: pointsAttr(r.polygon), fill: "none", stroke: coast.stroke,
+              "stroke-width": 1.2, "stroke-linejoin": "round", mask: `url(#${shoreMaskId(islandIndex)})`,
+            }),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -1329,7 +1346,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             "stroke-width": width, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
           }),
         );
-        layers.lines.push(el("g", { id: anchor }, ...lineParts));
+        // A coastline stops where an island has merged with it (#165). The
+        // island's fill already makes that stretch land; leaving the shore
+        // line drawn over it is what made an island touching the shore read
+        // as a ring lying across the peninsula.
+        layers.lines.push(el("g", {
+          id: anchor,
+          ...(hasIslands && chain.includes("coastline") ? { mask: `url(#${coastMaskId})` } : {}),
+        }, ...lineParts));
         }
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -1992,15 +2016,60 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   layers.labels.push(...labelBuckets[4]!, ...labelBuckets[3]!, ...labelBuckets[2]!, ...labelBuckets[1]!, ...labelBuckets[0]!);
 
   // The land mask (#98): white everywhere, black over every water body, so
-  // terrain drawn through it stops at the shore.
+  // terrain drawn through it stops at the shore — AND white again over every
+  // island, because an island is land (#165). Without that last step a wood
+  // declared on an island is masked away by the sea the island sits in.
+  const frame = { x: 0, y: 0, width: w, height: h };
+  const maskBox = `maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(w)}" height="${fmt(h)}"`;
+  const defs: string[] = [];
   if (hasWater) {
-    body.push(
-      `<defs><mask id="${landMaskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(w)}" height="${fmt(h)}">` +
-        el("rect", { x: 0, y: 0, width: w, height: h, fill: "#fff" }) +
+    defs.push(
+      `<mask id="${landMaskId}" ${maskBox}>` +
+        el("rect", { ...frame, fill: "#fff" }) +
         waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
-        `</mask></defs>`,
+        islandInfos.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#fff" })).join("") +
+        `</mask>`,
     );
   }
+
+  // LAND IS ONE REGION, so a coastline is drawn only where land meets WATER
+  // (#165). Every land shape used to stroke its own whole outline regardless
+  // of what was already land beneath it, so an island touching the shore drew
+  // a ring lying across the peninsula and two overlapping islands drew a lens
+  // with a seam through it. At map scale that is the common case rather than
+  // an edge case: Bainbridge really is separated from the Kitsap Peninsula by
+  // about half a mile of water, which on a 100mi-wide map is thinner than the
+  // stroke, so the correct rendering is one merged landmass.
+  //
+  // Taken as a MASK rather than as a polygon union, which would need a
+  // boolean-geometry engine the renderer does not carry (ADR 0007). The result
+  // is the same boundary: each island's stroke shows only over water and not
+  // over another island, and the mainland's coastline is hidden under every
+  // island — so what survives is exactly the outline of the union.
+  if (hasIslands) {
+    islandInfos.forEach((_, i) => {
+      defs.push(
+        `<mask id="${shoreMaskId(i)}" ${maskBox}>` +
+          // No water declared anywhere: nothing to merge against, so show the
+          // island whole rather than erasing it.
+          (waterPolys.length
+            ? el("rect", { ...frame, fill: "#000" }) +
+              waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#fff" })).join("") +
+              // Every OTHER island, not this one: an island's own interior must
+              // not eat its own stroke, or every shore comes out half-width.
+              islandInfos.filter((__, j) => j !== i).map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("")
+            : el("rect", { ...frame, fill: "#fff" })) +
+          `</mask>`,
+      );
+    });
+    defs.push(
+      `<mask id="${coastMaskId}" ${maskBox}>` +
+        el("rect", { ...frame, fill: "#fff" }) +
+        islandInfos.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        `</mask>`,
+    );
+  }
+  if (defs.length) body.push(`<defs>${defs.join("")}</defs>`);
   body.push(...layers.water, ...layers.realms, ...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
 }
 

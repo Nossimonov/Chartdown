@@ -382,8 +382,12 @@ describe("levels (spec 06 §8)", () => {
     expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
     // the sea is FULL water fill (not the faint zone tint)
     expect(svg).toMatch(/polygon[^/]*fill="#b9d3e6"/);
-    // the island rises above it as LAND: paper surface, coastline stroke
-    expect(svg).toMatch(/fill="#f9f5ea" stroke="#8fa8b8"/);
+    // The island rises above it as LAND: paper surface, coastline stroke.
+    // Two shapes rather than one since #165 — the fill is land wherever it
+    // lands, while the shore is drawn only where there is water to have a
+    // shore against, so only the stroke carries the union mask.
+    expect(svg).toMatch(/fill="#f9f5ea"/);
+    expect(svg).toMatch(/fill="none" stroke="#8fa8b8"[^/]*mask="url\(#cd-shore-/);
     // realm tint paints beneath terrain: its dashed boundary appears before the forest fill
     const realmAt = svg.indexOf('stroke-dasharray="9 4 2 4"');
     const forestAt = svg.indexOf("#a9c79c");

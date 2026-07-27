@@ -651,6 +651,66 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
   });
 });
 
+describe("land is one region — overlapping shapes are not double-outlined (#165)", () => {
+  // Bainbridge really is separated from the Kitsap Peninsula by about half a
+  // mile of water, which on a 100mi-wide map is thinner than the coastline
+  // stroke. What the renderer drew instead was Bainbridge's outline running
+  // across the peninsula, which reads as a mistake.
+  const SRC = `map: region
+extent: 300x300mi
+
+[water]
+coastline coast : from (150,0) via (150,100) (150,200) to (150,300)
+sea "The Sea" : west of coast
+island a "Half a mile offshore" : near coast at (146,80) size=40mi reach=0.4
+island b "Overlapping pair, west" : near coast at (100,200) size=40mi reach=0.6
+island c "Overlapping pair, east" : near coast at (118,210) size=40mi reach=0.6
+`;
+  const svg = (): string => renderSource(SRC).svg;
+  /** The `points` of the FILL polygon inside an entity's group. */
+  const shapeOf = (s: string, id: string): string =>
+    /points="([^"]+)"/.exec(new RegExp(`id="cd-document-${id}">(.{0,20000}?)</g>`, "s").exec(s)![1]!)![1]!;
+  const maskOf = (s: string, id: string): string =>
+    new RegExp(`<mask id="${id}"[^>]*>(.*?)</mask>`, "s").exec(s)![1]!;
+
+  it("an island's shore is stroked separately from its fill, and only the stroke is masked", () => {
+    // The fill is land wherever it lands — paper over paper where it meets the
+    // mainland, invisible and correct. Only the shore needs water to exist.
+    expect(svg()).toMatch(/fill="none" stroke="[^"]+"[^/]*mask="url\(#cd-shore-document-0\)"/);
+  });
+
+  it("that mask shows the water, hides the OTHER islands, and never hides the island itself", () => {
+    // Hiding its own interior would eat half its own stroke width, so every
+    // shore on the map would come out thin — the kind of change that looks
+    // like a theme tweak and is actually a geometry bug.
+    const s = svg();
+    const mask = maskOf(s, "cd-shore-document-1"); // island b
+    expect(mask).toContain(shapeOf(s, "c"));  // its overlapping neighbour, hidden
+    expect(mask).toContain(shapeOf(s, "a"));
+    expect(mask).not.toContain(shapeOf(s, "b"));
+  });
+
+  it("a coastline is hidden wherever an island has merged with it", () => {
+    const s = svg();
+    expect(s).toMatch(/id="cd-document-coast" mask="url\(#cd-coast-union-document\)"/);
+    expect(maskOf(s, "cd-coast-union-document")).toContain(shapeOf(s, "a"));
+  });
+
+  it("an island is LAND in the land mask, so terrain on it is not clipped away by the sea", () => {
+    const mask = maskOf(svg(), "cd-land-document");
+    // White AFTER the water's black: the island puts back what the sea took.
+    expect(mask.lastIndexOf('fill="#fff"')).toBeGreaterThan(mask.indexOf('fill="#000"'));
+  });
+
+  it("a map with no islands carries no union masks and an unmasked coastline", () => {
+    const plain = renderSource(`map: region\nextent: 300x300mi\n\n[water]\n` +
+      `coastline coast : from (150,0) via (150,150) to (150,300)\nsea "The Sea" : west of coast\n`).svg;
+    expect(plain).not.toContain("cd-shore-document");
+    expect(plain).not.toContain("cd-coast-union");
+    expect(plain).toMatch(/id="cd-document-coast">/);
+  });
+});
+
 describe("a river ending in open water says so (#166)", () => {
   // Nine rivers of the Puget Sound map were authored mouth-first from a bare
   // coordinate, which put every mouth a mile or two inside the water. The
