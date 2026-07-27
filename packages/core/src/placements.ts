@@ -360,8 +360,28 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
           i += 2;
         }
       }
+      // `on <ref> at <point> via <point>…` (#169): the feature's CENTERLINE.
+      // A bite is otherwise one straight run, and Hood Canal turns hard east
+      // at the Great Bend — one inlet with one mouth and one head, which is
+      // not the line-BRANCHING that spec 05 §4 stages. Only meaningful after
+      // an `at` point, since the centerline starts at the mouth.
+      const via: Point[] = [];
+      if (point && chunkText(peek()) === "via") {
+        i++;
+        for (;;) {
+          const text = chunkText(peek());
+          const next = text ? parsePoint(text) : null;
+          if (!next) break;
+          via.push(next);
+          i++;
+        }
+        if (via.length === 0) {
+          diagnostics.push(error(line, `'via' on '${ref.value}' has no points — a centerline needs at least one (spec 05 §4)`));
+        }
+      }
       result.placements.push(
-        point ? { kind: "relational", form: "on", ref, point }
+        point && via.length > 0 ? { kind: "relational", form: "on", ref, point, via }
+        : point ? { kind: "relational", form: "on", ref, point }
         : at ? { kind: "relational", form: "on", ref, at }
         : { kind: "relational", form: "on", ref },
       );

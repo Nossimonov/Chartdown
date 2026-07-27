@@ -178,8 +178,23 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       };
       const reach = numericFacet("reach");
       const taper = numericFacet("taper");
+      // A DECLARED CENTERLINE REPLACES THE GENERATED ONE (#169). `reach=`
+      // generates a straight run of `size × reach`; `via` states the line the
+      // feature actually follows, and its own length is then the depth. The
+      // two are alternatives, so declaring both is an error for the same
+      // reason an outline and the dials are on a detached feature (ADR 0026):
+      // honouring either means discarding the other.
+      const via = p.via?.map(toXY);
+      if (via && pairOf(e.pairs, "reach") !== undefined) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `'${e.name ?? e.typeWord}' declares a centerline with 'via' AND reach= — 'via' says where the feature runs and reach= generates a straight run instead, so one would have to be discarded. Drop reach=, or drop the via points (spec 05 §4)`,
+        });
+        continue;
+      }
       const entry: PlacedRef = {
-        f: { morph, anchor: anchorXY, size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined ? { reach } : {}), ...(taper !== undefined ? { taper } : {}) },
+        f: { morph, anchor: anchorXY, size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined ? { reach } : {}), ...(taper !== undefined ? { taper } : {}), ...(via && via.length > 0 ? { via } : {}) },
         // The ENTITY as the author would recognise it: three `sound`s on one
         // coast all reported as "'sound'" gave nothing to tell them apart
         // (#156). And `sizeText` is carried verbatim rather than recomputed

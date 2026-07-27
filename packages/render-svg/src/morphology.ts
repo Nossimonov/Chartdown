@@ -27,7 +27,7 @@
  * extent.
  */
 
-import type { XY } from "./util";
+import { catmullRom, type XY } from "./util";
 
 /** What a feature's geometry does to its host (the `morph=` facet). */
 export type Morph = "jut" | "bite" | "detached";
@@ -65,6 +65,18 @@ export interface PlacedFeature {
    * part of the depth and converge only near the head.
    */
   taper?: number;
+  /**
+   * The feature's CENTERLINE, as declared controls from the mouth inward (#169).
+   *
+   * Without it a bite is one straight run of `size × reach`. Hood Canal runs
+   * 40mi south-west from Foulweather Bluff and then turns hard east for 15mi at
+   * the Great Bend, and that hook is what cuts the barb off the Kitsap
+   * Peninsula. A dogleg is not a BRANCH — one mouth, one head — so it is not
+   * the `delta`/`fork` line-branching spec 05 §4 stages.
+   *
+   * Declared, it replaces `reach=`: the centerline's own length is the depth.
+   */
+  via?: XY[];
 }
 
 /**
@@ -176,17 +188,21 @@ export type RejectReason =
   /** Another feature already claims this stretch of the host. */
   | { kind: "overlap"; other: PlacedFeature };
 
-/** A feature resolved against its host: where its window sits, and which way it goes. */
+/** A feature resolved against its host: where its window sits, and where it runs. */
 interface Sited {
   f: PlacedFeature;
   /** Arc position of the anchor on the resampled host. */
   at: number;
   /** Half the mouth width, in arc length. */
   half: number;
-  /** Signed depth: the direction and distance the head lies from the coast. */
-  depth: number;
-  /** Unit normal at the anchor — the ONE direction the whole feature travels. */
-  dir: XY;
+  /**
+   * The feature's CENTERLINE in rendered coordinates, from the mouth inward.
+   *
+   * Straight when nothing declares otherwise, and the shape is then exactly
+   * what it was before `via` existed. Everything downstream reads only this,
+   * so a bent inlet and a straight one are one code path rather than two.
+   */
+  centre: XY[];
 }
 
 /**
@@ -245,7 +261,7 @@ export function deformCurve(
   return out;
 }
 
-/** Resolve a feature against its host: anchor, direction, depth. */
+/** Resolve a feature against its host: anchor, direction, centerline. */
 function site(host: XY[], arc: number[], f: PlacedFeature): Sited | null {
   const i = nearestIndex(host, f.anchor);
   if (i < 0) return null;
@@ -255,7 +271,30 @@ function site(host: XY[], arc: number[], f: PlacedFeature): Sited | null {
   // the window so the feature stays one coherent shape rather than flipping
   // sides where the curve turns.
   const sign = (f.morph === "bite" ? -1 : 1) * seawardSign(dir, f.seaward);
-  return { f, at: arc[i]!, half: f.size / 2, depth: sign * f.size * (f.reach ?? ASPECT), dir };
+  const mouth = host[i]!;
+  // DECLARED CONTROLS REPLACE THE GENERATED RAY (#169). `reach=` generates a
+  // centerline; `via` states one, and its own length is then the depth — so
+  // the two are alternatives rather than a pair, the same way an outline and
+  // the dials are for a detached feature (ADR 0026).
+  // A MOUTH IS PERPENDICULAR TO ITS COAST. The declared controls say where the
+  // feature runs, but the first stretch is not free: the mouth's two corners
+  // are pinned to the host, so a centerline that leaves at a skew builds its
+  // fillets in one frame while their ends sit in another, and the join comes
+  // out as a corner — measured at 73 degrees on a bend whose own curvature was
+  // never above 31. A short control along the inward normal makes the shape
+  // leave the shore square and bend afterwards, which is also what an inlet
+  // does.
+  // Proportional to the FIRST LEG, not to the mouth. A short lead against a
+  // long leg is exactly the uneven control spacing a Catmull-Rom overshoots on,
+  // and the overshoot loops the centerline back on itself near the mouth — so
+  // a perfectly reasonable bend was refused as a fold, by a control this code
+  // added rather than by anything the author wrote.
+  const first = f.via?.[0];
+  const step = first ? sign * Math.hypot(first.x - mouth.x, first.y - mouth.y) * 0.3 : 0;
+  const centre = f.via && f.via.length > 0
+    ? [mouth, { x: mouth.x + dir.x * step, y: mouth.y + dir.y * step }, ...f.via]
+    : [mouth, { x: mouth.x + dir.x * sign * f.size * (f.reach ?? ASPECT), y: mouth.y + dir.y * sign * f.size * (f.reach ?? ASPECT) }];
+  return { f, at: arc[i]!, half: f.size / 2, centre };
 }
 
 /**
@@ -270,13 +309,10 @@ function splice(host: XY[], arc: number[], sited: Sited[]): XY[] {
     const from = s.at - s.half;
     const to = s.at + s.half;
     while (i < host.length && arc[i]! < from) out.push(host[i++]!);
-    for (const p of outlineOf(s.f, s.depth)) {
-      // (offset along the coast, depth into the shape) -> rendered coordinates.
-      // The base point follows the HOST, so a feature on a curving coast bends
-      // with it; the depth is added along ONE direction, the anchor's normal.
-      const base = pointAtArc(host, arc, s.at + p.x);
-      out.push({ x: base.x + s.dir.x * p.y, y: base.y + s.dir.y * p.y });
-    }
+    // The mouth's two corners are the host's OWN points at the window edges,
+    // so the splice closes exactly however the coast curves there — the rest
+    // of the shape is then built outward from them along the centerline.
+    out.push(...ribbon(pointAtArc(host, arc, from), pointAtArc(host, arc, to), s.centre, s.f.taper ?? 1));
     while (i < host.length && arc[i]! <= to) i++;
   }
   while (i < host.length) out.push(host[i++]!);
@@ -284,27 +320,48 @@ function splice(host: XY[], arc: number[], sited: Sited[]): XY[] {
 }
 
 /**
- * The outline of one feature in its own frame: `x` is offset along the host
- * from the anchor, `y` is depth (already signed). It runs from (-half, 0) to
- * (+half, 0), so splicing it in leaves the host continuous, and it leaves and
- * rejoins the coast tangentially, so the splice is smooth as well as closed.
+ * The outline of one feature: a RIBBON along its centerline.
  *
- * Five pieces, each sampled at its own radius of curvature:
+ * `mouthA` and `mouthB` are the host's own points at the window edges, so the
+ * splice closes exactly however the coast curves there. Everything else is
+ * built outward from them along `centre`, as a half-width that varies with
+ * distance travelled:
  *
- *      -half                                    +half
+ *      mouthA                                   mouthB
  *        \___                                  ___/     <- mouth fillets (r)
  *            |                                |
  *            |                                |         <- flanks: half-width
  *             \                              /             a, converging to b
  *              \____________________________/             over the last
- *                       (   head   )                       `taper` of the depth
+ *                       (   head   )                       `taper` of the run
+ *
+ * A BENT INLET AND A STRAIGHT ONE ARE THE SAME CODE (#169). The centerline is
+ * a two-point ray when nothing declares otherwise, so `via` costs no second
+ * path and no special case — Hood Canal's Great Bend is the same construction
+ * walking a different line.
  */
-function outlineOf(f: PlacedFeature, depth: number): XY[] {
-  const half = f.size / 2;
-  const D = Math.abs(depth);
-  const s = Math.sign(depth) || 1;
-  const t = Math.min(Math.max(f.taper ?? 1, 0), 1);
-  const r = MOUTH_FILLET * Math.min(half, D);
+function ribbon(mouthA: XY, mouthB: XY, centre: XY[], taper: number): XY[] {
+  const half = Math.hypot(mouthB.x - mouthA.x, mouthB.y - mouthA.y) / 2;
+  const mid = { x: (mouthA.x + mouthB.x) / 2, y: (mouthA.y + mouthB.y) / 2 };
+  // A declared dogleg is a BEND, not a corner: splined, so the flanks curve
+  // through it the way spec 02 §9's noise-free spline curves a course.
+  // Sampled DENSELY, because the ribbon only follows this line — it adds no
+  // curvature of its own, so a coarsely-splined bend is drawn as the elbow it
+  // was sampled as. At 8 samples per span the Great Bend rendered with two
+  // visible corners and a 42 degree turn; the shape is then re-spaced below,
+  // so the cost is bounded by the centerline's length rather than by this.
+  const spined = centre.length > 2 ? catmullRom([mid, ...centre.slice(1)], 96) : [mid, ...centre.slice(1)];
+  const path = resample(spined, Math.max(SPACING / 4, 1e-6));
+  const arcs = arcLengths(path);
+  const L = arcs[arcs.length - 1]!;
+  if (!(L > 0) || !(half > 0)) return [mouthA, mouthB];
+
+  const t = Math.min(Math.max(taper, 0), 1);
+  // Below this, two points are the same point. Scale-relative rather than a
+  // fixed epsilon: the residue that matters is proportional to the feature,
+  // and an absolute guess is right for one map size and wrong for the next.
+  const TINY = Math.max(half, L) * 1e-6;
+  const r = MOUTH_FILLET * Math.min(half, L);
   const a = half - r;                             // half-width of the channel
   // HOW MUCH it narrows is `taper`'s to say, not a constant's. Fixing the head
   // at a fraction of the mouth made every inlet neck to the same arrowhead
@@ -313,90 +370,164 @@ function outlineOf(f: PlacedFeature, depth: number): XY[] {
   // came out as a spearpoint. At taper=1 this is the wedge the spec describes;
   // near 0 the flanks run parallel and the head is a broad round bight.
   const b = Math.max(a * (1 - t), a * MIN_HEAD);  // radius of the rounded head
-  const inner = D - b;                            // depth at which the head begins
+  const inner = L - b;                            // distance at which the head begins
+  const shallow = inner <= r;
 
-  // Too shallow to hold a fillet, a flank and a head in sequence: a scoop
-  // rather than an inlet. A half-ellipse is the same shape with the flanks
-  // taken out, and has the same guarantees (finite radius everywhere).
-  if (inner <= r) return ellipse(half, s * D);
-
-  const pts: XY[] = [];
-  // Each piece carries both its endpoints so it can be read on its own; the
-  // shared vertex at a junction is dropped here rather than in five places.
-  // A repeated point is a zero-length segment, which reads as a spurious turn
-  // to `isSmooth` and as a degenerate crossing to `isSimple`.
-  const push = (x: number, y: number): void => {
-    const p = { x, y: s * y };
-    const prev = pts[pts.length - 1];
-    if (prev && Math.hypot(prev.x - p.x, prev.y - p.y) < 1e-12) return;
-    pts.push(p);
+  /** Half-width at distance `s` along the centerline. */
+  const widthAt = (s: number): number => {
+    if (shallow) {
+      // Too short to hold a fillet, a flank and a head in sequence: a scoop
+      // rather than an inlet. A half-ellipse is the same shape with the flanks
+      // taken out, and keeps the same guarantee of a finite radius everywhere.
+      return half * Math.sqrt(Math.max(0, 1 - (s / L) ** 2));
+    }
+    if (s <= r) return half - r * Math.sqrt(Math.max(0, 1 - (1 - s / r) ** 2));
+    if (s >= inner) return Math.sqrt(Math.max(0, b * b - (s - inner) ** 2));
+    const run = inner - r;
+    const ramp = Math.max(t, 1e-6) * run;
+    const flat = run - ramp;
+    const n = s - r;
+    return n <= flat ? a : b + (a - b) * 0.5 * (1 + Math.cos((Math.PI * (n - flat)) / ramp));
   };
 
-  // Mouth fillet, left: centred (-half, r), from the coast to the flank.
-  arcPoints(r, (u) => push(-half + r * Math.sin(u), r - r * Math.cos(u)), Math.PI / 2);
-  // Left flank: half-width converging from a to b over the last `t` of the run.
-  flankPoints(a, b, r, inner, t, (w, n) => push(-w, n));
-  // Head: a semicircle of radius b, so the trench ends in a bight.
-  arcPoints(b, (u) => push(-b * Math.cos(u), inner + b * Math.sin(u)), Math.PI);
-  // Right flank, mirrored: back down from the head to the fillet.
-  flankPoints(a, b, r, inner, t, (w, n) => push(w, n), true);
-  // Mouth fillet, right: the left one reflected, walked back out to the coast.
-  arcPoints(r, (u) => push(half - r * Math.sin(u), r - r * Math.cos(u)), Math.PI / 2, true);
-  return pts;
+  // Sampled per REGION at that region's own radius, so the vertex count follows
+  // the shape's detail rather than the map's extent (#163).
+  const stops: number[] = [];
+  const span = (steps: number, at: (u: number) => number): void => {
+    for (let i = 1; i <= steps; i++) stops.push(at(i / steps));
+  };
+  const QUARTER = Math.max(2, Math.ceil((PER_RADIUS * Math.PI) / 2));
+  stops.push(0);
+  // THE ROUND REGIONS ARE SAMPLED BY ANGLE, NOT BY DISTANCE. Stepping evenly
+  // along the centerline under-samples a circular arc exactly where it turns
+  // most — at the lip of the fillet, where the half-width leaves the mouth on
+  // a square-root, and at the tip of the head, where it closes on one. Both
+  // measured as corners: a 98.7 degree turn at the tip of a taper=1 wedge, and
+  // a mouth 8% narrower than declared because its first sample had already cut
+  // the corner. Even angle is even turn, which is the whole basis of #163.
+  if (shallow) {
+    span(Math.max(8, QUARTER * 2), (k) => L * Math.sin((k * Math.PI) / 2));
+  } else {
+    span(QUARTER, (k) => r * (1 - Math.cos((k * Math.PI) / 2)));
+    // The flank's radius of curvature is `2·ramp²/((a−b)·π²)` — of the same
+    // order as the feature itself, which is what makes this model drawable.
+    const run = inner - r;
+    const ramp = Math.max(t, 1e-6) * run;
+    const R = a > b ? (2 * ramp * ramp) / ((a - b) * Math.PI * Math.PI) : Infinity;
+    const flankSteps = Math.max(2, Math.min(400, Math.ceil(run / Math.max(R / PER_RADIUS, run / 400))));
+    span(flankSteps, (k) => r + run * k);
+    span(QUARTER, (k) => inner + b * Math.sin((k * Math.PI) / 2));
+  }
+
+  // AND BY THE CENTERLINE'S OWN CURVATURE. Everything above samples the WIDTH
+  // profile — how fast the shape narrows — which is the only thing that varies
+  // when the centerline is straight. A declared bend puts curvature in the
+  // other dimension, and the flank is exactly where the width is constant, so
+  // nothing was asking for samples through the turn: Hood Canal's Great Bend
+  // drew at 42 degrees while every regional radius it contains was under 5.
+  //
+  // Offset rails are parallel curves, so they turn through the same angle as
+  // the line they follow — the requirement is therefore the same one #163
+  // already sets everywhere else, `ds ≤ R/PER_RADIUS`, now asked of the
+  // centerline. A straight centerline has infinite radius, so this contributes
+  // nothing and no existing render moves.
+  // Applied as a CEILING ON EVERY GAP rather than as extra stops near the
+  // bend, because the gaps that need filling are not near it. `taper=0.15`
+  // gives the flank a radius of 1334 units, so it is sampled six times across
+  // 581 — right for a straight line, and it means the two samples bracketing
+  // the turn sit 90 units apart. Walking the curve adding points where it
+  // curves cannot fix a step that strides over the curvature entirely.
+  const tightest = Math.min(...curvature(path, arcs).filter((R) => Number.isFinite(R)));
+  if (Number.isFinite(tightest) && tightest > 0) {
+    const ceiling = Math.max(tightest / PER_RADIUS, L / 2000);
+    for (let s = ceiling; s < L; s += ceiling) stops.push(s);
+  }
+  stops.sort((x, y) => x - y);
+
+  // The frame at the mouth is the HOST's, so the two rails start exactly on
+  // the host's own points; further in it is the centerline's own.
+  const side = { x: (mouthB.x - mouthA.x) / (2 * half), y: (mouthB.y - mouthA.y) / (2 * half) };
+  const frameAt = (s: number): { p: XY; n: XY } => {
+    const p = pointAtArc(path, arcs, s);
+    const ahead = pointAtArc(path, arcs, Math.min(L, s + SPACING / 8));
+    const back = pointAtArc(path, arcs, Math.max(0, s - SPACING / 8));
+    const dx = ahead.x - back.x;
+    const dy = ahead.y - back.y;
+    const len = Math.hypot(dx, dy) || 1;
+    let n = { x: -dy / len, y: dx / len };
+    // Kept on the same side as the mouth's own, so the ribbon cannot flip
+    // where the centerline turns — the reason a bend is drawable at all.
+    if (n.x * side.x + n.y * side.y < 0) n = { x: -n.x, y: -n.y };
+    return { p, n };
+  };
+
+  const left: XY[] = [];
+  const right: XY[] = [];
+  for (const s of stops) {
+    const { p, n } = frameAt(s);
+    // SNAPPED TO ZERO AT THE TIP. The head closes where `s` reaches `inner + b`,
+    // but `inner` is itself `L − b`, so the arithmetic leaves a width around
+    // 1e-7 rather than 0 — and the two rails then end a fraction of a nanometre
+    // apart instead of on the same point. That is invisible in the geometry and
+    // very visible in the output: the pair prints identically at the renderer's
+    // precision, so the polyline carries a zero-length segment, which reads as
+    // a right-angle turn to anything measuring the drawn curve. Measured on the
+    // raw geometry the same shape turns 4.7 degrees.
+    const raw = widthAt(s);
+    const w = raw < TINY ? 0 : raw;
+    left.push({ x: p.x - n.x * w, y: p.y - n.y * w });
+    right.push({ x: p.x + n.x * w, y: p.y + n.y * w });
+  }
+  left[0] = mouthA;
+  right[0] = mouthB;
+
+  const out = [...left, ...right.reverse()];
+  // A repeated point is a zero-length segment, which reads as a spurious turn
+  // to `isSmooth` and as a degenerate crossing to `isSimple`. The tolerance is
+  // well below anything the renderer can draw and well above the noise above.
+  return out.filter((p, i) => i === 0 || Math.hypot(p.x - out[i - 1]!.x, p.y - out[i - 1]!.y) > TINY);
 }
 
-/** A half-ellipse from (-half, 0) to (half, 0), reaching `depth` at its centre. */
-function ellipse(half: number, depth: number): XY[] {
-  // The tightest radius on a half-ellipse is at whichever end of the axes is
-  // sharper; sampling by it keeps a very shallow or very deep scoop equally smooth.
-  const R = Math.min(half * half / Math.abs(depth), depth * depth / half);
-  const steps = Math.max(8, Math.ceil((Math.PI * Math.max(half, Math.abs(depth))) / (Math.abs(R) / PER_RADIUS)));
-  const out: XY[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const u = Math.PI - (Math.PI * i) / steps;
-    out.push({ x: half * Math.cos(u), y: depth * Math.sin(u) });
+/**
+ * Local radius of curvature at each vertex of a polyline (#169).
+ *
+ * A parallel curve turns through the same angle as the line it offsets, so
+ * this is what decides how finely a ribbon must be sampled through a bend —
+ * the same `ds ≤ R/PER_RADIUS` rule the rest of the shape already obeys.
+ * Straight runs give `Infinity`, which correctly asks for nothing.
+ */
+function curvature(curve: XY[], arc: number[]): number[] {
+  const out: number[] = new Array(curve.length).fill(Infinity);
+  for (let i = 1; i + 1 < curve.length; i++) {
+    const a = curve[i - 1]!, b = curve[i]!, c = curve[i + 1]!;
+    let turn = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+    if (turn > Math.PI) turn = 2 * Math.PI - turn;
+    const ds = (arc[i + 1]! - arc[i - 1]!) / 2;
+    out[i] = turn > 1e-9 && ds > 0 ? ds / turn : Infinity;
   }
   return out;
 }
 
 /**
- * Sample a circular arc of radius `R` through `sweep` radians, at this
- * renderer's fixed vertices-per-radius. `reverse` walks it the other way, for
- * the mirrored half of a symmetric shape.
- */
-function arcPoints(R: number, at: (u: number) => void, sweep: number, reverse = false): void {
-  const steps = Math.max(2, Math.ceil(PER_RADIUS * sweep));
-  for (let i = 0; i <= steps; i++) {
-    const k = reverse ? steps - i : i;
-    at((sweep * k) / steps);
-  }
-}
-
-/**
- * Sample one flank: half-width `a` at the mouth end, converging to `b` at the
- * head, with the convergence confined to the last `t` of the run.
+ * The tightest radius anywhere within one vertex of this arc position.
  *
- * The convergence is a raised cosine, so the flank leaves the fillet and meets
- * the head with a matching tangent. Its radius of curvature is
- * `2·ramp²/((a−b)·π²)` — a quantity of the same order as the feature itself,
- * which is the whole reason this model can be drawn (see the file header).
+ * Taken as a MINIMUM over the neighbourhood rather than read at a point: a
+ * bend's curvature lives on a couple of vertices, and a step that lands
+ * between them would read the turn as gentle and stride straight over it.
  */
-function flankPoints(
-  a: number, b: number, r: number, inner: number, t: number,
-  at: (w: number, n: number) => void,
-  reverse = false,
-): void {
-  const run = inner - r;
-  const ramp = Math.max(t, 1e-6) * run;
-  const flat = run - ramp;
-  const R = a > b ? (2 * ramp * ramp) / ((a - b) * Math.PI * Math.PI) : Infinity;
-  const steps = Math.max(2, Math.min(400, Math.ceil(run / Math.max(R / PER_RADIUS, run / 400))));
-  for (let i = 0; i <= steps; i++) {
-    const k = reverse ? steps - i : i;
-    const n = (run * k) / steps;
-    const w = n <= flat ? a : b + (a - b) * 0.5 * (1 + Math.cos((Math.PI * (n - flat)) / ramp));
-    at(w, r + n);
+function radiusNear(radii: number[], arc: number[], s: number): number {
+  let lo = 0;
+  let hi = arc.length - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1;
+    if (arc[mid]! <= s) lo = mid;
+    else hi = mid;
   }
+  let best = Infinity;
+  for (let i = Math.max(0, lo - 1); i <= Math.min(radii.length - 1, lo + 2); i++) {
+    best = Math.min(best, radii[i]!);
+  }
+  return best;
 }
 
 /** The point at a given arc length along a polyline, interpolated. */

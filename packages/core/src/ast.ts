@@ -87,7 +87,13 @@ export type Relational =
    * its footprint grid (NW cell = A1), a path's frame is the document grid
    * (the crossing chooser, spec 06 §6).
    */
-  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge }
+  /**
+   * `via` carries a placed feature's CENTERLINE (#169): `on shore at (52,50)
+   * via (38,78)`. A bite is one straight run without it, and Hood Canal turns
+   * hard east at the Great Bend — a single inlet with one mouth and one head,
+   * which is not the line-branching `delta`/`fork` spec 05 §4 stages.
+   */
+  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge; via?: Point[] }
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
   | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }
