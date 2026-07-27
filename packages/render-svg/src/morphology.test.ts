@@ -651,6 +651,51 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
   });
 });
 
+describe("a river ending in open water says so (#166)", () => {
+  // Nine rivers of the Puget Sound map were authored mouth-first from a bare
+  // coordinate, which put every mouth a mile or two inside the water. The
+  // Stillaguamish ran the length of Port Susan and carried on overland, and
+  // nothing in `check` or the render suggested it.
+  const SRC = `map: region
+extent: 300x300mi
+
+[water]
+coastline coast : from (150,0) via (150,100) (150,200) to (150,300)
+sea "The Sea" : west of coast
+
+[paths]
+river proper "Declared to the shore" : from (280,60) via (220,70) to coast at (150,80)
+river loose "Declared from open water" : from (100,220) via (200,235) to (280,250)
+`;
+  const warningsOf = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
+
+  it("names the river and the water body it ends inside", () => {
+    const msg = warningsOf(SRC).join();
+    expect(msg).toMatch(/'Declared from open water' ends inside 'The Sea'/);
+    expect(msg).toMatch(/to <coastline> at/); // the fix is a spelling that works
+  });
+
+  it("says nothing about the one declared `to coast at (…)` — the correct spelling", () => {
+    expect(warningsOf(SRC).join()).not.toMatch(/'Declared to the shore'/);
+  });
+
+  it("a river ending on dry land is not questioned", () => {
+    const inland = `map: region\nextent: 300x300mi\n\n[water]\n` +
+      `coastline coast : from (150,0) via (150,150) to (150,300)\nsea "The Sea" : west of coast\n\n` +
+      `[paths]\nriver r "The Upland" : from (280,60) via (250,80) to (220,100)\n`;
+    expect(warningsOf(inland).join()).not.toMatch(/ends inside/);
+  });
+
+  it("`join` is untouched — a confluence is water meeting water by design", () => {
+    const joined = `map: region\nextent: 300x300mi\n\n[water]\n` +
+      `coastline coast : from (150,0) via (150,150) to (150,300)\nsea "The Sea" : west of coast\n\n` +
+      `[paths]\nriver trunk "The Trunk" : from (280,60) via (220,90) to coast at (150,120)\n` +
+      `river branch "The Branch" : from (280,200) via (240,160) join trunk\n`;
+    expect(warningsOf(joined).join()).not.toMatch(/'The Branch' ends inside/);
+  });
+});
+
 describe("a named stretch of water is a name, not a mass (#160)", () => {
   const MAP = (section: string, line: string): string =>
     `# Basins\nmap: region\nextent: 200x300mi\n\n[water]\n` +

@@ -895,7 +895,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
    * that subtracts every water body, so a range can reach the shore without
    * bleeding onto it and a gulf can cut one named range in two.
    */
-  const waterPolys: XY[][] = [];
+  const waterPolys: { poly: XY[]; name?: string | undefined }[] = [];
   const hasWater = items.some(
     ({ e, chain }) => e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"),
   );
@@ -959,7 +959,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const isWater = e.section === "water";
       const isZone = !isWater && e.archetype === "zone";
       if (isWater) {
-        waterPolys.push(poly);
+        waterPolys.push({ poly, name: e.name ?? undefined });
         layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: theme.terrainFill(["sea"]) })));
       } else if (isZone) {
         // Nations are individuals, not a type: the tint keys on the realm's
@@ -1057,7 +1057,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // line and the fill follows it exactly. Lakes sit on land: terrain
         // layer. Seas are the floor: water layer.
         const shore = r.polygon;
-        waterPolys.push(shore);
+        waterPolys.push({ poly: shore, name: e.name ?? undefined });
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
             el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
@@ -1655,14 +1655,62 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // A warning, like every other coherence check, and only for the WHOLLY dry
   // case: an island half a mile offshore legitimately overlaps its shore at
   // map scale, which is #165's business rather than a mistake.
-  if (waterPolys.length) {
+  const waters = waterPolys.map((body) => body.poly);
+  if (waters.length) {
     for (const { e, poly } of islandInfos) {
-      if (coversWater(poly, waterPolys)) continue;
+      if (coversWater(poly, waters)) continue;
       const named = e.name ? `'${e.name}'` : `the ${e.typeWord ?? "island"} on line ${e.line}`;
       diagnostics.push({
         severity: "warning",
         line: e.line,
         message: `${named} is an island with no water around it — its footprint lies entirely on land. An island rises above the sea that surrounds it (spec 05 §2)`,
+      });
+    }
+  }
+
+  // A RIVER ENDING IN OPEN WATER (#166). Spec 05 §2's "water wins every
+  // overlap" is stated for terrain of every kind, on the grounds that it is a
+  // property of the map model rather than of one terrain kind — a path band is
+  // neither, so it was exempt by omission rather than by decision, and the
+  // result is the one thing the rule exists to prevent: something drawn over
+  // the sea that should have stopped at it.
+  //
+  // Reported rather than clipped, because a river crossing water is nearly
+  // always a typo rather than a claim, and because the FIX IS A REAL SPELLING
+  // that already works — so the diagnostic can name it. Clipping would also
+  // have to carve out bridges, fords, canals and `join`, each of which touches
+  // water on purpose.
+  //
+  // `to <coastline> at (…)` and `join <ref>` are those correct spellings, so a
+  // course declared either way is never questioned however its curve lands.
+  if (waters.length) {
+    for (const { e, r, chain } of items) {
+      if (!chain.includes("river") || !r.polyline || r.polyline.length < 2) continue;
+      const course = e.placements.find(
+        (p): p is Extract<Placement, { kind: "relational"; form: "from-to" }> =>
+          p.kind === "relational" && p.form === "from-to",
+      );
+      // EITHER END, not just the last one. Rivers are commonly authored
+      // MOUTH-FIRST — `from` the sea and inland — which is how nine of the
+      // Puget Sound map's rivers came to start a mile or two offshore.
+      // Checking only `to` missed every one of them.
+      const ends = [
+        { pt: r.polyline[0]!, spelled: course ? course.from.at.kind !== "point" || course.from.join === true : false },
+        { pt: r.polyline[r.polyline.length - 1]!, spelled: course ? course.to.at.kind !== "point" || course.to.join === true : false },
+      ];
+      const body = ends
+        .filter((end) => !end.spelled)
+        .flatMap((end) => waterPolys.filter((water) => pip(end.pt, water.poly)))[0];
+      if (!body) continue;
+      const named = e.name ? `'${e.name}'` : `the ${e.typeWord ?? "river"} on line ${e.line}`;
+      const into = body.name ? `'${body.name}'` : "open water";
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        // No coordinates in the suggestion: the endpoint is known here in
+        // RENDERED units, and quoting those back at an author writing map
+        // units would be worse than saying nothing.
+        message: `${named} ends inside ${into} — it is drawn across the water and out the far side. Declare that end at the shore, with 'to <coastline> at (…)' or 'from <coastline> at (…)' (spec 05 §2, 02 §7)`,
       });
     }
   }
@@ -1949,7 +1997,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     body.push(
       `<defs><mask id="${landMaskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(w)}" height="${fmt(h)}">` +
         el("rect", { x: 0, y: 0, width: w, height: h, fill: "#fff" }) +
-        waterPolys.map((poly) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
         `</mask></defs>`,
     );
   }
