@@ -29,8 +29,11 @@ export interface Measured {
   depth: number;
   /** Fraction of the depth spent converging: `taper=`. */
   taper: number;
-  /** The centerline from the mouth inward, in map coordinates: `via`. */
-  centerline: XY[];
+  /**
+   * The centerline from the mouth inward, in map coordinates, each control
+   * carrying the channel's full width there: `via (x,y)@1.5mi` (#190).
+   */
+  centerline: (XY & { width: number })[];
   /** Half-width down the channel, in miles, for reporting. */
   profile: { at: number; halfWidth: number }[];
 }
@@ -323,7 +326,10 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
     size: widthPixels * georef.milesPerPixel,
     depth,
     taper,
-    centerline: centrePixels.map((c) => georef.toMap(c.p.x, c.p.y)),
+    centerline: centrePixels.map((c, i) => ({
+      ...georef.toMap(c.p.x, c.p.y),
+      width: (profile[i]?.halfWidth ?? 0) * 2,
+    })),
     profile,
   };
 }
@@ -349,9 +355,9 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
  * 0.3mi, while the same shape in two evenly spread controls drew at full size.
  * So a tool that emits the first is emitting something no map can use.
  */
-export function spaceOut(points: XY[], minGap: number): XY[] {
+export function spaceOut<T extends XY>(points: T[], minGap: number): T[] {
   if (points.length < 3) return points.slice();
-  const out = [points[0]!];
+  const out: T[] = [points[0]!];
   for (let i = 1; i < points.length - 1; i++) {
     const last = out[out.length - 1]!;
     if (Math.hypot(points[i]!.x - last.x, points[i]!.y - last.y) >= minGap) out.push(points[i]!);
@@ -365,7 +371,7 @@ export function spaceOut(points: XY[], minGap: number): XY[] {
   return out;
 }
 
-export function simplify(points: XY[], tolerance: number): XY[] {
+export function simplify<T extends XY>(points: T[], tolerance: number): T[] {
   if (points.length < 3) return points.slice();
   const keep = new Uint8Array(points.length);
   keep[0] = 1;

@@ -317,7 +317,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // two are alternatives, so declaring both is an error for the same
       // reason an outline and the dials are on a detached feature (ADR 0026):
       // honouring either means discarding the other.
-      const via = p.via?.map(toXY);
+      // A control may state the channel's width there (#190). Carried in
+      // rendered units alongside the point, so the ribbon can follow a profile
+      // instead of narrowing monotonically from the mouth.
+      const via = p.via?.map((c) => ({
+        ...toXY(c),
+        ...(c.width === undefined ? {} : { width: measureToNumber(c.width) * scale }),
+      }));
       if (via && pairOf(e.pairs, "reach") !== undefined) {
         diagnostics.push({
           severity: "error",

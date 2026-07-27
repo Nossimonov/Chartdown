@@ -39,3 +39,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0027](0027-an-island-is-separate-or-it-is-a-peninsula.md) | An island is separate, or it is a peninsula; a welded island is reported, never repaired | Accepted |
 | [0028](0028-measurement-is-an-optional-package-in-typescript.md) | Measurement is an optional TypeScript package, not a second language | Accepted |
 | [0029](0029-a-shipped-dependency-is-ours-to-answer-for.md) | A shipped dependency is ours to answer for: built-ins before dependencies, shipped code audited in CI | Accepted |
+| [0030](0030-a-centerline-carries-its-own-width.md) | A centerline carries its own width: `via (x,y)@1.5mi`, so a channel may widen and narrow | Accepted |

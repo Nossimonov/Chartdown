@@ -1510,3 +1510,64 @@ bay b "B" : on shore at (50,50) size=4mi reach=1.5
     expect(renderSource(SRC).svg).toContain("<svg");
   });
 });
+
+describe("a centerline control may carry the channel's width (#190)", () => {
+  // `size=` is the mouth and `taper=` could only narrow from it, so every
+  // feature was a tube. Measured off imagery, Hood Canal runs 2.2, 3.9, 1.3,
+  // 5.8 and 1.1 miles across down its own length — a chain of basins joined by
+  // narrows, missed by up to 4.04mi against a median width of 1.64.
+  const doc = (feature: string): string => `map: region
+extent: 60x40mi
+
+[water]
+coastline shore : from (10,0) via (10,20) to (10,40)
+sea "S" : west of shore
+${feature}
+`;
+  const shoreOf = (src: string): XY[] =>
+    /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)![1]!
+      .trim().split(/\s+/).map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+  /** How wide the drawn inlet is at a given map x, in miles. */
+  const widthAt = (src: string, mapX: number): number => {
+    const scale = 820 / 60;
+    const near = shoreOf(src).filter((p) => Math.abs(p.x - mapX * scale) < 1.2 * scale && p.x > 10.5 * scale);
+    return near.length < 2 ? 0 : (Math.max(...near.map((p) => p.y)) - Math.min(...near.map((p) => p.y))) / scale;
+  };
+
+  it("widens where the author says it widens", () => {
+    const src = doc(`sound c "C" : on shore at (10,20) via (20,20)@2mi (30,20)@7mi (45,20)@2mi size=3mi`);
+    expect(renderSource(src).diagnostics).toEqual([]);
+    // Narrow at 20, broad at 30, narrow again at 45 — which a single taper
+    // cannot do in either direction, let alone both.
+    expect(widthAt(src, 20)).toBeLessThan(3.5);
+    expect(widthAt(src, 30)).toBeGreaterThan(5.5);
+    expect(widthAt(src, 42)).toBeLessThan(3.5);
+  });
+
+  it("draws a basin wider than its own mouth", () => {
+    // The mouth is a NARROWS. `taper=` cannot express this at all: it only
+    // ever narrows from the mouth, so the widest point was always the opening.
+    const src = doc(`sound c "C" : on shore at (10,20) via (30,20)@8mi (45,20)@2mi size=2mi`);
+    expect(renderSource(src).diagnostics).toEqual([]);
+    expect(widthAt(src, 30)).toBeGreaterThan(6);
+  });
+
+  it("interpolates through controls that state no width", () => {
+    // An author states the widths that matter and leaves the rest.
+    const stated = doc(`sound c "C" : on shore at (10,20) via (20,20)@2mi (30,20) (40,20)@6mi size=3mi`);
+    expect(renderSource(stated).diagnostics).toEqual([]);
+    const mid = widthAt(stated, 30);
+    expect(mid).toBeGreaterThan(2);
+    expect(mid).toBeLessThan(6);
+  });
+
+  it("leaves a feature with no declared widths exactly as it was", () => {
+    // The profile is opt-in: every existing document renders unchanged.
+    const before = doc(`sound c "C" : on shore at (10,20) via (25,20) (40,20) size=3mi taper=0.3`);
+    expect(renderSource(before).diagnostics).toEqual([]);
+    expect(widthAt(before, 25)).toBeGreaterThan(0);
+  });
+});

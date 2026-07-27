@@ -6,6 +6,7 @@
 import type {
   Address,
   AddressRange,
+  Control,
   Edge,
   EdgeDir,
   Endpoint,
@@ -103,6 +104,22 @@ export function parsePositional(text: string): Address | AddressRange | Point | 
 export function parsePoint(text: string): Point | null {
   const m = POINT_RE.exec(text);
   return m ? { kind: "point", x: Number(m[1]!), y: Number(m[2]!) } : null;
+}
+
+/**
+ * A centerline control, optionally carrying the channel's width there (#190):
+ * `(52,72)@1.5mi`.
+ *
+ * `@` reads as "at" and binds to the point it follows, so a profile skims as
+ * one thing — `via (42,63)@2mi (52,72)@1.5mi` says where the channel goes and
+ * how wide it is there, in the order a person would say it.
+ */
+export function parseControl(text: string): Control | null {
+  const at = text.indexOf("@");
+  if (at < 0) return parsePoint(text);
+  const point = parsePoint(text.slice(0, at));
+  const width = text.slice(at + 1);
+  return point && MEASURE_RE.test(width) ? { ...point, width } : null;
 }
 
 export const isCompass = (word: string): boolean => COMPASS.has(word);
@@ -365,12 +382,12 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       // at the Great Bend — one inlet with one mouth and one head, which is
       // not the line-BRANCHING that spec 05 §4 stages. Only meaningful after
       // an `at` point, since the centerline starts at the mouth.
-      const via: Point[] = [];
+      const via: Control[] = [];
       if (point && chunkText(peek()) === "via") {
         i++;
         for (;;) {
           const text = chunkText(peek());
-          const next = text ? parsePoint(text) : null;
+          const next = text ? parseControl(text) : null;
           if (!next) break;
           via.push(next);
           i++;

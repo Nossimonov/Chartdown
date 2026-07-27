@@ -75,8 +75,12 @@ export interface PlacedFeature {
    * the `delta`/`fork` line-branching spec 05 §4 stages.
    *
    * Declared, it replaces `reach=`: the centerline's own length is the depth.
+   *
+   * A control may carry the channel's WIDTH there (#190), in rendered units.
+   * Without one the width is interpolated from its neighbours, so an author
+   * states the widths that matter and leaves the rest.
    */
-  via?: XY[];
+  via?: (XY & { width?: number })[];
 }
 
 /**
@@ -216,6 +220,11 @@ interface Sited {
    * so a bent inlet and a straight one are one code path rather than two.
    */
   centre: XY[];
+  /**
+   * Declared HALF-widths, parallel to `centre` (#190). `undefined` where the
+   * author left it to be interpolated.
+   */
+  widths: (number | undefined)[];
 }
 
 /**
@@ -381,7 +390,12 @@ function site(host: XY[], arc: number[], f: PlacedFeature): Sited | null {
   const centre = f.via && f.via.length > 0
     ? [mouth, { x: mouth.x + dir.x * step, y: mouth.y + dir.y * step }, ...f.via]
     : [mouth, { x: mouth.x + dir.x * sign * f.size * (f.reach ?? ASPECT), y: mouth.y + dir.y * sign * f.size * (f.reach ?? ASPECT) }];
-  return { f, at: arc[i]!, half: f.size / 2, centre };
+  // The mouth and the lead carry no declared width: `size=` is the mouth, and
+  // the lead is this code's own, not the author's.
+  const widths: (number | undefined)[] = f.via && f.via.length > 0
+    ? [undefined, undefined, ...f.via.map((v) => (v.width === undefined ? undefined : v.width / 2))]
+    : [undefined, undefined];
+  return { f, at: arc[i]!, half: f.size / 2, centre, widths };
 }
 
 /**
@@ -399,7 +413,7 @@ function splice(host: XY[], arc: number[], sited: Sited[]): XY[] {
     // The mouth's two corners are the host's OWN points at the window edges,
     // so the splice closes exactly however the coast curves there — the rest
     // of the shape is then built outward from them along the centerline.
-    out.push(...ribbon(pointAtArc(host, arc, from), pointAtArc(host, arc, to), s.centre, s.f.taper ?? 1));
+    out.push(...ribbon(pointAtArc(host, arc, from), pointAtArc(host, arc, to), s.centre, s.f.taper ?? 1, s.widths));
     while (i < host.length && arc[i]! <= to) i++;
   }
   while (i < host.length) out.push(host[i++]!);
@@ -427,7 +441,13 @@ function splice(host: XY[], arc: number[], sited: Sited[]): XY[] {
  * path and no special case — Hood Canal's Great Bend is the same construction
  * walking a different line.
  */
-function ribbon(mouthA: XY, mouthB: XY, centre: XY[], taper: number): XY[] {
+function ribbon(
+  mouthA: XY,
+  mouthB: XY,
+  centre: XY[],
+  taper: number,
+  declared: (number | undefined)[] = [],
+): XY[] {
   const half = Math.hypot(mouthB.x - mouthA.x, mouthB.y - mouthA.y) / 2;
   const mid = { x: (mouthA.x + mouthB.x) / 2, y: (mouthA.y + mouthB.y) / 2 };
   // A declared dogleg is a BEND, not a corner: splined, so the flanks curve
@@ -460,8 +480,86 @@ function ribbon(mouthA: XY, mouthB: XY, centre: XY[], taper: number): XY[] {
   const inner = L - b;                            // distance at which the head begins
   const shallow = inner <= r;
 
+  // A DECLARED PROFILE, where the author gave one (#190). `size=` is the mouth
+  // and `taper=` could only narrow monotonically from it, which makes every
+  // feature a tube — and a real waterway is a chain of basins joined by
+  // narrows. Measured off imagery, Hood Canal runs 2.2, 3.9, 1.3, 5.8 and 1.1
+  // miles across down its own length, which that tube misses by up to 4.04mi
+  // against a median width of 1.64.
+  //
+  // Each declared control is located on the centerline by arc length, so the
+  // widths land where the author put them however the spline curves between.
+  //
+  // Located by walking FORWARD, never by searching the whole line. Controls are
+  // given in order along the channel, and a line that hooks back on itself — the
+  // Great Bend does — brings a later control physically near an earlier stretch,
+  // so a nearest-point search over the whole path assigns it backwards. Sorting
+  // afterwards then puts two widths at almost the same arc position with a jump
+  // between them, and a jump in width is a fold: measured on Hood Canal, every
+  // profile was refused, including ones barely varying from its mouth width.
+  const profile: { at: number; half: number }[] = [];
+  let cursor = 0;
+  for (let k = 1; k < centre.length; k++) {
+    const found = arcAtNearest(path, arcs, centre[k]!, cursor);
+    // Advance the cursor past this control whether or not it states a width, so
+    // an undeclared control still orders the ones after it.
+    cursor = segmentAt(arcs, found).lo;
+    const w = declared[k];
+    if (w !== undefined) profile.push({ at: found, half: w });
+  }
+  const stated = profile.length > 0;
+  /** Interpolated half-width from the mouth through the declared controls. */
+  const prof = (s: number): number => {
+    if (!stated) return a;
+    // The mouth is the profile's own first point: `size=` states it, so it is
+    // not a separate mechanism competing with the controls.
+    let prevAt = 0;
+    let prevHalf = half;
+    for (const point of profile) {
+      if (s <= point.at) {
+        const span = point.at - prevAt;
+        const k = span > 0 ? (s - prevAt) / span : 1;
+        // EASED, not straight. Interpolating linearly draws the basins as a
+        // row of facets — a surveyed polygon, against a spec whose first value
+        // is that a coast reads as though it were drawn. Cosine easing meets
+        // each control level, so the shape rounds into its basins, and unlike a
+        // cubic it cannot overshoot — an overshoot here is a negative width.
+        const eased = (1 - Math.cos(Math.PI * Math.min(Math.max(k, 0), 1))) / 2;
+        return prevHalf + (point.half - prevHalf) * eased;
+      }
+      prevAt = point.at;
+      prevHalf = point.half;
+    }
+    return prevHalf;
+  };
+  // The head closes on the last width the author stated, so a channel that ends
+  // broad ends broad rather than being necked by a taper it never declared.
+  const headHalf = stated ? Math.max(prof(L), Math.max(half, L) * 1e-3) : b;
+  const headFrom = L - headHalf;
+
   /** Half-width at distance `s` along the centerline. */
   const widthAt = (s: number): number => {
+    if (stated && !shallow) {
+      // Same three regions as below, with the flank taken from the profile:
+      // a filleted mouth, the declared channel, and a rounded head.
+      if (s <= r) {
+        const meets = prof(r);
+        // A FILLET ONLY CLOSES; IT DOES NOT OPEN. The square-root profile has an
+        // infinite slope at the mouth, which is exactly right when the channel
+        // narrows — the rail leaves running ALONG the coast, which is what makes
+        // an inlet's mouth a corner with a radius. Run the same curve backwards
+        // on a channel that WIDENS behind its mouth and the rail leaves running
+        // INTO the coast: measured at 148°, on a shape whose widening is under
+        // two tenths of a unit over the fillet. A mouth narrower than the water
+        // behind it is a NARROWS, and the rails simply flare from it.
+        if (meets <= half) return half - (half - meets) * Math.sqrt(Math.max(0, 1 - (1 - s / r) ** 2));
+        return half + (meets - half) * (s / r);
+      }
+      if (s >= headFrom) {
+        return Math.sqrt(Math.max(0, headHalf * headHalf - (s - headFrom) ** 2));
+      }
+      return prof(s);
+    }
     if (shallow) {
       // Too short to hold a fillet, a flank and a head in sequence: a scoop
       // rather than an inlet. A half-ellipse is the same shape with the flanks
@@ -494,6 +592,31 @@ function ribbon(mouthA: XY, mouthB: XY, centre: XY[], taper: number): XY[] {
   // the corner. Even angle is even turn, which is the whole basis of #163.
   if (shallow) {
     span(Math.max(8, QUARTER * 2), (k) => L * Math.sin((k * Math.PI) / 2));
+  } else if (stated) {
+    // SAMPLED TO THE PROFILE, not to the taper model (#190). The regions below
+    // space their stops by radii derived from `a`, `b` and `taper` — quantities
+    // a declared profile does not use. Left that way, a channel stated as
+    // widening from one mile to six and back was sampled as if it ran straight:
+    // the width jumped between stops, the rails read as corners, and a shape
+    // that is drawable at every point was refused as a fold.
+    span(QUARTER, (k) => r * (1 - Math.cos((k * Math.PI) / 2)));
+    // Between the fillet and the head, step finely enough that the width moves
+    // by a small fraction of itself each time — the same "no vertex turns far"
+    // rule the rest of the shape obeys, asked of the width instead of the line.
+    const flankFrom = r;
+    const flankTo = Math.max(headFrom, r);
+    const marks = new Set<number>([flankFrom, flankTo]);
+    for (const point of profile) if (point.at > flankFrom && point.at < flankTo) marks.add(point.at);
+    const ordered = [...marks].sort((x, y) => x - y);
+    for (let k = 0; k + 1 < ordered.length; k++) {
+      const from = ordered[k]!;
+      const to = ordered[k + 1]!;
+      const change = Math.abs(prof(to) - prof(from));
+      const scale = Math.max(prof(from), prof(to), TINY);
+      const steps = Math.max(2, Math.min(400, Math.ceil((change / scale) * PER_RADIUS * 2)));
+      for (let j = 1; j <= steps; j++) stops.push(from + ((to - from) * j) / steps);
+    }
+    span(QUARTER, (k) => headFrom + headHalf * Math.sin((k * Math.PI) / 2));
   } else {
     span(QUARTER, (k) => r * (1 - Math.cos((k * Math.PI) / 2)));
     // The flank's radius of curvature is `2·ramp²/((a−b)·π²)` — of the same
@@ -741,6 +864,24 @@ function segmentAt(arc: number[], target: number): { lo: number; k: number } {
   }
   const span = arc[lo + 1]! - arc[lo]!;
   return { lo, k: span > 0 ? (target - arc[lo]!) / span : 0 };
+}
+
+/**
+ * Arc position of the polyline vertex nearest a declared point (#190).
+ *
+ * A control states where the channel is that wide, so its width has to land at
+ * the same place on the splined line that the control itself does — not at the
+ * fraction of the way along that its index would suggest, which drifts as soon
+ * as the controls are unevenly spread, and measured ones always are.
+ */
+function arcAtNearest(curve: XY[], arc: number[], p: XY, from = 0): number {
+  let best = from;
+  let bestD = Infinity;
+  for (let i = from; i < curve.length; i++) {
+    const d = (curve[i]!.x - p.x) ** 2 + (curve[i]!.y - p.y) ** 2;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return arc[best]!;
 }
 
 /** The point at a given arc length along a polyline, interpolated. */

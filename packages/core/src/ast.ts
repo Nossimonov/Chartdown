@@ -25,6 +25,22 @@ export interface Point {
   y: number;
 }
 
+/**
+ * A control on a placed feature's centerline, which may carry the channel's
+ * WIDTH there (#190).
+ *
+ * `size=` gives the mouth and nothing else could vary, so a feature was a
+ * ribbon whose width fell monotonically from it. Measured off imagery, Hood
+ * Canal runs 2.2, 3.9, 1.3, 5.8 and 1.1 miles across down its own length —
+ * a chain of basins joined by narrows, which is what a drowned glacial valley
+ * is, and which that ribbon misses by up to 4.04mi against a median width of
+ * 1.64. The path was declared data already; this lets the breadth be too.
+ */
+export interface Control extends Point {
+  /** As written, unit and all — `1.5mi`. Absent, it is interpolated. */
+  width?: string;
+}
+
 export interface PointRange {
   kind: "point-range";
   from: Point;
@@ -93,7 +109,7 @@ export type Relational =
    * hard east at the Great Bend — a single inlet with one mouth and one head,
    * which is not the line-branching `delta`/`fork` spec 05 §4 stages.
    */
-  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge; via?: Point[] }
+  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge; via?: Control[] }
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
   | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }

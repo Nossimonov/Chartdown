@@ -177,10 +177,17 @@ function feature(options: Options): void {
     Math.max(got.size * 2, got.depth / 12),
   ).slice(1);
   const subject = [options.word, options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
-  const via = controls.length > 0 ? ` via ${controls.map((p) => `(${round(p.x, 1)},${round(p.y, 1)})`).join(" ")}` : "";
+  // Each control carries the width measured there (#190). `size=` is the mouth
+  // and `taper=` could only narrow from it, so a channel that widens into a
+  // basin and narrows again — which is what a real one does — had nowhere to be
+  // stated, and this tool measured the profile and threw it away.
+  const via = controls.length > 0
+    ? ` via ${controls.map((p) => `(${round(p.x, 1)},${round(p.y, 1)})@${round(p.width, 2)}mi`).join(" ")}`
+    : "";
 
   console.log(`; measured from ${options.image} — depth ${round(got.depth, 1)}mi along the channel, mouth ${round(got.size, 2)}mi`);
-  console.log(`${subject} : on <shore> at (${round(got.anchor.x, 1)},${round(got.anchor.y, 1)})${via} size=${round(got.size, 2)}mi taper=${round(got.taper, 2)}`);
+  const shape = controls.length > 0 ? "" : ` taper=${round(got.taper, 2)}`;
+  console.log(`${subject} : on <shore> at (${round(got.anchor.x, 1)},${round(got.anchor.y, 1)})${via} size=${round(got.size, 2)}mi${shape}`);
   console.log("");
   console.log("; replace <shore> with the id of the coastline this hangs on.");
   if (controls.length === 0) {

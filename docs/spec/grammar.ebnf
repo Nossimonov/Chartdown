@@ -85,6 +85,12 @@ step           = number , [ "x" , number ] ;
 address        = col-letters , row-number ;          (* chess-style, all grid types; AA past Z *)
 range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
+control        = point , [ "@" , measure ] ;
+                 (* a centerline control, optionally stating the channel's
+                    WIDTH there — spec 05 §4, ADR 0030, #190. `size=` is the
+                    profile's first point; an omitted width is interpolated;
+                    where widths are stated they are the shape and `taper=`
+                    governs only the generated case. *)
 point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) ,
@@ -102,7 +108,7 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
 relational     = ( "at" , ( point | address | range | edge ) )
                | ( [ measure ] , compass , "of" , ref )
                | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] ,
-                   [ "via" , point , { point } ] )
+                   [ "via" , control , { control } ] )
                  (* "via" after an "at" point declares a PLACED FEATURE's
                     centerline — spec 05 §4, #169. A bite is one straight run
                     without it, and Hood Canal turns hard east at the Great
