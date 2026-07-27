@@ -1,6 +1,6 @@
 # 0028 — Measurement is an optional TypeScript package, not a second language
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-27
 - **Issue:** [#181](https://github.com/Nossimonov/Chartdown/issues/181), [#188](https://github.com/Nossimonov/Chartdown/issues/188)
 

@@ -37,4 +37,5 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0025](0025-a-blob-declares-an-extent-not-an-outline.md) | A blob declares an extent, not an outline; finishing is texture and may never decide a dimension | Accepted |
 | [0026](0026-shape-is-declared-data.md) | A feature's shape is declared data: an outline for what is detached, a centerline for what deforms | Accepted |
 | [0027](0027-an-island-is-separate-or-it-is-a-peninsula.md) | An island is separate, or it is a peninsula; a welded island is reported, never repaired | Accepted |
-| [0028](0028-measurement-is-an-optional-package-in-typescript.md) | Measurement is an optional TypeScript package, not a second language | Proposed |
+| [0028](0028-measurement-is-an-optional-package-in-typescript.md) | Measurement is an optional TypeScript package, not a second language | Accepted |
+| [0029](0029-a-shipped-dependency-is-ours-to-answer-for.md) | A shipped dependency is ours to answer for: built-ins before dependencies, shipped code audited in CI | Accepted |
