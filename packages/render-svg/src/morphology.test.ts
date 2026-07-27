@@ -652,6 +652,61 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
   });
 });
 
+describe("an arm may hang off an arm (#170)", () => {
+  // Every secondary arm of Puget Sound hangs off a primary one — Dabob and
+  // Quilcene off Hood Canal, Dyes off Sinclair, Oakland off Hammersley. All of
+  // them drew NOTHING AT ALL: a bite is spliced into its host's course, and a
+  // bite is not a course, so nothing ever asked for them.
+  const COAST = `# P
+map: region
+extent: 80x160mi
+
+[water]
+` +
+    `coastline shore : from (40,0) via (38,60) (39,110) to (40,160)
+sea "S" : west of shore
+`;
+  const HOOD = `fjord hood "Hood Canal" : on shore at (38,50) size=3mi reach=9 taper=0.2
+`;
+  const DABOB = `sound dabob "Dabob Bay" : on hood at (56,44) size=2mi reach=4 taper=0.3
+`;
+  const coastOf = (src: string): { x: number; y: number }[] =>
+    /id="cd-p-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)![1]!
+      .trim().split(/\s+/).map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+
+  it("the arm CHANGES THE MAP — it used to leave the coast byte-identical", () => {
+    const without = coastOf(COAST + HOOD);
+    const with_ = coastOf(COAST + HOOD + DABOB);
+    expect(with_.length).toBeGreaterThan(without.length + 100);
+  });
+
+  it("says nothing — the water side comes from the canal, not from the map", () => {
+    // `sea : west of hood` is not a sentence about Hood Canal, so the old
+    // warning suggested a fix that could not be written. The arm's water IS
+    // the canal, so its side is the direction to the canal's own centerline.
+    expect(renderSource(COAST + HOOD + DABOB).diagnostics).toEqual([]);
+  });
+
+  it("works whichever order the two are declared in", () => {
+    // Resolved after the whole pre-scan, so a bay declared above the canal it
+    // hangs off is not a different document.
+    expect(coastOf(COAST + DABOB + HOOD).length).toBe(coastOf(COAST + HOOD + DABOB).length);
+  });
+
+  it("the arm reaches ACROSS the canal's line, not along it", () => {
+    // Dabob hangs off the canal's north flank; the canal runs east. An arm
+    // that inherited the canal's own seaward would run east too, and vanish
+    // into it.
+    const with_ = coastOf(COAST + HOOD + DABOB);
+    const without = coastOf(COAST + HOOD);
+    const northOf = (pts: { x: number; y: number }[]): number => Math.min(...pts.filter((p) => p.x > 500).map((p) => p.y));
+    expect(northOf(with_)).toBeLessThan(northOf(without) - 20);
+  });
+});
+
 describe("a placed feature is named on its body (#171)", () => {
   // The anchor is a point on the HOST shoreline, so labelling there put a
   // 40mi canal's name on the coast with forty miles of canal unnamed below

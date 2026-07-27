@@ -133,6 +133,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     sizeText: string;
     morph: Morph;
     line: number;
+    /** Every name this feature answers to, so an ARM can be hosted on it (#170). */
+    keys: string[];
+    /** The host it was declared on, for resolving an arm's water side (#170). */
+    host: string;
   }
   const featuresByHost = new Map<string, PlacedRef[]>();
   for (const e of model.entities) {
@@ -160,7 +164,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const len = Math.hypot(dx, dy);
         if (len > 1e-9) seaward = { x: dx / len, y: dy / len };
       }
-      if (!seaward) {
+      // An ARM hosted on another feature takes its side from that feature, not
+      // from the map (#170) — resolved in the pass below, once every feature is
+      // known, so declaration order does not decide whether it works. Warning
+      // here would send an author to write `sea : west of hood`, which is not a
+      // sentence about Hood Canal: the canal IS water.
+      const hostedOnFeature = model.entities.some(
+        (other) => other !== e && [...other.ids, ...(other.name ? [other.name] : [])].includes(host)
+          && model.facetOf(other.typeWord, "morph") !== undefined,
+      );
+      if (!seaward && !hostedOnFeature) {
         diagnostics.push({ severity: "warning", line: e.line, message: `nothing on this map says which side of '${host}' the water is on, so '${e.typeWord}' cannot know which way to face — declare an open coast's sea with 'sea : west of ${host}', or an enclosed one as an area following its shores (spec 05 §4)` });
       }
       // How far across the host it reaches, as a multiple of size= — the thing
@@ -205,6 +218,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         sizeText,
         morph,
         line: e.line,
+        keys: [...e.ids, ...(e.name ? [e.name] : [])],
+        host,
       };
       const list = featuresByHost.get(host) ?? [];
       list.push(entry);
@@ -256,6 +271,45 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
     return best ? Math.atan2(best.axis.y, best.axis.x) : undefined;
   };
+
+  /**
+   * AN ARM TAKES ITS WATER SIDE FROM THE ARM IT HANGS OFF (#170).
+   *
+   * Every secondary arm of Puget Sound hangs off a primary one — Dabob and
+   * Quilcene off Hood Canal, Dyes off Sinclair, Oakland off Hammersley — and
+   * none of them could say which way to face, because the map declares a side
+   * for the COAST and `sea : west of hood` is not a sentence about a canal.
+   * The canal is water, and the arm's water is the canal, so the side is the
+   * direction from the arm's mouth toward its host's own centerline. This is
+   * ADR 0024's "ask the containing feature" asked by a bite instead of an
+   * island.
+   *
+   * Resolved AFTER the whole pre-scan, so it does not matter whether the canal
+   * was declared before or after the bay hanging off it.
+   */
+  for (const list of featuresByHost.values()) {
+    for (const arm of list) {
+      if (arm.f.seaward) continue;
+      const host = [...featuresByHost.values()].flat().find((h) => h.keys.includes(arm.host));
+      if (!host?.f.seaward) continue;
+      // The host's centerline: its mouth, then either its declared controls or
+      // a straight run landward — away from the water that gave it ITS side.
+      const back = { x: -host.f.seaward.x, y: -host.f.seaward.y };
+      const depth = host.f.size * (host.f.reach ?? ASPECT);
+      const line = host.f.via && host.f.via.length > 0
+        ? [host.f.anchor, ...host.f.via]
+        : [host.f.anchor, { x: host.f.anchor.x + back.x * depth, y: host.f.anchor.y + back.y * depth }];
+      let best: XY | null = null;
+      let bestD = Infinity;
+      for (let i = 1; i < line.length; i++) {
+        const p = nearestOnSegment(line[i - 1]!, line[i]!, arm.f.anchor);
+        const d = Math.hypot(p.x - arm.f.anchor.x, p.y - arm.f.anchor.y);
+        if (d < bestD) { bestD = d; best = p; }
+      }
+      if (!best || bestD < 1e-9) continue;
+      arm.f.seaward = { x: (best.x - arm.f.anchor.x) / bestD, y: (best.y - arm.f.anchor.y) / bestD };
+    }
+  }
 
   /**
    * The midpoint of a placed feature's own body (#171).
@@ -326,8 +380,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     // lengths on different stretches of coast, and a renderer that silently
     // gives an author something other than what they asked for is the failure
     // ADR 0023 exists to prevent.
-    const byFeature = new Map(placed.map((x) => [x.f, x] as const));
-    return deformCurve(curve, placed.map((x) => x.f), (f, why) => {
+    // ARMS HANG OFF ARMS, IN A SECOND PASS (#170). Dabob Bay is declared `on
+    // hood`, and Hood Canal is a feature rather than a course — so nothing
+    // ever asked for Dabob and it was dropped without a word, which is why it
+    // rendered as nothing at all rather than as something facing wrongly.
+    //
+    // Two passes rather than one list, because a window is measured on its
+    // HOST AS ITS HOST STANDS: the canal's own window belongs to the
+    // undeformed coast, and the bay's belongs to the coast with the canal
+    // already spliced into it. Putting both in one pass would measure the
+    // bay's mouth against a stretch of shoreline that is no longer there —
+    // the same drift #163 fixed by measuring siblings on the undeformed host.
+    const arms = placed.flatMap((x) => x.keys.flatMap((k) => featuresByHost.get(k) ?? []));
+    const byFeature = new Map([...placed, ...arms].map((x) => [x.f, x] as const));
+    const passes = arms.length > 0 ? [placed, arms] : [placed];
+    return passes.reduce((into, pass) => deformCurve(into, pass.map((x) => x.f), (f, why) => {
       const x = byFeature.get(f);
       if (!x) return;
       const named = (y: typeof x): string => (y.label === y.word ? `'${y.word}'` : `'${y.label}' (${y.word})`);
@@ -342,9 +409,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       diagnostics.push({
         severity: "error",
         line: x.line,
-        message: `${named(x)} cannot be drawn at size=${x.sizeText} on '${keyOf(e)}' — ${because} (spec 05 §4)`,
+        message: `${named(x)} cannot be drawn at size=${x.sizeText} on '${x.host}' — ${because} (spec 05 §4)`,
       });
-    });
+    }), curve);
   };
 
   const refPoint = (ref: Ref): XY | null => {
@@ -2375,6 +2442,16 @@ function coversWater(poly: XY[], waters: XY[][]): boolean {
   }
   const probes = inside.length ? inside : [...poly, centroid(poly)];
   return probes.some((p) => waters.some((water) => pip(p, water)));
+}
+
+/** The point on segment a..b nearest to p. */
+function nearestOnSegment(a: XY, b: XY, p: XY): XY {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 <= 0) return a;
+  const t = Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return { x: a.x + dx * t, y: a.y + dy * t };
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {
