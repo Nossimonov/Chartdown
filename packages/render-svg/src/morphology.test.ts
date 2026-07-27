@@ -651,6 +651,90 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
   });
 });
 
+describe("a detached feature may carry its own outline (#172, ADR 0026)", () => {
+  // Three numbers produce a lozenge. That is right for the anonymous mid-river
+  // islet ADR 0023 is written around, and wrong for Whidbey Island, which
+  // doglegs at Coupeville — and a landform a reader recognises is exactly what
+  // a campaign attaches itself to, which is the ADR's own test for what must
+  // be declared data.
+  const MAP = (body: string): string => `# Whid
+map: region
+extent: 100x200mi
+
+[water]
+coastline shore : from (72,0) via (70,80) (71,140) to (72,200)
+sea "S" : west of shore
+${body}`;
+  const WHIDBEY = `area (-2,-40) (3,-30) (1,-20) (6,-8) (5,4) (10,18) (7,32) (2,26) (-1,10) (-5,-6) (-6,-24)`;
+  const poly = (src: string): { x: number; y: number }[] => {
+    const g = /id="cd-whid-w">(.{0,40000}?)<\/g>/s.exec(renderSource(src).svg);
+    const m = g && /points="([^"]+)"/.exec(g[1]!);
+    return m ? m[1]!.trim().split(/\s+/).map((q) => {
+      const [x, y] = q.split(",").map(Number) as [number, number];
+      return { x, y };
+    }) : [];
+  };
+  const form = (src: string): string => {
+    const p = poly(src);
+    const cx = p.reduce((s, q) => s + q.x, 0) / p.length;
+    const cy = p.reduce((s, q) => s + q.y, 0) / p.length;
+    return p.map((q) => `${(q.x - cx).toFixed(2)},${(q.y - cy).toFixed(2)}`).join(" ");
+  };
+  const diags = (src: string): string[] => renderSource(src).diagnostics.map((d) => `${d.severity}: ${d.message}`);
+
+  it("the outline is DRAWN, not silently discarded", () => {
+    // Supplied alongside the dials it used to render byte-identically to the
+    // declaration without it: accepted and thrown away.
+    const shaped = poly(MAP(`island w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`));
+    const lozenge = poly(MAP(`island w "Whidbey" : near shore at (40,100) size=80mi reach=0.18\n`));
+    expect(shaped.length).toBeGreaterThan(0);
+    expect(form(MAP(`island w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`)))
+      .not.toBe(form(MAP(`island w "Whidbey" : near shore at (40,100) size=80mi reach=0.18\n`)));
+    expect(lozenge.length).toBeGreaterThan(0);
+  });
+
+  it("it is ORGANICALLY FINISHED, not drawn raw", () => {
+    // Eleven declared points render as a drawn coast rather than a surveyed
+    // polygon; left raw it reads as strangely angular against every other
+    // coastline on the map (spec 02 §9, ADR 0025).
+    expect(poly(MAP(`island w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`)).length).toBeGreaterThan(11 * 4);
+  });
+
+  it("the points are FRAMED: moving it is ONE coordinate, and the shape does not change", () => {
+    // The property that keeps it a placed feature. Absolute points would mean
+    // transforming the whole set to move the island, and would leave it behind
+    // when its host moved.
+    expect(form(MAP(`island w "Whidbey" : near shore at (25,60) ${WHIDBEY}\n`)))
+      .toBe(form(MAP(`island w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`)));
+  });
+
+  it("an outline AND the dials is an ERROR — one would have to be discarded", () => {
+    const msg = diags(MAP(`island w "Whidbey" : near shore at (40,100) size=80mi ${WHIDBEY}\n`)).join();
+    expect(msg).toMatch(/error: 'Whidbey' declares an outline AND size=/);
+    expect(msg).toMatch(/Drop size=, or drop the outline/);
+    expect(poly(MAP(`island w "Whidbey" : near shore at (40,100) size=80mi ${WHIDBEY}\n`))).toEqual([]);
+  });
+
+  it("a reach= INHERITED from the vocabulary is not a conflict", () => {
+    // `skerry : island reach=0.2` would otherwise make every outline on a
+    // derived word an error. Only what is written on the entity line counts.
+    const src = `# Whid\nmap: region\nextent: 100x200mi\n\n[vocab]\nskerry : island reach=0.2\n\n[water]\n` +
+      `coastline shore : from (72,0) via (70,80) to (72,200)\nsea "S" : west of shore\n` +
+      `skerry w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`;
+    expect(renderSource(src).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("an outline of fewer than three points is reported", () => {
+    expect(diags(MAP(`island w "Whidbey" : near shore at (40,100) area (-2,-40) (3,-30)\n`)).join())
+      .toMatch(/outline of 2 points — an outline needs at least three/);
+  });
+
+  it("PROMOTION IS GEOMETRY-STABLE still: naming it does not reshape it", () => {
+    const anon = form(MAP(`island w : near shore at (40,100) ${WHIDBEY}\n`));
+    expect(form(MAP(`island w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`))).toBe(anon);
+  });
+});
+
 describe("an island takes its bearing from the water it sits in (#167, ADR 0024)", () => {
   // Six of Puget Sound's named islands divide two arms of the sea. Hartstene
   // is what makes Case Inlet and Pickering Passage two inlets rather than one

@@ -436,6 +436,60 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const anchor = e.placements.find((p): p is Point => p.kind === "point")
         ?? e.placements.flatMap((p) => (p.kind === "relational" && p.form === "at" && p.target.kind === "point" ? [p.target] : []))[0];
       const sizeText = pairOf(e.pairs, "size");
+
+      // A DETACHED FEATURE MAY CARRY ITS OWN OUTLINE (#172, ADR 0026).
+      //
+      // Three numbers produce a lozenge. That is right for the anonymous
+      // mid-river islet ADR 0023 is written around, and wrong for Whidbey
+      // Island, which doglegs at Coupeville — and a landform a reader
+      // recognises is exactly what a campaign attaches itself to, which is the
+      // ADR's own test for what must be declared data. Shape was the one thing
+      // about a feature that could not be declared.
+      //
+      // The points are FRAMED — offsets from the anchor in map units, the same
+      // referent-frame rule ADR 0009 sets for `on … at` — so moving the island
+      // is still one coordinate, not a transform of the whole set, and the
+      // feature stays attached to its host the way a placed feature must.
+      const outline = e.placements.find(
+        (p): p is Extract<Placement, { kind: "shape" }> => p.kind === "shape" && p.shape === "area",
+      );
+      if (anchor && outline) {
+        // An outline and the dials together are an ERROR, not a warning:
+        // honouring either one means discarding the other, and a renderer that
+        // silently picks is the failure this phase exists to remove. Only what
+        // is written ON THE ENTITY LINE counts — a `reach=` inherited from the
+        // vocabulary would otherwise make every outline on a derived word an
+        // error (`skerry : island reach=0.2`).
+        const dials = ["size", "reach", "taper"].filter((k) => pairOf(e.pairs, k) !== undefined);
+        if (dials.length > 0) {
+          diagnostics.push({
+            severity: "error",
+            line: e.line,
+            message: `'${e.name ?? e.typeWord}' declares an outline AND ${dials.map((d) => `${d}=`).join(", ")} — an outline says what the feature looks like and the dials generate a shape instead, so one would have to be discarded. Drop ${dials.map((d) => `${d}=`).join("/")}, or drop the outline (spec 05 §4)`,
+          });
+          return out;
+        }
+        const centre = toXY(anchor);
+        const framed = outline.args
+          .filter((arg): arg is Point => arg.kind === "point")
+          .map((arg) => ({ x: centre.x + arg.x * scale, y: centre.y + arg.y * scale }));
+        if (framed.length >= 3) {
+          // Organically finished, like any declared silhouette (spec 02 §9,
+          // ADR 0025): the author gives the shape, the renderer gives it a
+          // drawn edge. Left raw it reads as a surveyed polygon — strangely
+          // angular against every other coastline on the map.
+          out.polygon = organicOutline(framed, hashSeed(hashString(e.typeWord ?? "island"), framed.length));
+          out.point = centre;
+          return out;
+        }
+        diagnostics.push({
+          severity: "warning",
+          line: e.line,
+          message: `'${e.name ?? e.typeWord}' has an outline of ${framed.length} point${framed.length === 1 ? "" : "s"} — an outline needs at least three (spec 05 §4)`,
+        });
+        return out;
+      }
+
       if (anchor && sizeText !== undefined) {
         const center = toXY(anchor);
         const radius = (measureToNumber(sizeText) / 2) * scale;
