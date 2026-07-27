@@ -652,6 +652,53 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
   });
 });
 
+describe("a placed feature is named on its body (#171)", () => {
+  // The anchor is a point on the HOST shoreline, so labelling there put a
+  // 40mi canal's name on the coast with forty miles of canal unnamed below
+  // it, and piled four South Sound inlets' names into a six-mile square while
+  // the water they name lay thirty miles apart and unlabelled. Spec 07 §5
+  // already names an area-shaped feature in its body.
+  const SRC = `# P
+map: region
+extent: 100x200mi
+
+[water]
+coastline shore : from (50,0) via (48,80) (49,140) to (50,200)
+sea "S" : west of shore
+sound a "Alpha Inlet" : on shore at (48,70) size=6mi reach=4 taper=0.3
+sound b "Beta Inlet" : on shore at (48,90) size=6mi reach=4 taper=0.3
+fjord c "Gamma Canal" : on shore at (49,130) via (72,138) (86,160) size=4mi taper=0.2
+`;
+  const SC = 820 / 100;
+  const labelAt = (name: string): { x: number; y: number } => {
+    const tag = new RegExp(`<text([^>]*)>${name}<`).exec(renderSource(SRC).svg)!;
+    return {
+      x: Number(/x="([\d.-]+)"/.exec(tag[1]!)![1]) / SC,
+      y: Number(/y="([\d.-]+)"/.exec(tag[1]!)![1]) / SC,
+    };
+  };
+
+  it("sits at the middle of the feature, not at its mouth on the shore", () => {
+    // The coast is at x=48..50; this inlet is 6mi wide and reaches 24mi east,
+    // so its middle is at x=60 and its mouth is not.
+    expect(labelAt("Alpha Inlet").x).toBeCloseTo(60, 0);
+  });
+
+  it("follows a DECLARED centerline to its midpoint, not a straight guess", () => {
+    // Gamma runs (49,130) -> (72,138) -> (86,160): halfway along that line by
+    // arc length, which a depth-along-the-normal estimate would miss entirely.
+    const p = labelAt("Gamma Canal");
+    expect(p.x).toBeGreaterThan(65);
+    expect(p.y).toBeGreaterThan(135);
+  });
+
+  it("two inlets on one stretch of coast are named where they actually are", () => {
+    // They were crowded because they were placed at the same point, which
+    // defeats 07 §5's shrink-and-leader machinery rather than exercising it.
+    expect(Math.abs(labelAt("Alpha Inlet").y - labelAt("Beta Inlet").y)).toBeGreaterThan(15);
+  });
+});
+
 describe("a detached feature may carry its own outline (#172, ADR 0026)", () => {
   // Three numbers produce a lozenge. That is right for the anonymous mid-river
   // islet ADR 0023 is written around, and wrong for Whidbey Island, which

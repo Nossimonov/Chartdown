@@ -257,6 +257,50 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     return best ? Math.atan2(best.axis.y, best.axis.x) : undefined;
   };
 
+  /**
+   * The midpoint of a placed feature's own body (#171).
+   *
+   * Reconstructed from the DECLARED data — anchor, size, reach, via, and the
+   * water's side — rather than from the drawn shape, because the label is
+   * resolved before any course is finished. That also keeps it a pure function
+   * of the declaration, as ADR 0023 requires of everything else about a
+   * feature. Returns null for a word that is not a jut or a bite, whose anchor
+   * already is its position.
+   */
+  const featureLabelPoint = (e: EntityNode, anchor: XY, via: XY[] | undefined, hostKey: string): XY | null => {
+    const morph = model.facetOf(e.typeWord, "morph");
+    if (morph !== "jut" && morph !== "bite") return null;
+    if (via && via.length > 0) {
+      // Halfway along the declared centerline by arc length — spec 07 §5's
+      // rule for a line feature, applied to the line this feature runs along.
+      const line = [anchor, ...via];
+      const lengths = line.map((p, i) => (i === 0 ? 0 : Math.hypot(p.x - line[i - 1]!.x, p.y - line[i - 1]!.y)));
+      const total = lengths.reduce((s, d) => s + d, 0);
+      let walked = 0;
+      for (let i = 1; i < line.length; i++) {
+        if (walked + lengths[i]! >= total / 2) {
+          const k = lengths[i]! > 0 ? (total / 2 - walked) / lengths[i]! : 0;
+          return { x: line[i - 1]!.x + (line[i]!.x - line[i - 1]!.x) * k, y: line[i - 1]!.y + (line[i]!.y - line[i - 1]!.y) * k };
+        }
+        walked += lengths[i]!;
+      }
+      return line[line.length - 1]!;
+    }
+    const sizeText = pairOf(e.pairs, "size");
+    // The HOST's water side, not the feature's own names — a bite runs away
+    // from the water its host faces. Absent, the feature is already warned
+    // about elsewhere and the anchor stands as a least-bad position.
+    const seaward = seawardByHost.get(hostKey);
+    if (sizeText === undefined || !seaward) return null;
+    const reachText = pairOf(e.pairs, "reach") ?? model.facetOf(e.typeWord, "reach");
+    const reach = reachText === undefined ? ASPECT : Number(reachText);
+    if (!Number.isFinite(reach)) return null;
+    // Half the depth along the way the feature runs: a bite goes landward,
+    // away from the water that named its direction, and a jut goes seaward.
+    const step = (morph === "bite" ? -1 : 1) * (measureToNumber(sizeText) * scale * reach) / 2;
+    return { x: anchor.x + seaward.x * step, y: anchor.y + seaward.y * step };
+  };
+
   /** Every name this entity answers to, since a feature may reference either. */
   const hostKeys = (e: EntityNode): string[] => [...e.ids, ...(e.name ? [e.name] : [])];
 
@@ -679,7 +723,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }
           case "on":
             onRef = p.ref;
-            if (p.point) out.point = toXY(p.point);
+            // A PLACED FEATURE IS NAMED ON ITS BODY, NOT AT ITS MOUTH (#171).
+            // The anchor is a point on the HOST shoreline, so labelling there
+            // put a 40mi canal's name on the coast with forty miles of canal
+            // unnamed below it, and piled four South Sound inlets' names into
+            // a six-mile square while the water they name lay thirty miles
+            // apart and unlabelled. Spec 07 §5 already says an area-shaped
+            // feature is named in its body and a line feature at its
+            // arc-length midpoint; a bite is drawn as an area, so the anchor
+            // was simply the only position the label code had been handed.
+            if (p.point) out.point = featureLabelPoint(e, toXY(p.point), p.via?.map(toXY), refText(p.ref)) ?? toXY(p.point);
             break;
           case "near": {
             const target = p.target.kind === "point" ? toXY(p.target) : refPoint(p.target);
