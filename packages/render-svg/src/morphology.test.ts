@@ -1419,3 +1419,94 @@ island i "An Isle" : near shore at (${x},50) area (0,-6) (2,-3) (2.5,3) (1,6) (-
     expect(msgs[0]).toMatch(/no water around it/);
   });
 });
+
+describe("a feature's water side is resolved locally (#178)", () => {
+  // A coast with a peninsula jutting EAST between y=42 and y=58: land is west
+  // and INSIDE the peninsula, water is east and also NORTH of the peninsula's
+  // north shore. One vector for the whole body cannot say that — on the north
+  // shore the local normal runs north/south, so its dot product with "east" is
+  // about zero and the sign that falls out is arithmetic noise. Measured before
+  // the fix, an enclosed sea drew the bay and the cape THE WRONG WAY ROUND
+  // here, with nothing reported: a generated run has no declared direction to
+  // contradict, so it does not fold, it just lands on the wrong side.
+  const SHORE = "from (50,0) via (50,20) (50,40) (66,42) (80,45) (80,55) (66,58) (50,60) (50,80) to (50,120)";
+  const SCALE = 820 / 130;
+  const doc = (sea: string, feature: string): string => `map: region
+extent: 130x130mi
+
+[water]
+coastline shore : ${SHORE}
+${sea}
+${feature}
+`;
+  const HALFPLANE = `sea "S" : east of shore`;
+  const ENCLOSED = `sea "S" : area (50,0) along shore (50,120) (130,120) (130,0)`;
+
+  /** The coast's north and south extremes in a window round a map point. */
+  const band = (src: string, cx: number, cy: number): { lo: number; hi: number } => {
+    const m = /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)!;
+    const pts = m[1]!.trim().split(/\s+/)
+      .map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      })
+      .filter((p) => Math.abs(p.x - cx * SCALE) < 7 * SCALE && Math.abs(p.y - cy * SCALE) < 9 * SCALE);
+    return { lo: Math.min(...pts.map((p) => p.y)) / SCALE, hi: Math.max(...pts.map((p) => p.y)) / SCALE };
+  };
+
+  for (const [label, sea] of [["a half-plane", HALFPLANE], ["an enclosed sea", ENCLOSED]] as const) {
+    it(`bites into the peninsula and juts out of it, under ${label}`, () => {
+      const bare = band(doc(sea, ""), 66, 42);
+      const bay = band(doc(sea, `bay b "B" : on shore at (66,42) size=4mi reach=1.5`), 66, 42);
+      const cape = band(doc(sea, `cape c "C" : on shore at (66,42) size=4mi reach=1.5`), 66, 42);
+      // A bay is water cutting SOUTH into the peninsula: the band's south edge
+      // moves and its north edge does not.
+      expect(bay.hi).toBeGreaterThan(bare.hi + 3);
+      expect(Math.abs(bay.lo - bare.lo)).toBeLessThan(1);
+      // A cape is land reaching NORTH into the water: the mirror.
+      expect(cape.lo).toBeLessThan(bare.lo - 3);
+      expect(Math.abs(cape.hi - bare.hi)).toBeLessThan(1);
+    });
+  }
+
+  it("gives the same answer however the sea is spelled", () => {
+    // The A/B that started #175 and finished here: the sea's spelling is not
+    // supposed to be a fact about the coastline.
+    for (const feature of [
+      `bay b "B" : on shore at (66,42) size=4mi reach=1.5`,
+      `cape c "C" : on shore at (66,42) size=4mi reach=1.5`,
+      `bay w "W" : on shore at (50,20) size=4mi reach=1.5`,
+    ]) {
+      expect(band(doc(ENCLOSED, feature), 66, 42), feature)
+        .toEqual(band(doc(HALFPLANE, feature), 66, 42));
+    }
+  });
+});
+
+describe("an undetermined side is reported, not guessed (#178)", () => {
+  // Spec 05 §4: where the water's declaration does not determine the side at
+  // an anchor, a renderer MUST NOT guess silently. A shore with declared sea
+  // on BOTH sides — a spit, an isthmus — genuinely does not say which way a
+  // bay faces, and picking one is how a map comes to contradict its document.
+  const SRC = `map: region
+extent: 100x100mi
+
+[water]
+coastline shore : from (50,0) via (50,40) (50,60) to (50,100)
+sea "West" : west of shore
+sea "East" : east of shore
+bay b "B" : on shore at (50,50) size=4mi reach=1.5
+`;
+
+  it("says so, and says what would fix it", () => {
+    const warnings = renderSource(SRC).diagnostics.filter((d) => d.severity === "warning");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.message).toMatch(/does not say which side/);
+    expect(warnings[0]!.message).toMatch(/spec 05 §4/);
+  });
+
+  it("still draws the map — this is a warning, not a refusal", () => {
+    expect(renderSource(SRC).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(renderSource(SRC).svg).toContain("<svg");
+  });
+});

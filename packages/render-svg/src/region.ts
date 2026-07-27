@@ -109,6 +109,110 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     if (pts.length >= 2) for (const k of [...e.ids, ...(e.name ? [e.name] : [])]) hostControls.set(k, pts);
   }
 
+  /**
+   * PROVISIONAL WATER, for answering "which side" LOCALLY (#178).
+   *
+   * The side is a property of a place on a shore, and it was being answered by
+   * one vector for a whole body — a compass direction, or a bearing to the
+   * nearest water's centroid — reduced to a sign by a dot product against the
+   * local normal. That is inverted wherever a shore wraps a peninsula, right on
+   * one limb and backwards on the next, and where the coast turns square to the
+   * vector the dot product is near zero and the answer is arithmetic noise. A
+   * generated run has nothing to contradict a wrong answer, so it does not fold
+   * and is not reported: it simply draws the bay on the wrong side of the land.
+   *
+   * Asked properly it is a point-in-polygon test, which needs the water's
+   * outline — and that is built long after features are sited, because an
+   * `along`-spliced sea follows the DEFORMED course. The cycle breaks on an
+   * observation: which side of a shore the sea lies on does not depend on the
+   * bays cut into it. So this builds the body from the host's UNDEFORMED
+   * course, which needs only what the author declared, and the answer is exact
+   * for the question being asked.
+   */
+  const undeformed = (key: string): XY[] | null => {
+    const controls = hostControls.get(key);
+    return controls && controls.length >= 2 ? catmullRom(controls, 8) : null;
+  };
+
+  /** Water bodies that touch this host, as polygons, from declarations alone. */
+  const provisionalWater = (hostKey: string): XY[][] => {
+    const course = undeformed(hostKey);
+    if (!course) return [];
+    const out: XY[][] = [];
+    for (const e of model.entities) {
+      if (e.section !== "water") continue;
+      for (const p of e.placements) {
+        // `sea : east of shore` — the half-plane FOLLOWS the coast and closes
+        // on the compass side, so it is the true region rather than a bearing.
+        if (p.kind === "relational" && p.form === "side-of" && refText(p.ref) === hostKey) {
+          out.push(halfPlanePolygon({ compass: p.compass, of: course }, w, h));
+          continue;
+        }
+        // `sea : area (…) along shore (…)` — the enclosed form (#157). Its
+        // boundary already contains this host's course; splicing the whole
+        // course in where the `along` sits is enough to say which side it
+        // encloses, which is all this is asked for.
+        if (p.kind !== "shape" || p.shape !== "area") continue;
+        const follows = p.args.some((a) => a.kind === "relational" && a.form === "along" && refText(a.ref) === hostKey);
+        if (!follows) continue;
+        const ring: XY[] = [];
+        for (const arg of p.args) {
+          if (arg.kind === "point") ring.push(toXY(arg));
+          else if (arg.kind === "relational" && arg.form === "along" && refText(arg.ref) === hostKey) {
+            const head = ring[ring.length - 1];
+            const forward = !head
+              || Math.hypot(course[0]!.x - head.x, course[0]!.y - head.y)
+                <= Math.hypot(course[course.length - 1]!.x - head.x, course[course.length - 1]!.y - head.y);
+            ring.push(...(forward ? course : [...course].reverse()));
+          }
+        }
+        if (ring.length >= 3) out.push(ring);
+      }
+    }
+    return out;
+  };
+
+  /**
+   * The seaward unit normal at a point on a host, or null where the map does
+   * not say. Null is not a licence to guess — spec 05 §4 requires it reported.
+   */
+  const localSeaward = (hostKey: string, at: XY): XY | "ambiguous" | null => {
+    const course = undeformed(hostKey);
+    const bodies = provisionalWater(hostKey);
+    // NO BODY FOUND is not the same as CANNOT TELL. The first means this
+    // routine had nothing to look at — water spelled some way it does not
+    // reconstruct — and the older global answer is still the best available.
+    // The second means the declaration genuinely does not decide this spot,
+    // and spec 05 §4 requires that reported rather than guessed.
+    if (!course || bodies.length === 0) return null;
+    // The normal where the anchor actually sits, not an average of the coast.
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < course.length; i++) {
+      const d = Math.hypot(course[i]!.x - at.x, course[i]!.y - at.y);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    const a = course[Math.max(0, best - 1)]!;
+    const b = course[Math.min(course.length - 1, best + 1)]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!(len > 0)) return null;
+    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+    // PROBED FROM THE SHORE, not from the anchor. An author places an anchor
+    // by eye and it lands near the coast rather than on it; probing from there
+    // can put both samples on the same side of the water's edge, which reads
+    // as "the map does not say" when the map says perfectly well.
+    const on = course[best]!;
+    // Far enough off the line to clear its own sampling, near enough to stay
+    // local on a shore that turns.
+    const step = Math.max(w, h) / 400;
+    const wet = (s: number): boolean =>
+      bodies.some((body) => pip({ x: on.x + n.x * s, y: on.y + n.y * s }, body));
+    const plus = wet(step);
+    const minus = wet(-step);
+    if (plus === minus) return "ambiguous";
+    return plus ? n : { x: -n.x, y: -n.y };
+  };
+
   const waterCentres: XY[] = [];
   for (const e of model.entities) {
     if (e.section !== "water") continue;
@@ -157,7 +261,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // The water's own half-plane if it has one; otherwise the nearest
       // bounded water body, which is how an enclosed sea says it (#157).
       const anchorXY = toXY(p.point);
-      let seaward = seawardByHost.get(host);
+      // LOCAL FIRST (#178). Where the water's own outline settles the side at
+      // this anchor, that answer is exact and no global vector can improve on
+      // it — including for a half-plane, whose compass direction is undecidable
+      // wherever the coast happens to run parallel to it.
+      const local = localSeaward(host, anchorXY);
+      if (local === "ambiguous") {
+        diagnostics.push({
+          severity: "warning",
+          line: e.line,
+          message: `the water around '${host}' does not say which side '${e.typeWord}' faces at this point — both sides of the shore here read the same. Declare the sea's extent so it distinguishes them, or move the feature to a stretch where the shore has water on one side only (spec 05 §4)`,
+        });
+      }
+      let seaward = (local && local !== "ambiguous" ? local : undefined) ?? seawardByHost.get(host);
       if (!seaward && waterCentres.length > 0) {
         let best = waterCentres[0]!;
         for (const c of waterCentres) {
