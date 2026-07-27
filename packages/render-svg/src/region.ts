@@ -55,6 +55,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const lookup = (ref: Ref): Resolved | undefined =>
     resolved.get(ref.form === "id" ? ref.value : (byName.get(ref.value) ?? slugify(ref.value)));
   const toXY = (p: Point): XY => ({ x: p.x * scale, y: p.y * scale });
+  /** A map coordinate an author can paste back into the document. */
+  const round1 = (n: number): string => String(Math.round(n * 10) / 10);
 
   // ---------- placed morphology (#93, spec 05 §4, ADR 0023) ----------
   //
@@ -402,7 +404,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const arms = placed.flatMap((x) => x.keys.flatMap((k) => featuresByHost.get(k) ?? []));
     const byFeature = new Map([...placed, ...arms].map((x) => [x.f, x] as const));
     const passes = arms.length > 0 ? [placed, arms] : [placed];
-    return passes.reduce((into, pass) => deformCurve(into, pass.map((x) => x.f), (f, why) => {
+    // Only the FIRST pass is handed a declared course; the second is handed
+    // this function's own output, whose feature outlines must survive intact
+    // (#179).
+    return passes.reduce((into, pass, index) => deformCurve(into, pass.map((x) => x.f), (f, why) => {
       const x = byFeature.get(f);
       if (!x) return;
       const named = (y: typeof x): string => (y.label === y.word ? `'${y.word}'` : `'${y.label}' (${y.word})`);
@@ -413,13 +418,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           ? `half of its mouth would lie off the end of '${keyOf(e)}'. Move it further along the course, or use a smaller size=`
           : why.kind === "overlap"
             ? `it claims the same stretch of '${keyOf(e)}' as ${named(byFeature.get(why.other) ?? x)}. Move one of them, or use a smaller size= on either`
-            : `${x.morph === "jut" ? "a jut that long" : "a bite that deep"} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch`;
+            : why.kind === "off-normal"
+              ? `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and a centerline must leave perpendicular. Try a first via point at (${round1(why.suggest.x / scale)},${round1(why.suggest.y / scale)})`
+              : `${x.morph === "jut" ? "a jut that long" : "a bite that deep"} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch`;
+      // The size is named where the size is worth changing. On a skewed
+      // departure it is not, and quoting it invites exactly the wrong edit —
+      // which is what six rounds of shrinking a perfectly good inlet came from.
+      const at = why.kind === "off-normal" ? "" : ` at size=${x.sizeText}`;
       diagnostics.push({
         severity: "error",
         line: x.line,
-        message: `${named(x)} cannot be drawn at size=${x.sizeText} on '${x.host}' — ${because} (spec 05 §4)`,
+        message: `${named(x)} cannot be drawn${at} on '${x.host}' — ${because} (spec 05 §4)`,
       });
-    }), curve);
+    }, index === 0), curve);
   };
 
   const refPoint = (ref: Ref): XY | null => {
@@ -1932,12 +1943,27 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const waters = waterPolys.map((body) => body.poly);
   if (waters.length) {
     for (const { e, poly } of islandInfos) {
-      if (coversWater(poly, waters)) continue;
       const named = e.name ? `'${e.name}'` : `the ${e.typeWord ?? "island"} on line ${e.line}`;
+      if (!coversWater(poly, waters)) {
+        diagnostics.push({
+          severity: "warning",
+          line: e.line,
+          message: `${named} is an island with no water around it — its footprint lies entirely on land. An island rises above the sea that surrounds it (spec 05 §2)`,
+        });
+        continue;
+      }
+      // AND THE WEAKER FAILURE THAT MATTERS MORE (#180): still mostly in water,
+      // but touching the shore, so the union joins it to the mainland and the
+      // document's island is not one on the map. Warned rather than repaired —
+      // opening a channel would be the renderer inventing water nobody
+      // declared, against "drawn as declared or reported". The author's fixes
+      // are real: widen the channel, move it, or stop calling it an island.
+      const wet = surroundedByWater(poly, waters);
+      if (wet >= 0.98) continue;
       diagnostics.push({
         severity: "warning",
         line: e.line,
-        message: `${named} is an island with no water around it — its footprint lies entirely on land. An island rises above the sea that surrounds it (spec 05 §2)`,
+        message: `${named} is joined to the mainland — the water declared around it does not separate it (${Math.round(wet * 100)}% of its shore has water beyond it). Widen the channel, move it, or declare it as land rather than an island (spec 05 §2)`,
       });
     }
   }
@@ -2450,6 +2476,51 @@ function coversWater(poly: XY[], waters: XY[][]): boolean {
   }
   const probes = inside.length ? inside : [...poly, centroid(poly)];
   return probes.some((p) => waters.some((water) => pip(p, water)));
+}
+
+/**
+ * What fraction of the ring JUST OUTSIDE this outline lies in water (#180).
+ *
+ * The navigational question, asked geometrically: could a reader sail round
+ * it? An island a boat can circle has water beyond every part of its shore.
+ * Where its outline crosses the coast, #165's union welds the two and the
+ * document's island quietly becomes a lobe of the mainland — which #164 does
+ * not catch, because that fires only when a footprint is WHOLLY dry, and the
+ * cases that matter are mostly wet. Measured on the exercise map, Harstine was
+ * 68% in water and joined at its southern end, and nothing said so; the map
+ * then denied a passage that boats actually use.
+ *
+ * Probed just outside rather than at the outline itself, because a vertex on
+ * the shared boundary belongs to both and answers neither. The offset is small
+ * on purpose: a channel only has to be wider than this to count, so a narrow
+ * but genuine passage stays an island. Outward is found per edge by testing
+ * the normal against the outline, so a concave shape — Harstine is a wishbone
+ * — is probed correctly along its notch rather than from a centroid that lies
+ * outside it.
+ */
+function surroundedByWater(poly: XY[], waters: XY[][]): number {
+  if (poly.length < 3) return 1;
+  const xs = poly.map((p) => p.x);
+  const ys = poly.map((p) => p.y);
+  const diag = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  const step = Math.max(0.5, diag * 0.01);
+  let wet = 0;
+  let total = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) continue;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    let n = { x: -dy / len, y: dx / len };
+    if (pip({ x: mid.x + n.x * step, y: mid.y + n.y * step }, poly)) n = { x: -n.x, y: -n.y };
+    const probe = { x: mid.x + n.x * step, y: mid.y + n.y * step };
+    total++;
+    if (waters.some((water) => pip(probe, water))) wet++;
+  }
+  return total === 0 ? 1 : wet / total;
 }
 
 /** The point on segment a..b nearest to p. */

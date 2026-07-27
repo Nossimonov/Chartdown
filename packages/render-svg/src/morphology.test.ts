@@ -613,7 +613,7 @@ extent: 300x300mi
 coastline coast : from (150,0) via (150,100) (150,200) to (150,300)
 sea "The Sea" : west of coast
 island good "In the sea" : near coast at (90,60) size=30mi reach=0.6
-island half "Straddling the shore" : near coast at (150,150) size=30mi reach=0.6
+island half "A narrow channel" : near coast at (138,150) size=30mi reach=0.6
 island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
 `;
   const warningsOf = (src: string): string[] =>
@@ -629,11 +629,17 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
     expect(warningsOf(SRC).join()).not.toMatch(/'In the sea'/);
   });
 
-  it("says nothing about one STRADDLING the shore — that is #165, not a mistake", () => {
+  it("says nothing about one separated by a NARROW channel — that is #165, not a mistake", () => {
     // Bainbridge really is separated from the Kitsap Peninsula by half a mile
     // of water, which at map scale is thinner than the coastline stroke. The
     // right rendering is one merged landmass, not a warning.
-    expect(warningsOf(SRC).join()).not.toMatch(/'Straddling the shore'/);
+    //
+    // The fixture used to sit the island ON the coast, overlapping it by
+    // fifteen miles, which is not what that sentence describes — a sub-scale
+    // GAP is still a gap, and it is the gap that makes this legitimate. An
+    // island genuinely overlapping its shore is #180's case and is now
+    // reported, so this asserts what the comment always meant.
+    expect(warningsOf(SRC).join()).not.toMatch(/'A narrow channel'/);
   });
 
   it("is a WARNING — the map still renders", () => {
@@ -1266,5 +1272,147 @@ ${feature}
     const canal = `fjord hood "Hood Canal" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15`;
     const arm = `sound dabob "Dabob Bay" : on hood at (42,66) size=1.5mi reach=5 taper=0.3`;
     expect(refusals(doc(ENCLOSED, `${canal}\n${arm}`))).toBe(0);
+  });
+});
+
+describe("an arm does not re-space the feature it hangs off (#179)", () => {
+  // Arms run as a second pass over the coast the feature they hang off is
+  // already spliced into. That pass used to re-sample its input at the host
+  // spacing, which throws away an outline sampled at its own radii — and lands
+  // the new samples by TOTAL ARC LENGTH, so an unrelated feature elsewhere on
+  // the coast moved where they fell and turned a drawable arm into a fold.
+  const SHORE = "from (50,0) via (48,30) (52,60) (48,90) to (50,120)";
+  const SEA = `sea "S" : area (50,0) along shore (50,120) (100,120) (100,0)`;
+  const CANAL = `fjord hood "Hood Canal" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15`;
+  const ARM = `sound dabob "Dabob Bay" : on hood at (42,66) size=1.5mi reach=5 taper=0.3`;
+  const doc = (extra: string, withArm = true): string => `map: region
+extent: 100x120mi
+
+[water]
+coastline shore : ${SHORE}
+${SEA}
+${CANAL}
+${withArm ? ARM : ""}
+${extra}
+`;
+  const shoreOf = (src: string): { pts: XY[]; sharp: number } => {
+    const pts = /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)![1]!
+      .trim().split(/\s+/).map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+    let sharp = 0;
+    for (let i = 1; i + 1 < pts.length; i++) {
+      const a = pts[i - 1]!, b = pts[i]!, c = pts[i + 1]!;
+      let t = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+      if (t > Math.PI) t = 2 * Math.PI - t;
+      sharp = Math.max(sharp, (t * 180) / Math.PI);
+    }
+    return { pts, sharp };
+  };
+
+  it("adding a feature elsewhere on the coast does not refuse the arm", () => {
+    // A bay thirty miles away on the far side of the canal's mouth. Nothing
+    // about the arm changes, and it used to decide whether the arm drew.
+    for (const extra of [
+      "",
+      `bay b1 "B1" : on shore at (50,52) size=3mi reach=2`,
+      `bay b2 "B2" : on shore at (48,30) size=3mi reach=2`,
+      `cape c1 "C1" : on shore at (48,30) size=3mi`,
+    ]) {
+      expect(renderSource(doc(extra)).diagnostics, extra || "(nothing)").toEqual([]);
+    }
+  });
+
+  it("the arm ADDS to its host's outline instead of coarsening it", () => {
+    // Measured before the fix: 1211 vertices down to 756, and the coast's
+    // sharpest turn up from 29 degrees to 82 — a silent degradation of a
+    // canal that drew perfectly well on its own.
+    const alone = shoreOf(doc("", false));
+    const armed = shoreOf(doc("", true));
+    expect(armed.pts.length).toBeGreaterThan(alone.pts.length);
+    expect(armed.sharp).toBeLessThan(alone.sharp + 5);
+  });
+});
+
+describe("a skewed centerline is not reported as a fold (#183)", () => {
+  // Spec 05 §4 requires a centerline to leave its host perpendicular, and on a
+  // curved shore that direction cannot be judged by eye. Reported as a fold it
+  // sent an author to try smaller sizes, smaller reaches and straighter
+  // stretches, none of which was ever the problem.
+  const doc = (via: string, size = "2mi"): string => `map: region
+extent: 100x130mi
+
+[water]
+coastline shore : from (50,0) via (48,30) (52,60) (48,90) to (50,120)
+sea "S" : east of shore
+sound c "Case Inlet" : on shore at (52,60) ${via} size=${size} taper=0.2
+`;
+  const messages = (src: string): string[] => renderSource(src).diagnostics.map((d) => d.message);
+
+  it("names the skew, the angle, and a point to try", () => {
+    const [msg] = messages(doc("via (52,52)"));
+    expect(msg).toMatch(/leaves the host at \d+° from the normal/);
+    expect(msg).toMatch(/must leave perpendicular/);
+    expect(msg).toMatch(/Try a first via point at \(-?[\d.]+,-?[\d.]+\)/);
+    // The size is NOT quoted, because changing it is exactly the wrong edit.
+    expect(msg).not.toMatch(/size=/);
+  });
+
+  it("suggests a point that actually draws", () => {
+    // The suggestion is spliced and validated before being offered, so it is
+    // a fact about this map rather than an estimate.
+    const [msg] = messages(doc("via (52,52)"));
+    const m = /via point at \((-?[\d.]+),(-?[\d.]+)\)/.exec(msg!)!;
+    expect(messages(doc(`via (${m[1]},${m[2]})`))).toEqual([]);
+  });
+
+  it("leaves a genuine fold reading as a fold", () => {
+    // On the normal and far too big for its stretch: the perpendicular would
+    // not rescue it, so the honest answer is still a fold — with the size
+    // named, because here the size IS the thing to change.
+    const [msg] = messages(doc("via (44,60)", "60mi"));
+    expect(msg).toMatch(/would fold this stretch/);
+    expect(msg).toMatch(/size=60mi/);
+  });
+});
+
+describe("an island welded to the mainland is reported (#180)", () => {
+  // #164 fires only when a footprint is WHOLLY dry. The failure that matters
+  // is weaker: still mostly in water, but touching the shore, so #165's union
+  // joins the two and the document's island is not one on the map. The test is
+  // navigational — could a reader sail round it?
+  const doc = (x: number): string => `map: region
+extent: 100x100mi
+
+[water]
+coastline shore : from (50,0) via (50,30) (50,60) to (50,100)
+sea "S" : west of shore
+island i "An Isle" : near shore at (${x},50) area (0,-6) (2,-3) (2.5,3) (1,6) (-1,5) (-2,0) (-1.5,-4)
+`;
+  const messages = (x: number): string[] => renderSource(doc(x)).diagnostics.map((d) => d.message);
+
+  it("reports an island whose outline reaches the coast", () => {
+    // The island's east side extends 2.5mi from its anchor, so from x=48 it
+    // touches the shore at x=50.
+    for (const x of [48, 49, 50, 51]) {
+      const [msg] = messages(x);
+      expect(msg, `x=${x}`).toMatch(/is joined to the mainland/);
+      expect(msg, `x=${x}`).toMatch(/\d+% of its shore has water beyond it/);
+    }
+  });
+
+  it("leaves a genuine channel alone, however narrow", () => {
+    // 0.5mi, 0.3mi and 0.1mi of open water: all still islands.
+    for (const x of [40, 44, 47, 47.2, 47.4]) {
+      expect(messages(x), `x=${x}`).toEqual([]);
+    }
+  });
+
+  it("still gives the wholly-dry case its own message", () => {
+    // One cause, one report: a dry island is not also 'joined to the mainland'.
+    const msgs = messages(62);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatch(/no water around it/);
   });
 });

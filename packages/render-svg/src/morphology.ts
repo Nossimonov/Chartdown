@@ -186,7 +186,20 @@ export type RejectReason =
   /** Half the mouth would sit off the end of the host: there is no coast there. */
   | { kind: "off-end" }
   /** Another feature already claims this stretch of the host. */
-  | { kind: "overlap"; other: PlacedFeature };
+  | { kind: "overlap"; other: PlacedFeature }
+  /**
+   * The centerline leaves the host at a skew, and squaring it would draw (#183).
+   *
+   * A fourth cause, and the one an author hits first: spec 05 §4 requires a
+   * centerline to leave PERPENDICULAR, and on a curved shore that direction
+   * cannot be judged by eye from a list of coordinates. Reported as a fold, it
+   * sent an author to try smaller sizes, smaller reaches and straighter
+   * stretches — none of which was ever the problem.
+   *
+   * `suggest` is not an estimate. It is a first control this function has
+   * SPLICED AND VALIDATED, so the point offered is known to draw.
+   */
+  | { kind: "off-normal"; degrees: number; suggest: XY };
 
 /** A feature resolved against its host: where its window sits, and where it runs. */
 interface Sited {
@@ -219,6 +232,13 @@ export function deformCurve(
   curve: XY[],
   features: PlacedFeature[],
   onReject?: (f: PlacedFeature, why: RejectReason) => void,
+  /**
+   * Whether `curve` is a DECLARED course, needing normalising first.
+   *
+   * False for a curve this function already produced — an arm's pass over a
+   * coast that carries the feature it hangs off (#170, #179).
+   */
+  declared = true,
 ): XY[] {
   // RESAMPLED TO A UNIFORM SPACING FIRST, and this is load-bearing rather than
   // tidying (#154, #155). The window is an arc-length span, so without it the
@@ -226,7 +246,19 @@ export function deformCurve(
   // adding COLLINEAR points to a straight coast — changing nothing about the
   // line — doubled the deepest drawable feature. And a `from … to` course with
   // no via points splines to two points, so the window covered the whole coast.
-  const host = resample(curve, SPACING);
+  //
+  // ONLY WHERE THE CURVE IS THE AUTHOR'S, THOUGH (#179). That reasoning is
+  // about a course somebody typed; a curve this function has already returned
+  // carries FINISHED FEATURE OUTLINES, each sampled at its own radii, and
+  // re-spacing those uniformly throws the detail away. Measured on a canal with
+  // one arm: 1211 vertices down to 756, and the sharpest turn on the coast up
+  // from 29° to 82°. Worse, it made the result depend on the WHOLE MAP —
+  // re-spacing lands the samples by total arc length, so adding an unrelated
+  // feature forty miles away shifted where they fell on the canal, and an arm
+  // that drew perfectly well became a fold. Sixty arm placements were refused
+  // on a coast carrying fifteen features, none of them for a reason the author
+  // could see or fix.
+  const host = declared ? resample(curve, SPACING) : curve;
   const arc = arcLengths(host);
   const total = arc[arc.length - 1] ?? 0;
 
@@ -252,13 +284,53 @@ export function deformCurve(
     }
     const next = splice(host, arc, [...accepted, sited]);
     if (!isSimple(next) || !isSmooth(next)) {
-      onReject?.(f, { kind: "fold" });
+      onReject?.(f, skewed(host, arc, accepted, f, sited) ?? { kind: "fold" });
       continue;
     }
     accepted.push(sited);
     out = next;
   }
   return out;
+}
+
+/**
+ * Was this refusal really about the centerline leaving at a skew (#183)?
+ *
+ * Asked by EXPERIMENT rather than by threshold: square the first control onto
+ * the host's normal, keeping its distance, and splice the result. If that
+ * draws, the skew was the cause and the squared control is a point the author
+ * can paste — verified rather than estimated. If it does not, the shape has a
+ * problem the perpendicular would not fix, and the honest answer is still a
+ * fold. There is no angle to tune, which matters because the angle that
+ * actually bites depends on the mouth's width and the first leg's length.
+ */
+function skewed(
+  host: XY[],
+  arc: number[],
+  accepted: Sited[],
+  f: PlacedFeature,
+  sited: Sited,
+): RejectReason | null {
+  const via = f.via;
+  const mouth = sited.centre[0];
+  const lead = sited.centre[1];
+  if (!via || via.length === 0 || !mouth || !lead) return null;
+  const lx = lead.x - mouth.x;
+  const ly = lead.y - mouth.y;
+  const leadLen = Math.hypot(lx, ly);
+  const vx = via[0]!.x - mouth.x;
+  const vy = via[0]!.y - mouth.y;
+  const legLen = Math.hypot(vx, vy);
+  if (!(leadLen > 0) || !(legLen > 0)) return null;
+  const cos = Math.min(1, Math.max(-1, (lx * vx + ly * vy) / (leadLen * legLen)));
+  const degrees = (Math.acos(cos) * 180) / Math.PI;
+  if (degrees < 1) return null;
+  const suggest = { x: mouth.x + (lx / leadLen) * legLen, y: mouth.y + (ly / leadLen) * legLen };
+  const trial = site(host, arc, { ...f, via: [suggest, ...via.slice(1)] });
+  if (!trial) return null;
+  const drawn = splice(host, arc, [...accepted, trial]);
+  if (!isSimple(drawn) || !isSmooth(drawn)) return null;
+  return { kind: "off-normal", degrees, suggest };
 }
 
 /** Resolve a feature against its host: anchor, direction, centerline. */
