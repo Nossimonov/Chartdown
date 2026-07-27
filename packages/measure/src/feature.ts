@@ -295,14 +295,23 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
     centrePixels.pop();
   }
 
-  // Half-width per band from its area: a band of the channel is a slab, so its
-  // area over its length is its width. Steadier than probing a single ray,
-  // which lands in a notch as often as not.
-  const bandLength = deepest / bands;
-  const profile = centrePixels.map((c) => ({
-    at: c.at * georef.milesPerPixel,
-    halfWidth: (c.area / Math.max(bandLength, 1) / 2) * georef.milesPerPixel,
-  }));
+  // Half-width from the DISTANCE TO LAND at the middle of the channel, which is
+  // what a medial axis means: the largest circle that fits in the water here.
+  //
+  // Taking it from the band's AREA instead measured the trunk plus whatever
+  // hung off it, because flooding behind a mouth captures the arms too. On Hood
+  // Canal that put Dabob and Quilcene into the trunk's own width — 4.73mi and
+  // 3.5mi where the channel is nearer 1.5 — and a channel that wide cannot make
+  // the Great Bend's turn, so the renderer refused it, correctly (#177). A bay
+  // off to one side cannot move the distance from mid-channel to the shore.
+  const profile = centrePixels.map((c) => {
+    const px = Math.min(Math.max(Math.round(c.p.x), 0), mask.width - 1);
+    const py = Math.min(Math.max(Math.round(c.p.y), 0), mask.height - 1);
+    return {
+      at: c.at * georef.milesPerPixel,
+      halfWidth: (fromLand[py * mask.width + px] ?? 0) * georef.milesPerPixel,
+    };
+  });
 
   // `taper` is the fraction of the depth spent converging. Take the flank as
   // the median half-width over the first half, and find where the shape leaves
