@@ -14,17 +14,30 @@
 
 import { readFileSync } from "node:fs";
 import { decodePng, ImageError } from "./png";
-import { fitGeoref, GeorefError, parseLandmark, type Georef, type Landmark } from "./georef";
+import { fitGeoref, GeorefError, parseLandmark, type Georef, type Landmark, type XY } from "./georef";
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
+import { measureFeature, MeasureError, simplify, spaceOut } from "./feature";
 
 const USAGE = `chartdown-measure — derive Chartdown declarations from imagery
 
 usage: chartdown-measure inspect <image.png> [options]
+       chartdown-measure feature <image.png> --mouth <px,py> --into <px,py> [options]
        chartdown-measure --help
 
   inspect   report what the tool sees: the classification it chose, and the
             georeference it fitted. Run this first — a bad water threshold or
             a bad georeference is visible here and invisible afterwards.
+
+  feature   measure one inlet and print its declaration. Which water is "this
+            inlet" and where its mouth lies are yours to say: no picture of
+            Puget Sound contains a line marking where Hood Canal begins.
+
+feature options:
+  --mouth <px>,<py>   a pixel in the channel AT ITS MOUTH, between the headlands
+  --into <px>,<py>    a pixel well inside the inlet, past the mouth
+  --word <word>       the vocabulary word to declare it as (default: sound)
+  --name <text>       its display name
+  --id <word>         its id
 
 options:
   --georef <px>,<py>=<lat>,<lon>   a landmark; repeat it. Two at minimum, three
@@ -45,12 +58,23 @@ interface Options {
   index: IndexName;
   invert: boolean;
   close: number;
+  mouth?: XY;
+  into?: XY;
+  word: string;
+  name?: string;
+  id?: string;
+}
+
+function parsePixel(text: string | undefined, flag: string): XY {
+  const m = /^\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*$/.exec(text ?? "");
+  if (!m) throw new Error(`${flag} needs a pixel, as <x>,<y>`);
+  return { x: Number(m[1]), y: Number(m[2]) };
 }
 
 function parseArgs(argv: string[]): { command: string; options: Options } {
   const [command, image, ...rest] = argv;
   if (!command || !image) throw new Error(USAGE);
-  const options: Options = { image, landmarks: [], index: "luma", invert: false, close: 2 };
+  const options: Options = { image, landmarks: [], index: "luma", invert: false, close: 2, word: "sound" };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
     const value = rest[i + 1];
@@ -66,6 +90,16 @@ function parseArgs(argv: string[]): { command: string; options: Options } {
       const n = Number(value);
       if (!Number.isFinite(n) || n < 0) throw new Error("--close takes a number of pixels");
       options.close = Math.round(n);
+      i++;
+    } else if (flag === "--mouth") {
+      options.mouth = parsePixel(value, "--mouth");
+      i++;
+    } else if (flag === "--into") {
+      options.into = parsePixel(value, "--into");
+      i++;
+    } else if (flag === "--word" || flag === "--name" || flag === "--id") {
+      if (!value) throw new Error(`${flag} needs a value`);
+      options[flag === "--word" ? "word" : flag === "--name" ? "name" : "id"] = value;
       i++;
     } else if (flag === "--invert") {
       options.invert = true;
@@ -119,6 +153,41 @@ function inspect(options: Options): void {
   }
 }
 
+/** Everything the pipeline needs, in the order `inspect` reports it. */
+function prepare(options: Options): { mask: ReturnType<typeof largestBody>; fit: Georef } {
+  const raster = decodePng(readFileSync(options.image));
+  const classified = classifyWater(raster, options.index, options.invert);
+  const sea = largestBody(closeGaps(classified.mask, options.close));
+  if (options.landmarks.length === 0) {
+    throw new GeorefError("measuring needs a georeference: give --georef landmarks so pixels can become miles");
+  }
+  return { mask: sea, fit: fitGeoref(options.landmarks, raster) };
+}
+
+function feature(options: Options): void {
+  if (!options.mouth || !options.into) throw new Error("feature needs --mouth and --into");
+  const { mask, fit } = prepare(options);
+  const got = measureFeature(mask, fit, options.mouth, options.into);
+
+  // Thinned to what a person would write. Sixty controls down a canal is the
+  // wall of coordinates ADR 0023 exists to remove, wearing a different hat —
+  // a tenth of the feature's own width keeps every bend that reads as one.
+  const controls = spaceOut(
+    simplify(got.centerline, Math.max(got.size / 10, fit.milesPerPixel * 2)),
+    Math.max(got.size * 2, got.depth / 12),
+  ).slice(1);
+  const subject = [options.word, options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
+  const via = controls.length > 0 ? ` via ${controls.map((p) => `(${round(p.x, 1)},${round(p.y, 1)})`).join(" ")}` : "";
+
+  console.log(`; measured from ${options.image} — depth ${round(got.depth, 1)}mi along the channel, mouth ${round(got.size, 2)}mi`);
+  console.log(`${subject} : on <shore> at (${round(got.anchor.x, 1)},${round(got.anchor.y, 1)})${via} size=${round(got.size, 2)}mi taper=${round(got.taper, 2)}`);
+  console.log("");
+  console.log("; replace <shore> with the id of the coastline this hangs on.");
+  if (controls.length === 0) {
+    console.log("; no bends worth declaring — add reach= instead of via if you want a straight run.");
+  }
+}
+
 function main(argv: string[]): number {
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     console.log(USAGE);
@@ -130,12 +199,16 @@ function main(argv: string[]): number {
       inspect(options);
       return 0;
     }
+    if (command === "feature") {
+      feature(options);
+      return 0;
+    }
     console.error(`unknown command '${command}'\n\n${USAGE}`);
     return 2;
   } catch (error) {
     // Every failure this tool has is one an author can act on, so it is stated
     // rather than stack-traced.
-    if (error instanceof ImageError || error instanceof GeorefError) {
+    if (error instanceof ImageError || error instanceof GeorefError || error instanceof MeasureError) {
       console.error(`error: ${error.message}`);
       return 1;
     }
