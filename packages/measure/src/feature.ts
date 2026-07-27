@@ -155,7 +155,20 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
 
   // Geodesic distance from the mouth, THROUGH the water. Straight-line distance
   // would cut across every headland the channel goes round.
-  const dist = new Float32Array(mask.bits.length).fill(-1);
+  //
+  // CHAMFERED, NOT FLOODED. A four-connected walk measures Manhattan distance,
+  // which is exact along the axes and overstates a diagonal by 41% — and a
+  // channel is under no obligation to run north-south. Measured against the
+  // reference tracing of Hood Canal, which runs south-south-west, this read
+  // 79.7mi where the truth is 55.8: a ratio of 1.428 against √2's 1.414. Every
+  // fixture that had passed was axis-aligned, where the two metrics agree
+  // exactly, so nothing in the suite could have caught it.
+  //
+  // Diagonal steps at √2 are exact at 0°, 45° and 90° and worst at 22.5°, where
+  // they overstate by 7.6%. Iterating raster passes rather than running a
+  // Dijkstra keeps this to array arithmetic; a channel needs one pass per bend
+  // it wraps around, so the bound is generous rather than tight.
+  const dist = new Float32Array(mask.bits.length).fill(Infinity);
   const queue = new Int32Array(insideCount + 8);
   let head = 0;
   let tail = 0;
@@ -173,27 +186,61 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
         const py = y + oy;
         if (px < 0 || py < 0 || px >= mask.width || py >= mask.height) continue;
         const at2 = py * mask.width + px;
-        if (inside[at2] === 1 && dist[at2] === -1) { dist[at2] = 0; queue[tail++] = at2; }
+        if (inside[at2] === 1 && dist[at2] === Infinity) { dist[at2] = 0; queue[tail++] = at2; }
       }
     }
   }
   if (tail === 0) throw new MeasureError("the mouth does not touch the water behind it");
-  while (head < tail) {
-    const from = queue[head++]!;
-    const x = from % mask.width;
-    const y = (from / mask.width) | 0;
-    const d = dist[from]! + 1;
-    const step = (to: number, ok: boolean): void => {
-      if (ok && inside[to] === 1 && dist[to] === -1) { dist[to] = d; queue[tail++] = to; }
-    };
-    step(from - 1, x > 0);
-    step(from + 1, x + 1 < mask.width);
-    step(from - mask.width, y > 0);
-    step(from + mask.width, y + 1 < mask.height);
+
+  // Only the inlet's own bounding box is swept, so the cost follows the feature
+  // rather than the picture it was cut from.
+  let x0 = mask.width, x1 = 0, y0 = mask.height, y1 = 0;
+  for (let i = 0; i < inside.length; i++) {
+    if (inside[i] !== 1) continue;
+    const x = i % mask.width;
+    const y = (i / mask.width) | 0;
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  const D1 = 1;
+  const D2 = Math.SQRT2;
+  const W = mask.width;
+  for (let round = 0; round < 64; round++) {
+    let moved = false;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const i = y * W + x;
+        if (inside[i] !== 1) continue;
+        let d = dist[i]!;
+        if (x > 0) d = Math.min(d, dist[i - 1]! + D1);
+        if (y > 0) d = Math.min(d, dist[i - W]! + D1);
+        if (x > 0 && y > 0) d = Math.min(d, dist[i - W - 1]! + D2);
+        if (x + 1 < W && y > 0) d = Math.min(d, dist[i - W + 1]! + D2);
+        if (d < dist[i]!) { dist[i] = d; moved = true; }
+      }
+    }
+    for (let y = y1; y >= y0; y--) {
+      for (let x = x1; x >= x0; x--) {
+        const i = y * W + x;
+        if (inside[i] !== 1) continue;
+        let d = dist[i]!;
+        if (x + 1 < W) d = Math.min(d, dist[i + 1]! + D1);
+        if (y + 1 < mask.height) d = Math.min(d, dist[i + W]! + D1);
+        if (x + 1 < W && y + 1 < mask.height) d = Math.min(d, dist[i + W + 1]! + D2);
+        if (x > 0 && y + 1 < mask.height) d = Math.min(d, dist[i + W - 1]! + D2);
+        if (d < dist[i]!) { dist[i] = d; moved = true; }
+      }
+    }
+    if (!moved) break;
   }
 
   let deepest = 0;
-  for (let i = 0; i < dist.length; i++) if (dist[i]! > deepest) deepest = dist[i]!;
+  for (let i = 0; i < dist.length; i++) {
+    const d = dist[i]!;
+    if (Number.isFinite(d) && d > deepest) deepest = d;
+  }
   if (deepest < 2) throw new MeasureError("the inlet is barely deeper than its own mouth — check the inward point");
 
   // The centerline is the centre of the water at each distance from the mouth.
@@ -213,7 +260,7 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
   const fromLand = distanceToLand(mask);
   for (let i = 0; i < dist.length; i++) {
     const d = dist[i]!;
-    if (d < 0) continue;
+    if (!Number.isFinite(d)) continue;
     const band = Math.min(bands, Math.floor((d / deepest) * bands));
     const w = Math.max(fromLand[i]!, 0.001);
     sumX[band]! += (i % mask.width) * w;

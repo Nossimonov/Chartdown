@@ -76,9 +76,12 @@ describe("measuring a channel that bends, which is the case via exists for", () 
     // Straight line from mouth to head is ~145px = 14.5mi; along the channel
     // it is ~220px = 22mi. The second is the one `via` has to reproduce.
     const asCrowFlies = Math.hypot(150 - 60, 190 - 100) * 0.1;
-    // The claim is the RATIO, not a particular number of miles: going round
-    // the corner is half again as far as cutting across it.
-    expect(got.depth).toBeGreaterThan(asCrowFlies * 1.4);
+    // The claim is the RATIO, not a particular number of miles: going round the
+    // corner is a third again as far as cutting across it. Not the full √2 of
+    // the centerline's own L, because the shortest way through a channel with
+    // width to it clips the inside of the bend — which is what a geodesic
+    // through water means, and what a boat would do.
+    expect(got.depth).toBeGreaterThan(asCrowFlies * 1.25);
   });
 
   it("produces a centerline that turns the corner", () => {
@@ -145,5 +148,29 @@ describe("thinning a centerline to what a person would write", () => {
 
   it("leaves a short line alone", () => {
     expect(simplify([{ x: 0, y: 0 }, { x: 1, y: 1 }], 5)).toHaveLength(2);
+  });
+});
+
+describe("a channel running DIAGONALLY, where the metric had to be right (#181)", () => {
+  // Every other fixture here runs along an axis, and a four-connected walk is
+  // EXACT along an axis — so the suite was blind to its 41% overstatement of a
+  // diagonal until the real Puget Sound mask showed Hood Canal at 79.7mi where
+  // the reference tracing says 55.8. That ratio, 1.428, is √2 wearing a hat.
+  const DIAGONAL = scene((x, y) => x >= 40 && Math.abs((y - 60) - (x - 40)) < 10 && y < 260);
+  const got = measureFeature(DIAGONAL, georef(0.1), { x: 60, y: 80 }, { x: 200, y: 220 });
+
+  it("measures a 45° run at its true length, not its Manhattan length", () => {
+    // From (60,80) to the far end near (240,260): about 180px each way, so a
+    // true length near 254px = 25.4mi. Manhattan would call it 360px = 36mi.
+    expect(got.depth).toBeGreaterThan(22);
+    expect(got.depth).toBeLessThan(28);
+  });
+
+  it("measures the mouth PERPENDICULAR to the run, not along an axis", () => {
+    // `|y - x - 20| < 10` is a band whose perpendicular half-width is 10/√2,
+    // so the channel is 14.14px across — and a horizontal or vertical chord
+    // through it would measure 20. Finding 1.41mi rather than 2.0 is the
+    // narrowest-chord search doing its job on a diagonal.
+    expect(got.size).toBeCloseTo(1.41, 1);
   });
 });
