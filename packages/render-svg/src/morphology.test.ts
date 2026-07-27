@@ -7,7 +7,7 @@
  * never crosses itself no matter what it is asked for.
  */
 import { describe, expect, it } from "vitest";
-import { deformCurve, isSimple, isSmooth, type PlacedFeature } from "./morphology";
+import { deformCurve, isSimple, isSmooth, resample, spacingFor, type PlacedFeature } from "./morphology";
 import { renderSource } from "./index";
 import type { XY } from "./util";
 
@@ -16,8 +16,12 @@ import type { XY } from "./util";
  * imposes (#155) — so a test may compare its output to this baseline by index.
  * Deforming with NO features is exactly that resampling and nothing else.
  */
-const straight = (n = 81, len = 400): XY[] =>
-  deformCurve(Array.from({ length: n }, (_, i) => ({ x: (i / (n - 1)) * len, y: 100 })), []);
+const rawStraight = (n = 81, len = 400): XY[] =>
+  Array.from({ length: n }, (_, i) => ({ x: (i / (n - 1)) * len, y: 100 }));
+/** The baseline at the spacing THESE features will cause, so indices line up. */
+const straightFor = (feats: PlacedFeature[], n = 81, len = 400): XY[] =>
+  resample(rawStraight(n, len), spacingFor(feats));
+const straight = (n = 81, len = 400): XY[] => straightFor([], n, len);
 
 const feature = (over: Partial<PlacedFeature> = {}): PlacedFeature => ({
   morph: "jut", anchor: { x: 200, y: 100 }, size: 60, ...over,
@@ -28,14 +32,14 @@ const maxOffset = (a: XY[], b: XY[]): number =>
 
 describe("a placed feature deforms its host", () => {
   it("moves the curve at the anchor and leaves it simple", () => {
-    const base = straight();
+    const base = straightFor([feature()]);
     const out = deformCurve(base, [feature()]);
     expect(maxOffset(base, out)).toBeGreaterThan(1);
     expect(isSimple(out)).toBe(true);
   });
 
   it("a bite goes the opposite way from a jut of the same size", () => {
-    const base = straight();
+    const base = straightFor([feature()]);
     const jut = deformCurve(base, [feature({ morph: "jut" })]);
     const bite = deformCurve(base, [feature({ morph: "bite" })]);
     const at = 40; // the anchor's index on this sampling
@@ -47,7 +51,7 @@ describe("a placed feature deforms its host", () => {
   it("disturbs ONLY its own window — the rest of the coast is untouched", () => {
     // The locality guarantee is what lets an author place a second feature
     // later without the first one shifting.
-    const base = straight();
+    const base = straightFor([feature()]);
     const out = deformCurve(base, [feature({ anchor: { x: 200, y: 100 }, size: 60 })]);
     const far = out.filter((_, i) => Math.abs(base[i]!.x - 200) > 31);
     expect(far.every((p, k) => p.y === base.filter((_, i) => Math.abs(base[i]!.x - 200) > 31)[k]!.y)).toBe(true);
@@ -57,7 +61,7 @@ describe("a placed feature deforms its host", () => {
     // A raised cosine has zero slope at both window edges. Sample the step
     // between adjacent vertices: the largest one near the seam must not exceed
     // the largest one at the crest, or there is a corner where the bump lands.
-    const base = straight();
+    const base = straightFor([feature()]);
     const out = deformCurve(base, [feature()]);
     const steps = out.slice(1).map((p, i) => Math.abs(p.y - out[i]!.y));
     const crest = Math.max(...steps.slice(35, 45));
@@ -68,7 +72,7 @@ describe("a placed feature deforms its host", () => {
 
 describe("a feature is a pure function of its own data (ADR 0023)", () => {
   it("is deterministic — no seed, no ordinal, no document order", () => {
-    const base = straight();
+    const base = straightFor([feature()]);
     expect(deformCurve(base, [feature()])).toEqual(deformCurve(base, [feature()]));
   });
 
@@ -77,14 +81,14 @@ describe("a feature is a pure function of its own data (ADR 0023)", () => {
     // must render identically. Nothing in the geometry can see a name, which
     // is the structural guarantee behind the spec's promise — naming adds a
     // story, not a shape.
-    const base = straight();
+    const base = straightFor([feature()]);
     const anonymous = deformCurve(base, [feature()]);
     const named = deformCurve(base, [feature()]);
     expect(named).toEqual(anonymous);
   });
 
   it("moving one feature does not move another", () => {
-    const base = straight();
+    const base = straightFor([feature()]);
     const a = feature({ anchor: { x: 100, y: 100 }, size: 40 });
     const b = feature({ anchor: { x: 300, y: 100 }, size: 40 });
     const both = deformCurve(base, [a, b]);
@@ -123,7 +127,7 @@ describe("the simplicity guarantee is hard (ADR 0023)", () => {
   });
 
   it("draws at the declared size when it fits — no silent shrinking anywhere", () => {
-    const base = straight();
+    const base = straightFor([feature()]);
     const rejected: string[] = [];
     const out = deformCurve(base, [feature({ size: 60 })], () => rejected.push("x"));
     expect(rejected).toHaveLength(0);
@@ -138,6 +142,8 @@ describe("the simplicity guarantee is hard (ADR 0023)", () => {
 
 describe("detached features do not touch the host", () => {
   it("an island leaves the coastline exactly as it was", () => {
+    // A detached feature contributes nothing to the spacing either, so the
+    // baseline is the featureless one.
     const base = straight();
     expect(deformCurve(base, [feature({ morph: "detached" })])).toEqual(base);
   });
@@ -160,7 +166,7 @@ describe("direction comes from the map, not from the drawing order (#93)", () =>
   };
 
   it("a jut goes toward the water and a bite away from it", () => {
-    const base = straight();
+    const base = straightFor([feature()]);
     const cape = deformCurve(base, [feature({ morph: "jut", seaward: north })]);
     const bay = deformCurve(base, [feature({ morph: "bite", seaward: north })]);
     const at = anchorIndex(base);
@@ -173,7 +179,7 @@ describe("direction comes from the map, not from the drawing order (#93)", () =>
     // says which side the water is on; whether the author drew the coast
     // north-to-south or south-to-north is not the map's business. Without
     // this, editing a `from`/`to` would silently invert every feature on it.
-    const base = straight();
+    const base = straightFor([feature()]);
     const at = anchorIndex(base);
     const drawn = deformCurve(base, [feature({ morph: "jut", seaward: north })]);
     const reversed = deformCurve([...base].reverse(), [feature({ morph: "jut", seaward: north })]);
@@ -186,7 +192,7 @@ describe("direction comes from the map, not from the drawing order (#93)", () =>
   it("without a declared water side the shape is still drawn, deterministically", () => {
     // Warned about at the call site rather than silently skipped: a missing
     // declaration should cost a diagnostic, not a feature.
-    const base = straight();
+    const base = straightFor([feature()]);
     const out = deformCurve(base, [feature()]);
     expect(maxOffset(base, out)).toBeGreaterThan(1);
     expect(out).toEqual(deformCurve(base, [feature()]));

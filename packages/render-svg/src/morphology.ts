@@ -76,8 +76,22 @@ const MIN_SIZE = 1e-6;
 
 /** Uniform vertex spacing, in rendered units, before any feature is applied. */
 const SPACING = 2;
-/** Vertices a feature's window needs to read as a curve rather than a polygon. */
+/** Vertices a feature's finest detail needs to read as a curve rather than a polygon. */
 const WINDOW_VERTICES = 24;
+
+/**
+ * Vertex spacing a set of features needs, exported so a caller can build a
+ * comparable baseline. Tests that resampled at a fixed spacing and compared to
+ * a deformed curve by index broke three times as this number changed, which
+ * said the coupling belonged in one place rather than in every assertion.
+ */
+export function spacingFor(features: PlacedFeature[]): number {
+  const finest = features.reduce(
+    (m, f) => (f.morph === "detached" ? m : Math.min(m, (f.size / 2) * Math.max(f.taper ?? 1, 0.02))),
+    Infinity,
+  );
+  return Number.isFinite(finest) ? Math.min(SPACING, finest / WINDOW_VERTICES) : SPACING;
+}
 /** Backstop so a pathological extent cannot allocate without bound. */
 const MAX_POINTS = 6000;
 
@@ -135,9 +149,11 @@ export function deformCurve(
   // The spacing has to suit the SMALLEST feature on the course, not a fixed
   // guess: a 0.5mi inlet on a 120mi map is a three-pixel mouth, and at a flat
   // 2-unit spacing its window held two vertices and could not be drawn at all.
-  const smallest = features.reduce((m, f) => (f.morph === "detached" ? m : Math.min(m, f.size)), Infinity);
-  const spacing = Number.isFinite(smallest) ? Math.min(SPACING, smallest / WINDOW_VERTICES) : SPACING;
-  let out = resample(curve, spacing);
+  // The finest length scale is the RAMP, not the mouth (#163). `taper=0.15`
+  // makes the ramp a thirteenth of the window, so sampling the window at 24
+  // vertices left 1.8 on the ramp and the whole shoulder was drawn as a single
+  // step — the 8x jump in step length the report measured at the corner.
+  let out = resample(curve, spacingFor(features));
   for (const f of features) {
     if (f.morph === "detached" || f.size < MIN_SIZE) continue;
     const next = applyOne(out, f);
