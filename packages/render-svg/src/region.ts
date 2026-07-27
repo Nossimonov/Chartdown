@@ -812,16 +812,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
   }
 
-  const pip = (pt: XY, poly: XY[]): boolean => {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i]!;
-      const b = poly[j]!;
-      if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-    }
-    return inside;
-  };
-
   // Name homes (owner: the ROAD's label dodges the forest's name, never
   // the reverse): each named area reserves its natural centroid label spot
   // BEFORE curve labels claim, and the reservation is released before area
@@ -893,6 +883,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // `frame` marks half-plane realms: their polygon is mostly viewport edge,
   // so only border-stated stretches stroke (no outline around the map rim).
   const realmInfos: { e: EntityNode; key: string; poly: XY[]; spans: { ref: string; start: number; end: number }[]; fill: string; frame?: boolean }[] = [];
+  /** Every island's drawn footprint, checked against the water once all of it is known (#164). */
+  const islandInfos: { e: EntityNode; poly: XY[] }[] = [];
   const borderDecls: EntityNode[] = [];
 
   /**
@@ -1180,6 +1172,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // Islands are LAND (owner round three): paper surface and a coastline
       // stroke, exactly like the continents — not a tinted blob.
       if (chain.includes("island")) {
+        // Checked AFTER the loop, not here: `waterPolys` is filled as the
+        // items are walked, so an island declared before its sea would be
+        // measured against water that does not exist yet (#164).
+        islandInfos.push({ e, poly: r.polygon });
         const coast = theme.pathStroke(["coastline"]);
         layers.areas.push(
           el("g", { id: anchor }, titleEl,
@@ -1645,6 +1641,32 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
   }
 
+  // AN ISLAND WITH NO WATER AROUND IT (#164). Spec 05 §2: "an island rises
+  // above the sea that surrounds it" — so an island whose footprint lies
+  // wholly on land is a sentence the document can write and the renderer will
+  // draw, as a stroked contour on open grass with a place-name beside it.
+  //
+  // Nobody notices while authoring, because at full-map zoom it reads as a
+  // faint mark and nothing says otherwise: on the Puget Sound exercise map
+  // NINE of fifteen islands were misplaced, in the map's headline feature.
+  // This is the region-map form of #123's door onto solid rock, and strictly
+  // easier — a geometric fact rather than an inference about intent.
+  //
+  // A warning, like every other coherence check, and only for the WHOLLY dry
+  // case: an island half a mile offshore legitimately overlaps its shore at
+  // map scale, which is #165's business rather than a mistake.
+  if (waterPolys.length) {
+    for (const { e, poly } of islandInfos) {
+      if (coversWater(poly, waterPolys)) continue;
+      const named = e.name ? `'${e.name}'` : `the ${e.typeWord ?? "island"} on line ${e.line}`;
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `${named} is an island with no water around it — its footprint lies entirely on land. An island rises above the sea that surrounds it (spec 05 §2)`,
+      });
+    }
+  }
+
   // Massifs emit FIRST among lines (beneath rivers and roads that cross
   // them), one group per fill with group-level opacity so overlaps merge.
   if (massifs.length) {
@@ -2015,6 +2037,52 @@ function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing:
     if (needed >= 0.5) return { size, spacing: needed };
   }
   return { size: 8, spacing: Math.max(0.5, perChar - 8 * 0.58) };
+}
+
+/**
+ * Is this point inside this polygon? The standard crossing count.
+ *
+ * At module scope because the water check below needs it too, and duplicating
+ * a predicate is how two callers end up disagreeing about what "inside" means.
+ */
+function pip(pt: XY, poly: XY[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Does any part of this footprint lie in water? (#164)
+ *
+ * SAMPLED rather than solved. An exact polygon intersection would be a
+ * boolean-geometry engine, which the renderer deliberately does not carry
+ * (ADR 0007 keeps it free of runtime dependencies), and the question is
+ * coarse by design: "is there ANY water under this", not "how much of it".
+ *
+ * The grid can miss a very thin island — a `reach=0.15` skerry is a few pixels
+ * across — so a footprint no sample lands inside falls back to its own
+ * vertices and centre. Reporting a real island because the sampler was too
+ * coarse would be worse than the defect this exists to catch.
+ */
+function coversWater(poly: XY[], waters: XY[][]): boolean {
+  const xs = poly.map((p) => p.x);
+  const ys = poly.map((p) => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const STEPS = 12;
+  const inside: XY[] = [];
+  for (let i = 0; i <= STEPS; i++) {
+    for (let j = 0; j <= STEPS; j++) {
+      const p = { x: x0 + ((x1 - x0) * i) / STEPS, y: y0 + ((y1 - y0) * j) / STEPS };
+      if (pip(p, poly)) inside.push(p);
+    }
+  }
+  const probes = inside.length ? inside : [...poly, centroid(poly)];
+  return probes.some((p) => waters.some((water) => pip(p, water)));
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {

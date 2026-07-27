@@ -600,6 +600,57 @@ describe("a detached feature has two dials as well (#159)", () => {
   });
 });
 
+describe("an island with no water around it is reported (#164)", () => {
+  // The issue's own reproduction. Nine of the Puget Sound exercise map's
+  // fifteen islands were drawn on dry land and `check` said nothing — a
+  // stroked contour on open grass with a place-name beside it, which at
+  // full-map zoom reads as a faint mark rather than as a mistake.
+  const SRC = `map: region
+extent: 300x300mi
+
+[water]
+coastline coast : from (150,0) via (150,100) (150,200) to (150,300)
+sea "The Sea" : west of coast
+island good "In the sea" : near coast at (90,60) size=30mi reach=0.6
+island half "Straddling the shore" : near coast at (150,150) size=30mi reach=0.6
+island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
+`;
+  const warningsOf = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
+
+  it("names the island that is on land", () => {
+    const msg = warningsOf(SRC).join();
+    expect(msg).toMatch(/'Forty miles inland' is an island with no water around it/);
+    expect(msg).toMatch(/spec 05 §2/);
+  });
+
+  it("says nothing about the island that is in the sea", () => {
+    expect(warningsOf(SRC).join()).not.toMatch(/'In the sea'/);
+  });
+
+  it("says nothing about one STRADDLING the shore — that is #165, not a mistake", () => {
+    // Bainbridge really is separated from the Kitsap Peninsula by half a mile
+    // of water, which at map scale is thinner than the coastline stroke. The
+    // right rendering is one merged landmass, not a warning.
+    expect(warningsOf(SRC).join()).not.toMatch(/'Straddling the shore'/);
+  });
+
+  it("is a WARNING — the map still renders", () => {
+    expect(renderSource(SRC).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(renderSource(SRC).svg).toContain("Forty miles inland");
+  });
+
+  it("stays quiet on a map that declares no water at all", () => {
+    // Nothing on such a map says where the sea is, so there is no fact to
+    // report — inventing one would warn on every island of every map that
+    // does not model its water.
+    const dry = `map: region\nextent: 300x300mi\n\n[water]\n` +
+      `coastline coast : from (150,0) via (150,150) to (150,300)\n` +
+      `island a "Alone" : near coast at (90,60) size=30mi\n`;
+    expect(warningsOf(dry).join()).not.toMatch(/no water around it/);
+  });
+});
+
 describe("a named stretch of water is a name, not a mass (#160)", () => {
   const MAP = (section: string, line: string): string =>
     `# Basins\nmap: region\nextent: 200x300mi\n\n[water]\n` +
