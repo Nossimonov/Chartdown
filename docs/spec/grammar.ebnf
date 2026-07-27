@@ -101,7 +101,13 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
 
 relational     = ( "at" , ( point | address | range | edge ) )
                | ( [ measure ] , compass , "of" , ref )
-               | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] )
+               | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] ,
+                   [ "via" , point , { point } ] )
+                 (* "via" after an "at" point declares a PLACED FEATURE's
+                    centerline — spec 05 §4, #169. A bite is one straight run
+                    without it, and Hood Canal turns hard east at the Great
+                    Bend. One mouth and one head, so this is not the
+                    line-BRANCHING that 05 §4 stages. *)
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] ,
