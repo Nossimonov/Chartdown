@@ -36,3 +36,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0024](0024-a-feature-takes-its-bearing-from-the-water-it-sits-in.md) | A detached feature takes its bearing from the water it sits in, read from that water's own declaration | Accepted |
 | [0025](0025-a-blob-declares-an-extent-not-an-outline.md) | A blob declares an extent, not an outline; finishing is texture and may never decide a dimension | Accepted |
 | [0026](0026-shape-is-declared-data.md) | A feature's shape is declared data: an outline for what is detached, a centerline for what deforms | Accepted |
+| [0027](0027-an-island-is-separate-or-it-is-a-peninsula.md) | An island is separate, or it is a peninsula; a welded island is reported, never repaired | Accepted |
