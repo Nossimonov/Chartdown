@@ -11,7 +11,7 @@
 import type { EntityNode, Placement, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
-import { deformCurve, type Morph, type PlacedFeature } from "./morphology";
+import { ASPECT, deformCurve, type Morph, type PlacedFeature } from "./morphology";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
@@ -196,6 +196,52 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       featuresByHost.set(host, list);
     }
   }
+  /**
+   * The axis of the CHANNEL this point sits in, if it sits in one (#167).
+   *
+   * An island in an inlet lies ALONG the inlet — Hartstene, Squaxin, McNeil and
+   * Anderson each parallel the channels either side of them, because the same
+   * ice cut the island and the water. Taking the long axis from the HOST LINE
+   * instead (#159) reads the coastline's direction, which runs across the inlet
+   * rather than along it, so an island placed in one came out as a bar damming
+   * the channel instead of an island splitting it.
+   *
+   * Read from the INLET'S OWN DECLARATION rather than from the rendered water.
+   * Measuring the drawn sea would give the same answer here — its principal
+   * axis inside this inlet comes out along the channel, and open water is
+   * detectably round rather than elongated — but it would make an island's
+   * shape depend on rendered geometry, so an unrelated edit to the coastline
+   * could silently re-point an island a campaign had already named. ADR 0023
+   * requires a feature's geometry to be a pure function of the placed data, and
+   * two declarations are exactly that.
+   */
+  const channelAxisAt = (pt: XY): number | undefined => {
+    let best: { axis: XY; area: number; anchor: XY; line: number } | undefined;
+    for (const entry of [...featuresByHost.values()].flat()) {
+      // Only water divides: a jut is land, and an island cannot sit inside one.
+      if (entry.morph !== "bite") continue;
+      const seaward = entry.f.seaward;
+      if (!seaward) continue;
+      // A bite runs LANDWARD — away from the water that named its direction.
+      const axis = { x: -seaward.x, y: -seaward.y };
+      const depth = entry.f.size * (entry.f.reach ?? ASPECT);
+      const dx = pt.x - entry.f.anchor.x;
+      const dy = pt.y - entry.f.anchor.y;
+      const along = dx * axis.x + dy * axis.y;
+      const across = dx * -axis.y + dy * axis.x;
+      if (along < 0 || along > depth || Math.abs(across) > entry.f.size / 2) continue;
+      const area = entry.f.size * depth;
+      // The SMALLEST containing channel wins — an inlet inside a sound is the
+      // more specific statement about where this island actually is. Ties are
+      // broken on declared position and then line, so the answer never depends
+      // on map iteration order.
+      const better = !best || area < best.area ||
+        (area === best.area && (entry.f.anchor.x - best.anchor.x || entry.f.anchor.y - best.anchor.y || entry.line - best.line) < 0);
+      if (better) best = { axis, area, anchor: entry.f.anchor, line: entry.line };
+    }
+    return best ? Math.atan2(best.axis.y, best.axis.x) : undefined;
+  };
+
   /** Every name this entity answers to, since a feature may reference either. */
   const hostKeys = (e: EntityNode): string[] => [...e.ids, ...(e.name ? [e.name] : [])];
 
@@ -393,13 +439,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           diagnostics.push({ severity: "warning", line: e.line, message: `'reach=${reachText}' is not a number — the vocabulary default applies (spec 05 §4)` });
         }
         const shortRatio = Number.isFinite(reachNum) && reachNum > 0 ? reachNum : 1;
-        // The long axis lies along the HOST, inferred rather than declared:
-        // every long island in a sound parallels the shore it sits off,
-        // because the same glacier cut both.
+        // The long axis is inferred rather than declared: every long island in
+        // a sound parallels the water it sits in, because the same glacier cut
+        // both. THE CHANNEL WINS WHERE THERE IS ONE (#167) — an island inside
+        // an inlet lies along the inlet, not along the coastline that inlet
+        // was cut into, which runs across it. Elsewhere the host's own course
+        // still answers, so no island in open water moves.
         const hostRef = e.placements.find((p): p is Extract<Placement, { kind: "relational"; form: "near" }> =>
           p.kind === "relational" && p.form === "near" && p.target.kind === "ref");
         const controls = hostRef && hostRef.target.kind === "ref" ? hostControls.get(hostRef.target.value) : undefined;
-        const angle = controls ? tangentAngle(controls, center) : 0;
+        const angle = channelAxisAt(center) ?? (controls ? tangentAngle(controls, center) : 0);
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
         const raw = blob({ x: 0, y: 0 }, radius, rng(hashSeed(0, hashString(e.typeWord ?? "island"), Math.round(radius * 1000))));

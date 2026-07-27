@@ -33,3 +33,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0021](0021-a-map-is-the-sum-of-its-files.md) | A map is the sum of its files; cross-document references are in scope, and validated in both directions | Accepted |
 | [0022](0022-a-declaration-is-a-promise.md) | A declaration is a promise; the file that made it for this map is the one that is checked | Accepted |
 | [0023](0023-detail-is-data-not-noise.md) | Detail is data, not noise: anything a story can attach to must be declared | Accepted |
+| [0024](0024-a-feature-takes-its-bearing-from-the-water-it-sits-in.md) | A detached feature takes its bearing from the water it sits in, read from that water's own declaration | Accepted |

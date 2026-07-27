@@ -651,6 +651,99 @@ island inland "Forty miles inland" : near coast at (210,240) size=30mi reach=0.6
   });
 });
 
+describe("an island takes its bearing from the water it sits in (#167, ADR 0024)", () => {
+  // Six of Puget Sound's named islands divide two arms of the sea. Hartstene
+  // is what makes Case Inlet and Pickering Passage two inlets rather than one
+  // bay — it lies ALONG its channel, and the coastline it was cut into runs
+  // across that channel, so taking the bearing from the host drew a bar
+  // damming the inlet instead of an island splitting it.
+  const MAP = (islands: string): string => `# Hartstene
+map: region
+extent: 70x120mi
+
+[water]
+coastline shore : from (30,0) via (28,40) (29,80) to (30,120)
+sea "South Sound" : west of shore
+sound case "The Embayment" : on shore at (28,40) size=6mi reach=3 taper=0.15
+${islands}`;
+
+  const bbox = (src: string, id: string): { w: number; h: number } => {
+    const g = new RegExp(`id="cd-hartstene-${id}">(.{0,20000}?)</g>`, "s").exec(renderSource(src).svg)!;
+    const pts = /points="([^"]+)"/.exec(g[1]!)![1]!.trim().split(/\s+/)
+      .map((p) => p.split(",").map(Number) as [number, number]);
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+  const INSIDE = `island hartstene "Hartstene Island" : near shore at (36,40) size=13mi reach=0.14`;
+  const OUTSIDE = `island offshore "Out In The Sound" : near shore at (14,80) size=13mi reach=0.14`;
+
+  it("an island INSIDE an inlet lies along the inlet, not along the coast", () => {
+    const b = bbox(MAP(INSIDE), "hartstene");
+    // The coast here runs north-south and the inlet runs east-west.
+    expect(b.w).toBeGreaterThan(b.h * 4);
+  });
+
+  it("an island in OPEN WATER is unchanged — it still follows the shore", () => {
+    // The reason this could be a corrected inference rather than a breaking
+    // change: open water contains no channel, so the host-tangent path stands.
+    const b = bbox(MAP(OUTSIDE), "offshore");
+    expect(b.h).toBeGreaterThan(b.w * 4);
+  });
+
+  it("the two rules coexist on one map", () => {
+    const src = MAP(`${INSIDE}\n${OUTSIDE}`);
+    expect(renderSource(src).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(bbox(src, "hartstene").w).toBeGreaterThan(bbox(src, "hartstene").h);
+    expect(bbox(src, "offshore").h).toBeGreaterThan(bbox(src, "offshore").w);
+  });
+
+  it("water on BOTH sides: the island divides the inlet rather than damming it", () => {
+    // The claim the issue was filed for. Sampled across the island's short
+    // axis at its centre: land in the middle, and the INLET'S WATER either
+    // side. Asserting merely "not island" for the flanking points would be
+    // vacuous — a point outside the island's own bounding box is trivially
+    // not-island, and would pass just as happily over open grass.
+    const svg = renderSource(MAP(INSIDE)).svg;
+    const polyOf = (s: string): { x: number; y: number }[] =>
+      s.trim().split(/\s+/).map((p) => {
+        const [x, y] = p.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+    const island = polyOf(/points="([^"]+)"/.exec(
+      /id="cd-hartstene-hartstene">(.{0,20000}?)<\/g>/s.exec(svg)![1]!,
+    )![1]!);
+    // The sea is the largest polygon on a coastline map.
+    const sea = [...svg.matchAll(/<polygon points="([^"]+)"/g)]
+      .map((m) => polyOf(m[1]!)).sort((a, b) => b.length - a.length)[0]!;
+    const inside = (pt: { x: number; y: number }, poly: { x: number; y: number }[]): boolean => {
+      let hit = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i]!, b = poly[j]!;
+        if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const ys = island.map((p) => p.y);
+    const xs = island.map((p) => p.x);
+    const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+    const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+    const halfH = (Math.max(...ys) - Math.min(...ys)) / 2;
+
+    expect(inside({ x: cx, y: cy }, island)).toBe(true);                 // land in the middle
+    for (const side of [-1, 1]) {
+      const pt = { x: cx, y: cy + side * halfH * 2 };
+      expect(inside(pt, island), `${side < 0 ? "north" : "south"} of the island`).toBe(false);
+      expect(inside(pt, sea), `${side < 0 ? "north" : "south"} channel is water`).toBe(true);
+    }
+  });
+
+  it("stays a pure function of the DECLARED data — naming it does not re-point it", () => {
+    const anon = bbox(MAP(`island hartstene : near shore at (36,40) size=13mi reach=0.14`), "hartstene");
+    expect(bbox(MAP(INSIDE), "hartstene")).toEqual(anon);
+  });
+});
+
 describe("land is one region — overlapping shapes are not double-outlined (#165)", () => {
   // Bainbridge really is separated from the Kitsap Peninsula by about half a
   // mile of water, which on a 100mi-wide map is thinner than the coastline

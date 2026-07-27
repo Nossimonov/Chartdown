@@ -80,8 +80,12 @@ export function seawardSign(normal: XY, seaward: XY | undefined): number {
   return normal.x * seaward.x + normal.y * seaward.y >= 0 ? 1 : -1;
 }
 
-/** Fallback reach for a word that declares none. */
-const ASPECT = 0.55;
+/**
+ * Fallback reach for a word that declares none. Exported because the region
+ * renderer needs the same number to work out how deep an inlet runs (#167),
+ * and two copies of a default is how they come to disagree.
+ */
+export const ASPECT = 0.55;
 
 /** Below this a feature is smaller than the curve's own sampling and cannot read. */
 const MIN_SIZE = 1e-6;
