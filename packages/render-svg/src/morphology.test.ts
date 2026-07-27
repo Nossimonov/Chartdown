@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { deformCurve, isSimple, isSmooth, resample, spacingFor, type PlacedFeature } from "./morphology";
+import { formatPoints, frameShape, parsePoints } from "@chartdown/core";
 import { renderSource } from "./index";
 import type { XY } from "./util";
 
@@ -732,6 +733,38 @@ ${body}`;
   it("PROMOTION IS GEOMETRY-STABLE still: naming it does not reshape it", () => {
     const anon = form(MAP(`island w : near shore at (40,100) ${WHIDBEY}\n`));
     expect(form(MAP(`island w "Whidbey" : near shore at (40,100) ${WHIDBEY}\n`))).toBe(anon);
+  });
+
+  it("a trace framed by `chartdown frame` renders WHERE IT WAS TRACED (#174)", () => {
+    // The loop that matters: absolute trace -> framed clause -> drawn island.
+    // The tool's whole purpose is that a mis-subtracted offset is invisible —
+    // a plausible island in the wrong place — so the round trip is asserted
+    // against the traced coordinates rather than against the tool's own output.
+    const traced = parsePoints("(38,60) (43,70) (41,80) (46,92) (45,104) (50,118)");
+    if ("error" in traced) throw new Error(traced.error);
+    const framed = frameShape(traced);
+    const p = poly(MAP(`island w "W" : near shore at (${framed.anchor.x},${framed.anchor.y}) area ${formatPoints(framed.offsets)}\n`));
+    const sc = 820 / 100; // canvas units per map mile at this extent
+    const xs = p.map((q) => q.x / sc);
+    const ys = p.map((q) => q.y / sc);
+    // Asserted as a FRACTION of the shape, not an absolute slack: the outline
+    // is a silhouette that gets textured (spec 02 §9), so the finished curve
+    // bulges a little past its controls — measured at 0.74mi on a 58mi island,
+    // which is the same finishing every `area` has always had. What would
+    // matter is a systematic shift, and that shows up as a moved centre rather
+    // than as a wider one.
+    const near = (got: number, want: number, span: number): void => {
+      expect(Math.abs(got - want) / span, `${got.toFixed(2)} vs ${want}`).toBeLessThan(0.02);
+    };
+    near(Math.min(...xs), 38, 12);
+    near(Math.max(...xs), 50, 12);
+    near(Math.min(...ys), 60, 58);
+    near(Math.max(...ys), 118, 58);
+    // And the CENTRE is where the trace put it, within a fifth of a mile —
+    // this is the assertion that would catch a mis-subtracted offset, since
+    // that shifts the shape without changing its size.
+    expect(Math.abs((Math.min(...xs) + Math.max(...xs)) / 2 - 44)).toBeLessThan(0.2);
+    expect(Math.abs((Math.min(...ys) + Math.max(...ys)) / 2 - 89)).toBeLessThan(0.2);
   });
 });
 

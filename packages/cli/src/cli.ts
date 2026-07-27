@@ -7,12 +7,13 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { checkDetailSeams, checkInset, checkSource, documentKind, parse } from "@chartdown/core";
+import { checkDetailSeams, checkInset, checkSource, documentKind, formatPoints, frameShape, parse, parsePoints } from "@chartdown/core";
 import { render, type RenderMode } from "@chartdown/render-svg";
 
 const USAGE = [
   "usage: chartdown render <file.cd> [-o out.svg] [--mode player|gm] [--theme theme.cd]",
   "       chartdown check <file.cd>",
+  "       chartdown frame [--at <x,y>] <points…>    absolute trace -> anchored outline",
 ].join("\n");
 
 function fail(message: string): never {
@@ -23,6 +24,34 @@ function fail(message: string): never {
 
 const args = process.argv.slice(2);
 const command = args[0];
+
+// `frame` takes points rather than a file, so it is handled before the file
+// argument is demanded (#174). Tracing a real coastline gives ABSOLUTE
+// coordinates, and a framed outline wants offsets from the anchor — the
+// subtraction is trivial and its mistakes are invisible, because a shape
+// shifted by a constant is still a plausible island in the wrong place.
+if (command === "frame") {
+  let at: { x: number; y: number } | undefined;
+  const rest: string[] = [];
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === "--at") {
+      const parsed = parsePoints(args[++i] ?? fail("missing value for --at"));
+      if ("error" in parsed || parsed.length !== 1) fail(`--at wants one point, like --at 40,100`);
+      at = parsed[0]!;
+    } else rest.push(args[i]!);
+  }
+  const points = parsePoints(rest.join(" "));
+  if ("error" in points) fail(points.error);
+  if (points.length < 3) fail(`an outline needs at least three points (got ${points.length})`);
+  const framed = frameShape(points, at);
+  console.error(
+    `${points.length} points, ${framed.extent.width} x ${framed.extent.height} across` +
+    `${framed.derived ? " — anchor derived from the shape's centre" : ""}`,
+  );
+  console.log(`at (${framed.anchor.x},${framed.anchor.y}) area ${formatPoints(framed.offsets)}`);
+  process.exit(0);
+}
+
 if (command !== "render" && command !== "check") fail(`unknown command '${command ?? ""}'`);
 const file = args[1] ?? fail("missing input file");
 

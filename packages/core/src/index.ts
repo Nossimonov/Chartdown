@@ -11,4 +11,5 @@ export { STDLIB_SOURCE, ARCHETYPES, CLOSED_FACETS, facetAccepts, VocabTable, loa
 export { parseThemeDocument, THEME_PROPS, SURFACE_WORDS, ZONE_WORDS, type ThemeDocumentNode, type ThemeEntry } from "./theme";
 export type { Diagnostic, Severity } from "./diagnostics";
 export { locationOf } from "./diagnostics";
+export { formatPoints, frameShape, parsePoints, unframeShape, type FramePoint, type Framed } from "./frame";
 export type * from "./ast";

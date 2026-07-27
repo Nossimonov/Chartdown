@@ -8,7 +8,7 @@
  * human decoding errors.
  */
 
-import { checkSource, documentKind, locationOf, parse, type Diagnostic } from "@chartdown/core";
+import { checkSource, documentKind, formatPoints, frameShape, locationOf, parse, parsePoints, type Diagnostic, type FramePoint } from "@chartdown/core";
 import { exportUvttSource, renderSource, type RenderMode } from "@chartdown/render-svg";
 
 const formatDiagnostics = (diagnostics: Diagnostic[]): string =>
@@ -89,6 +89,46 @@ export function runUvtt(source: string, args: { mode?: RenderMode; level?: strin
     return { isError: true, text: `UVTT export refused:\n${formatDiagnostics(errors)}` };
   }
   return { text: JSON.stringify(uvtt, null, 2) };
+}
+
+/**
+ * Absolute trace -> anchored outline (#174, ADR 0026).
+ *
+ * Exposed to assistants because this is precisely the step they are worst at,
+ * and its failures are invisible rather than loud: a shape shifted by a
+ * constant is still a plausible island in the wrong place, and one mistyped
+ * vertex is a plausible island with a cape that is not there. Nothing in the
+ * document would report either. Twenty-two subtractions done deterministically
+ * removes an authoring path that produces silently wrong maps — the same
+ * reasoning that put diagnostics in the renderer.
+ *
+ * Deliberately narrow: it converts points and returns the clause. Deciding
+ * where a feature belongs stays the author's job.
+ */
+export function runFrame(points: string, anchor?: string): ToolText {
+  const parsed = parsePoints(points);
+  if ("error" in parsed) return { isError: true, text: `could not read the outline: ${parsed.error}` };
+  if (parsed.length < 3) {
+    return { isError: true, text: `an outline needs at least three points (got ${parsed.length}) — spec 05 §4` };
+  }
+  let at: FramePoint | undefined;
+  if (anchor !== undefined) {
+    const a = parsePoints(anchor);
+    if ("error" in a || a.length !== 1) return { isError: true, text: `the anchor wants one point, like 40,100` };
+    at = a[0]!;
+  }
+  const framed = frameShape(parsed, at);
+  return {
+    text: [
+      `at (${framed.anchor.x},${framed.anchor.y}) area ${formatPoints(framed.offsets)}`,
+      ``,
+      `${parsed.length} points; the shape measures ${framed.extent.width} x ${framed.extent.height}.`,
+      framed.derived
+        ? `The anchor was derived from the shape's own centre — pass one if the feature already has a position.`
+        : `Offsets are measured from the anchor you gave.`,
+      `Paste this onto a detached feature's entity line, after 'near <host>'. Do NOT also give size=/reach=/taper= — an outline and the dials together is an error (spec 05 §4).`,
+    ].join("\n"),
+  };
 }
 
 // parse is re-exported so the server can enumerate levels for tool hints.
