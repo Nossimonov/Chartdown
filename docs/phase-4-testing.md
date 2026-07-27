@@ -67,28 +67,42 @@ Nine issues, all on `0.4-dev`.
 | **Free text placements + `key=`** (#107) | The set is `<point\|cell>`, `<range>`, `sprawl <range>`, `along <ref>`. `along` now draws the caption **on the course**. `key=<n>` works without `labels: keyed` — a numbered route through a named map. |
 | **Fields** (#106, ADR 0018) | `light: dark` (and `light <level>: daylight`) makes a dark map with emitters as pools. Declare your own: `[vocab] radiation : field occluded=none states=none,heavy,lethal`, then `radiation: heavy` and `reactor : F4 radiation=40ft`. |
 
-## Wave 5 — the focus of this pass
+## Wave 5 — three rounds done; what changed under you
 
-**Placed morphology** (#93, spec 05 §4, [ADR 0023](decisions/0023-detail-is-data-not-noise.md)) — discrete coast and river features that are *declared data* rather than generated noise. This is the largest region-side piece in the phase and it wants a **real coastline**, not a probe: somewhere like Puget Sound, where a large coastline feature is itself filled with smaller ones, is the shape that pushes it to its limit.
+**Placed morphology** (#93, spec 05 §4) went through three rounds and came out substantially different from what round 1 tested. **Re-read spec 05 §4 before authoring** — several things you learned in earlier rounds are no longer true.
 
-The thesis is worth knowing before you test against it, because it decides what counts as a bug. A roughness generator was built for this and **rejected**: generated features are not persistent, addressable things, so a player who becomes intrigued by an island in a river and names it would find it gone after one seed change. Every feature here is a real entity — pointable-at, annotatable, promotable from anonymous to named, and unchanged by that promotion.
+### What is new to write
 
-| Feature | What to exercise |
+| Spelling | What it does |
 |---|---|
-| **The two dials** | `size=` is the extent **along** the host; `reach=` is how far it carries **across**, as a multiple of that size. `cove : on coast at (…) size=60mi` and `fjord : …` at the same size are deliberately different shapes — 27px against 236px on a test coast. `reach=` is a vocabulary facet, so derivation carries it and you can override it per entity. |
-| **The words** | `cape headland peninsula spit` (jut seaward) · `bay cove sound fjord` (bite landward) · `island islet atoll oxbow` (a separate shape beside the host). All standard library; derive your own (`skerry : island`) and it inherits the geometry. |
-| **Direction is inferred, never declared** | A jut goes seaward and a bite goes landward, resolved from the water's own half-plane — so a coast needs something like `sea "The Sound" : west of coast`, and then no cape ever restates it. Reversing a coastline's `from`/`to` must **not** turn its headlands into harbours. |
-| **Promotion is geometry-stable** | `island : near coast at (…) size=8mi` and `island vashon "Vashon" : near coast at (…) size=8mi` must render **identically**. If naming something moves or reshapes it, that is a bug of the first order — it means the map changed under the campaign that named it. |
-| **Moving is stable too** | Moving an island slides the same island; it must not redraw a different one. Same for editing an unrelated line elsewhere in the document. |
-| **Refusals are diagnostics, not obstacles** | A feature that cannot be drawn as written is an **error** naming the feature, its size and its host — never a silently smaller feature. **Please report refusals rather than working around them**; the last two were both the renderer's fault rather than the request's, and each one found a real defect. |
+| `via` on a placed feature | **A bite or jut may bend.** `fjord hood "Hood Canal" : on shore at (36,44) via (72,48) (96,92) size=3mi taper=0.15` — the declared line is the centerline, and its own length is the depth. This is the Great Bend, and it is *not* the staged `delta`/`fork` branching: one mouth, one head (#169). |
+| `on <another feature>` | **An arm may hang off an arm.** `sound dabob "Dabob Bay" : on hood at (56,44) size=2mi reach=4` — Dabob off Hood Canal, Dyes off Sinclair. It used to draw nothing at all (#170). |
+| `area (…)` on a detached feature | **An island may carry its own outline** instead of the dials, so Whidbey can dogleg. Points are **offsets from the anchor**, so moving the island is one coordinate (#172, ADR 0026). |
+| `chartdown frame` | Converts an absolute trace into that anchored form: `chartdown frame --at 40,100 "(38,60) (43,70) …"`. Also an MCP tool. **Please use it rather than subtracting by hand** — a mis-subtracted offset renders as a perfectly plausible island in the wrong place (#174). |
+
+### What CHANGED — old habits will now be wrong
+
+- **`reach=` values are recalibrated** against real Puget Sound measurements and are much larger than round 1's: `cape 0.55 · bay 1 · peninsula 1.6 · cove 3 · spit 5 · sound 6 · fjord 20`. Round 1's guesses (fjord 2) are gone.
+- **`taper=` says how far the sides converge, not only where.** Near 0 the flanks run parallel into a broad round bight; at 1 it is a wedge. A fjord no longer comes out a spearpoint (#163).
+- **`blob` declares an EXTENT, not an outline** (ADR 0025). `size=` is now exact — a `size=40mi` blob measures 40mi across — and its shape no longer moves when you name it, reorder the file, or add a `seed:`. A document whose shapes are all extents renders identically under every seed.
+- **A placed feature is labelled on its body**, not at its mouth on the shore (#171).
+- **An island is land in every sense**: overlapping land shapes are unioned, so an island touching the shore reads as one landmass rather than a ring drawn across it (#165).
+
+### New diagnostics — all of these are deliberate
+
+- **error**: an outline *and* `size=`/`reach=`/`taper=` together; `via` *and* `reach=` together. Both mean something would have to be discarded.
+- **error**: two features claiming the same stretch of a host; a feature whose mouth runs off the end of its host. Each names its own cause — tell us if one names the wrong one.
+- **warning**: an island whose footprint lies wholly on land; a river whose end falls inside a water body (either end — mouth-first authoring is why nine of them went unnoticed).
 
 ### Known gaps — please don't report these
 
-- **`delta` and `fork` are not in the standard library.** Branching a course is a different geometric problem from deforming one, and shipping the words without the geometry would give you a line that parses clean and draws nothing. A river delta is currently unexpressible; that is deliberate and staged.
-- **`reach=` values are a first guess** (cove 0.3 · bay 0.5 · cape 0.55 · peninsula 0.8 · spit 1.3 · sound 1.4 · fjord 2). Telling us they are wrong against a real coastline *is* the exercise — that is a finding, not a bug report.
-- **Nothing has been tested past four features on one coast**, and no island cluster at all. Scale behaviour is unknown territory, which is why this map was chosen.
+- **`delta` and `fork` are still staged.** A river delta remains unexpressible, deliberately.
+- **`in <water>` was proposed and not adopted** (#167). An island inside an inlet now works with ordinary `near` placement, and the anchoring question it raises is deferred to #162 rather than settled twice.
+- **A jut or bite takes no outline.** Its shape has to stay joined to its host at two points, so it declares a centerline (`via`) instead. That asymmetry with detached features is a decision, not an oversight (ADR 0026).
 
-Also in this wave, and smaller: **#149** — a theme naming a glyph no `[glyphs]` section defines now says so, rather than falling through to a generic marker in silence.
+### What would be most useful from round 4
+
+The Puget Sound map should now be substantially drawable: **the six islands that divide water** (Hartstene, Squaxin, Herron, Ketron, McNeil, Anderson), **Hood Canal with its Great Bend**, **Dabob and Dyes as arms**, and **Whidbey with its dogleg** via a declared outline. Whether it actually reads as Puget Sound is the finding. #93 stays open pending exactly this.
 
 ## Wave 4 — verified in the previous round
 
@@ -190,7 +204,7 @@ Reproductions in the style of #101–#105 (a minimal document, the command, expe
 
 ## Current state
 
-- **418 tests** green, typecheck clean. Examples changed since the last round: the Gilded Tankard (the Snug's door, Wave 4) and Vessany (Gull Bay gains a `size=` and renders as a real inlet, Wave 5). The corpus verifies otherwise unchanged, through the same action driver CI uses.
+- **492 tests** green, typecheck clean. Examples changed since the last round: Vessany (Gull Bay now reads as a real inlet, and its render is seed-invariant), plus the Sundered Reach and Gumdrop Vale, whose blobs changed shape once under ADR 0025. No example SOURCE needed editing for any of it. The corpus verifies through the same action driver CI uses.
 - Phase 4: **43 issues, 31 closed, 12 open** — but seven of the twelve (**#116**, **#123**, **#146**, **#147**, **#148**, **#149**, **#150**) are implemented and committed on this branch and close when Phase 4 merges, since `Closes #n` only fires on the default branch. **#93** is committed in stages and stays open pending this round.
-- ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md), [0019](decisions/0019-line-labels-claim-before-point-labels.md), [0020](decisions/0020-render-resolution-is-editorial.md), [0021](decisions/0021-a-map-is-the-sum-of-its-files.md), [0022](decisions/0022-a-declaration-is-a-promise.md), [0023](decisions/0023-detail-is-data-not-noise.md).
+- ADRs added this phase: [0015](decisions/0015-one-staging-zone-spelling.md), [0016](decisions/0016-derivation-carries-word-keyed-behaviour.md), [0017](decisions/0017-openings-perforate-terrain.md), [0018](decisions/0018-fields-generalize-light.md), [0019](decisions/0019-line-labels-claim-before-point-labels.md), [0020](decisions/0020-render-resolution-is-editorial.md), [0021](decisions/0021-a-map-is-the-sum-of-its-files.md), [0022](decisions/0022-a-declaration-is-a-promise.md), [0023](decisions/0023-detail-is-data-not-noise.md), [0024](decisions/0024-a-feature-takes-its-bearing-from-the-water-it-sits-in.md), [0025](decisions/0025-a-blob-declares-an-extent-not-an-outline.md), [0026](decisions/0026-shape-is-declared-data.md).
 - The language reference for agents is `docs/spec/digest.md` **on this branch** — the published `llms-full.txt` is 0.3.3 and does not describe any of the above.
