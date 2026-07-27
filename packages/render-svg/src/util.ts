@@ -5,10 +5,21 @@ export interface XY {
   y: number;
 }
 
+/**
+ * The finest distance the renderer can express, in rendered units.
+ *
+ * `fmt` prints two decimals, so two vertices closer together than this are the
+ * same vertex as far as the output is concerned. Exported because geometry that
+ * samples a curve needs the same number: emitting vertices below the quantum
+ * costs points, and their positions are then dominated by arithmetic noise
+ * rather than by shape — which measures as a corner that nothing can draw.
+ */
+export const QUANTUM = 0.01;
+
 /** Fixed-precision formatting keeps output byte-identical across runs. */
 export const fmt = (n: number): string => {
-  const rounded = Math.round(n * 100) / 100;
-  return Object.is(rounded, -0) ? "0" : String(rounded);
+  const rounded = Math.round(n / QUANTUM) * QUANTUM;
+  return Object.is(rounded, -0) ? "0" : String(Number(rounded.toFixed(2)));
 };
 
 export const esc = (text: string): string =>
@@ -37,7 +48,32 @@ export const text = (content: string, attrs: Attrs): string =>
     .map(([k, v]) => ` ${k}="${typeof v === "number" ? fmt(v) : esc(String(v))}"`)
     .join("")}>${esc(content)}</text>`;
 
-export const pointsAttr = (pts: XY[]): string => pts.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(" ");
+/**
+ * A point list for a `polyline`/`polygon`, with CONSECUTIVE DUPLICATES DROPPED
+ * AT THE PRINTED PRECISION (#176).
+ *
+ * Two vertices closer together than `fmt` can express print as the same pair of
+ * numbers, and the segment between them is then zero-length. That is invisible
+ * — it draws nothing — but it is not harmless: a zero-length segment has no
+ * direction, so anything measuring the drawn curve reads an arbitrary angle
+ * there. It is why a coastline whose geometry turns 29° was measured turning
+ * 155.9°, and why a shape that had already passed the renderer's own 135° fold
+ * check appeared to violate it. The check was right and the output was lying.
+ *
+ * Deduped HERE, once, rather than in each shape that might produce a near-pair:
+ * the criterion is a property of the output format rather than of any geometry,
+ * so `fmt`'s own answer is the exact test and no tolerance has to be guessed.
+ * Every earlier attempt guessed one in world units and was finer than the two
+ * decimal places actually printed.
+ */
+export const pointsAttr = (pts: XY[]): string => {
+  const out: string[] = [];
+  for (const p of pts) {
+    const at = `${fmt(p.x)},${fmt(p.y)}`;
+    if (at !== out[out.length - 1]) out.push(at);
+  }
+  return out.join(" ");
+};
 
 /** mulberry32 — small, fast, deterministic. */
 export function rng(seed: number): () => number {

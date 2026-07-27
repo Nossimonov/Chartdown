@@ -1102,3 +1102,169 @@ describe("a named stretch of water is a name, not a mass (#160)", () => {
     expect(attrsOf(svg, "inland").filter((f) => f !== "none").length).toBeGreaterThan(0);
   });
 });
+
+describe("a centerline is bounded by curvature, not by total turn (#177)", () => {
+  // A corner too tight to take in one step is exactly the corner a real
+  // waterway completes in a series of smaller angles separated by distance.
+  // The rail-side test used to compare each station's normal against the
+  // MOUTH's vector — which is `cos` of how far the line has turned — so it
+  // changed sign at 90° of CUMULATIVE turn and swapped the two rails. The
+  // refusal was honest (the swap really did cross the outline) but the fold
+  // was manufactured by the check rather than declared by the author.
+  const coast = (): XY[] => resample([{ x: 50, y: 0 }, { x: 50, y: 260 }], spacingFor([]));
+  /** Leaves the mouth heading east, turning `deg` in total over `steps` legs. */
+  const arc = (steps: number, deg: number, len: number): XY[] => {
+    const out: XY[] = [];
+    let p = { x: 50, y: 130 };
+    let heading = 0;
+    for (let i = 0; i < steps; i++) {
+      heading += (deg * Math.PI) / 180 / steps;
+      p = { x: p.x + Math.cos(heading) * len, y: p.y + Math.sin(heading) * len };
+      out.push({ ...p });
+    }
+    return out;
+  };
+  const draws = (via: XY[], size = 3): boolean => {
+    let refused = false;
+    deformCurve(coast(), [{
+      morph: "bite", anchor: { x: 50, y: 130 }, size, taper: 0.2,
+      seaward: { x: -1, y: 0 }, via,
+    }], () => { refused = true; });
+    return !refused;
+  };
+
+  it("draws a bend of many times the half-width whatever the total comes to", () => {
+    // Twenty-four legs of 25 units: a radius of hundreds against a half-width
+    // of 1.5, nowhere near folding anything. Every one of these was refused.
+    for (const total of [90, 120, 150, 180, 240, 300]) {
+      expect(draws(arc(24, total, 25)), `${total} degrees over 24 legs`).toBe(true);
+    }
+  });
+
+  it("spreading a turn over more distance now HELPS, where it used to not", () => {
+    // The two columns of #177's table were identical: 120 degrees was refused
+    // at one leg and at six alike. Spreading a bend is the whole technique for
+    // drawing a channel of finite width around a tight corner, and the same
+    // total taken in smaller steps is a wider radius rather than a new shape.
+    expect(draws(arc(3, 180, 25)), "180 degrees in 3 legs").toBe(false);
+    expect(draws(arc(24, 180, 25)), "180 degrees in 24 legs").toBe(true);
+  });
+
+  it("still refuses a bend far tighter than the ribbon is wide", () => {
+    // The bound that remains is the real one: an offset curve folds when the
+    // centerline's radius drops below the half-width. Here the radius is a
+    // fraction of it, and `isSimple` catches the crossing on the drawn
+    // boundary rather than on a proxy for it.
+    expect(draws(arc(24, 300, 0.05), 12)).toBe(false);
+  });
+});
+
+describe("a bent centerline draws no sharper than a straight one (#176)", () => {
+  // Reported as a pointed head and a cusp of 155.9 and 168.5 degrees that
+  // `check` passed at exit 0 — which was contradictory, since `deformCurve`
+  // validates the curve it returns against a 135 degree limit. Both halves
+  // were true: the geometry was inside the limit, and the OUTPUT was not the
+  // geometry.
+  const doc = (centerline: string): string => `map: region
+extent: 120x120mi
+
+[water]
+coastline shore : from (30,0) via (29,30) (28,60) (29,90) to (30,120)
+sea "S" : west of shore
+sound a "A bent inlet" : on shore at (28,60) ${centerline} size=3mi taper=0.2
+`;
+  const drawnShore = (src: string): XY[] =>
+    /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)![1]!
+      .trim().split(/\s+/).map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+  const sharpest = (pts: XY[]): number => {
+    let worst = 0;
+    for (let i = 1; i + 1 < pts.length; i++) {
+      const a = pts[i - 1]!, b = pts[i]!, c = pts[i + 1]!;
+      let t = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+      if (t > Math.PI) t = 2 * Math.PI - t;
+      worst = Math.max(worst, (t * 180) / Math.PI);
+    }
+    return worst;
+  };
+
+  it("keeps every reported centerline in the straight one's range", () => {
+    const straight = sharpest(drawnShore(doc("via (48,60)")));
+    for (const bent of [
+      "via (44,62) (56,70)",
+      "via (42,63) (52,72) (60,88)",
+      "via (40,64) (48,72) (54,84) (58,96)",
+    ]) {
+      // Was 155.9, 168.5 and 124.6 degrees against a straight case of 11.1.
+      expect(sharpest(drawnShore(doc(bent))), bent).toBeLessThan(straight * 3);
+    }
+  });
+
+  it("never prints the same vertex twice — a zero-length segment has no direction", () => {
+    // This is what made a smooth curve measure 155.9 degrees: two vertices
+    // closer than `fmt` can express print identically, and the segment between
+    // them then reads as an arbitrary turn to anything measuring the drawn
+    // curve.
+    for (const spec of ["via (48,60)", "via (42,63) (52,72) (60,88)"]) {
+      const pts = drawnShore(doc(spec));
+      const repeats = pts.filter((p, i) => i > 0 && p.x === pts[i - 1]!.x && p.y === pts[i - 1]!.y);
+      expect(repeats, spec).toEqual([]);
+    }
+  });
+});
+
+describe("a declared centerline chooses its own side (#175)", () => {
+  // Under an enclosed sea the map yields ONE vector for a whole body, reduced
+  // to a side by a dot product with the local normal — so on a shore that
+  // wraps a peninsula it is inverted on one limb, and where the coast turns
+  // square to it the answer is arithmetic noise. The mouth's lead followed
+  // that, while the channel followed the author, and the contradiction was
+  // reported as a fold the author had not written.
+  const SHORE = "from (50,0) via (48,30) (52,60) (48,90) to (50,120)";
+  const doc = (sea: string, feature: string): string => `map: region
+extent: 100x120mi
+
+[water]
+coastline shore : ${SHORE}
+${sea}
+${feature}
+`;
+  const HALFPLANE = `sea "S" : east of shore`;
+  const ENCLOSED = `sea "S" : area (50,0) along shore (50,120) (100,120) (100,0)`;
+  const refusals = (src: string): number =>
+    renderSource(src).diagnostics.length;
+
+  it("gives the same answer however the sea is spelled", () => {
+    // #175's A/B: only the sea declaration differs, and it decided whether a
+    // centerline could be drawn at all.
+    for (const f of [
+      `sound c "X" : on shore at (52,60) size=2mi reach=4 taper=0.2`,
+      `sound c "X" : on shore at (52,60) via (44,60) size=2mi taper=0.2`,
+      `fjord h "H" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15`,
+    ]) {
+      expect(refusals(doc(ENCLOSED, f)), f).toBe(refusals(doc(HALFPLANE, f)));
+    }
+  });
+
+  it("accepts a centerline in every direction that clears the coast", () => {
+    // The accepted set was a single bearing out of eight, and at four of five
+    // anchors on the reported map it was disjoint from the land side.
+    const dirs: [number, number][] = [[1, 0], [-1, 0], [0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [-0.7, -0.7]];
+    for (const [dx, dy] of dirs) {
+      const f = `sound c "X" : on shore at (52,60) via (${(52 + dx * 8).toFixed(1)},${(60 + dy * 8).toFixed(1)}) size=2mi taper=0.2`;
+      expect(refusals(doc(ENCLOSED, f)), `${dx},${dy}`).toBe(0);
+    }
+  });
+
+  it("an arm on a canal that states its course needs no side from the map", () => {
+    // Dabob Bay hangs off Hood Canal. Where the canal declares its centerline
+    // that line IS the answer, so the arm was being dropped for want of
+    // something it never needed — and which sea spelling two features away
+    // decided whether it got.
+    const canal = `fjord hood "Hood Canal" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15`;
+    const arm = `sound dabob "Dabob Bay" : on hood at (42,66) size=1.5mi reach=5 taper=0.3`;
+    expect(refusals(doc(ENCLOSED, `${canal}\n${arm}`))).toBe(0);
+  });
+});

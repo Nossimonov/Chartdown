@@ -107,7 +107,10 @@ relational     = ( "at" , ( point | address | range | edge ) )
                     centerline — spec 05 §4, #169. A bite is one straight run
                     without it, and Hood Canal turns hard east at the Great
                     Bend. One mouth and one head, so this is not the
-                    line-BRANCHING that 05 §4 stages. *)
+                    line-BRANCHING that 05 §4 stages.
+                    It replaces reach= for DEPTH and for DIRECTION both (#175):
+                    the side the feature runs to is the author's, and the
+                    water's side governs only a generated run. *)
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] ,

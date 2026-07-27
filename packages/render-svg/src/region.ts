@@ -291,13 +291,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     for (const arm of list) {
       if (arm.f.seaward) continue;
       const host = [...featuresByHost.values()].flat().find((h) => h.keys.includes(arm.host));
-      if (!host?.f.seaward) continue;
+      // A DECLARED CENTERLINE IS ENOUGH ON ITS OWN (#175). Only the GENERATED
+      // run needs the host's water side, to know which way to leave the shore;
+      // where the host states its course, that course already is the answer.
+      // Requiring a side either way meant an arm on a canal that says exactly
+      // where it runs was dropped because the map could not work out something
+      // the arm never needed — which is how Dabob Bay came to depend on how the
+      // sea two features away happened to be spelled.
+      const stated = host?.f.via && host.f.via.length > 0;
+      if (!host || (!stated && !host.f.seaward)) continue;
       // The host's centerline: its mouth, then either its declared controls or
       // a straight run landward — away from the water that gave it ITS side.
-      const back = { x: -host.f.seaward.x, y: -host.f.seaward.y };
+      const back = { x: -(host.f.seaward?.x ?? 0), y: -(host.f.seaward?.y ?? 0) };
       const depth = host.f.size * (host.f.reach ?? ASPECT);
-      const line = host.f.via && host.f.via.length > 0
-        ? [host.f.anchor, ...host.f.via]
+      const line = stated
+        ? [host.f.anchor, ...host.f.via!]
         : [host.f.anchor, { x: host.f.anchor.x + back.x * depth, y: host.f.anchor.y + back.y * depth }];
       let best: XY | null = null;
       let bestD = Infinity;

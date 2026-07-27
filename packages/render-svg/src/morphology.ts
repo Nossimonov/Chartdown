@@ -27,7 +27,7 @@
  * extent.
  */
 
-import { catmullRom, type XY } from "./util";
+import { catmullRom, QUANTUM, type XY } from "./util";
 
 /** What a feature's geometry does to its host (the `morph=` facet). */
 export type Morph = "jut" | "bite" | "detached";
@@ -289,8 +289,23 @@ function site(host: XY[], arc: number[], f: PlacedFeature): Sited | null {
   // and the overshoot loops the centerline back on itself near the mouth — so
   // a perfectly reasonable bend was refused as a fold, by a control this code
   // added rather than by anything the author wrote.
+  // AND THE DECLARED CENTERLINE CHOOSES ITS OWN SIDE (#175). The lead is only
+  // there to make the shape leave the shore square; which WAY it leaves is the
+  // author's, already said by the first control they wrote. Taking that sign
+  // from the water instead put the two in contradiction whenever the water's
+  // answer was wrong or undecidable — and the map decides the side by one
+  // vector for a whole body reduced to a sign against the local normal, so on
+  // a shore that wraps a peninsula it is inverted on one limb, and where the
+  // coast turns square to it the dot product is nearly zero and the answer is
+  // arithmetic noise. The lead then pointed one way and the declared channel
+  // the other, so the centerline doubled back at the mouth and was refused as
+  // a fold the author had not written: on an enclosed sea, every bearing at
+  // four of five anchors. `via` already replaces `reach=` for depth; replacing
+  // it for direction as well leaves the water's side deciding only the case
+  // where nothing else says — a generated run.
   const first = f.via?.[0];
-  const step = first ? sign * Math.hypot(first.x - mouth.x, first.y - mouth.y) * 0.3 : 0;
+  const along = first ? (first.x - mouth.x) * dir.x + (first.y - mouth.y) * dir.y : 0;
+  const step = first ? (along >= 0 ? 1 : -1) * Math.hypot(first.x - mouth.x, first.y - mouth.y) * 0.3 : 0;
   const centre = f.via && f.via.length > 0
     ? [mouth, { x: mouth.x + dir.x * step, y: mouth.y + dir.y * step }, ...f.via]
     : [mouth, { x: mouth.x + dir.x * sign * f.size * (f.reach ?? ASPECT), y: mouth.y + dir.y * sign * f.size * (f.reach ?? ASPECT) }];
@@ -437,28 +452,84 @@ function ribbon(mouthA: XY, mouthB: XY, centre: XY[], taper: number): XY[] {
   // 581 — right for a straight line, and it means the two samples bracketing
   // the turn sit 90 units apart. Walking the curve adding points where it
   // curves cannot fix a step that strides over the curvature entirely.
+  // SUBDIVIDING THE GAPS THAT ARE TOO LARGE, rather than laying a second grid
+  // over the first (#176). Adding stops at every multiple of the ceiling put
+  // them wherever they happened to fall, which next to the width profile's own
+  // stops meant slivers: a step of 0.02 between neighbours 1.14 apart, and runs
+  // of 0.01–0.06 through the fillet. A sliver carries no shape — both ends
+  // round to nearly the same printed point, so its DIRECTION is rounding noise,
+  // and a pair of them reads as a corner of 20–39° on a curve that is smooth
+  // wherever you look at it. Splitting an over-wide gap evenly obeys the same
+  // ceiling and cannot produce a step shorter than half of it.
   const tightest = Math.min(...curvature(path, arcs).filter((R) => Number.isFinite(R)));
+  stops.sort((x, y) => x - y);
   if (Number.isFinite(tightest) && tightest > 0) {
     const ceiling = Math.max(tightest / PER_RADIUS, L / 2000);
-    for (let s = ceiling; s < L; s += ceiling) stops.push(s);
+    const filled: number[] = [];
+    for (let i = 0; i < stops.length; i++) {
+      const at = stops[i]!;
+      filled.push(at);
+      const next = i + 1 < stops.length ? stops[i + 1]! : L;
+      const span = next - at;
+      if (span > ceiling) {
+        const steps = Math.ceil(span / ceiling);
+        for (let j = 1; j < steps; j++) filled.push(at + (span * j) / steps);
+      }
+    }
+    stops.length = 0;
+    stops.push(...filled);
   }
-  stops.sort((x, y) => x - y);
 
   // The frame at the mouth is the HOST's, so the two rails start exactly on
   // the host's own points; further in it is the centerline's own.
   const side = { x: (mouthB.x - mouthA.x) / (2 * half), y: (mouthB.y - mouthA.y) / (2 * half) };
-  const frameAt = (s: number): { p: XY; n: XY } => {
-    const p = pointAtArc(path, arcs, s);
-    const ahead = pointAtArc(path, arcs, Math.min(L, s + SPACING / 8));
-    const back = pointAtArc(path, arcs, Math.max(0, s - SPACING / 8));
-    const dx = ahead.x - back.x;
-    const dy = ahead.y - back.y;
+  // THE TANGENT IS A FIELD, INTERPOLATED — not a chord re-measured at every
+  // station (#176). Taking it as the difference between two lookups a fixed
+  // distance apart quantises it to the lookup table's own spacing: the chord
+  // only changes as its ends cross vertices, so the tangent moves in steps
+  // while the stations move continuously. The fillet samples far finer than
+  // the table, so it read a staircase, and the rails inherited it as a wobble
+  // the size of their own steps — 20–31° corners on a curve that is smooth at
+  // every scale it can be drawn at. Resolved once per vertex and interpolated
+  // between, the frame turns as evenly as the line does.
+  const tangents = path.map((_, i) => {
+    const a = path[Math.max(0, i - 1)]!;
+    const b = path[Math.min(path.length - 1, i + 1)]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
-    let n = { x: -dy / len, y: dx / len };
-    // Kept on the same side as the mouth's own, so the ribbon cannot flip
-    // where the centerline turns — the reason a bend is drawable at all.
-    if (n.x * side.x + n.y * side.y < 0) n = { x: -n.x, y: -n.y };
-    return { p, n };
+    return { x: dx / len, y: dy / len };
+  });
+  /** The centerline's left-hand normal at `s` — the tangent, rotated. */
+  const normalAt = (s: number): { p: XY; n: XY } => {
+    const p = pointAtArc(path, arcs, s);
+    const { lo, k } = segmentAt(arcs, s);
+    const a = tangents[lo]!;
+    const b = tangents[Math.min(tangents.length - 1, lo + 1)]!;
+    const tx = a.x + (b.x - a.x) * k;
+    const ty = a.y + (b.y - a.y) * k;
+    const len = Math.hypot(tx, ty) || 1;
+    return { p, n: { x: -ty / len, y: tx / len } };
+  };
+  // WHICH RAIL IS WHICH IS DECIDED ONCE, AT THE MOUTH (#177). The left-hand
+  // normal is the tangent rotated a quarter turn, so it is already continuous
+  // along the centerline and cannot flip on its own — carrying one sign the
+  // whole way IS the parallel transport this needs.
+  //
+  // Re-deciding it at every station by comparing against the MOUTH's vector
+  // was a ceiling disguised as a safety check: that dot product is `cos` of
+  // how far the centerline has turned, so it changed sign at 90° and swapped
+  // the rails, and the swap crossed the outline. The refusal was therefore
+  // honest — the shape really did fold — but the fold was manufactured here
+  // rather than declared, and it landed at a constant 90° of CUMULATIVE turn
+  // however gently the turn was spread. A bend of 72mi radius in a ribbon 3mi
+  // wide was refused for the same total as a hairpin. What actually folds an
+  // offset curve is its radius dropping below the half-width, which is local,
+  // and `isSimple` already measures exactly that on the drawn boundary.
+  const flip = normalAt(0).n.x * side.x + normalAt(0).n.y * side.y < 0 ? -1 : 1;
+  const frameAt = (s: number): { p: XY; n: XY } => {
+    const { p, n } = normalAt(s);
+    return { p, n: { x: n.x * flip, y: n.y * flip } };
   };
 
   const left: XY[] = [];
@@ -478,14 +549,62 @@ function ribbon(mouthA: XY, mouthB: XY, centre: XY[], taper: number): XY[] {
     left.push({ x: p.x - n.x * w, y: p.y - n.y * w });
     right.push({ x: p.x + n.x * w, y: p.y + n.y * w });
   }
+  // THE MOUTH'S CORNERS ARE EASED ONTO THE RAILS, not stamped over them (#176).
+  //
+  // Those two corners are the host's own points, so they are pinned in the
+  // CHORD's frame, while every station is built in the CENTERLINE's. A declared
+  // bend leaves the two a degree or so apart — a Catmull-Rom starts curving
+  // toward its next control immediately — so the computed rail began about 0.04
+  // units to the side of the corner it was forced to start from. Assigning the
+  // corner hid that offset in a single step, and a step sideways followed by a
+  // step back is a spike: it measured 65° where the same feature drawn straight
+  // measured 11°, and on the reported maps 156° and 168°.
+  //
+  // Spread over the fillet, the same correction is invisible. It decays to
+  // nothing by the time the flanks begin, so only the stretch that is still
+  // becoming channel is touched, and the correction is a POSITION rather than a
+  // frame: rotating the frame here instead was measurably worse, distorting the
+  // fillet enough to fold an oblique centerline that had drawn perfectly well.
+  // Nudging by a bounded, shrinking offset cannot fold anything.
+  const ease = (rail: XY[], corner: XY): void => {
+    const head = rail[0];
+    if (!head || !(r > 0)) return;
+    const dx = corner.x - head.x;
+    const dy = corner.y - head.y;
+    for (let i = 0; i < rail.length; i++) {
+      const s = stops[i]!;
+      if (s >= r) break;
+      const k = 1 - s / r;
+      rail[i] = { x: rail[i]!.x + dx * k, y: rail[i]!.y + dy * k };
+    }
+  };
+  ease(left, mouthA);
+  ease(right, mouthB);
   left[0] = mouthA;
   right[0] = mouthB;
 
   const out = [...left, ...right.reverse()];
   // A repeated point is a zero-length segment, which reads as a spurious turn
-  // to `isSmooth` and as a degenerate crossing to `isSimple`. The tolerance is
-  // well below anything the renderer can draw and well above the noise above.
-  return out.filter((p, i) => i === 0 || Math.hypot(p.x - out[i - 1]!.x, p.y - out[i - 1]!.y) > TINY);
+  // to `isSmooth` and as a degenerate crossing to `isSimple`.
+  //
+  // THINNED TO WHAT THE OUTPUT CAN STILL POINT (#176). The tolerance used to be
+  // a fraction of the feature, far finer than the renderer's own two decimals,
+  // so the stops — the width profile's, sampled by angle, interleaved with the
+  // centerline curvature's, sampled evenly — left runs of vertices 0.01 to 0.07
+  // apart.
+  //
+  // A step has to clear the quantum by some margin before its DIRECTION
+  // survives being printed, which is the quantity that matters here: rounding
+  // moves each end by up to half a quantum, so a step of one quantum can come
+  // out pointing anywhere, and a step of two is still badly bent. Those runs
+  // measured 20–31° turns on curves that are smooth at every scale they can be
+  // drawn at. Eight quanta holds the printed direction inside a few degrees,
+  // and costs nothing real: it is still some twenty stations across a mouth
+  // fillet, far more than the fillet's own sampling asks for. A feature small
+  // enough for that floor to matter is thinned by a fraction of itself instead,
+  // so a sub-pixel cove keeps its shape rather than collapsing to its mouth.
+  const gap = Math.max(TINY, Math.min(QUANTUM, Math.max(half, L) / 1000));
+  return out.filter((p, i) => i === 0 || Math.hypot(p.x - out[i - 1]!.x, p.y - out[i - 1]!.y) > gap);
 }
 
 /**
@@ -530,11 +649,17 @@ function radiusNear(radii: number[], arc: number[], s: number): number {
   return best;
 }
 
-/** The point at a given arc length along a polyline, interpolated. */
-function pointAtArc(curve: XY[], arc: number[], target: number): XY {
-  if (target <= 0) return curve[0]!;
+/**
+ * Which segment an arc position falls in, and how far along it (0..1).
+ *
+ * Shared so that position and tangent are read from the SAME place on the
+ * curve: resolving them separately is how a frame comes to describe a point
+ * the shape is not actually at.
+ */
+function segmentAt(arc: number[], target: number): { lo: number; k: number } {
   const last = arc[arc.length - 1]!;
-  if (target >= last) return curve[curve.length - 1]!;
+  if (!(target > 0)) return { lo: 0, k: 0 };
+  if (target >= last) return { lo: Math.max(0, arc.length - 2), k: 1 };
   let lo = 0;
   let hi = arc.length - 1;
   while (lo + 1 < hi) {
@@ -542,10 +667,17 @@ function pointAtArc(curve: XY[], arc: number[], target: number): XY {
     if (arc[mid]! <= target) lo = mid;
     else hi = mid;
   }
+  const span = arc[lo + 1]! - arc[lo]!;
+  return { lo, k: span > 0 ? (target - arc[lo]!) / span : 0 };
+}
+
+/** The point at a given arc length along a polyline, interpolated. */
+function pointAtArc(curve: XY[], arc: number[], target: number): XY {
+  if (target <= 0) return curve[0]!;
+  if (target >= arc[arc.length - 1]!) return curve[curve.length - 1]!;
+  const { lo, k } = segmentAt(arc, target);
   const a = curve[lo]!;
   const b = curve[lo + 1]!;
-  const span = arc[lo + 1]! - arc[lo]!;
-  const k = span > 0 ? (target - arc[lo]!) / span : 0;
   return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
 }
 
