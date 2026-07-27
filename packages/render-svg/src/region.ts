@@ -222,15 +222,22 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     // gives an author something other than what they asked for is the failure
     // ADR 0023 exists to prevent.
     const byFeature = new Map(placed.map((x) => [x.f, x] as const));
-    return deformCurve(curve, placed.map((x) => x.f), (f) => {
+    return deformCurve(curve, placed.map((x) => x.f), (f, why) => {
       const x = byFeature.get(f);
       if (!x) return;
-      const shape = x.morph === "jut" ? "a jut that long" : "a bite that deep";
-      const named = x.label === x.word ? `'${x.word}'` : `'${x.label}' (${x.word})`;
+      const named = (y: typeof x): string => (y.label === y.word ? `'${y.word}'` : `'${y.label}' (${y.word})`);
+      // Each refusal names its OWN cause and its own fix. An overlap reported
+      // as a fold would send an author to shrink a feature that fits.
+      const because =
+        why.kind === "off-end"
+          ? `half of its mouth would lie off the end of '${keyOf(e)}'. Move it further along the course, or use a smaller size=`
+          : why.kind === "overlap"
+            ? `it claims the same stretch of '${keyOf(e)}' as ${named(byFeature.get(why.other) ?? x)}. Move one of them, or use a smaller size= on either`
+            : `${x.morph === "jut" ? "a jut that long" : "a bite that deep"} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch`;
       diagnostics.push({
         severity: "error",
         line: x.line,
-        message: `${named} cannot be drawn at size=${x.sizeText} on '${keyOf(e)}' — ${shape} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch (spec 05 §4)`,
+        message: `${named(x)} cannot be drawn at size=${x.sizeText} on '${keyOf(e)}' — ${because} (spec 05 §4)`,
       });
     });
   };

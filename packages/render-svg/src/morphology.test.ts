@@ -51,10 +51,18 @@ describe("a placed feature deforms its host", () => {
   it("disturbs ONLY its own window — the rest of the coast is untouched", () => {
     // The locality guarantee is what lets an author place a second feature
     // later without the first one shifting.
+    //
+    // Asserted by POSITION, not by index. A feature now splices its own
+    // outline into the host (#163), so the two curves no longer share a vertex
+    // count — and index-matching was always testing the sampling rather than
+    // the guarantee, which is why it had to be re-pinned every time the
+    // sampling moved.
     const base = straightFor([feature()]);
     const out = deformCurve(base, [feature({ anchor: { x: 200, y: 100 }, size: 60 })]);
-    const far = out.filter((_, i) => Math.abs(base[i]!.x - 200) > 31);
-    expect(far.every((p, k) => p.y === base.filter((_, i) => Math.abs(base[i]!.x - 200) > 31)[k]!.y)).toBe(true);
+    // size=60 on a straight coast: the window is x ∈ [170, 230]. Everything
+    // outside it must still lie exactly on the undisturbed line y = 100.
+    expect(out.filter((p) => Math.abs(p.x - 200) > 30.001).every((p) => p.y === 100)).toBe(true);
+    expect(out.some((p) => Math.abs(p.x - 200) < 30 && p.y !== 100)).toBe(true);
   });
 
   it("meets the undisturbed curve smoothly rather than with a crease", () => {
@@ -131,7 +139,19 @@ describe("the simplicity guarantee is hard (ADR 0023)", () => {
     const rejected: string[] = [];
     const out = deformCurve(base, [feature({ size: 60 })], () => rejected.push("x"));
     expect(rejected).toHaveLength(0);
-    expect(maxOffset(base, out)).toBeCloseTo(60 * 0.55, 6);
+    // The DEPTH is `size × reach` exactly, and the MOUTH is `size` exactly.
+    // Both measured off the undisturbed line rather than vertex-by-vertex:
+    // what an author is promised is the shape's dimensions, not a vertex count.
+    expect(Math.max(...out.map((p) => Math.abs(p.y - 100)))).toBeCloseTo(60 * 0.55, 6);
+    // The outline meets the coast TANGENTIALLY at each end, so its outermost
+    // vertices carry exactly zero displacement and drop out of `moved`; the
+    // first one that survives sits a fraction of the fillet inside the window.
+    // The mouth is 60 by construction — what is checked here is that it is not
+    // quietly narrower.
+    const moved = out.filter((p) => p.y !== 100);
+    const span = Math.max(...moved.map((p) => p.x)) - Math.min(...moved.map((p) => p.x));
+    expect(span).toBeLessThanOrEqual(60);
+    expect(span).toBeGreaterThan(58);
   });
 
   it("isSimple actually catches a crossing — the guard is not vacuous", () => {
@@ -465,21 +485,69 @@ describe("Wave 5 regressions (#153–#156)", () => {
   });
 
   it("#156 the refusal quotes the size as written, names the entity, and matches the shape", () => {
-    // A big jut off a sharply turning coast: this one genuinely folds, which a
-    // needle on a straight coast does not — a huge reach there is absurd to
-    // look at but geometrically valid, and the check is about geometry.
+    // A big jut into the mouth of a hairpin: the tongue has to cross the far
+    // arm of the coast, which is a genuine fold. The earlier fixture — a huge
+    // reach off a zigzag — no longer refuses, and that is correct: under the
+    // outline model (#163) a long narrow tongue does not fold, it is merely
+    // absurd to look at, and the check is about geometry rather than taste.
     const src = doc(
-      `coastline shore : from (300,0) via (100,300) (500,600) (100,900) to (300,1200)
+      `coastline shore : from (100,300) via (500,300) (500,340) to (100,340)
 ` +
-      `sea "W" : west of shore
+      `sea "W" : south of shore
 ` +
-      `spit dungeness "Dungeness Spit" : on shore at (500,600) size=300.5mi reach=200`,
+      `spit dungeness "Dungeness Spit" : on shore at (300,300) size=300.5mi reach=3`,
     );
     const msg = errorsOf(src).join();
     expect(msg).toMatch(/size=300\.5mi/);        // not rounded, unit kept
     expect(msg).toMatch(/'Dungeness Spit' \(spit\)/); // the entity, not just the word
     expect(msg).toMatch(/a jut that long/);      // not "a bite that deep"
     expect(msg).not.toMatch(/a bite that deep/);
+  });
+
+  it("#163 a refusal names ITS OWN cause: off the end of the host, not a fold", () => {
+    // Reporting this as a fold would send an author to shrink a feature whose
+    // size is fine — it is in the wrong place, and only the message can say so.
+    const msg = errorsOf(doc(`${COAST}cape a "A Cape" : on shore at (300,20) size=300.5mi`)).join();
+    expect(msg).toMatch(/half of its mouth would lie off the end of 'shore'/);
+    expect(msg).not.toMatch(/fold/);
+  });
+
+  it("#163 two features may not claim the same stretch, and the report names both", () => {
+    // Composing them is what put a corner between two inlets that are each
+    // perfectly drawable alone. Refused and named, so the author decides.
+    const msg = errorsOf(doc(
+      `${COAST}bay one "First Bay" : on shore at (300,600) size=200mi\n` +
+      `bay two "Second Bay" : on shore at (300,640) size=200mi`,
+    )).join();
+    expect(msg).toMatch(/'Second Bay' \(bay\)/);
+    expect(msg).toMatch(/claims the same stretch of 'shore' as 'First Bay' \(bay\)/);
+    // The FIRST one still draws — one bad declaration does not cost its neighbour.
+    expect(msg).not.toMatch(/'First Bay' \(bay\) cannot/);
+  });
+
+  it("#163 an inlet is a smooth curve at every taper, not a polygon", () => {
+    // The defect this model replaced: depth as a function of position along the
+    // coast is a GRAPH, and a graph cannot have parallel sides — reaching a
+    // fjord's depth within its mouth forced a radius of curvature of 0.013
+    // units, so every inlet drew with 60-90 degree corners. The done-state #163
+    // asks for is 20 degrees at the densities the renderer itself chooses.
+    for (const taper of [1, 0.6, 0.4, 0.2, 0.15]) {
+      const src = doc(`${COAST}sound s "An Inlet" : on shore at (300,600) size=20mi reach=3 taper=${taper}`);
+      expect(errorsOf(src), `taper=${taper}`).toEqual([]);
+      const m = /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(renderSource(src).svg)!;
+      const pts = m[1]!.trim().split(/\s+/).map((p) => {
+        const [x, y] = p.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+      let worst = 0;
+      for (let i = 1; i + 1 < pts.length; i++) {
+        const a = pts[i - 1]!, b = pts[i]!, c = pts[i + 1]!;
+        let t = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+        if (t > Math.PI) t = 2 * Math.PI - t;
+        worst = Math.max(worst, (t * 180) / Math.PI);
+      }
+      expect(worst, `taper=${taper} turned ${worst.toFixed(1)}°`).toBeLessThan(20);
+    }
   });
 });
 

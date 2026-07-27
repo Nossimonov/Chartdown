@@ -5,10 +5,26 @@
  * The geometry is deliberately small and pure. A feature's shape is a function
  * of (kind, anchor, size, host curve) and nothing else — no seed, no ordinal,
  * no dependence on other entities — because ADR 0023's whole point is that a
- * feature must not move under an unrelated edit. That is also why the
- * deformation is a smooth bump over a WINDOW of the curve rather than an
- * inserted vertex: inserting points would make the result depend on how
- * densely the host happened to be sampled.
+ * feature must not move under an unrelated edit.
+ *
+ * A FEATURE IS AN OUTLINE SPLICED INTO ITS HOST, not a displacement of the
+ * host's own vertices (#163). The first model displaced each vertex in the
+ * window by a raised cosine — that is, it made depth a FUNCTION OF POSITION
+ * ALONG THE COAST, a graph. A graph cannot have parallel sides: to reach the
+ * depth of a fjord within the width of its mouth it must climb almost
+ * vertically, and where an almost-vertical climb turns back to horizontal the
+ * radius of curvature collapses. Measured on a 20-unit inlet three times as
+ * deep, that radius was 0.013 units — two hundred times finer than any sampling
+ * a renderer can afford, so every inlet on the map was drawn as a polygon with
+ * 60-90 degree corners.
+ *
+ * Inverting the dependence fixes it at the root: HALF-WIDTH AS A FUNCTION OF
+ * DEPTH. A trench is then a nearly-constant function over a long interval,
+ * which is the flat direction rather than the steep one, and every radius in
+ * the shape — mouth fillet, flank, head — is a fraction of the feature's own
+ * size instead of a vanishing quantity. Each piece is then sampled at ITS OWN
+ * radius, so the vertex count follows the shape's detail rather than the map's
+ * extent.
  */
 
 import type { XY } from "./util";
@@ -20,7 +36,7 @@ export interface PlacedFeature {
   morph: Morph;
   /** Where on the host it sits, in rendered coordinates. */
   anchor: XY;
-  /** Extent along the host, in rendered units. */
+  /** Extent along the host, in rendered units — the width of the mouth. */
   size: number;
   /**
    * Which way is SEAWARD, as a unit vector — resolved from the map, not
@@ -40,17 +56,13 @@ export interface PlacedFeature {
    */
   reach?: number;
   /**
-   * What fraction of the window is spent tapering, 0..1 (#158).
+   * What fraction of the feature's DEPTH is spent converging, 0..1 (#158).
    *
-   * 1 is a pure raised cosine: the widest point is the mouth and the shape
-   * narrows to a point — a wedge. That is right for a cove and wrong for
-   * everything glacial. Hood Canal, Dabob Bay, Case Inlet and Carr Inlet are
-   * near PARALLEL-SIDED, because a drowned valley is a trench rather than a
-   * notch, and at a wedge profile the only way to get their depth was a
-   * hairline needle that read as a spine on the coast.
-   *
-   * Below 1 the middle of the window is displaced flat and only the ends
-   * taper, which is a trench with rounded corners.
+   * 1 narrows the whole way from mouth to head — a wedge, which is right for a
+   * cove and wrong for everything glacial. Hood Canal, Dabob Bay, Case Inlet
+   * and Carr Inlet are near parallel-sided, because a drowned valley is a
+   * trench rather than a notch. Below 1 the sides run parallel for the first
+   * part of the depth and converge only near the head.
    */
   taper?: number;
 }
@@ -74,26 +86,50 @@ const ASPECT = 0.55;
 /** Below this a feature is smaller than the curve's own sampling and cannot read. */
 const MIN_SIZE = 1e-6;
 
-/** Uniform vertex spacing, in rendered units, before any feature is applied. */
+/** Uniform vertex spacing for the HOST curve, in rendered units. */
 const SPACING = 2;
-/** Vertices a feature's finest detail needs to read as a curve rather than a polygon. */
-const WINDOW_VERTICES = 24;
 
 /**
- * Vertex spacing a set of features needs, exported so a caller can build a
- * comparable baseline. Tests that resampled at a fixed spacing and compared to
- * a deformed curve by index broke three times as this number changed, which
- * said the coupling belonged in one place rather than in every assertion.
+ * Radius of the fillet where a feature's flank meets the coast, as a fraction
+ * of its half-width. An inlet meets the shore at a corner — that is what an
+ * inlet is — but a corner with a radius, not a vertex. This is also what makes
+ * the mouth the widest part of the shape: the opening spans the full declared
+ * `size=` and the channel inside it is narrower by twice the fillet.
  */
-export function spacingFor(features: PlacedFeature[]): number {
-  const finest = features.reduce(
-    (m, f) => (f.morph === "detached" ? m : Math.min(m, (f.size / 2) * Math.max(f.taper ?? 1, 0.02))),
-    Infinity,
-  );
-  return Number.isFinite(finest) ? Math.min(SPACING, finest / WINDOW_VERTICES) : SPACING;
-}
+const MOUTH_FILLET = 0.25;
+
+/**
+ * Narrowest a head may be, as a fraction of the flank half-width.
+ *
+ * The head is a semicircle of the half-width the flanks have converged to, so
+ * `taper=` alone decides how pointed the feature is — but a radius of zero is
+ * a cusp, which `isSmooth` is right to refuse, so even a full wedge ends in a
+ * small round tip rather than a point.
+ */
+const MIN_HEAD = 0.08;
+
+/**
+ * Vertices per radius of curvature. The turn at each vertex is then 1/this
+ * radians by construction, so the whole shape is smooth at whatever scale it
+ * is drawn: at 12 that is 4.8 degrees, comfortably inside the 20 degrees #163
+ * asks for, and it costs points only where the shape actually curves.
+ */
+const PER_RADIUS = 12;
+
 /** Backstop so a pathological extent cannot allocate without bound. */
 const MAX_POINTS = 6000;
+
+/**
+ * Vertex spacing for a host carrying these features.
+ *
+ * Under the outline model this no longer depends on the features at all — each
+ * one brings its own sampling, set by its own radii — but it stays exported
+ * because tests build a comparable baseline from it, and because a caller
+ * should not have to know that the answer is now a constant.
+ */
+export function spacingFor(_features: PlacedFeature[]): number {
+  return SPACING;
+}
 
 /**
  * Re-space a polyline's vertices evenly along its arc length, preserving its
@@ -120,112 +156,262 @@ export function resample(curve: XY[], spacing: number): XY[] {
 }
 
 /**
+ * Why a feature could not be drawn as written.
+ *
+ * Three genuinely different problems with three different fixes, so they are
+ * three values rather than one. Reporting an overlap as a fold would send an
+ * author to shrink a feature that fits perfectly well and merely collides with
+ * a neighbour — a diagnostic naming the wrong cause is the same silent
+ * plausibility this phase keeps rooting out, arriving as prose.
+ */
+export type RejectReason =
+  /** The shape would cross the course, or come to a cusp on it. */
+  | { kind: "fold" }
+  /** Half the mouth would sit off the end of the host: there is no coast there. */
+  | { kind: "off-end" }
+  /** Another feature already claims this stretch of the host. */
+  | { kind: "overlap"; other: PlacedFeature };
+
+/** A feature resolved against its host: where its window sits, and which way it goes. */
+interface Sited {
+  f: PlacedFeature;
+  /** Arc position of the anchor on the resampled host. */
+  at: number;
+  /** Half the mouth width, in arc length. */
+  half: number;
+  /** Signed depth: the direction and distance the head lies from the coast. */
+  depth: number;
+  /** Unit normal at the anchor — the ONE direction the whole feature travels. */
+  dir: XY;
+}
+
+/**
  * Apply every feature hosted on this curve, in one pass.
  *
- * Order does not matter to the result when features do not overlap, and when
- * they do the later one composes on the earlier — which is the same rule
- * declaration order already gives terrain (spec 06 §6).
+ * Features are accepted in DOCUMENT ORDER — an author reading their own file
+ * top to bottom sees the same decisions the renderer made — but spliced by arc
+ * position, and every window is measured on the UNDEFORMED host. Measuring on
+ * the running result was a real defect: the first inlet spliced in tens of
+ * units of new arc length, so the second one's window covered a different
+ * stretch of coast than the same declaration would have covered alone.
  */
 export function deformCurve(
   curve: XY[],
   features: PlacedFeature[],
-  onReject?: (f: PlacedFeature) => void,
+  onReject?: (f: PlacedFeature, why: RejectReason) => void,
 ): XY[] {
   // RESAMPLED TO A UNIFORM SPACING FIRST, and this is load-bearing rather than
-  // tidying (#154, #155).
-  //
-  // Everything downstream measures the polyline: the window is an arc-length
-  // span, and the fold check reads the turn at each vertex. Both therefore
-  // depended on how densely the host happened to be drawn, which is a function
-  // of how many `via` points an author typed rather than of the shape. Adding
-  // COLLINEAR points to a straight coast — changing nothing about the line —
-  // doubled the deepest drawable feature. And a `from … to` course with no via
-  // points splines to two points, so the window covered the whole coast and
-  // each feature displaced an endpoint instead of drawing anything.
-  //
-  // At a fixed spacing the turn per vertex is proportional to curvature, so
-  // the fold check measures geometry and the same request succeeds or fails
-  // the same way however the host was written.
-  // The spacing has to suit the SMALLEST feature on the course, not a fixed
-  // guess: a 0.5mi inlet on a 120mi map is a three-pixel mouth, and at a flat
-  // 2-unit spacing its window held two vertices and could not be drawn at all.
-  // The finest length scale is the RAMP, not the mouth (#163). `taper=0.15`
-  // makes the ramp a thirteenth of the window, so sampling the window at 24
-  // vertices left 1.8 on the ramp and the whole shoulder was drawn as a single
-  // step — the 8x jump in step length the report measured at the corner.
-  let out = resample(curve, spacingFor(features));
+  // tidying (#154, #155). The window is an arc-length span, so without it the
+  // result depended on how many `via` points an author happened to type:
+  // adding COLLINEAR points to a straight coast — changing nothing about the
+  // line — doubled the deepest drawable feature. And a `from … to` course with
+  // no via points splines to two points, so the window covered the whole coast.
+  const host = resample(curve, SPACING);
+  const arc = arcLengths(host);
+  const total = arc[arc.length - 1] ?? 0;
+
+  const accepted: Sited[] = [];
+  let out = host;
   for (const f of features) {
     if (f.morph === "detached" || f.size < MIN_SIZE) continue;
-    const next = applyOne(out, f);
-    if (next === null) {
-      onReject?.(f);
+    const sited = site(host, arc, f);
+    // A window running off the end of the host cannot be spliced: half the
+    // mouth would have no coast to sit on.
+    if (sited === null || sited.at - sited.half <= 0 || sited.at + sited.half >= total) {
+      onReject?.(f, { kind: "off-end" });
       continue;
     }
+    // Two features may not claim the same stretch of coast. Reported rather
+    // than composed: overlapping mouths are a contradiction in the document,
+    // and blending them silently is how a corner nobody asked for appears
+    // between two inlets that are each fine on their own.
+    const clash = accepted.find((g) => Math.abs(g.at - sited.at) < g.half + sited.half);
+    if (clash) {
+      onReject?.(f, { kind: "overlap", other: clash.f });
+      continue;
+    }
+    const next = splice(host, arc, [...accepted, sited]);
+    if (!isSimple(next) || !isSmooth(next)) {
+      onReject?.(f, { kind: "fold" });
+      continue;
+    }
+    accepted.push(sited);
     out = next;
   }
   return out;
 }
 
-/**
- * One feature: displace every vertex inside the window along the local
- * outward normal, weighted by a raised cosine so the bump meets the
- * undisturbed curve with a matching tangent and leaves no crease.
- *
- * The feature is drawn at the size it ASKED FOR or not at all. An earlier
- * draft clamped the amplitude down until the result verified, and that was
- * rejected on the owner's argument: a clamp deliberately discards map data. It
- * also makes `size=` a lie — two capes both declared 90mi would render at
- * different sizes depending on their host's local curvature, so the number in
- * the document would stop determining what is on the map, which is the whole
- * thesis of ADR 0023.
- *
- * Returning null means "this cannot be drawn as written"; the caller reports
- * it and the author changes the document.
- */
-function applyOne(curve: XY[], f: PlacedFeature): XY[] | null {
-  const anchorIndex = nearestIndex(curve, f.anchor);
-  if (anchorIndex < 0) return null;
-  const half = f.size / 2;
+/** Resolve a feature against its host: anchor, direction, depth. */
+function site(host: XY[], arc: number[], f: PlacedFeature): Sited | null {
+  const i = nearestIndex(host, f.anchor);
+  if (i < 0) return null;
+  const dir = normalAt(host, i);
   // A jut goes SEAWARD and a bite goes landward. The seaward side is resolved
   // from the map (see `seawardSign`) at the anchor, then held constant across
-  // the window so the bump stays one coherent shape rather than flipping
+  // the window so the feature stays one coherent shape rather than flipping
   // sides where the curve turns.
-  const facing = seawardSign(normalAt(curve, anchorIndex), f.seaward);
-  const sign = (f.morph === "bite" ? -1 : 1) * facing;
-  const arc = arcLengths(curve);
-  const at = arc[anchorIndex]!;
-
-  const dir = normalAt(curve, anchorIndex);
-  const moved = displace(curve, arc, at, half, sign * f.size * (f.reach ?? ASPECT), dir, f.taper ?? 1);
-  return isSimple(moved) && isSmooth(moved) ? moved : null;
+  const sign = (f.morph === "bite" ? -1 : 1) * seawardSign(dir, f.seaward);
+  return { f, at: arc[i]!, half: f.size / 2, depth: sign * f.size * (f.reach ?? ASPECT), dir };
 }
 
 /**
- * Displace vertices within `half` arc-length of `at`, raised-cosine weighted,
- * all in ONE direction — the normal at the anchor.
- *
- * Per-vertex normals were tried first and are wrong at exactly the places a
- * feature is most wanted. On a sharp headland the two arms have normals
- * pointing tens of degrees apart, so the halves of the bump travel in
- * different directions and pinch the curve between them; the result folded and
- * was refused, even though a cartographer would happily draw a bay there.
- *
- * A bay is a bite in a direction, not an offset of a curve. Displacing the
- * whole window along the anchor's normal is both the simpler model and the one
- * that matches what the word means.
+ * Rebuild the host with every accepted feature's outline in place of the
+ * stretch of coast it occupies.
  */
-function displace(curve: XY[], arc: number[], at: number, half: number, amplitude: number, dir: XY, taper: number): XY[] {
-  return curve.map((p, i) => {
-    const d = Math.abs(arc[i]! - at);
-    if (d >= half) return p;
-    // Tukey window: flat across the middle, cosine tapers at the ends, with
-    // `taper` setting how much of the half-window is spent on the ramp. At
-    // taper=1 this is exactly the raised cosine it replaces.
-    const ramp = Math.max(taper, 1e-6) * half;
-    const flat = half - ramp;
-    const weight = d <= flat ? 1 : 0.5 * (1 + Math.cos((Math.PI * (d - flat)) / ramp));
-    return { x: p.x + dir.x * amplitude * weight, y: p.y + dir.y * amplitude * weight };
-  });
+function splice(host: XY[], arc: number[], sited: Sited[]): XY[] {
+  const order = [...sited].sort((a, b) => a.at - b.at);
+  const out: XY[] = [];
+  let i = 0;
+  for (const s of order) {
+    const from = s.at - s.half;
+    const to = s.at + s.half;
+    while (i < host.length && arc[i]! < from) out.push(host[i++]!);
+    for (const p of outlineOf(s.f, s.depth)) {
+      // (offset along the coast, depth into the shape) -> rendered coordinates.
+      // The base point follows the HOST, so a feature on a curving coast bends
+      // with it; the depth is added along ONE direction, the anchor's normal.
+      const base = pointAtArc(host, arc, s.at + p.x);
+      out.push({ x: base.x + s.dir.x * p.y, y: base.y + s.dir.y * p.y });
+    }
+    while (i < host.length && arc[i]! <= to) i++;
+  }
+  while (i < host.length) out.push(host[i++]!);
+  return out;
+}
+
+/**
+ * The outline of one feature in its own frame: `x` is offset along the host
+ * from the anchor, `y` is depth (already signed). It runs from (-half, 0) to
+ * (+half, 0), so splicing it in leaves the host continuous, and it leaves and
+ * rejoins the coast tangentially, so the splice is smooth as well as closed.
+ *
+ * Five pieces, each sampled at its own radius of curvature:
+ *
+ *      -half                                    +half
+ *        \___                                  ___/     <- mouth fillets (r)
+ *            |                                |
+ *            |                                |         <- flanks: half-width
+ *             \                              /             a, converging to b
+ *              \____________________________/             over the last
+ *                       (   head   )                       `taper` of the depth
+ */
+function outlineOf(f: PlacedFeature, depth: number): XY[] {
+  const half = f.size / 2;
+  const D = Math.abs(depth);
+  const s = Math.sign(depth) || 1;
+  const t = Math.min(Math.max(f.taper ?? 1, 0), 1);
+  const r = MOUTH_FILLET * Math.min(half, D);
+  const a = half - r;                             // half-width of the channel
+  // HOW MUCH it narrows is `taper`'s to say, not a constant's. Fixing the head
+  // at a fraction of the mouth made every inlet neck to the same arrowhead
+  // whatever its word, so `taper` chose only WHERE the narrowing happened —
+  // and a fjord, whose whole character is being parallel-sided to its head,
+  // came out as a spearpoint. At taper=1 this is the wedge the spec describes;
+  // near 0 the flanks run parallel and the head is a broad round bight.
+  const b = Math.max(a * (1 - t), a * MIN_HEAD);  // radius of the rounded head
+  const inner = D - b;                            // depth at which the head begins
+
+  // Too shallow to hold a fillet, a flank and a head in sequence: a scoop
+  // rather than an inlet. A half-ellipse is the same shape with the flanks
+  // taken out, and has the same guarantees (finite radius everywhere).
+  if (inner <= r) return ellipse(half, s * D);
+
+  const pts: XY[] = [];
+  // Each piece carries both its endpoints so it can be read on its own; the
+  // shared vertex at a junction is dropped here rather than in five places.
+  // A repeated point is a zero-length segment, which reads as a spurious turn
+  // to `isSmooth` and as a degenerate crossing to `isSimple`.
+  const push = (x: number, y: number): void => {
+    const p = { x, y: s * y };
+    const prev = pts[pts.length - 1];
+    if (prev && Math.hypot(prev.x - p.x, prev.y - p.y) < 1e-12) return;
+    pts.push(p);
+  };
+
+  // Mouth fillet, left: centred (-half, r), from the coast to the flank.
+  arcPoints(r, (u) => push(-half + r * Math.sin(u), r - r * Math.cos(u)), Math.PI / 2);
+  // Left flank: half-width converging from a to b over the last `t` of the run.
+  flankPoints(a, b, r, inner, t, (w, n) => push(-w, n));
+  // Head: a semicircle of radius b, so the trench ends in a bight.
+  arcPoints(b, (u) => push(-b * Math.cos(u), inner + b * Math.sin(u)), Math.PI);
+  // Right flank, mirrored: back down from the head to the fillet.
+  flankPoints(a, b, r, inner, t, (w, n) => push(w, n), true);
+  // Mouth fillet, right: the left one reflected, walked back out to the coast.
+  arcPoints(r, (u) => push(half - r * Math.sin(u), r - r * Math.cos(u)), Math.PI / 2, true);
+  return pts;
+}
+
+/** A half-ellipse from (-half, 0) to (half, 0), reaching `depth` at its centre. */
+function ellipse(half: number, depth: number): XY[] {
+  // The tightest radius on a half-ellipse is at whichever end of the axes is
+  // sharper; sampling by it keeps a very shallow or very deep scoop equally smooth.
+  const R = Math.min(half * half / Math.abs(depth), depth * depth / half);
+  const steps = Math.max(8, Math.ceil((Math.PI * Math.max(half, Math.abs(depth))) / (Math.abs(R) / PER_RADIUS)));
+  const out: XY[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const u = Math.PI - (Math.PI * i) / steps;
+    out.push({ x: half * Math.cos(u), y: depth * Math.sin(u) });
+  }
+  return out;
+}
+
+/**
+ * Sample a circular arc of radius `R` through `sweep` radians, at this
+ * renderer's fixed vertices-per-radius. `reverse` walks it the other way, for
+ * the mirrored half of a symmetric shape.
+ */
+function arcPoints(R: number, at: (u: number) => void, sweep: number, reverse = false): void {
+  const steps = Math.max(2, Math.ceil(PER_RADIUS * sweep));
+  for (let i = 0; i <= steps; i++) {
+    const k = reverse ? steps - i : i;
+    at((sweep * k) / steps);
+  }
+}
+
+/**
+ * Sample one flank: half-width `a` at the mouth end, converging to `b` at the
+ * head, with the convergence confined to the last `t` of the run.
+ *
+ * The convergence is a raised cosine, so the flank leaves the fillet and meets
+ * the head with a matching tangent. Its radius of curvature is
+ * `2·ramp²/((a−b)·π²)` — a quantity of the same order as the feature itself,
+ * which is the whole reason this model can be drawn (see the file header).
+ */
+function flankPoints(
+  a: number, b: number, r: number, inner: number, t: number,
+  at: (w: number, n: number) => void,
+  reverse = false,
+): void {
+  const run = inner - r;
+  const ramp = Math.max(t, 1e-6) * run;
+  const flat = run - ramp;
+  const R = a > b ? (2 * ramp * ramp) / ((a - b) * Math.PI * Math.PI) : Infinity;
+  const steps = Math.max(2, Math.min(400, Math.ceil(run / Math.max(R / PER_RADIUS, run / 400))));
+  for (let i = 0; i <= steps; i++) {
+    const k = reverse ? steps - i : i;
+    const n = (run * k) / steps;
+    const w = n <= flat ? a : b + (a - b) * 0.5 * (1 + Math.cos((Math.PI * (n - flat)) / ramp));
+    at(w, r + n);
+  }
+}
+
+/** The point at a given arc length along a polyline, interpolated. */
+function pointAtArc(curve: XY[], arc: number[], target: number): XY {
+  if (target <= 0) return curve[0]!;
+  const last = arc[arc.length - 1]!;
+  if (target >= last) return curve[curve.length - 1]!;
+  let lo = 0;
+  let hi = arc.length - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1;
+    if (arc[mid]! <= target) lo = mid;
+    else hi = mid;
+  }
+  const a = curve[lo]!;
+  const b = curve[lo + 1]!;
+  const span = arc[lo + 1]! - arc[lo]!;
+  const k = span > 0 ? (target - arc[lo]!) / span : 0;
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
 }
 
 /**
@@ -266,16 +452,6 @@ function nearestIndex(curve: XY[], p: XY): number {
 }
 
 /**
- * Does this polyline avoid crossing itself? ADR 0023 makes this a hard
- * guarantee rather than a quality target: a map that folds over itself is
- * wrong in a way no reader can repair, so the amplitude is reduced until this
- * passes.
- *
- * Adjacent segments share an endpoint and are skipped; everything else is
- * tested pairwise, which is quadratic and fine at the vertex counts a rendered
- * spine has.
- */
-/**
  * Sharpest turn a deformed course may make, in degrees.
  *
  * This is a FOLD detector, not a gentleness rule, and it has been loosened
@@ -289,14 +465,10 @@ const MAX_TURN_DEGREES = 135;
 /**
  * Does this curve avoid folding to a point? SIMPLICITY IS NOT ENOUGH.
  *
- * Displacing a curve along its own normals by an amount near the local radius
- * of curvature produces a CUSP on the concave side — the classic offset-curve
- * failure. A cusp comes to a point and turns back without the curve ever
- * crossing itself, so `isSimple` passes it happily while the map shows a
- * spike. Measured on Vessany's Gull Bay: non-self-intersecting, and a 157°
- * turn. Densifying the samples did not help, because the fold was real
- * geometry rather than coarse drawing — it was caught by eye first, then by
- * this number.
+ * A curve can come to a CUSP and turn back without ever crossing itself, so
+ * `isSimple` passes it happily while the map shows a spike. Measured on
+ * Vessany's Gull Bay: non-self-intersecting, and a 157° turn. It was caught by
+ * eye first, then by this number.
  */
 export function isSmooth(curve: XY[], limitDegrees = MAX_TURN_DEGREES): boolean {
   const limit = (limitDegrees * Math.PI) / 180;
@@ -309,20 +481,65 @@ export function isSmooth(curve: XY[], limitDegrees = MAX_TURN_DEGREES): boolean 
   return true;
 }
 
+/**
+ * Does this polyline avoid crossing itself? ADR 0023 makes this a hard
+ * guarantee rather than a quality target: a map that folds over itself is
+ * wrong in a way no reader can repair.
+ */
 export function isSimple(curve: XY[]): boolean {
-  const first = curve[0];
-  const last = curve[curve.length - 1];
+  const segs = curve.length - 1;
+  if (segs < 2) return true;
+  const first = curve[0]!;
+  const last = curve[curve.length - 1]!;
   // Only a CLOSED ring has a first and last segment sharing an endpoint. The
   // exemption was originally unconditional, which silently forgave a genuine
   // crossing between the ends of an OPEN coastline — caught by the test that
   // asks whether this guard is vacuous, which it was.
-  const closed =
-    curve.length > 2 && first !== undefined && last !== undefined &&
-    Math.hypot(first.x - last.x, first.y - last.y) < 1e-9;
-  for (let i = 0; i + 1 < curve.length; i++) {
-    for (let j = i + 2; j + 1 < curve.length; j++) {
-      if (closed && i === 0 && j + 1 === curve.length - 1) continue;
-      if (segmentsCross(curve[i]!, curve[i + 1]!, curve[j]!, curve[j + 1]!)) return false;
+  const closed = curve.length > 2 && Math.hypot(first.x - last.x, first.y - last.y) < 1e-9;
+
+  // BROAD-PHASED ON A UNIFORM GRID. Testing every pair is quadratic, which was
+  // affordable while a course was a few hundred vertices and is not now that a
+  // feature brings its own sampling (#163): a coast carrying a dozen inlets
+  // runs to thousands, and `deformCurve` re-checks the whole curve once per
+  // feature. The grid changes only the cost — every pair whose bounding boxes
+  // meet is still tested exactly, so the answer is identical.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of curve) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const cell = Math.max(Math.hypot(maxX - minX, maxY - minY) / Math.max(16, Math.sqrt(segs)), 1e-9);
+  const cols = Math.floor((maxX - minX) / cell) + 1;
+  const buckets = new Map<number, number[]>();
+  const cellsOf = (i: number): number[] => {
+    const a = curve[i]!, b = curve[i + 1]!;
+    const gx0 = Math.floor((Math.min(a.x, b.x) - minX) / cell);
+    const gx1 = Math.floor((Math.max(a.x, b.x) - minX) / cell);
+    const gy0 = Math.floor((Math.min(a.y, b.y) - minY) / cell);
+    const gy1 = Math.floor((Math.max(a.y, b.y) - minY) / cell);
+    const keys: number[] = [];
+    for (let gx = gx0; gx <= gx1; gx++) for (let gy = gy0; gy <= gy1; gy++) keys.push(gy * cols + gx);
+    return keys;
+  };
+  for (let i = 0; i < segs; i++) {
+    for (const key of cellsOf(i)) {
+      const bucket = buckets.get(key);
+      if (bucket) bucket.push(i);
+      else buckets.set(key, [i]);
+    }
+  }
+  const tested = new Set<number>();
+  for (let i = 0; i < segs; i++) {
+    tested.clear();
+    for (const key of cellsOf(i)) {
+      for (const j of buckets.get(key) ?? []) {
+        if (j < i + 2 || tested.has(j)) continue;
+        tested.add(j);
+        if (closed && i === 0 && j === segs - 1) continue;
+        if (segmentsCross(curve[i]!, curve[i + 1]!, curve[j]!, curve[j + 1]!)) return false;
+      }
     }
   }
   return true;
