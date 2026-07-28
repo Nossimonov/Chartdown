@@ -6,7 +6,18 @@
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize } from "./lex";
 
-export const THEME_PROPS = new Set(["fill", "stroke", "width", "dash", "opacity", "glyph", "asset", "edge"]);
+export const THEME_PROPS = new Set(["fill", "stroke", "width", "dash", "opacity", "glyph", "asset", "edge", "bank"]);
+
+/**
+ * Which side of its own line a border's ink lies on (#185, ADR 0034).
+ *
+ * Closed, because the whole point is that there is no fourth answer: a stroke
+ * CENTRED on a boundary puts half its ink on each side, and when two shores
+ * approach, the two water-side halves meet and fill the channel between them.
+ * That ambiguity is structural rather than anybody's choice, so the spelling
+ * for it is removed rather than defaulted.
+ */
+export const BANK_VALUES = new Set(["land", "water", "both"]);
 export const SURFACE_WORDS = new Set(["paper", "grid", "fog", "ink", "light", "ledge", "leader"]);
 export const ZONE_WORDS = new Set(["core", "edge"]);
 
@@ -99,6 +110,10 @@ export function parseThemeDocument(source: string, diagnostics: Diagnostic[]): T
       if (t.kind === "pair") {
         if (!THEME_PROPS.has(t.key)) {
           diagnostics.push(warning(raw.line, `unknown theme property '${t.key}' — the appearance vocabulary is closed (spec 08 §3)`));
+          continue;
+        }
+        if (t.key === "bank" && !BANK_VALUES.has(t.value)) {
+          diagnostics.push(warning(raw.line, `'bank=${t.value}' is not one of ${[...BANK_VALUES].join(", ")} — a border lies on the land, on the water, or on both, and never centred on the line (spec 08 §3)`));
           continue;
         }
         pairs[t.key] = t.value;

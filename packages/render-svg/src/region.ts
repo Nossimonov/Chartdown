@@ -1385,8 +1385,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const landMask = hasWater ? `url(#${landMaskId})` : undefined;
   /** One per island: shows its shore only where it meets water, not other land (#165). */
   const shoreMaskId = (i: number): string => `cd-shore-${model.doc.docId}-${i}`;
+  /** One per island: its own footprint, for clipping its shore to one side (#185). */
+  const insideMaskId = (i: number): string => `cd-inside-${model.doc.docId}-${i}`;
   /** Hides the mainland's coastline wherever an island has merged with it (#165). */
   const coastMaskId = `cd-coast-union-${model.doc.docId}`;
+  /**
+   * Shows only WATER — every declared body, with all land punched back out
+   * (#185, ADR 0034).
+   *
+   * A border clipped to this lies wholly on the water side of its own line,
+   * which is what stops two approaching shores filling the channel between
+   * them with each other's ink.
+   */
+  const waterMaskId = `cd-water-${model.doc.docId}`;
   // Known BEFORE the draw loop, because a coastline may be drawn long before
   // the islands that merge with it are reached — and a mask reference to a
   // definition that never gets emitted is an error, not a no-op.
@@ -1668,6 +1679,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const islandIndex = islandInfos.length;
         islandInfos.push({ e, poly: r.polygon });
         const coast = theme.pathStroke(["coastline"]);
+        // An island's shore is a coastline and lies on one side of itself too
+        // (#185, ADR 0034). Nesting its own footprint inside #165's mask
+        // INTERSECTS the two: what survives is the half of the stroke that is
+        // inside this island AND has water outside it, which is the land-side
+        // stroke and the #165 rule at once.
+        const islandBank = theme.bank(["coastline"]);
         // FILL AND STROKE ARE SEPARATE SHAPES so only the stroke is masked
         // (#165). The fill is land wherever it lands — paper over paper where
         // it meets the mainland, which is invisible and correct — while the
@@ -1675,10 +1692,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         layers.areas.push(
           el("g", { id: anchor }, titleEl,
             el("polygon", { points: pointsAttr(r.polygon), fill: groundFill ?? theme.surface("paper", "fill", "#f9f5ea") }),
-            el("polygon", {
-              points: pointsAttr(r.polygon), fill: "none", stroke: coast.stroke,
-              "stroke-width": 1.2, "stroke-linejoin": "round", mask: `url(#${shoreMaskId(islandIndex)})`,
-            }),
+            el("g", { mask: `url(#${shoreMaskId(islandIndex)})` },
+              el("g", islandBank === "both" ? {} : { mask: `url(#${insideMaskId(islandIndex)})` },
+                el("polygon", {
+                  points: pointsAttr(r.polygon), fill: "none", stroke: coast.stroke,
+                  "stroke-width": islandBank === "both" ? 1.2 : 2.4, "stroke-linejoin": "round",
+                }))),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -1809,13 +1828,17 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // island outline weight the owner preferred), unless width= says so.
         const width = Number(pairOf(e.pairs, "width") ?? (chain.includes("coastline") ? 1.2 : 2));
         const lineParts: string[] = [titleEl];
+        // Double where the stroke will be clipped to one side, so the half that
+        // survives is the width that was asked for.
+        const oneSided = chain.includes("coastline") && theme.bank(chain) !== "both" && hasWater;
+        const inkW = oneSided ? width * 2 : width;
         const edgeW = theme.edgeWidth(chain);
         if (edgeW) {
           const edgeStroke = theme.prop(chain, "stroke", { zone: "edge" }) ?? theme.prop(chain, "fill", { zone: "edge" }) ?? stroke.stroke;
           lineParts.push(
             el("polyline", {
               points: pointsAttr(r.polyline), fill: "none", stroke: edgeStroke,
-              "stroke-width": width + 2 * edgeW, "stroke-linejoin": "round", "stroke-linecap": "round",
+              "stroke-width": inkW + 2 * edgeW, "stroke-linejoin": "round", "stroke-linecap": "round",
             }),
           );
         }
@@ -1825,17 +1848,36 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         lineParts.push(
           el("polyline", {
             points: pointsAttr(r.polyline), fill: "none", stroke: coreStroke,
-            "stroke-width": width, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
+            "stroke-width": inkW, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
           }),
         );
         // A coastline stops where an island has merged with it (#165). The
         // island's fill already makes that stretch land; leaving the shore
         // line drawn over it is what made an island touching the shore read
         // as a ring lying across the peninsula.
+        //
+        // AND IT LIES ON ONE SIDE OF ITSELF (#185, ADR 0034). A stroke centred
+        // on a boundary puts half its ink on each side, so where two shores
+        // approach, the two water-side halves meet and fill the channel
+        // between them — the passage is not thin, it is painted over. Clipped
+        // to the water, a border can only ever darken water, so a bold theme
+        // may make a channel ugly and cannot make it disappear.
+        //
+        // Done by clipping a DOUBLE-WIDTH centred stroke rather than by
+        // offsetting the line, which would need the outward normal at every
+        // vertex and an answer at every join. The mask keeps the half that
+        // belongs to the region, and this file already knew the trick: #165's
+        // note that clipping an island's shore to water "comes out
+        // half-width" is the same observation, seen as a problem.
+        const isCoast = chain.includes("coastline");
+        const bank = isCoast ? theme.bank(chain) : "both";
+        const banked = bank !== "both" && hasWater
+          ? [el("g", { mask: `url(#${bank === "water" ? waterMaskId : landMaskId})` }, ...lineParts)]
+          : lineParts;
         layers.lines.push(el("g", {
           id: anchor,
-          ...(hasIslands && chain.includes("coastline") ? { mask: `url(#${coastMaskId})` } : {}),
-        }, ...lineParts));
+          ...(hasIslands && isCoast ? { mask: `url(#${coastMaskId})` } : {}),
+        }, ...banked));
         }
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -2551,8 +2593,26 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // is the same boundary: each island's stroke shows only over water and not
   // over another island, and the mainland's coastline is hidden under every
   // island — so what survives is exactly the outline of the union.
+  if (hasWater) {
+    defs.push(
+      `<mask id="${waterMaskId}" ${maskBox}>` +
+        el("rect", { ...frame, fill: "#000" }) +
+        waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#fff" })).join("") +
+        // Islands are LAND inside the water they sit in, so their own interiors
+        // come back out: an island's border must lie on its water side too,
+        // and the mask that grants that is the same one.
+        islandInfos.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        `</mask>`,
+    );
+  }
   if (hasIslands) {
-    islandInfos.forEach((_, i) => {
+    islandInfos.forEach(({ poly }, i) => {
+      defs.push(
+        `<mask id="${insideMaskId(i)}" ${maskBox}>` +
+          el("rect", { ...frame, fill: "#000" }) +
+          el("polygon", { points: pointsAttr(poly), fill: "#fff" }) +
+          `</mask>`,
+      );
       defs.push(
         `<mask id="${shoreMaskId(i)}" ${maskBox}>` +
           // No water declared anywhere: nothing to merge against, so show the

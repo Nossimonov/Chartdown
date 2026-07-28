@@ -185,7 +185,12 @@ theme-subject  = word , [ "." , word ]                (* word / word.state / wor
                | surface-word ;
 surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge"
                | "leader" ;
-                 (* pair keys (closed): fill stroke width dash opacity glyph asset edge;
+                 (* pair keys (closed): fill stroke width dash opacity glyph
+                    asset edge bank;
+                    bank = "land" | "water" | "both" — which side of its own
+                    line a border's ink lies on, clipped to that region. Never
+                    centred: that is the ambiguity that loses narrow channels.
+                    Spec 08 §3, ADR 0034, #185;
                     glyph= and asset= values may be comma-separated variant pools,
                     chosen by deterministic position hash *)
 glyph-line     = word , ":" , string , EOL ;          (* SVG path data, 24x24 box centered on origin *)

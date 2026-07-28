@@ -280,6 +280,27 @@ export class Theme {
     return dash ? { stroke, dash } : { stroke };
   }
 
+  /**
+   * Which side of its line this word's border lies on (#185, ADR 0034).
+   *
+   * LAND by default, and the arithmetic is what decides it rather than the
+   * convention. A coastline's line is dark ink, not a vignette: at 1.2 units
+   * on a 200mi map it spans 0.29mi, so centred it puts 0.146mi into the water
+   * from each shore, and two shores 0.20mi apart paint their channel shut
+   * between them. Clipped to the WATER it is worse, 0.29mi from each side.
+   * Clipped to the land it puts nothing in the water at all, and a channel is
+   * drawn exactly as wide as it was declared.
+   *
+   * That is also spec 08's rule in its strongest form: no stroke paints land
+   * colour onto declared water, whatever a theme asks for. A theme that wants
+   * the conventional water-side vignette says `bank=water` and colours it from
+   * the water — safe, because clipped there it can only ever darken water.
+   */
+  bank(chain: string[]): "land" | "water" | "both" {
+    const declared = this.prop(chain, "bank");
+    return declared === "water" || declared === "both" ? declared : "land";
+  }
+
   side(word: string | undefined): string {
     const fill = word && this.map.get(`side.${word}`)?.["fill"];
     if (!fill) return "#8a6ab5";

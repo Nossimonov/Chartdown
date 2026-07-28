@@ -994,7 +994,10 @@ island c "Overlapping pair, east" : near coast at (118,210) size=40mi reach=0.6
   it("an island's shore is stroked separately from its fill, and only the stroke is masked", () => {
     // The fill is land wherever it lands — paper over paper where it meets the
     // mainland, invisible and correct. Only the shore needs water to exist.
-    expect(svg()).toMatch(/fill="none" stroke="[^"]+"[^/]*mask="url\(#cd-shore-document-0\)"/);
+    // On a wrapping group since #185, because the shore is clipped twice:
+    // by #165's union, and by its own footprint so the ink lies on one side.
+    expect(svg()).toMatch(/mask="url\(#cd-shore-document-0\)"><g mask="url\(#cd-inside-document-0\)"/);
+    expect(svg()).toMatch(/fill="none" stroke="[^"]+"/);
   });
 
   it("that mask shows the water, hides the OTHER islands, and never hides the island itself", () => {
@@ -1911,5 +1914,61 @@ ${feature}
       expect(Math.sign(generated), `generated at ${ax}`).toBe(sign);
       expect(Math.sign(stated), `stated at ${ax}`).toBe(sign);
     }
+  });
+});
+
+describe("a border lies on one side of its line (#185, ADR 0034)", () => {
+  // A stroke centred on a boundary puts half its ink on each side, and where
+  // two shores approach, the two water-side halves meet and fill the passage.
+  // The channel is not thin — it is painted over, which is why #180's warning
+  // cannot catch it: that check reasons about geometry, and a theme can erase
+  // a channel the checker has just certified.
+  const doc = (extra = ""): string => `map: region
+extent: 200x120mi
+${extra}
+[water]
+coastline shore : from (100,0) via (100,60) to (100,120)
+sea "S" : west of shore
+island a "A" : near shore at (95,30) size=12mi reach=0.55
+`;
+  const svgOf = (src: string, theme?: string): string =>
+    renderSource(src, theme ? { theme } : {}).svg;
+
+  it("clips a coastline's stroke to one side, at the width asked for", () => {
+    // Drawn as a DOUBLE-width centred stroke behind a mask rather than by
+    // offsetting the line, which would need an outward normal at every vertex
+    // and an answer at every join. The visible half is the declared width.
+    const svg = svgOf(doc());
+    expect(svg).toContain(`stroke-width="2.4"`);
+    expect(svg).toMatch(/<g mask="url\(#cd-land-document\)">/);
+  });
+
+  it("puts no coastline ink on the water by default", () => {
+    // The strongest form of spec 08's rule: no stroke paints land colour onto
+    // declared water, whatever a theme asks for.
+    const svg = svgOf(doc());
+    expect(svg).not.toMatch(/<g mask="url\(#cd-water-document\)">/);
+  });
+
+  it("moves the ink to the water side when a theme says so", () => {
+    const svg = svgOf(doc(), `kind: theme\n\n[theme]\ncoastline : bank=water\n`);
+    expect(svg).toMatch(/<g mask="url\(#cd-water-document\)">/);
+  });
+
+  it("bank=both is the only way back to a centred stroke", () => {
+    // Deliberately the opt-in rather than the default: a midline stroke is the
+    // ambiguity that loses channels, so an author asking for it owns it.
+    const svg = svgOf(doc(), `kind: theme\n\n[theme]\ncoastline : bank=both\n`);
+    expect(svg).not.toMatch(/<g mask="url\(#cd-water-document\)">/);
+    expect(svg).not.toMatch(/<g mask="url\(#cd-land-document\)">/);
+    expect(svg).toContain(`stroke-width="1.2"`);
+  });
+
+  it("an island's shore is clipped to its own footprint too", () => {
+    // Nesting its own outline inside #165's union mask INTERSECTS the two:
+    // what survives is the half of the stroke inside this island that has
+    // water outside it — the one-sided stroke and the #165 rule at once.
+    const svg = svgOf(doc());
+    expect(svg).toMatch(/mask="url\(#cd-shore-document-0\)"><g mask="url\(#cd-inside-document-0\)"/);
   });
 });

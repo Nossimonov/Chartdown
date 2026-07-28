@@ -34,7 +34,7 @@ lollipop : "M0,-3 a5,5 0 1,1 0.1,0 M0,2 L0,10"
 
 ## 3. The appearance vocabulary (closed)
 
-`fill=` · `stroke=` · `width=` · `dash=` · `opacity=` · `glyph=` · `asset=` · `edge=` (edge-zone thickness). Nothing else — every property is presentation-only by construction, which is how the contract's no-semantics rule is enforced. Unknown properties warn and are ignored.
+`fill=` · `stroke=` · `width=` · `dash=` · `opacity=` · `glyph=` · `asset=` · `edge=` (edge-zone thickness) · `bank=` (which side of its own line a border's ink lies on: `land`, `water` or `both` — a CLOSED set, [ADR 0034](../decisions/0034-a-border-lies-on-one-side-of-its-line.md), [#185](https://github.com/Nossimonov/Chartdown/issues/185)). Nothing else — every property is presentation-only by construction, which is how the contract's no-semantics rule is enforced. Unknown properties warn and are ignored.
 
 ## 4. Glyphs and assets
 
@@ -72,6 +72,14 @@ Two rules make these usable:
 Because liveness is measured by what the render actually asked for, it is only as complete as the render: a property consulted on a path this render did not take reads as dead. This is why these are warnings, and why **there is no suppression syntax** — the first real false positives should shape the escape hatch rather than have it guessed in advance. A diagnostic from a theme carries a line number in the **theme file**, not the map, and implementations MUST report it against the theme's path.
 
 ## 7. Conformance
+
+**A border lies on ONE SIDE of its line, never centred** *([ADR 0034](../decisions/0034-a-border-lies-on-one-side-of-its-line.md), [#185](https://github.com/Nossimonov/Chartdown/issues/185))*. A stroke centred on a boundary puts half its ink on each side, and *which* half is not a question the model can answer — so where two shores approach, the two water-side halves meet and fill the passage between them. The channel is not thin; it is painted over, and [#180](https://github.com/Nossimonov/Chartdown/issues/180)'s warning cannot catch it, because that check reasons about geometry and a theme can erase a channel the checker has just certified. There is deliberately **no spelling for a stroke whose midline is the boundary**: an author who wants that look declares `bank=both` and owns the result.
+
+Each stroke MUST be **clipped to the region it belongs to**, which is what makes the freedom above safe: a bold vignette on the water side may bleed across a narrow channel, but it is painting water-coloured ink onto water, so the passage darkens and never becomes land. A theme may make a map ugly; it MUST NOT be able to make it wrong. It follows that **no stroke paints land colour onto declared water**, whatever a theme asks for.
+
+The default is **`land`**, decided by arithmetic rather than convention: a coastline's line is dark ink and not a vignette, so at 1.2 units on a 200mi map it spans 0.29mi, and two shores 0.20mi apart paint their channel shut between them. Clipped to the water it is worse — 0.29mi from each side. Clipped to the land it puts nothing in the water at all.
+
+This does not make a **sub-pixel** channel visible; below about a pixel at the rendered size no clipping helps, and that is a separate mechanism.
 
 Themes MUST NOT alter geometry, placement, or archetype semantics (spec 04 §4) — the property set makes violations inexpressible. Zone rendering quality is tiered by intent: the primitive renderer draws zones as cartographic edging (edge strokes under core strips; inset boundary bands); texture blending across zones is supporting-renderer territory that the format enables but does not mandate. Label prominence continues to flow from vocabulary tiers (spec 07 §1); typography is deliberately absent from v0.1's property set.
 

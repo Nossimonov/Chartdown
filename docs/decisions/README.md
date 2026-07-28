@@ -43,3 +43,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0031](0031-a-bank-the-document-did-not-choose.md) | A bank the document did not choose is refused, not picked: an arm on its host's centerline names the ambiguity | Accepted |
 | [0032](0032-a-measurement-emits-a-line-that-draws.md) | A measurement emits a line that draws, and checks it the way the renderer will | Accepted |
 | [0033](0033-width-is-a-cross-section.md) | A channel's width is its cross-section, square to the centerline | Accepted |
+| [0034](0034-a-border-lies-on-one-side-of-its-line.md) | A border lies on one side of its line, and is clipped to the region that owns it | Accepted |

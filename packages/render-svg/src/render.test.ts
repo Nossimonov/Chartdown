@@ -494,7 +494,11 @@ describe("levels (spec 06 §8)", () => {
     // lands, while the shore is drawn only where there is water to have a
     // shore against, so only the stroke carries the union mask.
     expect(svg).toMatch(/fill="#f9f5ea"/);
-    expect(svg).toMatch(/fill="none" stroke="#8fa8b8"[^/]*mask="url\(#cd-shore-/);
+    // The mask moved onto a wrapping group when a shore gained a side
+    // (#185): the stroke is now clipped twice — by #165's union and by the
+    // island's own footprint — and a mask attribute takes one value.
+    expect(svg).toMatch(/mask="url\(#cd-shore-[^"]*"><g mask="url\(#cd-inside-/);
+    expect(svg).toMatch(/fill="none" stroke="#8fa8b8"/);
     // realm tint paints beneath terrain: its dashed boundary appears before the forest fill
     const realmAt = svg.indexOf('stroke-dasharray="9 4 2 4"');
     const forestAt = svg.indexOf("#a9c79c");
