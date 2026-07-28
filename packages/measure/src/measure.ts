@@ -18,12 +18,14 @@ import { fitGeoref, GeorefError, parseLandmark, parseOrigin, type Georef, type L
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
 import { easeBends, measureFeature, MeasureError, simplify, tightestBend, withMouthLead } from "./feature";
 import { CoastError, measureCoast } from "./coast";
+import { IslandError, measureIsland } from "./island";
 
 const USAGE = `chartdown-measure — derive Chartdown declarations from imagery
 
 usage: chartdown-measure inspect <image.png> [options]
        chartdown-measure feature <image.png> --mouth <point> --into <point> [options]
        chartdown-measure coast <image.png> --from <point> --to <point> [options]
+       chartdown-measure island <image.png> --inside <point> [options]
        chartdown-measure --help
 
   inspect   report what the tool sees: the classification it chose, and the
@@ -38,6 +40,15 @@ usage: chartdown-measure inspect <image.png> [options]
             A traced shore already contains every inlet — simplification keeps
             a deep narrow one however coarse the tolerance — so declaring a
             feature on it would draw that feature twice. This emits the spine.
+
+  island    trace one island's outline from a point inside it. A point in
+            water, or on the mainland, is reported rather than measured — five
+            of the Puget Sound exercise's island anchors turned out to be one
+            or the other, and nothing had been able to say so.
+
+island options:
+  --inside <point>    a point on the island, in pixels or map miles
+  --tolerance <miles> thin the traced staircase (0.5)
 
 coast options:
   --from <point>      where the coastline starts
@@ -90,6 +101,7 @@ interface Options {
   into?: Given;
   from?: Given;
   to?: Given;
+  inside?: Given;
   through?: Given;
   fill: number;
   tolerance: number;
@@ -168,8 +180,8 @@ function parseArgs(argv: string[]): { command: string; options: Options } {
       if (!value) throw new Error(`${flag} needs a value`);
       options[flag === "--word" ? "word" : flag === "--name" ? "name" : "id"] = value;
       i++;
-    } else if (flag === "--from" || flag === "--to" || flag === "--through") {
-      options[flag.slice(2) as "from" | "to" | "through"] = parsePoint(value, flag);
+    } else if (flag === "--from" || flag === "--to" || flag === "--through" || flag === "--inside") {
+      options[flag.slice(2) as "from" | "to" | "through" | "inside"] = parsePoint(value, flag);
       i++;
     } else if (flag === "--fill" || flag === "--tolerance") {
       const n = Number(value);
@@ -377,6 +389,40 @@ function coast(options: Options): void {
   console.log("; every inlet that filled is yours to declare on this line — measure each with `feature`.");
 }
 
+function island(options: Options): void {
+  if (!options.inside) throw new Error("island needs --inside");
+  const { mask, fit } = prepare(options);
+  const got = measureIsland(mask, fit, toPixels(options.inside, fit));
+  const thinned = simplify(got.offsets, options.tolerance);
+  // AN OUTLINE NEEDS MORE CORNERS THAN A BOX. Where the island is not much
+  // bigger than the tolerance, simplification returns the bounding rectangle —
+  // Protection Island came back as four points and zero square miles, which
+  // would enter a document as a tiny rectangle presented as a survey. The
+  // pixel-level guard cannot catch this: the run is large enough to trace and
+  // it is the THINNING that flattens it.
+  if (thinned.length < 6) {
+    throw new IslandError(
+      `at ${round(options.tolerance, 2)}mi that island thins to ${thinned.length} points — a box, not an outline. `
+      + `It covers ${round(got.areaMiles, 2)} sq mi. Use a finer --tolerance, or declare it with size= and reach=, `
+      + `which is the honest spelling for a feature too small to have a shape on this map (spec 05 §4)`,
+    );
+  }
+  const subject = ["island", options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
+  const at = (p: XY): string => `(${round(p.x, 1)},${round(p.y, 1)})`;
+  console.log(`; traced from ${options.image} — ${round(got.areaMiles, 0)} sq mi, ${thinned.length} points at ${round(options.tolerance, 2)}mi`);
+  // FRAMED as offsets from the anchor (ADR 0026), so moving the island is one
+  // coordinate and the shape travels with it.
+  console.log(`${subject} : near <host> at ${at(got.anchor)} area ${thinned.map(at).join(" ")}`);
+  console.log("");
+  console.log("; replace <host> with the coastline or water this sits off.");
+  if (options.origin) {
+    console.log(`; coordinates are measured from --origin ${round(options.origin.lat, 4)},${round(options.origin.lon, 4)} — this document's own frame.`);
+  } else {
+    console.log("; coordinates are measured from the IMAGE's top-left corner. Where a document's extent");
+    console.log("; starts elsewhere, pass --origin <lat>,<lon> — its north-west corner — or this lands off the map.");
+  }
+}
+
 function main(argv: string[]): number {
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     console.log(USAGE);
@@ -386,6 +432,10 @@ function main(argv: string[]): number {
     const { command, options } = parseArgs(argv);
     if (command === "inspect") {
       inspect(options);
+      return 0;
+    }
+    if (command === "island") {
+      island(options);
       return 0;
     }
     if (command === "coast") {

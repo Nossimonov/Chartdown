@@ -66,18 +66,36 @@ const RING: readonly (readonly [number, number])[] = [
  * this resolution, and which `simplify` then reduces to controls a person would
  * write. Smoothing it here would be inventing a shore.
  */
-export function traceRing(mask: Mask): XY[] {
+export interface LandRun {
+  /** Pixels in this run. */
+  size: number;
+  /** Its lowest index, which is a boundary pixel a walk can start from. */
+  top: number;
+  /** Its own label, matching the per-pixel `labels` array. */
+  label: number;
+}
+
+/**
+ * Every run of connected land, largest first, with a label per pixel.
+ *
+ * Labelled in the SAME pass rather than re-flooded per query (#197): asking
+ * "which run is this pixel in" by flooding from each run in turn is quadratic,
+ * and this image is 5.3 million pixels.
+ *
+ * Shared with the island verb: an island is a land run that is not the
+ * mainland, and telling those apart is the whole of that verb's diagnostics.
+ */
+export function labelLand(mask: Mask): { runs: LandRun[]; labels: Int32Array } {
   const { width, height, bits } = mask;
   const land = (x: number, y: number): boolean =>
     x >= 0 && y >= 0 && x < width && y < height && bits[y * width + x] === 0;
-
-  // The largest landmass, so an offshore speck cannot be mistaken for the coast.
+  const labels = new Int32Array(bits.length).fill(-1);
   const seen = new Uint8Array(bits.length);
-  let start = -1;
-  let biggest = 0;
   const queue = new Int32Array(bits.length);
+  const out: LandRun[] = [];
   for (let i = 0; i < bits.length; i++) {
     if (bits[i] !== 0 || seen[i] === 1) continue;
+    const label = out.length;
     let tail = 0;
     let size = 0;
     let top = i;
@@ -85,6 +103,7 @@ export function traceRing(mask: Mask): XY[] {
     queue[tail++] = i;
     for (let head = 0; head < tail; head++) {
       const at = queue[head]!;
+      labels[at] = label;
       size++;
       if (at < top) top = at;
       const x = at % width;
@@ -99,17 +118,36 @@ export function traceRing(mask: Mask): XY[] {
         queue[tail++] = j;
       }
     }
-    if (size > biggest) { biggest = size; start = top; }
+    out.push({ size, top, label });
   }
-  if (start < 0) throw new CoastError("no land in this image — check the classification, or --invert");
+  // Sorted for reporting; `labels` still holds the ORIGINAL index, so a run is
+  // found by its own label rather than by its rank.
+  return { runs: [...out].sort((a, b) => b.size - a.size), labels };
+}
 
-  const sx = start % width;
-  const sy = (start / width) | 0;
+/** Every run of connected land, largest first. */
+export const landRuns = (mask: Mask): LandRun[] => labelLand(mask).runs;
+
+/**
+ * Walk the boundary of the land run whose lowest pixel is `top`, clockwise.
+ *
+ * Moore-neighbour tracing: from a known boundary pixel, sweep the eight
+ * neighbours from where the walk arrived and step to the first that is land.
+ * It returns the ring as PIXELS, a staircase — which is the honest output at
+ * this resolution, and which `simplify` then reduces to controls a person would
+ * write. Smoothing it here would be inventing a shore.
+ */
+export function traceRingFrom(mask: Mask, top: number): XY[] {
+  const { width, height, bits } = mask;
+  const land = (x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x < width && y < height && bits[y * width + x] === 0;
+  const sx = top % width;
+  const sy = (top / width) | 0;
   const out: XY[] = [];
   let cx = sx;
   let cy = sy;
-  // `top` is the lowest index, so the pixel above it is water and the walk can
-  // begin by sweeping from there.
+  // `top` is the run's lowest index, so the pixel above it is water and the
+  // walk can begin by sweeping from there.
   let from = 6;
   const LIMIT = bits.length * 4;
   do {
@@ -129,8 +167,17 @@ export function traceRing(mask: Mask): XY[] {
     }
     if (!moved) break;
   } while ((cx !== sx || cy !== sy) && out.length < LIMIT);
-  if (out.length < 4) throw new CoastError("the largest landmass is too small to have a coastline");
   return out;
+}
+
+/** The outer boundary of the largest landmass — the coast. */
+export function traceRing(mask: Mask): XY[] {
+  const runs = landRuns(mask);
+  const biggest = runs[0];
+  if (!biggest) throw new CoastError("no land in this image — check the classification, or --invert");
+  const ring = traceRingFrom(mask, biggest.top);
+  if (ring.length < 4) throw new CoastError("the largest landmass is too small to have a coastline");
+  return ring;
 }
 
 /** Is this pixel on the edge of the picture rather than on a shore? */
