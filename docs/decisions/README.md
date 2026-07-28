@@ -42,3 +42,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0030](0030-a-centerline-carries-its-own-width.md) | A centerline carries its own width: `via (x,y)@1.5mi`, so a channel may widen and narrow | Accepted |
 | [0031](0031-a-bank-the-document-did-not-choose.md) | A bank the document did not choose is refused, not picked: an arm on its host's centerline names the ambiguity | Accepted |
 | [0032](0032-a-measurement-emits-a-line-that-draws.md) | A measurement emits a line that draws, and checks it the way the renderer will | Accepted |
+| [0033](0033-width-is-a-cross-section.md) | A channel's width is its cross-section, square to the centerline | Accepted |

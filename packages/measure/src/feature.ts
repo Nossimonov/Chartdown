@@ -309,34 +309,54 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
     centrePixels.pop();
   }
 
-  // Half-width from the DISTANCE TO LAND at the middle of the channel, which is
-  // what a medial axis means: the largest circle that fits in the water here.
+  // THE WIDTH OF A CHANNEL IS ITS CROSS-SECTION, SQUARE TO THE CENTERLINE
+  // (spec 05 §4, ADR 0033). That is the quantity the renderer draws — rails
+  // offset at plus and minus the half-width, perpendicular to the line — so it
+  // is the one that makes the number in the document and the water on the map
+  // the same width.
   //
-  // Taking it from the band's AREA instead measured the trunk plus whatever
-  // hung off it, because flooding behind a mouth captures the arms too. On Hood
-  // Canal that put Dabob and Quilcene into the trunk's own width — 4.73mi and
-  // 3.5mi where the channel is nearer 1.5 — and a channel that wide cannot make
-  // the Great Bend's turn, so the renderer refused it, correctly (#177). A bay
-  // off to one side cannot move the distance from mid-channel to the shore.
-  // AND THE WIDTH IS A CROSS-SECTION, NOT AN INSCRIBED CIRCLE (#192). The
-  // distance to land is the largest circle that fits in the water here, and at
-  // a BEND that circle is bigger than the channel: it settles into the corner
-  // and touches both outer banks at once. On a square elbow it reads 1.17x the
-  // true half-width, and more as the turn sharpens — so the measurement makes a
-  // channel widest exactly where it turns hardest, which is the one place a
-  // ribbon cannot afford it. Hood Canal's Great Bend came back at 1.88mi.
+  // Not the distance to land, which is the largest circle that FITS here: that
+  // reads low wherever the centerline sits off-centre, since the nearer bank
+  // caps it, and high at a bend, where the circle settles into the corner and
+  // touches both outer banks at once — 1.17x the true half-width on a square
+  // elbow and more as the turn sharpens. It made a channel widest exactly where
+  // it turns hardest, which is the one place a ribbon cannot afford it.
   //
-  // The width across a channel is the shortest way across it, which is what
-  // `size=` already means at the mouth — the same narrowest-chord search, now
-  // asked at every control. Searched on the CUT mask, so a chord near the mouth
-  // stops there instead of escaping into the open sea.
-  const profile = centrePixels.map((c) => {
+  // Measured WITHIN THE TRUNK, so a crossing stops where the trunk does. The
+  // exactly-perpendicular ray escapes up an arm and keeps going: at Dabob Bay's
+  // junction that read the trunk as 6mi across, against 1.8 either side of it.
+  // The trunk's own water is already known — it is what the bands were grown
+  // over, and it excludes water that is a detour — so the ray simply stops on
+  // leaving it. An arm is a feature in its own right and is declared as one; it
+  // is not part of its host's width.
+  const reach = (p: XY, dir: XY): number => {
+    for (let d = 0; d < span; d++) {
+      const x = Math.round(p.x + dir.x * d);
+      const y = Math.round(p.y + dir.y * d);
+      if (x < 0 || y < 0 || x >= mask.width || y >= mask.height) return Infinity;
+      if (onTrunk[y * mask.width + x] !== 1) return d;
+    }
+    return Infinity;
+  };
+  const profile = centrePixels.map((c, i) => {
     const px = Math.min(Math.max(Math.round(c.p.x), 0), mask.width - 1);
     const py = Math.min(Math.max(Math.round(c.p.y), 0), mask.height - 1);
-    return {
-      at: c.at * georef.milesPerPixel,
-      halfWidth: (fromLand[py * mask.width + px] ?? 0) * georef.milesPerPixel,
-    };
+    const before = centrePixels[Math.max(0, i - 1)]!.p;
+    const after = centrePixels[Math.min(centrePixels.length - 1, i + 1)]!.p;
+    const dx = after.x - before.x;
+    const dy = after.y - before.y;
+    const len = Math.hypot(dx, dy);
+    const p = { x: px, y: py };
+    const a = len > 0 ? reach(p, { x: -dy / len, y: dx / len }) : Infinity;
+    const b = len > 0 ? reach(p, { x: dy / len, y: -dx / len }) : Infinity;
+    // The inscribed circle stands in where the centerline has no direction here
+    // — a single band — or where the crossing runs off the picture rather than
+    // closing on a bank, which is a point in open water rather than in a
+    // channel.
+    const half = Number.isFinite(a) && Number.isFinite(b)
+      ? (a + b) / 2
+      : (fromLand[py * mask.width + px] ?? 0);
+    return { at: c.at * georef.milesPerPixel, halfWidth: half * georef.milesPerPixel };
   });
 
   // `taper` is the fraction of the depth spent converging. Take the flank as

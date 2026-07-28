@@ -87,7 +87,12 @@ range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
 control        = point , [ "@" , measure ] ;
                  (* a centerline control, optionally stating the channel's
-                    WIDTH there — spec 05 §4, ADR 0030, #190. `size=` is the
+                    WIDTH there — spec 05 §4, ADR 0030, #190. That width is the
+                    CROSS-SECTION SQUARE TO THE CENTERLINE (ADR 0033, #192):
+                    the distance between the rails, which is what a renderer
+                    draws — not the largest circle that fits, which inflates at
+                    a bend, and not the narrowest crossing in any direction,
+                    which is the reading a MOUTH takes. `size=` is the
                     profile's first point; an omitted width is interpolated;
                     where widths are stated they are the shape and `taper=`
                     governs only the generated case.

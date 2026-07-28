@@ -281,3 +281,34 @@ describe("a measured centerline is checked as the renderer will draw it (#192)",
     expect(easeBends(straight)).toEqual(straight);
   });
 });
+
+describe("width is a cross-section square to the centerline (spec 05 §4, ADR 0033)", () => {
+  // A channel of KNOWN constant width, turning a square corner. The number a
+  // control carries is what the renderer draws as the distance between its
+  // rails, so the test is simply whether the measurement returns the width the
+  // channel was built with — at the bend as well as along the straights.
+  const TRUE_WIDTH = 2;
+  const ELBOW = scene((x, y) =>
+    (x >= 40 && x < 200 && y >= 140 && y < 160)
+    || (x >= 180 && x < 200 && y >= 140 && y < 280));
+  const got = measureFeature(ELBOW, georef(0.1), { x: 45, y: 150 }, { x: 190, y: 250 });
+
+  it("reads a channel of known width as that width, corner included", () => {
+    // Within a pixel, which is the resolution the picture actually has: a
+    // raster cannot say where a bank is to better than the cell it is drawn in.
+    for (const p of got.profile) {
+      expect(p.halfWidth * 2, `at ${p.at.toFixed(1)}mi`).toBeGreaterThan(TRUE_WIDTH - 0.35);
+      expect(p.halfWidth * 2, `at ${p.at.toFixed(1)}mi`).toBeLessThan(TRUE_WIDTH + 0.15);
+    }
+  });
+
+  it("does not inflate where the channel turns", () => {
+    // The distance to land is the largest circle that FITS, and at a corner
+    // that circle settles into it and touches both outer banks: on a square
+    // elbow it reaches 1.17x the true half-width, so the old measure made a
+    // channel widest exactly where it turns hardest — the one place a ribbon
+    // cannot afford it, since that is where an offset curve folds.
+    const widest = Math.max(...got.profile.map((p) => p.halfWidth * 2));
+    expect(widest).toBeLessThan(TRUE_WIDTH * 1.1);
+  });
+});
