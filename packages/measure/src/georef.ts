@@ -47,6 +47,17 @@ export interface Georef {
   rotationDegrees: number;
   /** RMS fit error in miles. Meaningless below three landmarks — see above. */
   residualMiles: number;
+  /**
+   * How far each landmark ends up from where it was said to be, in the frame
+   * this fit emits (#202).
+   *
+   * An RMS is one number over a set, and a reader who suspects it cannot take
+   * it apart: three landmarks fitting at 0.13, 0.22 and 0.23mi and three
+   * fitting at 0.02, 0.02 and 0.34mi both report about 0.20, and only the
+   * second says "one of these is misplaced". Reported alongside rather than
+   * instead, because the RMS is the number the tolerance is judged against.
+   */
+  residuals: { px: number; py: number; offMiles: number }[];
   /** Longest landmark separation as a fraction of the image diagonal. */
   baseline: number;
 }
@@ -153,9 +164,15 @@ export function fitGeoref(
   };
 
   let sum = 0;
+  const residuals: { px: number; py: number; offMiles: number }[] = [];
   for (let i = 0; i < marks.length; i++) {
     const got = toWorld(marks[i]!.px, marks[i]!.py);
-    sum += (got.x - world[i]!.x) ** 2 + (got.y - world[i]!.y) ** 2;
+    const off = (got.x - world[i]!.x) ** 2 + (got.y - world[i]!.y) ** 2;
+    sum += off;
+    // Measured on `toWorld`, which is what `toMap` emits up to a TRANSLATION —
+    // so this is the error in the coordinates the tool prints, not a separate
+    // quantity that happens to be near it (#202).
+    residuals.push({ px: marks[i]!.px, py: marks[i]!.py, offMiles: Math.sqrt(off) });
   }
   const residualMiles = Math.sqrt(sum / marks.length);
   const milesPerPixel = scale;
@@ -200,6 +217,7 @@ export function fitGeoref(
     milesPerPixel,
     rotationDegrees: (theta * 180) / Math.PI,
     residualMiles,
+    residuals,
     baseline,
   };
 }

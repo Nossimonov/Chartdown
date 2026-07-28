@@ -254,6 +254,18 @@ export interface MeasuredCoast {
   /** How far each endpoint had to move to reach a shore, in miles. */
   fromMovedMiles: number;
   toMovedMiles: number;
+  /**
+   * What fraction of the water `--fill` turned into land (#199).
+   *
+   * The one number that tells a good spine from a deleted sea, and the reason
+   * it has to be printed: at every setting the CONTROL COUNT looks reasonable —
+   * 464 controls at fill 0, 112 at the old default of 2 — and 112 is what
+   * "Puget Sound is not on the map" also looks like. I proposed that default
+   * off point probes at basin middles, which asks the wrong question: a closing
+   * acts at a channel's NARROWEST place, and the Tacoma Narrows is 2.19mi while
+   * Dabob Bay's median is 2.20. A matching number is not a map.
+   */
+  filledFraction: number;
 }
 
 /**
@@ -312,7 +324,15 @@ export function measureCoast(
       ? (forwardOnFrame < backwardOnFrame ? "forward" : "backward")
       : (forwardMiles >= backwardMiles ? "forward" : "backward");
   const moved = (a: XY, b: XY): number => Math.hypot(a.x - b.x, a.y - b.y) * georef.milesPerPixel;
+  let wet = 0;
+  let dried = 0;
+  for (let i = 0; i < mask.bits.length; i++) {
+    if (mask.bits[i] !== 1) continue;
+    wet++;
+    if (filled.bits[i] !== 1) dried++;
+  }
   return {
+    filledFraction: wet > 0 ? dried / wet : 0,
     points: pick === "forward" ? f : b,
     forwardMiles,
     backwardMiles,

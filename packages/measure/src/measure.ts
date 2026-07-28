@@ -57,8 +57,13 @@ coast options:
   --through <point>   a point the coast passes, where the longer is not the one
   --fill <miles>      close the land by this much first, so every inlet
                       narrower than TWICE it fills in and is left for its own
-                      declaration (2). Which water is a feature and which is
-                      the coast is your call, as --mouth is.
+                      declaration (0 — nothing filled). Which water is a
+                      feature and which is the coast is your call, as --mouth
+                      is, and it is not a question about WIDTH: the closing
+                      acts at each channel's NARROWEST place, so a radius large
+                      enough to fill a broad bay pinches the strait that feeds
+                      the whole sea. Raise it from 0 and watch what it says it
+                      removed.
   --tolerance <miles> thin the traced staircase to controls a person would
                       write (0.5)
 
@@ -153,7 +158,13 @@ function toPixels(given: Given, fit: Georef): XY {
 function parseArgs(argv: string[]): { command: string; options: Options } {
   const [command, image, ...rest] = argv;
   if (!command || !image) throw new Error(USAGE);
-  const options: Options = { image, landmarks: [], index: "luma", invert: false, close: 2, word: "sound", fill: 2, tolerance: 0.5 };
+  // `fill` DEFAULTS TO NOTHING (#199). It was 2, which removes every channel
+  // narrower than FOUR miles — and Admiralty Inlet's narrowest is 3.02mi, so
+  // the default deleted Puget Sound and reported a plausible control count
+  // while doing it. A radius that fills the inlets an author means is a
+  // judgement about their map; there is no safe number to guess, and 0 at
+  // least fails where it can be seen.
+  const options: Options = { image, landmarks: [], index: "luma", invert: false, close: 2, word: "sound", fill: 0, tolerance: 0.5 };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
     const value = rest[i + 1];
@@ -209,9 +220,37 @@ function describeGeoref(fit: Georef, marks: number): string[] {
     `              landmarks span ${Math.round(fit.baseline * 100)}% of the frame` +
       (marks >= 3 ? `, fit leaves ${round(fit.residualMiles, 3)}mi of error` : `, and two landmarks always fit exactly — add a third to make this checkable`),
   ];
-  if (Math.abs(fit.rotationDegrees) > 1) {
-    lines.push(`              image is ${round(Math.abs(fit.rotationDegrees), 1)}° off north — expected for a rotated picture, suspicious otherwise`);
+  // EACH LANDMARK, not only their RMS (#202): one number over a set cannot be
+  // taken apart, and a single misplaced landmark is exactly what a reader is
+  // looking for here.
+  if (marks >= 3) {
+    lines.push(`              ${fit.residuals.map((r) => `${r.px},${r.py} off ${round(r.offMiles, 2)}mi`).join(" · ")}`);
   }
+  // ROTATION IS ALWAYS DISCLOSED, AND IN MILES (#202). It used to be reported
+  // only past a degree, which is the wrong unit: a fit turned 0.39° — silent
+  // under that gate — moves the corners of a 135mi frame by nearly half a
+  // mile, and on imagery whose narrowest declared water is 0.22mi that is the
+  // difference between a point being wet and being dry. Half a mile of
+  // unexplained offset then reads as the TOOL misplacing things, which is the
+  // wrong lead and cost the Puget Sound exercise two rounds.
+  const halfDiagonal = Math.hypot(fit.extent.width, fit.extent.height) / 2;
+  const corner = Math.abs((fit.rotationDegrees * Math.PI) / 180) * halfDiagonal;
+  lines.push(
+    `              turned ${round(fit.rotationDegrees, 2)}° from north, which moves the far corners ${round(corner, 2)}mi`
+    + (Math.abs(fit.rotationDegrees) > 1 ? " — expected for a rotated picture, suspicious otherwise" : ""),
+  );
+  // THE TRANSFORM ITSELF, so nobody has to recover it. #202 was raised because
+  // a reader rebuilt it from the tool's own printed replies, got an
+  // axis-aligned model with two different scales, and measured a half-mile
+  // error that was their reconstruction rather than this fit. Derived by
+  // probing `toMap` rather than from the coefficients behind it, so what is
+  // printed cannot drift from what is emitted.
+  const at = fit.toMap(0, 0);
+  const dx = fit.toMap(1000, 0);
+  const dy = fit.toMap(0, 1000);
+  const term = (n: number): string => `${n < 0 ? "-" : "+"} ${Math.abs(n).toFixed(6)}`;
+  lines.push(`              x = ${at.x.toFixed(4)} ${term((dx.x - at.x) / 1000)}*px ${term((dy.x - at.x) / 1000)}*py`);
+  lines.push(`              y = ${at.y.toFixed(4)} ${term((dx.y - at.y) / 1000)}*px ${term((dy.y - at.y) / 1000)}*py`);
   return lines;
 }
 
@@ -305,6 +344,53 @@ function feature(options: Options): void {
     : "";
 
   console.log(`; measured from ${options.image} — depth ${round(got.depth, 1)}mi along the channel, mouth ${round(got.size, 2)}mi`);
+  // A MOUTH THAT NAMES THE WHOLE SEA (#200). The chord is the author's call and
+  // should be, but "did this separate anything" is a far weaker test than it
+  // reads as, and it gets weaker the further out the chord goes: one anywhere
+  // near open water separates the entire sound and passes. Measuring the
+  // sixteen named waters of Puget Sound, FOUR of them — Liberty, Elliott,
+  // Sinclair, Commencement — came back on the same 3.65mi chord as the same
+  // 69.8mi body, each a valid declaration that draws, and the script that
+  // produced them looked like it had succeeded.
+  //
+  console.log(`; that mouth encloses ${Math.round(got.share * 100)}% of the water in this frame.`);
+  // THE TELL IS NOT THE DEPTH, AND IT IS NOT A THRESHOLD (#200). The issue says
+  // so and is right: Hood Canal really is 59mi from a 1.75mi mouth, so no bound
+  // on depth, or on depth against mouth width, tells a long fjord from a
+  // mistake. Neither does the share — those four fake bays each enclosed 16% of
+  // this frame's water, well under the 90% at which the flood already refuses.
+  //
+  // What tells them apart is a fact this run has already measured: whether the
+  // channel PINCHES somewhere further in. Where it does, that pinch is the
+  // mouth the author meant — Sinclair's is Rich Passage, 0.85mi, 5.7mi past the
+  // chord that returned the whole sound. Where it does not, the mouth given is
+  // the narrowest the water gets and there is nothing to suggest.
+  //
+  // Compared against the mouth measured in the same run, so nothing here is
+  // calibrated to one map: three fifths is "meaningfully narrower", not a
+  // width anyone picked.
+  const insidePoint = fit.toMap(intoPx.x, intoPx.y);
+  let nearest = -1;
+  let nearestD = Infinity;
+  for (let i = 0; i < got.centerline.length; i++) {
+    const c = got.centerline[i]!;
+    const d = Math.hypot(c.x - insidePoint.x, c.y - insidePoint.y);
+    if (d < nearestD) { nearestD = d; nearest = i; }
+  }
+  const reached = nearest >= 0 ? (got.profile[nearest]?.at ?? 0) : 0;
+  const beyond = Math.max(0, got.depth - reached);
+  console.log(`; --into lies ${round(reached, 1)}mi along it, so ${round(beyond, 1)}mi of what was measured is BEYOND the point you called inside.`);
+  // Three times over is loose on purpose. An author gives one point well inside
+  // and the feature legitimately runs on past it, so a fjord measured from its
+  // own mouth is nowhere near this — but a chord out in open water encloses the
+  // whole sound, and then the water past the author's point is most of what was
+  // measured. On the four inlets that came back as the same 69.8mi body, --into
+  // sat a few miles in with sixty beyond it.
+  if (beyond > reached * 3 && beyond > got.size * 4) {
+    console.log("; NOTE: that is most of what this measured. A chord out in open water separates the whole");
+    console.log("; sound and passes the test above, so this may not be the water you are naming — the fix is");
+    console.log("; a TIGHTER mouth, further in, at the narrows the water actually passes through.");
+  }
   // BOTH FRAMES, so the next run can be written in either. The anchor below is
   // the mouth CHORD'S MIDPOINT rather than the point given, so it is not the
   // coordinate to re-use for --mouth, and reading it as one lands a few pixels
@@ -371,7 +457,24 @@ function coast(options: Options): void {
   const subject = ["coastline", options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
   const at = (p: XY): string => `(${round(p.x, 1)},${round(p.y, 1)})`;
   const via = thinned.slice(1, -1).map(at).join(" ");
-  console.log(`; traced from ${options.image} — inlets narrower than ${round(options.fill * 2, 2)}mi filled, ${thinned.length} controls at ${round(options.tolerance, 2)}mi`);
+  console.log(`; traced from ${options.image} — ${options.fill > 0 ? `inlets narrower than ${round(options.fill * 2, 2)}mi filled` : "nothing filled (--fill 0)"}, ${thinned.length} controls at ${round(options.tolerance, 2)}mi`);
+  // WHAT THE FILL ACTUALLY REMOVED (#199). The verb knows, and nothing else in
+  // the output distinguishes "the inlets are gone, as asked" from "the sea is
+  // gone": the control count falls smoothly through both, which is why a table
+  // of them read as confirmation while the map underneath was empty.
+  //
+  // Loud past a quarter, and the number is stated either way. A fill is for
+  // trimming INLETS off a coast, and inlets are a modest share of any real
+  // sea — measured on Puget Sound the settings that removed 18% and 39% had
+  // already reduced the Sound to a ribbon and then to nothing, so a quarter is
+  // past the point where the radius has stopped trimming and become the coast.
+  if (options.fill > 0) {
+    console.log(`; that filled ${Math.round(got.filledFraction * 100)}% of the water in this frame.`
+      + (got.filledFraction > 0.25
+        ? ` THAT IS NOT TRIMMING — render this line before using it. A fill wide enough to close the basins`
+          + ` deletes the sea and still emits a plausible number of controls.`
+        : ""));
+  }
   console.log(`; the two arcs run ${round(got.forwardMiles, 1)}mi and ${round(got.backwardMiles, 1)}mi; took the one that is ${Math.round(got.forwardOnFrame * 100)}% picture-edge over the one that is ${Math.round(got.backwardOnFrame * 100)}%${options.through ? ", as --through says" : ""}.`);
   // HOW FAR EACH END MOVED. A point given in open water snaps to the nearest
   // shore, which is right and worth seeing: it was a seven-mile snap onto the

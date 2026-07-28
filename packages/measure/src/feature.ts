@@ -38,6 +38,17 @@ export interface Measured {
   /** Half-width down the channel, in miles, for reporting. */
   profile: { at: number; halfWidth: number }[];
   /**
+   * What share of this image's water the mouth enclosed (#200).
+   *
+   * The tell that a chord has named the whole sea, and it has to be the SHARE
+   * rather than the depth: Hood Canal really is 59mi deep from a 1.75mi mouth,
+   * so no bound on depth, or on depth against mouth width, can separate a long
+   * fjord from a mistake. What separates them is how much of the sea was on
+   * the far side of the chord. Refusing above 90% was already here; it is far
+   * too loose to catch four inlets that each came back as most of Puget Sound.
+   */
+  share: number;
+  /**
    * The unit direction the centerline leaves its host on, in map coordinates.
    *
    * A renderer prepends a control of its own along the HOST's normal at the
@@ -402,6 +413,7 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
       width: (profile[i]?.halfWidth ?? 0) * 2,
     })),
     profile,
+    share: water > 0 ? insideCount / water : 0,
   };
 }
 

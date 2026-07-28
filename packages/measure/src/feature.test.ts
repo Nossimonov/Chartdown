@@ -19,6 +19,7 @@ const georef = (milesPerPixel: number): Georef => ({
   milesPerPixel,
   rotationDegrees: 0,
   residualMiles: 0,
+  residuals: [],
   baseline: 1,
 });
 
@@ -62,6 +63,30 @@ describe("measuring a straight inlet of known size", () => {
   it("calls a parallel-sided channel barely tapered", () => {
     // Nothing converges until the very end, which is what taper= means.
     expect(got.taper).toBeLessThan(0.25);
+  });
+});
+
+describe("a mouth says how much of the sea it enclosed (#200)", () => {
+  // Four of Puget Sound's named waters came back on the SAME 3.65mi chord as
+  // the same 69.8mi body — the whole sound wearing four names in turn, each a
+  // valid declaration that drew. "Did the chord separate anything" is a far
+  // weaker test than it reads as, and it gets weaker the further out the chord
+  // goes. The tell cannot be the depth: Hood Canal really is 59mi from a
+  // 1.75mi mouth.
+  it("reports the share of this image's water that lies behind the mouth", () => {
+    const got = measureFeature(STRAIGHT, georef(0.1), { x: 45, y: 150 }, { x: 200, y: 150 });
+    // The inlet is 200x20; the open sea down the west edge is 40x400. So the
+    // inlet is the minority of the water, which is what a named inlet is.
+    expect(got.share).toBeGreaterThan(0);
+    expect(got.share).toBeLessThan(0.3);
+  });
+
+  it("is the fraction that would have to grow toward 1 for a chord out at sea", () => {
+    // Moving the mouth outward can only enclose MORE, never less — which is
+    // the property that makes the number worth printing.
+    const near = measureFeature(STRAIGHT, georef(0.1), { x: 120, y: 150 }, { x: 200, y: 150 });
+    const far = measureFeature(STRAIGHT, georef(0.1), { x: 45, y: 150 }, { x: 200, y: 150 });
+    expect(far.share).toBeGreaterThan(near.share);
   });
 });
 

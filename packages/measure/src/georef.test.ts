@@ -54,6 +54,66 @@ describe("fitting a georeference", () => {
   });
 });
 
+describe("the error reported is the error in the coordinates emitted (#202)", () => {
+  // Raised because a reader rebuilt the transform from the tool's own printed
+  // replies, got an axis-aligned model, and measured half a mile of error that
+  // was their reconstruction rather than this fit. The reported number was
+  // right the whole time — so what these pin is that it STAYS right, and that
+  // the per-landmark breakdown behind it is the same quantity.
+  const skewed = (): Landmark[] => {
+    const marks = synthetic(0.05, [[100, 100], [900, 900], [900, 100]]);
+    marks[1]!.lat += 0.004; // about a quarter mile, well inside the tolerance
+    return marks;
+  };
+
+  it("gives a residual per landmark, and the RMS of those is the reported one", () => {
+    const fit = fitGeoref(skewed(), IMAGE);
+    expect(fit.residuals).toHaveLength(3);
+    const rms = Math.sqrt(fit.residuals.reduce((t, r) => t + r.offMiles ** 2, 0) / fit.residuals.length);
+    expect(rms).toBeCloseTo(fit.residualMiles, 9);
+  });
+
+  it("measures each against the point the emitted transform actually lands on", () => {
+    // The claim in the issue, tested directly: take the emitted `toMap`, ask it
+    // where each landmark goes, and compare with where the landmark was said to
+    // be. A translation is the only difference between `toMap` and the fit, so
+    // the DISTANCES are identical and this is checkable without knowing the
+    // origin — which is exactly why the reported number was already honest.
+    const marks = skewed();
+    const fit = fitGeoref(marks, IMAGE);
+    const world = marks.map((m) => fit.toMap(m.px, m.py));
+    for (let i = 0; i < marks.length; i++) {
+      for (let j = i + 1; j < marks.length; j++) {
+        const emitted = Math.hypot(world[i]!.x - world[j]!.x, world[i]!.y - world[j]!.y);
+        const truth = Math.hypot(
+          (marks[i]!.lon - marks[j]!.lon) * Math.cos((LAT * Math.PI) / 180) * MPD,
+          (marks[i]!.lat - marks[j]!.lat) * MPD,
+        );
+        // Within the sum of the two landmarks' own reported residuals: the fit
+        // cannot be further off than it says it is.
+        expect(Math.abs(emitted - truth)).toBeLessThanOrEqual(
+          fit.residuals[i]!.offMiles + fit.residuals[j]!.offMiles + 1e-9,
+        );
+      }
+    }
+  });
+
+  it("carries the rotation, which is what a reconstruction leaves out", () => {
+    // 0.39° on the exercise imagery — silent under the old 1° disclosure gate,
+    // and worth nearly half a mile at the corners of a 135mi frame. An
+    // axis-aligned model fitted to it comes back with two different scales,
+    // which is what the issue reported.
+    const turned = synthetic(0.05, [[100, 100], [900, 900], [900, 100]]).map((m) => ({ ...m }));
+    const fit = fitGeoref(turned, IMAGE);
+    const a = fit.toMap(0, 0);
+    const alongX = fit.toMap(1000, 0);
+    const alongY = fit.toMap(0, 1000);
+    // Isotropic BY CONSTRUCTION: the two axes are the same scale, whatever the
+    // landmarks say, so the fit cannot absorb a bad one as a stretch.
+    expect(Math.hypot(alongX.x - a.x, alongX.y - a.y)).toBeCloseTo(Math.hypot(alongY.x - a.x, alongY.y - a.y), 9);
+  });
+});
+
 describe("a georeference that cannot be trusted is refused (#181)", () => {
   it("refuses landmarks too close together — which a residual cannot catch", () => {
     // Two points fit a similarity EXACTLY, so the residual here is zero no

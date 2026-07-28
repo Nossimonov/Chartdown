@@ -45,3 +45,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0033](0033-width-is-a-cross-section.md) | A channel's width is its cross-section, square to the centerline | Accepted |
 | [0034](0034-a-border-lies-on-one-side-of-its-line.md) | A border lies on one side of its line, and is clipped to the region that owns it | Accepted |
 | [0035](0035-a-channel-too-narrow-to-see-is-drawn-as-a-symbol.md) | A channel too narrow to see is drawn as a symbol, at a floor in viewport units | Accepted |
+| [0036](0036-a-measurement-reports-what-it-removed.md) | A measurement reports what it consumed, not only what it produced | Accepted |

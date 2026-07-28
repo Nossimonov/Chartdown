@@ -20,6 +20,19 @@ import type { Mask } from "./raster";
 
 export class IslandError extends Error {}
 
+/**
+ * A SPECK IS NOT AN OUTLINE. Below a handful of pixels the traced ring is the
+ * pixel grid rather than the island — Protection Island, about a square mile of
+ * low sand, came back as four points and zero square miles, which would have
+ * gone into a document as a tiny rectangle presented as a survey.
+ *
+ * At module scope because the DIAGNOSTICS have to apply the same threshold
+ * (#201): a "nearest land" the tracer would itself refuse is not an answer, and
+ * reporting one produced the sentence "the nearest land is 0.0mi away … and
+ * covers 0 sq mi" — a point in water, with land at no distance, of no size.
+ */
+const MIN_PIXELS = 12;
+
 export interface MeasuredIsland {
   /** The ring's centroid, in map coordinates — the feature's anchor. */
   anchor: XY;
@@ -68,24 +81,100 @@ export function measureIsland(mask: Mask, georef: Georef, inside: XY): MeasuredI
   const { runs, labels } = labelLand(mask);
   if (runs.length === 0) throw new IslandError("no land in this image — check the classification, or --invert");
 
+  // Only a run the TRACER WOULD ACCEPT can be the answer to "did you mean
+  // that?" (#201). Without this the nearest-land scan happily returned a
+  // three-pixel speck, and on `_sea4.png` reported 7.1mi to nothing while the
+  // nearest real land was 5.67mi away.
+  const bigEnough = new Set(runs.filter((r) => r.size >= MIN_PIXELS).map((r) => r.label));
+
+  /**
+   * The nearest pixel of every qualifying land run, nearest run first.
+   *
+   * Per RUN rather than one global minimum, because "the nearest land" can be
+   * a speck with a landmass just behind it (#201): from one probe on this
+   * imagery the nearest land is 97 pixels of sand at 7.14mi and the mainland
+   * is at 7.98mi, so a single answer sends the reader to the sand.
+   */
+  const nearestRuns = (want: (label: number) => boolean): { index: number; distance: number; size: number }[] => {
+    const best = new Map<number, { index: number; distance: number }>();
+    for (let i = 0; i < bits.length; i++) {
+      if (bits[i] !== 0) continue;
+      const label = labels[i]!;
+      if (!bigEnough.has(label) || !want(label)) continue;
+      const d = Math.hypot((i % width) - px, ((i / width) | 0) - py);
+      const cur = best.get(label);
+      if (!cur || d < cur.distance) best.set(label, { index: i, distance: d });
+    }
+    return [...best.entries()]
+      .map(([label, at]) => ({ ...at, size: runs.find((r) => r.label === label)?.size ?? 0 }))
+      .sort((a, b) => a.distance - b.distance);
+  };
+
+  /**
+   * A SUGGESTION THAT DOES NOT MOVE IS NOT A SUGGESTION (#201).
+   *
+   * The nearest land pixel sits ON the boundary, and a map coordinate prints to
+   * 0.1mi — two pixels at this scale — so an author who pasted back exactly
+   * what the message said landed in the water and got the same message again.
+   * Two fixes at once: step to a pixel whose four neighbours are also land, and
+   * give the answer in PIXELS, which carry no rounding at all.
+   */
+  const inward = (index: number): number => {
+    const ix = index % width;
+    const iy = (index / width) | 0;
+    const ux = ix - px;
+    const uy = iy - py;
+    const len = Math.hypot(ux, uy) || 1;
+    for (let step = 0; step <= 4; step++) {
+      const cx = Math.round(ix + (ux / len) * step);
+      const cy = Math.round(iy + (uy / len) * step);
+      if (cx < 1 || cy < 1 || cx >= width - 1 || cy >= height - 1) break;
+      const at = cy * width + cx;
+      if (labels[at] !== labels[index]) continue;
+      const solid = bits[at] === 0 && bits[at - 1] === 0 && bits[at + 1] === 0
+        && bits[at - width] === 0 && bits[at + width] === 0;
+      if (solid) return at;
+    }
+    return index;
+  };
+
+  /** Below a tenth of a mile a rounded distance reads as zero — say pixels. */
+  const away = (pixels: number): string =>
+    pixels * perPixel >= 0.1 ? `${(pixels * perPixel).toFixed(1)}mi` : `${Math.round(pixels)} pixels`;
+
+  type Candidate = { index: number; distance: number; size: number };
+  const describe = (c: Candidate): string => {
+    const spot = inward(c.index);
+    const at = georef.toMap(spot % width, (spot / width) | 0);
+    const area = sqMiles(c.size);
+    return `${away(c.distance)} away, ${area.toFixed(area < 1 ? 2 : 0)} sq mi, at (${at.x.toFixed(1)},${at.y.toFixed(1)})`
+      + ` — \`--inside ${spot % width},${(spot / width) | 0}\``;
+  };
+  /**
+   * The nearest, and the nearest BIGGER one if it is comparably close.
+   *
+   * "Bigger and within twice the distance" needs no size threshold to be
+   * chosen: whether a speck is worth pointing at is decided by what else is
+   * beside it, which is the fact the reader is missing rather than a number
+   * anyone has to pick.
+   */
+  const offer = (found: Candidate[]): string => {
+    const first = found[0]!;
+    const bigger = found.find((c) => c.size > first.size && c.distance <= first.distance * 2);
+    return bigger ? `${describe(first)}; the nearest larger land is ${describe(bigger)}` : describe(first);
+  };
+
   if (bits[py * width + px] === 1) {
     // In water. Find the nearest land and say what it is, so the reader can
     // tell "I missed by a little" from "there is nothing there".
-    let best = -1;
-    let bestD = Infinity;
-    for (let i = 0; i < bits.length; i++) {
-      if (bits[i] !== 0) continue;
-      const d = Math.hypot((i % width) - px, ((i / width) | 0) - py);
-      if (d < bestD) { bestD = d; best = i; }
+    const found = nearestRuns(() => true);
+    if (found.length === 0) {
+      throw new IslandError(
+        `that point is in water, and this image has no land run big enough to trace — every one is under ${MIN_PIXELS} `
+        + `pixels. Check the classification, or --invert`,
+      );
     }
-    if (best < 0) throw new IslandError("no land in this image — check the classification, or --invert");
-    const run = runs.find((r) => r.label === labels[best]);
-    const size = run ? sqMiles(run.size) : 0;
-    const at = georef.toMap(best % width, (best / width) | 0);
-    throw new IslandError(
-      `that point is in water — the nearest land is ${(bestD * perPixel).toFixed(1)}mi away at `
-      + `(${at.x.toFixed(1)},${at.y.toFixed(1)}) and covers ${size.toFixed(0)} sq mi. Did you mean a point on that?`,
-    );
+    throw new IslandError(`that point is in water. The nearest land is ${offer(found)}. Did you mean one of those?`);
   }
 
   const here = runs.find((r) => r.label === labels[py * width + px]);
@@ -94,18 +183,25 @@ export function measureIsland(mask: Mask, georef: Georef, inside: XY): MeasuredI
   // largest land run in the picture. A point on it has no island ring to find,
   // and no anchor will produce one.
   if (here.top === runs[0]!.top && runs.length > 1) {
+    // AND WHERE THE NEAREST THING THAT IS NOT THE MAINLAND IS (#201). "The run
+    // containing it is the largest in this image" is equally true of a point on
+    // an island's neighbour, a point ten miles inland, and a genuinely welded
+    // island — and it reads as the third. Rounds nine and ten both concluded
+    // from this message that Squaxin and McNeil were beyond the classification
+    // and went looking at image resolution; the anchors were thirteen pixels
+    // off their own islands, inherited from a hand-drawn map. The evidence that
+    // tells the two cases apart is already in hand, so it is now given.
+    const other = nearestRuns((label) => label !== here.label);
+    const lead = `that point is on the mainland (${sqMiles(here.size).toFixed(0)} sq mi, the largest in this image).`;
+    const advice = `the channel is narrower than this classification can see: try a smaller --close, a different `
+      + `--index, or a finer image (spec 05 §2)`;
     throw new IslandError(
-      `that point is on the mainland — the land run containing it covers ${sqMiles(here.size).toFixed(0)} sq mi, `
-      + `the largest in this image. If it should be an island, the channel separating it is narrower than this `
-      + `classification can see: try a smaller --close, or a different --index (spec 05 §2)`,
+      other.length === 0 ? `${lead} There is no other land in this image, so ${advice}`
+        : `${lead} The nearest land that is NOT the mainland is ${offer(other)}. If you meant that, use it. `
+          + `If not, ${advice}`,
     );
   }
 
-  // A SPECK IS NOT AN OUTLINE. Below a handful of pixels the traced ring is
-  // the pixel grid rather than the island — Protection Island, about a square
-  // mile of low sand, came back as four points and zero square miles, which
-  // would have gone into a document as a tiny rectangle presented as a survey.
-  const MIN_PIXELS = 12;
   if (here.size < MIN_PIXELS) {
     throw new IslandError(
       `that landmass is ${here.size} pixels — ${sqMiles(here.size).toFixed(2)} sq mi at ${perPixel.toFixed(3)}mi `

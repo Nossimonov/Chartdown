@@ -34,6 +34,7 @@ const georef = (milesPerPixel: number): Georef => ({
   milesPerPixel,
   rotationDegrees: 0,
   residualMiles: 0,
+  residuals: [],
   baseline: 1,
 });
 
@@ -75,8 +76,32 @@ describe("a point that is not on an island", () => {
     try { measureIsland(scene(), G, { x: 130, y: 60 }); } catch (e) { message = (e as Error).message; }
     expect(message).toMatch(/that point is in water/);
     expect(message).toMatch(/nearest land is [\d.]+mi away/);
-    expect(message).toMatch(/covers \d+ sq mi/);
-    expect(message).toMatch(/Did you mean a point on that\?/);
+    expect(message).toMatch(/\d+ sq mi/);
+    expect(message).toMatch(/Did you mean one of those\?/);
+  });
+
+  it("suggests a point the tool ACCEPTS, in pixels (#201)", () => {
+    // The nearest land pixel sits ON the boundary and a map coordinate prints
+    // to 0.1mi — two pixels at this scale — so an author who pasted back what
+    // the message said landed in the water and got the message again. Both
+    // halves of the fix are asserted: the answer is a pixel, and that pixel
+    // traces.
+    let message = "";
+    try { measureIsland(scene(), G, { x: 130, y: 60 }); } catch (e) { message = (e as Error).message; }
+    const suggested = /--inside (\d+),(\d+)/.exec(message);
+    expect(suggested, message).not.toBeNull();
+    const at = { x: Number(suggested![1]), y: Number(suggested![2]) };
+    expect(() => measureIsland(scene(), G, at)).not.toThrow();
+  });
+
+  it("never offers land the tracer would itself refuse (#201)", () => {
+    // "The nearest land is 0.0mi away and covers 0 sq mi" — a point in water,
+    // with land at no distance, of no size. It came from scanning raw pixels
+    // with no area threshold, so a speck won on distance.
+    let message = "";
+    try { measureIsland(scene(), G, { x: 178, y: 34 }); } catch (e) { message = (e as Error).message; }
+    expect(message).not.toMatch(/0 sq mi/);
+    expect(message).not.toMatch(/is 0\.0mi away/);
   });
 
   it("on the mainland: says so, and why no anchor fixes it", () => {

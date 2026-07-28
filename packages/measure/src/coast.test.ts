@@ -37,6 +37,7 @@ const georef = (milesPerPixel: number): Georef => ({
   milesPerPixel,
   rotationDegrees: 0,
   residualMiles: 0,
+  residuals: [],
   baseline: 1,
 });
 
@@ -88,6 +89,50 @@ describe("filling the inlets a document will declare", () => {
       ring.filter((p) => p.x >= 50 && p.x < 54 && p.y > 60 && p.y < 110).length;
     expect(dips(traced)).toBeGreaterThan(0);
     expect(dips(spine)).toBe(0);
+  });
+});
+
+describe("a fill says how much water it took (#199)", () => {
+  // The number that separates "the inlets are gone, as asked" from "the sea is
+  // gone". Nothing else in the output does: the control count falls smoothly
+  // through both, which is how a table of them read as confirmation while the
+  // map underneath was empty. The old default of 2 removed every channel under
+  // FOUR miles, and Admiralty Inlet's narrowest is 3.02.
+  const filledAt = (fill: number): number =>
+    measureCoast(INLETS, georef(0.1), { from: { x: 2, y: 40 }, to: { x: W - 3, y: 40 }, fill }).filledFraction;
+
+  it("reports nothing filled when nothing was asked for", () => {
+    expect(filledAt(0)).toBe(0);
+  });
+
+  it("stays small while the fill is only taking inlets", () => {
+    expect(filledAt(3)).toBeGreaterThan(0);
+    expect(filledAt(3)).toBeLessThan(0.25);
+    // An opening cannot remove a BROAD region however large the radius: the
+    // dilation puts the open sea back. So on this coast the number saturates
+    // at the inlets, which is the shape of a healthy trim.
+    expect(filledAt(35)).toBeLessThan(0.25);
+  });
+
+  it("goes loud where the fill closes the sea itself", () => {
+    // The Puget Sound failure in miniature: where the water is a channel rather
+    // than an open basin, a radius past half its width takes ALL of it — and
+    // the traced ring then belongs to a map with no sea on it. A quarter is the
+    // line the CLI shouts past, so the two cases have to land either side of it.
+    const strait: Mask = { width: W, height: H, bits: new Uint8Array(W * H) };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) strait.bits[y * W + x] = y >= 57 && y < 63 ? 1 : 0;
+    const got = measureCoast(strait, georef(0.1), { from: { x: 2, y: 57 }, to: { x: W - 3, y: 57 }, fill: 4 });
+    expect(got.filledFraction).toBe(1);
+  });
+
+  it("counts the water that became land, not the pixels touched", () => {
+    // Every filled pixel was water before, so the fraction is of the original
+    // water and can never exceed it — the dilation half of an opening must not
+    // be able to inflate this.
+    for (const fill of [1, 3, 8, 20]) {
+      expect(filledAt(fill), `fill=${fill}`).toBeGreaterThanOrEqual(0);
+      expect(filledAt(fill), `fill=${fill}`).toBeLessThanOrEqual(1);
+    }
   });
 });
 
