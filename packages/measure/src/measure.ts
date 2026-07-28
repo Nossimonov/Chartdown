@@ -14,7 +14,7 @@
 
 import { readFileSync } from "node:fs";
 import { decodePng, ImageError } from "./png";
-import { fitGeoref, GeorefError, parseLandmark, type Georef, type Landmark, type XY } from "./georef";
+import { fitGeoref, GeorefError, parseLandmark, parseOrigin, type Georef, type Landmark, type Origin, type XY } from "./georef";
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
 import { easeBends, measureFeature, MeasureError, simplify, tightestBend, withMouthLead } from "./feature";
 
@@ -52,6 +52,11 @@ options:
   --invert                         water is the LIGHTER side of the cut.
   --close <pixels>                 close breaks up to this wide before labelling,
                                    so a narrow passage is not pinched shut (2).
+  --origin <lat>,<lon>             the DOCUMENT's extent origin — its north-west
+                                   corner. Without it, coordinates come out
+                                   relative to the IMAGE's top-left corner, which
+                                   an existing map will not share: pasted in, the
+                                   feature lands wherever the two frames differ.
 
 PNG only, by design — see ADR 0029.`;
 
@@ -61,6 +66,7 @@ interface Options {
   index: IndexName;
   invert: boolean;
   close: number;
+  origin?: Origin;
   mouth?: Given;
   into?: Given;
   word: string;
@@ -138,6 +144,10 @@ function parseArgs(argv: string[]): { command: string; options: Options } {
       if (!value) throw new Error(`${flag} needs a value`);
       options[flag === "--word" ? "word" : flag === "--name" ? "name" : "id"] = value;
       i++;
+    } else if (flag === "--origin") {
+      if (!value) throw new Error("--origin needs a document extent origin, as <lat>,<lon>");
+      options.origin = parseOrigin(value);
+      i++;
     } else if (flag === "--invert") {
       options.invert = true;
     } else {
@@ -182,7 +192,7 @@ function inspect(options: Options): void {
   }
 
   if (options.landmarks.length > 0) {
-    for (const line of describeGeoref(fitGeoref(options.landmarks, raster), options.landmarks.length)) {
+    for (const line of describeGeoref(fitGeoref(options.landmarks, raster, options.origin), options.landmarks.length)) {
       console.log(line);
     }
   } else {
@@ -198,7 +208,7 @@ function prepare(options: Options): { mask: ReturnType<typeof largestBody>; fit:
   if (options.landmarks.length === 0) {
     throw new GeorefError("measuring needs a georeference: give --georef landmarks so pixels can become miles");
   }
-  return { mask: sea, fit: fitGeoref(options.landmarks, raster) };
+  return { mask: sea, fit: fitGeoref(options.landmarks, raster, options.origin) };
 }
 
 function feature(options: Options): void {
@@ -264,6 +274,17 @@ function feature(options: Options): void {
   const shape = controls.length > 0 ? "" : ` taper=${round(got.taper, 2)}`;
   console.log(`${subject} : on <shore> at (${round(got.anchor.x, 1)},${round(got.anchor.y, 1)})${via} size=${round(got.size, 2)}mi${shape}`);
   console.log("");
+  // WHICH FRAME THESE ARE IN (#196). Nothing in the output said, and it reads
+  // as an absolute map coordinate — so a declaration measured against imagery
+  // and pasted into a document whose extent starts elsewhere lands wherever the
+  // two frames differ, silently, because a feature in the wrong place is still
+  // a valid feature. Stating it costs a line and makes the offset a decision.
+  if (options.origin) {
+    console.log(`; coordinates are measured from --origin ${round(options.origin.lat, 4)},${round(options.origin.lon, 4)} — this document's own frame.`);
+  } else {
+    console.log("; coordinates are measured from the IMAGE's top-left corner. Where a document's extent");
+    console.log("; starts elsewhere, pass --origin <lat>,<lon> — its north-west corner — or this lands off the map.");
+  }
   console.log("; replace <shore> with the id of the coastline this hangs on.");
   if (controls.length === 0) {
     console.log("; no bends worth declaring — add reach= instead of via if you want a straight run.");

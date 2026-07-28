@@ -80,7 +80,27 @@ const project = (lat: number, lon: number, lat0: number, lon0: number): XY => ({
   y: -(lat - lat0) * MILES_PER_DEGREE,
 });
 
-export function fitGeoref(marks: Landmark[], image: { width: number; height: number }): Georef {
+/** A document's extent origin — its north-west corner, in the world. */
+export interface Origin {
+  lat: number;
+  lon: number;
+}
+
+export function fitGeoref(
+  marks: Landmark[],
+  image: { width: number; height: number },
+  /**
+   * Where the DOCUMENT's coordinates start (#196).
+   *
+   * Without one, coordinates come out relative to the image's own top-left
+   * corner — fine for a map being written around the picture, and quietly
+   * wrong for one that already exists. A declaration measured against Puget
+   * Sound imagery and pasted into a map whose extent starts elsewhere lands
+   * seven miles from the water, and nothing warns, because nothing is wrong
+   * with it: it is a valid feature at the coordinates it states.
+   */
+  origin?: Origin,
+): Georef {
   if (marks.length < 2) {
     throw new GeorefError("a georeference needs at least two landmarks — give a third to make the fit checkable, since two always fit exactly");
   }
@@ -158,15 +178,19 @@ export function fitGeoref(marks: Landmark[], image: { width: number; height: num
     height: Math.max(...corners.map((c) => c.y)) - minY,
   };
 
+  // What (0,0) means. The image's own corner unless the caller says otherwise,
+  // which keeps every existing invocation reading exactly as it did.
+  const zero = origin ? project(origin.lat, origin.lon, lat0, lon0) : { x: minX, y: minY };
+
   return {
     toMap: (px, py) => {
       const at = toWorld(px, py);
-      return { x: at.x - minX, y: at.y - minY };
+      return { x: at.x - zero.x, y: at.y - zero.y };
     },
     toPixel: (x, y) => {
       // Undo the offset, then the rotation and scale that `toWorld` applied.
-      const bx = x + minX - wcx;
-      const by = y + minY - wcy;
+      const bx = x + zero.x - wcx;
+      const by = y + zero.y - wcy;
       return {
         x: pcx + (bx * cos + by * sin) / scale,
         y: pcy + (-bx * sin + by * cos) / scale,
@@ -181,6 +205,16 @@ export function fitGeoref(marks: Landmark[], image: { width: number; height: num
 }
 
 /** Parse `x,y=lat,lon` as written on the command line. */
+/** Parse `lat,lon` as written on the command line — a document's extent origin. */
+export function parseOrigin(text: string): Origin {
+  const m = /^\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*$/.exec(text);
+  if (!m) throw new GeorefError(`origin '${text}' is not in the form <lat>,<lon>`);
+  const [lat, lon] = m.slice(1).map(Number) as [number, number];
+  if (Math.abs(lat) > 90) throw new GeorefError(`origin '${text}' has a latitude outside -90..90 — are the coordinates the other way round?`);
+  if (Math.abs(lon) > 180) throw new GeorefError(`origin '${text}' has a longitude outside -180..180`);
+  return { lat, lon };
+}
+
 export function parseLandmark(text: string): Landmark {
   const m = /^\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*=\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*$/.exec(text);
   if (!m) throw new GeorefError(`landmark '${text}' is not in the form <pixelX>,<pixelY>=<lat>,<lon>`);

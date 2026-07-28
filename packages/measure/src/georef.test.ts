@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitGeoref, GeorefError, parseLandmark, type Landmark } from "./georef";
+import { fitGeoref, GeorefError, parseLandmark, parseOrigin, type Landmark } from "./georef";
 
 const IMAGE = { width: 1000, height: 1000 };
 
@@ -150,5 +150,61 @@ describe("map coordinates convert back to pixels (#193)", () => {
       expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
       expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
     }
+  });
+});
+
+describe("coordinates come out in the document's frame when it says so (#196)", () => {
+  // Without an origin the frame is the IMAGE's own top-left corner, which an
+  // existing document does not share: a declaration measured against Puget
+  // Sound imagery and pasted into a map whose extent starts elsewhere landed
+  // seven miles from the water, and nothing warned — a feature in the wrong
+  // place is still a valid feature.
+  const marks = [
+    "1146,2052=47.2690,-122.5517",
+    "1046,478=48.4061,-122.6433",
+    "202,838=48.1490,-123.5670",
+  ].map(parseLandmark);
+  const IMAGE = { width: 1957, height: 2696 };
+
+  it("puts (0,0) at the declared origin", () => {
+    const origin = { lat: 48.65, lon: -123.75 };
+    const fit = fitGeoref(marks, IMAGE, origin);
+    const at = fit.toPixel(0, 0);
+    const back = fit.toMap(at.x, at.y);
+    expect(back.x).toBeCloseTo(0, 6);
+    expect(back.y).toBeCloseTo(0, 6);
+  });
+
+  it("shifts every point by the same offset, and nothing else", () => {
+    // The frame moves; the geometry does not. Distances measured in one frame
+    // must be identical in the other, or the origin would be rescaling the map.
+    const plain = fitGeoref(marks, IMAGE);
+    const shifted = fitGeoref(marks, IMAGE, { lat: 48.65, lon: -123.75 });
+    const a = [1059, 1143] as const;
+    const b = [842, 1850] as const;
+    const dx = plain.toMap(...a).x - shifted.toMap(...a).x;
+    const dy = plain.toMap(...a).y - shifted.toMap(...a).y;
+    expect(plain.toMap(...b).x - shifted.toMap(...b).x).toBeCloseTo(dx, 6);
+    expect(plain.toMap(...b).y - shifted.toMap(...b).y).toBeCloseTo(dy, 6);
+    const span = (g: typeof plain): number =>
+      Math.hypot(g.toMap(...a).x - g.toMap(...b).x, g.toMap(...a).y - g.toMap(...b).y);
+    expect(span(shifted)).toBeCloseTo(span(plain), 6);
+    // And the offset is a real one — this is the seven miles that went missing.
+    expect(Math.hypot(dx, dy)).toBeGreaterThan(5);
+  });
+
+  it("still inverts exactly with an origin in force", () => {
+    const fit = fitGeoref(marks, IMAGE, { lat: 48.65, lon: -123.75 });
+    for (const [px, py] of [[0, 0], [1957, 2696], [1059, 1143]] as const) {
+      const m = fit.toMap(px, py);
+      const back = fit.toPixel(m.x, m.y);
+      expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
+      expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
+    }
+  });
+
+  it("rejects an origin that is not a lat,lon", () => {
+    expect(() => parseOrigin("48.65")).toThrow(/is not in the form/);
+    expect(() => parseOrigin("123.75,-48.65")).toThrow(/latitude outside/);
   });
 });
