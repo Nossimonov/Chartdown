@@ -90,7 +90,11 @@ control        = point , [ "@" , measure ] ;
                     WIDTH there — spec 05 §4, ADR 0030, #190. `size=` is the
                     profile's first point; an omitted width is interpolated;
                     where widths are stated they are the shape and `taper=`
-                    governs only the generated case. *)
+                    governs only the generated case.
+                    HOW MANY controls state a line does not change the line
+                    (#189): their spacing is not part of the shape, so a
+                    measured centerline and a sketched one describing the same
+                    curve draw the same. *)
 point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) ,

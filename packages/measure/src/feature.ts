@@ -351,35 +351,14 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
  * to remove, wearing a different hat. The tolerance is a fraction of the
  * feature's own width, so a wide sound keeps fewer controls than a narrow one
  * and both keep the bends that matter.
- */
-/**
- * Space the controls out, which the renderer's spline cares about more than
- * their number.
  *
- * A measured centerline crowds its controls where the channel bends and leaves
- * long gaps down the straights, and that unevenness — not the count, and not
- * the feature's size — is what a Catmull-Rom overshoots on. Measured on a canal
- * turning a right angle: six controls with three of them within a mile of each
- * other and then a ten-mile jump was REFUSED at every size from 1.56mi down to
- * 0.3mi, while the same shape in two evenly spread controls drew at full size.
- * So a tool that emits the first is emitting something no map can use.
+ * Thinned for READABILITY only. This used to be followed by a second pass that
+ * forced the survivors to be evenly spaced, because the renderer's spline
+ * overshot on uneven ones — a tool working around a renderer limitation, and
+ * one that cost exactly the controls a bend is made of. With the spline now
+ * centripetal (#189), spacing no longer changes a centerline's shape, so the
+ * measurement emits the controls the shape actually needs.
  */
-export function spaceOut<T extends XY>(points: T[], minGap: number): T[] {
-  if (points.length < 3) return points.slice();
-  const out: T[] = [points[0]!];
-  for (let i = 1; i < points.length - 1; i++) {
-    const last = out[out.length - 1]!;
-    if (Math.hypot(points[i]!.x - last.x, points[i]!.y - last.y) >= minGap) out.push(points[i]!);
-  }
-  const end = points[points.length - 1]!;
-  const last = out[out.length - 1]!;
-  // The head is kept whatever its spacing — it is the feature's extent — but a
-  // control crowding it is dropped in its favour.
-  if (out.length > 1 && Math.hypot(end.x - last.x, end.y - last.y) < minGap) out.pop();
-  out.push(end);
-  return out;
-}
-
 export function simplify<T extends XY>(points: T[], tolerance: number): T[] {
   if (points.length < 3) return points.slice();
   const keep = new Uint8Array(points.length);

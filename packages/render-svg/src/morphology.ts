@@ -203,7 +203,29 @@ export type RejectReason =
    * `suggest` is not an estimate. It is a first control this function has
    * SPLICED AND VALIDATED, so the point offered is known to draw.
    */
-  | { kind: "off-normal"; degrees: number; suggest: XY };
+  | { kind: "off-normal"; degrees: number; suggest: XY }
+  /**
+   * The centerline turns tighter than the channel is wide, so the inner rail
+   * folds through itself (#189).
+   *
+   * The fifth cause, and the one a MEASURED centerline hits: measurement puts
+   * controls where curvature is high, and a cluster of them describes a turn of
+   * their own spacing's radius. Reported as a plain fold it sent an author to
+   * shrink a feature — which does work here, unlike #183's skew, but says
+   * nothing about WHERE, and on a canal stated in eight controls there is no
+   * way to find the one bend that is too tight by reading coordinates.
+   */
+  | { kind: "pinch"; radius: number; half: number; at: XY };
+
+/** Where a shape comes closest to folding: the turn, and the width there. */
+interface Pinch {
+  /** Radius of curvature of the centerline, in rendered units. */
+  radius: number;
+  /** Half-width the ribbon carries at that station. */
+  half: number;
+  /** The point on the centerline where the two are worst matched. */
+  at: XY;
+}
 
 /** A feature resolved against its host: where its window sits, and where it runs. */
 interface Sited {
@@ -293,7 +315,9 @@ export function deformCurve(
     }
     const next = splice(host, arc, [...accepted, sited]);
     if (!isSimple(next) || !isSmooth(next)) {
-      onReject?.(f, skewed(host, arc, accepted, f, sited) ?? { kind: "fold" });
+      // Skew first: it is asked by experiment and answers with a point that is
+      // known to draw, so where both apply the stronger diagnostic wins.
+      onReject?.(f, skewed(host, arc, accepted, f, sited) ?? pinched(host, arc, sited) ?? { kind: "fold" });
       continue;
     }
     accepted.push(sited);
@@ -340,6 +364,37 @@ function skewed(
   const drawn = splice(host, arc, [...accepted, trial]);
   if (!isSimple(drawn) || !isSmooth(drawn)) return null;
   return { kind: "off-normal", degrees, suggest };
+}
+
+/**
+ * Was this refusal a turn too tight for the channel's width (#189)?
+ *
+ * Asked of the geometry the outline was actually built from, so the numbers
+ * reported are the renderer's own rather than a second estimate of them. An
+ * offset curve folds where the centerline's radius drops below the half-width
+ * it carries — the condition #177 established — so this reports the place
+ * where those two are worst matched, and only when they genuinely cross.
+ *
+ * A margin, not a bare inequality: the rails also carry the fillet and the
+ * head, so a shape whose ratio is a hair over one is folding for this reason
+ * too. Below one it is certain; a little above it is still the best answer
+ * available, and the alternative is the bare fold that names nothing.
+ */
+function pinched(host: XY[], arc: number[], sited: Sited): RejectReason | null {
+  let worst: Pinch | null = null;
+  const from = sited.at - sited.half;
+  const to = sited.at + sited.half;
+  ribbon(
+    pointAtArc(host, arc, from),
+    pointAtArc(host, arc, to),
+    sited.centre,
+    sited.f.taper ?? 1,
+    sited.widths,
+    (p) => { worst = p; },
+  );
+  const p = worst as Pinch | null;
+  if (p === null || !(p.half > 0) || p.radius > p.half * 1.5) return null;
+  return { kind: "pinch", radius: p.radius, half: p.half, at: p.at };
 }
 
 /** Resolve a feature against its host: anchor, direction, centerline. */
@@ -447,6 +502,12 @@ function ribbon(
   centre: XY[],
   taper: number,
   declared: (number | undefined)[] = [],
+  /**
+   * Where this shape comes closest to folding, reported for the diagnostic
+   * (#189). Read from the same geometry the outline is built from, so the
+   * number an author is given is the one the renderer actually used.
+   */
+  probe?: (p: Pinch) => void,
 ): XY[] {
   const half = Math.hypot(mouthB.x - mouthA.x, mouthB.y - mouthA.y) / 2;
   const mid = { x: (mouthA.x + mouthB.x) / 2, y: (mouthA.y + mouthB.y) / 2 };
@@ -656,7 +717,33 @@ function ribbon(
   // and a pair of them reads as a corner of 20–39° on a curve that is smooth
   // wherever you look at it. Splitting an over-wide gap evenly obeys the same
   // ceiling and cannot produce a step shorter than half of it.
-  const tightest = Math.min(...curvature(path, arcs).filter((R) => Number.isFinite(R)));
+  const radii = curvature(path, arcs);
+  const tightest = Math.min(...radii.filter((R) => Number.isFinite(R)));
+  // WHERE THIS SHAPE COMES CLOSEST TO FOLDING (#189). An offset curve folds
+  // where the centerline's radius drops below the half-width being carried
+  // there, so the worst place is the smallest RATIO of the two — not the
+  // tightest turn, which is harmless in a narrow stretch, and not the widest
+  // part, which is harmless on a straight. Reported from here because this is
+  // where both numbers already exist together.
+  // NOT ON A SCOOP, though. A shallow shape is a half-ellipse whose width is
+  // governed by its mouth and nothing else — its run is shorter than its own
+  // half-width, so the centerline barely leaves the coast and the chord
+  // between the mouth's corners can sit further in than the first control
+  // does. The "turn" then found is that reversal, radius zero, and telling an
+  // author to spread their via points through it is advice about a bend they
+  // did not write. A feature too big for its stretch is a plain fold, and the
+  // size really is the thing to change.
+  if (probe && !shallow) {
+    let worst: Pinch | null = null;
+    for (let i = 1; i + 1 < path.length; i++) {
+      const R = radii[i]!;
+      if (!Number.isFinite(R)) continue;
+      const w = widthAt(arcs[i]!);
+      if (w <= TINY) continue;
+      if (worst === null || R / w < worst.radius / worst.half) worst = { radius: R, half: w, at: path[i]! };
+    }
+    if (worst) probe(worst);
+  }
   stops.sort((x, y) => x - y);
   if (Number.isFinite(tightest) && tightest > 0) {
     const ceiling = Math.max(tightest / PER_RADIUS, L / 2000);

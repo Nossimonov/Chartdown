@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { deformCurve, isSimple, isSmooth, resample, spacingFor, type PlacedFeature } from "./morphology";
 import { formatPoints, frameShape, parsePoints } from "@chartdown/core";
 import { renderSource } from "./index";
-import type { XY } from "./util";
+import { catmullRom, type XY } from "./util";
 
 /**
  * A straight west-to-east coast, already at the uniform spacing `deformCurve`
@@ -1270,7 +1270,13 @@ ${feature}
     // something it never needed — and which sea spelling two features away
     // decided whether it got.
     const canal = `fjord hood "Hood Canal" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15`;
-    const arm = `sound dabob "Dabob Bay" : on hood at (42,66) size=1.5mi reach=5 taper=0.3`;
+    // Anchored on the canal's BANK, not on its centerline (#191). Written at
+    // the centerline control (42,66) this passed on a coin flip: an anchor
+    // equidistant from both rails gets no side at all, and the bank was then
+    // decided by which vertex the rounding picked. The subject here is #175 —
+    // that a declared course needs no side from the map — so the anchor should
+    // not be carrying a second, unrelated ambiguity.
+    const arm = `sound dabob "Dabob Bay" : on hood at (41.2,65.4) size=1.5mi reach=5 taper=0.3`;
     expect(refusals(doc(ENCLOSED, `${canal}\n${arm}`))).toBe(0);
   });
 });
@@ -1284,7 +1290,10 @@ describe("an arm does not re-space the feature it hangs off (#179)", () => {
   const SHORE = "from (50,0) via (48,30) (52,60) (48,90) to (50,120)";
   const SEA = `sea "S" : area (50,0) along shore (50,120) (100,120) (100,0)`;
   const CANAL = `fjord hood "Hood Canal" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15`;
-  const ARM = `sound dabob "Dabob Bay" : on hood at (42,66) size=1.5mi reach=5 taper=0.3`;
+  // On the canal's BANK. At the centerline control (42,66) the bank is decided
+  // by vertex rounding rather than by the document (#191), which would make
+  // this test's answer depend on something it is not about.
+  const ARM = `sound dabob "Dabob Bay" : on hood at (41.2,65.4) size=1.5mi reach=5 taper=0.3`;
   const doc = (extra: string, withArm = true): string => `map: region
 extent: 100x120mi
 
@@ -1569,5 +1578,139 @@ ${feature}
     const before = doc(`sound c "C" : on shore at (10,20) via (25,20) (40,20) size=3mi taper=0.3`);
     expect(renderSource(before).diagnostics).toEqual([]);
     expect(widthAt(before, 25)).toBeGreaterThan(0);
+  });
+});
+
+describe("control spacing does not decide a centerline's shape (#189)", () => {
+  // A Catmull-Rom parameterised uniformly gives every span an equal share of
+  // the parameter however long it is, so a short span beside a long one is
+  // traversed at a wildly different speed and the curve bulges past the short
+  // one to make up the difference. Measurement crowds controls where curvature
+  // is high and leaves long gaps down the straights, which is exactly that
+  // pattern — so a traced coastline was refused at EVERY size, and the refusal
+  // blamed the size.
+  const doc = (via: string, size: string): string => `map: region
+extent: 31x24mi
+
+[water]
+coastline shore : from (3.1,0) via (3.1,12) to (3.1,24)
+sea "S" : west of shore
+fjord hood "Hood Canal" : on shore at (4.8,7.8) via ${via} size=${size} taper=0.07
+`;
+  // The declaration from #189, measured off imagery: three controls within a
+  // mile of each other at the bend, then a ten-mile run.
+  const CROWDED = "(14.2,7.9) (15.1,8) (15.7,8.4) (15.7,18.3) (15.7,18.9) (16.1,19.3)";
+  const errors = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
+
+  it("stops refusing a crowded centerline at every size", () => {
+    // Before: refused at 1.56mi, 1mi, 0.6mi and 0.3mi alike — a fifth of the
+    // size asked for, and still a fold. Size was not the cause at any value,
+    // and the message named it as the fix.
+    expect(errors(doc(CROWDED, "0.6mi"))).toEqual([]);
+    expect(errors(doc(CROWDED, "0.3mi"))).toEqual([]);
+  });
+
+  it("names the bend and its radius rather than the size", () => {
+    // Wide enough that the tail's own turn genuinely cannot carry it. That is
+    // an honest refusal — and it has to say WHERE, because on a canal stated
+    // in eight controls there is no reading the offending bend off a list of
+    // coordinates.
+    const [msg] = errors(doc(CROWDED, "1.56mi"));
+    expect(msg).toMatch(/turns with a radius of [\d.]+ near \([\d.]+,[\d.]+\)/);
+    expect(msg).toMatch(/cannot follow a turn tighter than its own half-width/);
+    // The size is NOT quoted: on a declared profile the width that folds is
+    // not `size=` at all, and quoting it invites the edit that cannot work.
+    expect(msg).not.toMatch(/size=/);
+  });
+
+  it("draws the same shape however many controls state it", () => {
+    // The property the fix is really for: a centerline is a SHAPE, and how
+    // many points an author used to describe it must not change it. Stated at
+    // four controls and at sixteen along the same arc, the drawn coast should
+    // be the same line.
+    const arc = (n: number): string => {
+      const pts: string[] = [];
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        pts.push(`(${(4.8 + 14 * t).toFixed(2)},${(7.8 + 6 * t * t).toFixed(2)})`);
+      }
+      return pts.join(" ");
+    };
+    let perMile = 1;
+    const shore = (src: string): XY[] => {
+      const out = renderSource(src);
+      expect(out.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+      perMile = Number(/viewBox="0 0 ([\d.]+)/.exec(out.svg)![1]!) / 31;
+      return /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(out.svg)![1]!
+        .trim().split(/\s+/).map((q) => {
+          const [x, y] = q.split(",").map(Number) as [number, number];
+          return { x, y };
+        });
+    };
+    const coarse = shore(doc(arc(4), "1mi"));
+    const fine = shore(doc(arc(16), "1mi"));
+    // Nearest-point deviation, since the two are sampled differently.
+    const apart = Math.max(...fine.map((p) =>
+      Math.min(...coarse.map((q) => Math.hypot(p.x - q.x, p.y - q.y)))));
+    // Measured in MILES rather than rendered units, and against the thing the
+    // number is about: the channel is a mile wide, and the two statements of
+    // it agree to a small fraction of that.
+    expect(apart / perMile).toBeLessThan(0.25);
+  });
+});
+
+describe("the spline is centripetal (#189)", () => {
+  // Equal chords give equal knots, which IS the uniform spline — so this
+  // changes only the curves that were being drawn wrong, and every evenly
+  // spread control set renders exactly as before.
+  it("leaves a straight line straight however it is sampled", () => {
+    const even = catmullRom([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }, { x: 30, y: 0 }], 8);
+    const lumpy = catmullRom([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 30, y: 0 }], 8);
+    expect(Math.max(...even.map((p) => Math.abs(p.y)))).toBeLessThan(1e-9);
+    expect(Math.max(...lumpy.map((p) => Math.abs(p.y)))).toBeLessThan(1e-9);
+  });
+
+  it("does not loop a crowded centerline back through itself", () => {
+    // #189's own controls: three within a mile at the bend, then a ten-mile
+    // run. Measured on this line, the uniform spline put ONE self-crossing in
+    // it and a 54.9° kink; the centripetal one has neither. That crossing is
+    // the whole bug — the centerline really did fold, so the refusal was
+    // honest, but the fold was manufactured by the parameterisation rather
+    // than by anything the author wrote.
+    const hood: XY[] = [
+      { x: 4.8, y: 7.8 }, { x: 14.2, y: 7.9 }, { x: 15.1, y: 8 }, { x: 15.7, y: 8.4 },
+      { x: 15.7, y: 18.3 }, { x: 15.7, y: 18.9 }, { x: 16.1, y: 19.3 },
+    ];
+    const curve = catmullRom(hood, 96);
+    const side = (p: XY, q: XY, r: XY): number =>
+      Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+    let crossings = 0;
+    let sharpest = 0;
+    for (let i = 0; i + 1 < curve.length; i++) {
+      for (let j = i + 2; j + 1 < curve.length; j++) {
+        const [a, b, c, d] = [curve[i]!, curve[i + 1]!, curve[j]!, curve[j + 1]!];
+        if (side(a, b, c) !== side(a, b, d) && side(c, d, a) !== side(c, d, b)) crossings++;
+      }
+    }
+    for (let i = 1; i + 1 < curve.length; i++) {
+      const a = curve[i - 1]!, b = curve[i]!, c = curve[i + 1]!;
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-12 || Math.hypot(c.x - b.x, c.y - b.y) < 1e-12) continue;
+      let t = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+      if (t > Math.PI) t = 2 * Math.PI - t;
+      sharpest = Math.max(sharpest, (t * 180) / Math.PI);
+    }
+    expect(crossings).toBe(0);
+    expect(sharpest).toBeLessThan(20);
+  });
+
+  it("holds a circle on its circle", () => {
+    const ring = Array.from({ length: 12 }, (_, i) => ({
+      x: 50 * Math.cos((i * Math.PI) / 6), y: 50 * Math.sin((i * Math.PI) / 6),
+    }));
+    const drawn = catmullRom(ring, 8, true);
+    const radii = drawn.map((p) => Math.hypot(p.x, p.y));
+    expect(Math.min(...radii)).toBeGreaterThan(49.5);
+    expect(Math.max(...radii)).toBeLessThan(50.5);
   });
 });

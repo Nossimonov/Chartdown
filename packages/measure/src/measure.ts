@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { decodePng, ImageError } from "./png";
 import { fitGeoref, GeorefError, parseLandmark, type Georef, type Landmark, type XY } from "./georef";
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
-import { measureFeature, MeasureError, simplify, spaceOut } from "./feature";
+import { measureFeature, MeasureError, simplify } from "./feature";
 
 const USAGE = `chartdown-measure — derive Chartdown declarations from imagery
 
@@ -172,10 +172,14 @@ function feature(options: Options): void {
   // Thinned to what a person would write. Sixty controls down a canal is the
   // wall of coordinates ADR 0023 exists to remove, wearing a different hat —
   // a tenth of the feature's own width keeps every bend that reads as one.
-  const controls = spaceOut(
-    simplify(got.centerline, Math.max(got.size / 10, fit.milesPerPixel * 2)),
-    Math.max(got.size * 2, got.depth / 12),
-  ).slice(1);
+  //
+  // Thinned for readability and NOTHING ELSE (#189). A second pass used to
+  // force the survivors evenly apart, to keep the renderer's spline from
+  // overshooting on uneven spacing — and it deleted the controls a bend is
+  // made of: measured on Hood Canal, the thinned line refused above 1.2mi
+  // where the unthinned one drew at 2.2. The spline is centripetal now, so
+  // spacing no longer decides a centerline's shape and the workaround is gone.
+  const controls = simplify(got.centerline, Math.max(got.size / 10, fit.milesPerPixel * 2)).slice(1);
   const subject = [options.word, options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
   // Each control carries the width measured there (#190). `size=` is the mouth
   // and `taper=` could only narrow from it, so a channel that widens into a

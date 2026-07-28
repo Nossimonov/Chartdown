@@ -544,11 +544,19 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             ? `it claims the same stretch of '${keyOf(e)}' as ${named(byFeature.get(why.other) ?? x)}. Move one of them, or use a smaller size= on either`
             : why.kind === "off-normal"
               ? `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and a centerline must leave perpendicular. Try a first via point at (${round1(why.suggest.x / scale)},${round1(why.suggest.y / scale)})`
-              : `${x.morph === "jut" ? "a jut that long" : "a bite that deep"} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch`;
+              : why.kind === "pinch"
+                // The place, the two numbers, and the rule connecting them. A
+                // fold is local, so an author needs to be told WHERE: on a
+                // canal stated in eight controls there is no reading the one
+                // bend that is too tight off a list of coordinates.
+                ? `its centerline turns with a radius of ${round1(why.radius / scale)} near (${round1(why.at.x / scale)},${round1(why.at.y / scale)}), and a channel cannot follow a turn tighter than its own half-width — ${round1(why.half / scale)} there. Spread the via points through that bend, or narrow the channel there`
+                : `${x.morph === "jut" ? "a jut that long" : "a bite that deep"} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch`;
       // The size is named where the size is worth changing. On a skewed
       // departure it is not, and quoting it invites exactly the wrong edit —
       // which is what six rounds of shrinking a perfectly good inlet came from.
-      const at = why.kind === "off-normal" ? "" : ` at size=${x.sizeText}`;
+      // Nor on a pinch: the width that folds is the one at the bend, which on
+      // a declared profile is not `size=` at all.
+      const at = why.kind === "off-normal" || why.kind === "pinch" ? "" : ` at size=${x.sizeText}`;
       diagnostics.push({
         severity: "error",
         line: x.line,
