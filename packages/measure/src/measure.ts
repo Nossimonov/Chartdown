@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { decodePng, ImageError } from "./png";
 import { fitGeoref, GeorefError, parseLandmark, type Georef, type Landmark, type XY } from "./georef";
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
-import { easeBends, measureFeature, MeasureError, simplify, tightestBend } from "./feature";
+import { easeBends, measureFeature, MeasureError, simplify, tightestBend, withMouthLead } from "./feature";
 
 const USAGE = `chartdown-measure — derive Chartdown declarations from imagery
 
@@ -187,8 +187,19 @@ function feature(options: Options): void {
   // folds (spec 05 §4). Each control may move within its own half-width of
   // where it was measured and no further, which keeps the line in the water it
   // describes.
-  const eased = easeBends(thinned);
-  const controls = eased.slice(1);
+  // CHECKED AND EASED WITH THE MOUTH LEAD IN PLACE (#193). A renderer prepends
+  // a control of its own along the host's normal, proportional to the first
+  // leg, and that control is part of the curve it draws — so a check that
+  // leaves it out is checking a different line. It printed a declaration that
+  // `check` refused, silently and at exit 0, which is the one failure this
+  // tool exists to prevent: measuring accurately and then handing over
+  // something that cannot be drawn.
+  //
+  // The lead is held fixed while the rest is eased, because it is the
+  // renderer's control rather than the author's; easing it would be smoothing
+  // a point no document contains.
+  const eased = easeBends(withMouthLead(thinned[0]!, thinned.slice(1), got.leaves), 1.2, 2);
+  const controls = eased.slice(2);
   const subject = [options.word, options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
   // Each control carries the width measured there (#190). `size=` is the mouth
   // and `taper=` could only narrow from it, so a channel that widens into a
@@ -218,6 +229,15 @@ function feature(options: Options): void {
     );
     console.log("; so the renderer will refuse it and name the place. The water really does turn that sharply —");
     console.log("; declare the sharpest stretch as its own narrower feature, or accept a wider mouth for it.");
+  }
+  // The one assumption this check rests on, stated rather than left implicit:
+  // the mouth's own chord stands in for the coast, so the lead above points
+  // where a renderer will point it only if the feature is hung on a shore
+  // running as the measured mouth does. Spec 05 §4 requires a centerline to
+  // leave its host perpendicular, so that is the same condition.
+  if (controls.length > 0) {
+    console.log(`; the centerline leaves the mouth heading (${round(got.leaves.x, 2)},${round(got.leaves.y, 2)});`);
+    console.log("; hang this on a coast that runs across that, or it leaves at a skew and is refused (spec 05 §4).");
   }
 }
 

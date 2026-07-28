@@ -37,6 +37,21 @@ export interface Measured {
   centerline: (XY & { width: number })[];
   /** Half-width down the channel, in miles, for reporting. */
   profile: { at: number; halfWidth: number }[];
+  /**
+   * The unit direction the centerline leaves its host on, in map coordinates.
+   *
+   * A renderer prepends a control of its own along the HOST's normal at the
+   * mouth, and that control is part of the curve it draws (#169, #183) — so a
+   * check that omits it is checking a different line, which is how a
+   * declaration came to print clean and then be refused (#193).
+   *
+   * Knowable here after all: the mouth is the narrowest chord between two
+   * headlands, so that chord IS the local coastline and its perpendicular is
+   * the host's normal. It holds where the feature is placed on a coast running
+   * as the measured mouth does, which is the workflow; on some other coast the
+   * centerline leaves at a skew, and spec 05 §4 requires it not to.
+   */
+  leaves: XY;
 }
 
 const at = (mask: Mask, x: number, y: number): number =>
@@ -378,6 +393,7 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
 
   return {
     anchor: georef.toMap(mid.x, mid.y),
+    leaves: leavesOn(georef, mid, across, into),
     size: widthPixels * georef.milesPerPixel,
     depth,
     taper,
@@ -592,6 +608,49 @@ export function simplify<T extends XY>(points: T[], tolerance: number): T[] {
   return points.filter((_, i) => keep[i] === 1);
 }
 
+/**
+ * Which way the centerline leaves the mouth, in MAP coordinates.
+ *
+ * Perpendicular to the mouth chord, taking the side the inlet actually runs to
+ * — the chord has two normals and only one of them goes inland. Resolved in map
+ * space rather than pixel space so a rotated georeference cannot turn it: the
+ * two endpoints are converted and the direction taken between them.
+ */
+function leavesOn(georef: Georef, mid: XY, across: XY, into: XY): XY {
+  const inward = (into.x - mid.x) * -across.y + (into.y - mid.y) * across.x >= 0 ? 1 : -1;
+  const tip = { x: mid.x - across.y * inward, y: mid.y + across.x * inward };
+  const a = georef.toMap(mid.x, mid.y);
+  const b = georef.toMap(tip.x, tip.y);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  return len > 0 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
+}
+
+/**
+ * The line a renderer will actually draw: the declared controls with the
+ * MOUTH LEAD a renderer inserts ahead of them (#169, #193).
+ *
+ * Proportional to the first leg, and along the direction the centerline leaves
+ * its host on, exactly as the renderer builds it. Where the centerline leaves
+ * perpendicular — which spec 05 §4 requires — this is collinear with the first
+ * leg and changes nothing; where it does not, it is a corner at the mouth, and
+ * that corner is the shape being refused.
+ */
+export function withMouthLead<T extends XY & { width?: number }>(
+  anchor: T,
+  controls: T[],
+  leaves: XY,
+): T[] {
+  const first = controls[0];
+  if (!first) return [anchor];
+  const leg = Math.hypot(first.x - anchor.x, first.y - anchor.y);
+  if (!(leg > 0)) return [anchor, ...controls];
+  const step = leg * 0.3;
+  const lead = { ...anchor, x: anchor.x + leaves.x * step, y: anchor.y + leaves.y * step };
+  return [anchor, lead, ...controls];
+}
+
 /** Samples per span when asking what the renderer will actually draw. */
 const SPAN_SAMPLES = 24;
 
@@ -650,14 +709,14 @@ export function tightestBend<T extends XY & { width?: number }>(points: T[]): nu
  * Endpoints are fixed: the first is the feature's anchor on its host and the
  * last is its head, and both are extents rather than shape.
  */
-export function easeBends<T extends XY & { width?: number }>(points: T[], target = 1.2): T[] {
+export function easeBends<T extends XY & { width?: number }>(points: T[], target = 1.2, fixed = 1): T[] {
   if (points.length < 3) return points.map((p) => ({ ...p }));
   const out = points.map((p) => ({ ...p }));
   const from = points.map((p) => ({ x: p.x, y: p.y }));
   for (let round = 0; round < 200; round++) {
     if (tightestBend(out) >= target) break;
     const prev = out.map((p) => ({ x: p.x, y: p.y }));
-    for (let i = 1; i + 1 < out.length; i++) {
+    for (let i = Math.max(1, fixed); i + 1 < out.length; i++) {
       const a = prev[i - 1]!;
       const b = prev[i]!;
       const c = prev[i + 1]!;

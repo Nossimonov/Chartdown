@@ -4,7 +4,7 @@
  * Puget Sound exercise produced.
  */
 import { describe, expect, it } from "vitest";
-import { easeBends, measureFeature, MeasureError, simplify, tightestBend } from "./feature";
+import { easeBends, measureFeature, MeasureError, simplify, tightestBend, withMouthLead } from "./feature";
 import type { Mask } from "./raster";
 import type { Georef } from "./georef";
 
@@ -310,5 +310,52 @@ describe("width is a cross-section square to the centerline (spec 05 §4, ADR 00
     // cannot afford it, since that is where an offset curve folds.
     const widest = Math.max(...got.profile.map((p) => p.halfWidth * 2));
     expect(widest).toBeLessThan(TRUE_WIDTH * 1.1);
+  });
+});
+
+describe("the line checked is the line the renderer draws (#193)", () => {
+  // The tool printed a declaration that `check` refused, silently and at exit
+  // 0. The check was not wrong about the curve it was given — it was given the
+  // wrong curve. A renderer prepends a control of its own at the mouth, along
+  // the HOST's normal and proportional to the first leg (#169), and that
+  // control is part of the shape it draws.
+  const anchor = { x: 53.7, y: 57.5, width: 1.8 };
+  const controls = [
+    { x: 54.7, y: 59.7, width: 2 }, { x: 54.9, y: 61, width: 2 }, { x: 54.3, y: 62.2, width: 2 },
+    { x: 53, y: 63.5, width: 2.45 }, { x: 51.6, y: 65.2, width: 2 },
+  ];
+
+  it("inserts the lead the renderer will insert", () => {
+    const leg = Math.hypot(controls[0]!.x - anchor.x, controls[0]!.y - anchor.y);
+    const line = withMouthLead(anchor, controls, { x: 0, y: 1 });
+    expect(line).toHaveLength(controls.length + 2);
+    expect(line[0]).toEqual(anchor);
+    // Along the stated direction, at 0.3 of the first leg.
+    expect(line[1]!.x).toBeCloseTo(anchor.x, 6);
+    expect(line[1]!.y).toBeCloseTo(anchor.y + leg * 0.3, 6);
+    expect(line.slice(2)).toEqual(controls);
+  });
+
+  it("costs a well-placed centerline almost nothing", () => {
+    // Spec 05 §4 requires the departure to be perpendicular, and where it is
+    // the lead is collinear with the first leg. Not a no-op — an extra knot
+    // splits the first span and moves the tangent at the control after it — but
+    // small, and it cannot turn a drawable line into an undrawable one. This is
+    // why the omission went unnoticed for so long.
+    const leg = Math.hypot(controls[0]!.x - anchor.x, controls[0]!.y - anchor.y);
+    const along = { x: (controls[0]!.x - anchor.x) / leg, y: (controls[0]!.y - anchor.y) / leg };
+    const without = tightestBend([anchor, ...controls]);
+    const with_ = tightestBend(withMouthLead(anchor, controls, along));
+    expect(with_).toBeGreaterThan(1);
+    expect(Math.abs(with_ - without) / without).toBeLessThan(0.1);
+  });
+
+  it("a skewed departure is a corner at the mouth, and is seen", () => {
+    // Measured on #193's own case: the declaration cleared its own check at
+    // 1.06 and the renderer refused it at 0.33, because the host's normal there
+    // pointed east while the channel ran north.
+    const across = { x: 0.98, y: 0.2 };
+    expect(tightestBend([anchor, ...controls])).toBeGreaterThan(1);
+    expect(tightestBend(withMouthLead(anchor, controls, across))).toBeLessThan(1);
   });
 });
