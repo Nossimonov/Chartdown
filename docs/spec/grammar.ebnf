@@ -126,6 +126,10 @@ relational     = ( "at" , ( point | address | range | edge ) )
                     It replaces reach= for DEPTH and for DIRECTION both (#175):
                     the side the feature runs to is the author's, and the
                     water's side governs only a generated run.
+                    A centerline MUST leave its host PERPENDICULAR, and a
+                    departure too skewed for a squared first control to rescue
+                    is reported as the skew with both bearings rather than as a
+                    fold — spec 05 §4, #183, #194.
                     Where `ref` is another jut/bite the feature is an ARM, and
                     its "at" point may not lie on that host's own centerline —
                     the side is a direction TOWARD that line, so on it there is

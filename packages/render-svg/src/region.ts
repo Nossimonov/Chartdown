@@ -597,7 +597,15 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           : why.kind === "overlap"
             ? `it claims the same stretch of '${keyOf(e)}' as ${named(byFeature.get(why.other) ?? x)}. Move one of them, or use a smaller size= on either`
             : why.kind === "off-normal"
-              ? `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and a centerline must leave perpendicular. Try a first via point at (${round1(why.suggest.x / scale)},${round1(why.suggest.y / scale)})`
+              // ONE CAUSE, TWO REMEDIES (#194). Where squaring the first control
+              // draws, that point is offered and it is known to work. Where it
+              // does not, the skew is still the cause — a corner between this
+              // renderer's own mouth lead and the author's first control — and
+              // saying so with both bearings beats naming a bend they did not
+              // write and cannot move.
+              ? why.suggest
+                ? `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and a centerline must leave perpendicular. Try a first via point at (${round1(why.suggest.x / scale)},${round1(why.suggest.y / scale)})`
+                : `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and squaring the first via point is not enough to draw it — so this feature is on the wrong stretch of coast, or this coast is not the one it was drawn against. It leaves heading (${round1(why.leaves.x)},${round1(why.leaves.y)}) while the shore here faces (${round1(why.normal.x)},${round1(why.normal.y)})`
               : why.kind === "pinch"
                 // The place, the two numbers, and the rule connecting them. A
                 // fold is local, so an author needs to be told WHERE: on a

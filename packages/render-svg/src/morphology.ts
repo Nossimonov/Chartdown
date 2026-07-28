@@ -203,7 +203,27 @@ export type RejectReason =
    * `suggest` is not an estimate. It is a first control this function has
    * SPLICED AND VALIDATED, so the point offered is known to draw.
    */
-  | { kind: "off-normal"; degrees: number; suggest: XY }
+  | {
+      kind: "off-normal";
+      degrees: number;
+      /**
+       * A first control this function has SPLICED AND VALIDATED, where one
+       * exists — so the point offered is known to draw.
+       *
+       * Absent where squaring the first control is not enough to rescue the
+       * shape (#194). A large skew is still a skew, and reporting it as a
+       * pinch sent an author to spread `via` points through a bend they had
+       * not written: the corner is between this code's own mouth lead and
+       * their first control. Nothing is offered rather than something
+       * unverified, because a suggestion that does not draw is worse than
+       * none — but the cause is named either way.
+       */
+      suggest?: XY;
+      /** Unit direction the centerline leaves the mouth on. */
+      leaves: XY;
+      /** Unit direction of the host's normal there — where it should leave. */
+      normal: XY;
+    }
   /**
    * The centerline turns tighter than the channel is wide, so the inner rail
    * folds through itself (#189).
@@ -225,6 +245,16 @@ interface Pinch {
   half: number;
   /** The point on the centerline where the two are worst matched. */
   at: XY;
+  /** Arc position of that point along the centerline. */
+  s: number;
+  /**
+   * Arc position of the first control the AUTHOR declared, or 0 where the
+   * centerline was generated and there are none (#194).
+   *
+   * A pinch before it cannot be the fault of any `via` point that was written:
+   * everything up to there is the mouth and the lead this code adds itself.
+   */
+  declaredFrom: number;
 }
 
 /** A feature resolved against its host: where its window sits, and where it runs. */
@@ -317,7 +347,7 @@ export function deformCurve(
     if (!isSimple(next) || !isSmooth(next)) {
       // Skew first: it is asked by experiment and answers with a point that is
       // known to draw, so where both apply the stronger diagnostic wins.
-      onReject?.(f, skewed(host, arc, accepted, f, sited) ?? pinched(host, arc, sited) ?? { kind: "fold" });
+      onReject?.(f, skewed(host, arc, accepted, f, sited) ?? pinched(host, arc, f, sited) ?? { kind: "fold" });
       continue;
     }
     accepted.push(sited);
@@ -344,6 +374,28 @@ function skewed(
   f: PlacedFeature,
   sited: Sited,
 ): RejectReason | null {
+  const off = departure(f, sited);
+  if (!off) return null;
+  const trial = site(host, arc, { ...f, via: [off.suggest, ...f.via!.slice(1)] });
+  if (!trial) return null;
+  const drawn = splice(host, arc, [...accepted, trial]);
+  if (!isSimple(drawn) || !isSmooth(drawn)) return null;
+  return { kind: "off-normal", degrees: off.degrees, suggest: off.suggest, leaves: off.leaves, normal: off.normal };
+}
+
+/**
+ * How far off the host's normal this centerline leaves, and the two bearings.
+ *
+ * Pure geometry, separated from the experiment above so that the ANGLE is
+ * available whether or not squaring the first control happens to rescue the
+ * shape (#194). Tying the two together meant a badly skewed departure — the
+ * case where the angle matters most — was reported as something else entirely,
+ * because the one edit that fixes a small skew cannot fix a large one.
+ */
+function departure(
+  f: PlacedFeature,
+  sited: Sited,
+): { degrees: number; suggest: XY; leaves: XY; normal: XY } | null {
   const via = f.via;
   const mouth = sited.centre[0];
   const lead = sited.centre[1];
@@ -358,12 +410,12 @@ function skewed(
   const cos = Math.min(1, Math.max(-1, (lx * vx + ly * vy) / (leadLen * legLen)));
   const degrees = (Math.acos(cos) * 180) / Math.PI;
   if (degrees < 1) return null;
-  const suggest = { x: mouth.x + (lx / leadLen) * legLen, y: mouth.y + (ly / leadLen) * legLen };
-  const trial = site(host, arc, { ...f, via: [suggest, ...via.slice(1)] });
-  if (!trial) return null;
-  const drawn = splice(host, arc, [...accepted, trial]);
-  if (!isSimple(drawn) || !isSmooth(drawn)) return null;
-  return { kind: "off-normal", degrees, suggest };
+  return {
+    degrees,
+    suggest: { x: mouth.x + (lx / leadLen) * legLen, y: mouth.y + (ly / leadLen) * legLen },
+    leaves: { x: vx / legLen, y: vy / legLen },
+    normal: { x: lx / leadLen, y: ly / leadLen },
+  };
 }
 
 /**
@@ -379,8 +431,16 @@ function skewed(
  * head, so a shape whose ratio is a hair over one is folding for this reason
  * too. Below one it is certain; a little above it is still the best answer
  * available, and the alternative is the bare fold that names nothing.
+ *
+ * AND A PINCH BEFORE THE AUTHOR'S FIRST CONTROL IS NOT THEIRS (#194). Everything
+ * up to there is the mouth and the lead this code adds itself, so no `via` point
+ * that was written can be responsible and no edit to one can help. That is a
+ * SKEWED DEPARTURE wearing a pinch's clothes, and it is reported as the skew it
+ * is — by position rather than by an angle threshold, which keeps #183's rule
+ * that what angle actually bites depends on the mouth's width and the first
+ * leg's length.
  */
-function pinched(host: XY[], arc: number[], sited: Sited): RejectReason | null {
+function pinched(host: XY[], arc: number[], f: PlacedFeature, sited: Sited): RejectReason | null {
   let worst: Pinch | null = null;
   const from = sited.at - sited.half;
   const to = sited.at + sited.half;
@@ -394,6 +454,10 @@ function pinched(host: XY[], arc: number[], sited: Sited): RejectReason | null {
   );
   const p = worst as Pinch | null;
   if (p === null || !(p.half > 0) || p.radius > p.half * 1.5) return null;
+  if (p.declaredFrom > 0 && p.s < p.declaredFrom) {
+    const off = departure(f, sited);
+    if (off) return { kind: "off-normal", degrees: off.degrees, leaves: off.leaves, normal: off.normal };
+  }
   return { kind: "pinch", radius: p.radius, half: p.half, at: p.at };
 }
 
@@ -560,8 +624,12 @@ function ribbon(
   // profile was refused, including ones barely varying from its mouth width.
   const profile: { at: number; half: number }[] = [];
   let cursor = 0;
+  // Where the author's own controls begin: `centre` is [mouth, lead, ...via],
+  // so index 2 is the first of theirs (#194).
+  let declaredFrom = 0;
   for (let k = 1; k < centre.length; k++) {
     const found = arcAtNearest(path, arcs, centre[k]!, cursor);
+    if (k === 2) declaredFrom = found;
     // Advance the cursor past this control whether or not it states a width, so
     // an undeclared control still orders the ones after it.
     cursor = segmentAt(arcs, found).lo;
@@ -740,7 +808,9 @@ function ribbon(
       if (!Number.isFinite(R)) continue;
       const w = widthAt(arcs[i]!);
       if (w <= TINY) continue;
-      if (worst === null || R / w < worst.radius / worst.half) worst = { radius: R, half: w, at: path[i]! };
+      if (worst === null || R / w < worst.radius / worst.half) {
+        worst = { radius: R, half: w, at: path[i]!, s: arcs[i]!, declaredFrom };
+      }
     }
     if (worst) probe(worst);
   }

@@ -1777,3 +1777,55 @@ ${arm}
     expect(messages(doc(at("(42.8,66.6)")))).toEqual([]);
   });
 });
+
+describe("a badly skewed departure says so, whatever the angle (#194)", () => {
+  // #183 reports off-normal only where squaring the first control DRAWS, which
+  // is right as an experiment and wrong as a filter: a large skew is the case
+  // where the angle matters most, and it is exactly the case one squared
+  // control cannot rescue. Reported as a pinch, it sent an author to spread via
+  // points through a bend they had not written — the corner is between this
+  // renderer's own mouth lead and their first control.
+  const doc = (via: string): string => `map: region
+extent: 100x120mi
+
+[water]
+coastline shore : from (50,0) via (50,40) (50,80) to (50,120)
+sea "S" : west of shore
+fjord f "F" : on shore at (50,30) ${via} size=2mi taper=0.2
+`;
+  const messages = (src: string): string[] => renderSource(src).diagnostics.map((d) => d.message);
+
+  it("names the skew and both bearings when no single control rescues it", () => {
+    // A centerline running along the coast rather than into the land.
+    const [msg] = messages(doc("via (50,45) (50,60) (50,75)"));
+    expect(msg).toMatch(/leaves the host at \d+° from the normal/);
+    expect(msg).toMatch(/squaring the first via point is not enough/);
+    // Both directions, so an author can see which one is wrong.
+    expect(msg).toMatch(/leaves heading \(-?[\d.]+,-?[\d.]+\) while the shore here faces \(-?[\d.]+,-?[\d.]+\)/);
+    // No coordinate is offered, because none is known to draw — and #183's
+    // rule is that a suggestion is a fact rather than an estimate.
+    expect(msg).not.toMatch(/Try a first via point/);
+    expect(msg).not.toMatch(/size=/);
+  });
+
+  it("still offers a validated point where squaring does rescue it", () => {
+    const [msg] = messages(doc("via (52,38) (70,31) (85,31)"));
+    expect(msg).toMatch(/Try a first via point at \(-?[\d.]+,-?[\d.]+\)/);
+    const m = /via point at \((-?[\d.]+),(-?[\d.]+)\)/.exec(msg!)!;
+    expect(messages(doc(`via (${m[1]},${m[2]}) (70,31) (85,31)`))).toEqual([]);
+  });
+
+  it("does NOT blame the departure for a bend far from the mouth", () => {
+    // The soundness property. This centerline leaves about 5° off normal —
+    // trivial — and hairpins 25 miles inland. Squaring the first control cannot
+    // fix a distant hairpin either, so a rule that reported the skew whenever
+    // the trial failed would name a 5° departure as the cause of a fold it had
+    // nothing to do with. The gate is POSITIONAL: a pinch before the author's
+    // first control is the lead's, and one after it is theirs.
+    const [msg] = messages(doc("via (60,30.9) (70,31.8) (75,32.2) (76,33.6) (74.6,34.4) (66,34)"));
+    expect(msg).toMatch(/turns with a radius of/);
+    expect(msg).not.toMatch(/from the normal/);
+    // And it points at the hairpin, which IS a control that was written.
+    expect(msg).toMatch(/near \(76,33.6\)/);
+  });
+});
