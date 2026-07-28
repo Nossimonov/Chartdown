@@ -413,10 +413,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
    * Resolved AFTER the whole pre-scan, so it does not matter whether the canal
    * was declared before or after the bay hanging off it.
    */
+  const refused = new Set<PlacedRef>();
   for (const list of featuresByHost.values()) {
     for (const arm of list) {
-      if (arm.f.seaward) continue;
       const host = [...featuresByHost.values()].flat().find((h) => h.keys.includes(arm.host));
+      // AND THE HOST'S ANSWER WINS, where there is a host. This used to run
+      // only for an arm that had no side yet, which meant the map's global
+      // guess — the direction to the nearest water body's centre — got there
+      // first and the host was never asked. §4 requires the opposite: an arm's
+      // water side comes from its host, because the canal IS the arm's water
+      // and no vector aimed at a distant sea is a sentence about it.
       // A DECLARED CENTERLINE IS ENOUGH ON ITS OWN (#175). Only the GENERATED
       // run needs the host's water side, to know which way to leave the shore;
       // where the host states its course, that course already is the answer.
@@ -435,14 +441,62 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         : [host.f.anchor, { x: host.f.anchor.x + back.x * depth, y: host.f.anchor.y + back.y * depth }];
       let best: XY | null = null;
       let bestD = Infinity;
+      let along: XY | null = null;
       for (let i = 1; i < line.length; i++) {
         const p = nearestOnSegment(line[i - 1]!, line[i]!, arm.f.anchor);
         const d = Math.hypot(p.x - arm.f.anchor.x, p.y - arm.f.anchor.y);
-        if (d < bestD) { bestD = d; best = p; }
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+          const dx = line[i]!.x - line[i - 1]!.x;
+          const dy = line[i]!.y - line[i - 1]!.y;
+          const len = Math.hypot(dx, dy);
+          along = len > 0 ? { x: dx / len, y: dy / len } : null;
+        }
       }
-      if (!best || bestD < 1e-9) continue;
+      if (!best) continue;
+      // AN ANCHOR ON THE HOST'S OWN CENTERLINE DOES NOT SAY WHICH BANK
+      // (#191, ADR 0031). The side is the direction from the anchor toward that
+      // centerline, so on the line itself there is no direction — and the arm
+      // was left with no side at all, its bank decided by which of the host's
+      // two rails a vertex rounding happened to pick. Measured on a canal, the
+      // two rails sat 0.752mi from the anchor apiece and answered differently:
+      // one bank drew, the other drove the bite into the canal and was refused
+      // as a fold. The anchor an author reaches for is one of the host's own
+      // `via` controls, because that is the point on the canal they mean.
+      //
+      // The threshold is float noise and nothing more. Swept perpendicular to
+      // a 2mi canal, an anchor off the centerline by 0.001mi — five feet on a
+      // hundred-mile map — already answers stably and the same way at every
+      // distance out to the bank. The coordinate states a side as soon as it
+      // is not on the line, so refusing any wider would refuse documents that
+      // do say which bank they mean.
+      if (bestD <= Math.max(host.f.size, 1) * 1e-9) {
+        const named = arm.label === arm.word ? `'${arm.word}'` : `'${arm.label}' (${arm.word})`;
+        // Both banks, because naming one would be the silent pick this refuses
+        // — offered as positions the author chooses between, not as a
+        // suggestion the renderer has validated.
+        const half = host.f.size / 2;
+        const banks = along
+          ? [1, -1].map((s) =>
+              `(${round1((best!.x - along!.y * half * s) / scale)},${round1((best!.y + along!.x * half * s) / scale)})`,
+            ).join(" or ")
+          : "either side of it";
+        diagnostics.push({
+          severity: "error",
+          line: arm.line,
+          message: `${named} cannot be drawn on '${arm.host}' — its anchor lies on the centerline of '${arm.host}', which does not say which bank it leaves from. Move it to one: about ${banks} (spec 05 §4)`,
+        });
+        refused.add(arm);
+        continue;
+      }
       arm.f.seaward = { x: (best.x - arm.f.anchor.x) / bestD, y: (best.y - arm.f.anchor.y) / bestD };
     }
+  }
+  // Dropped rather than drawn without a side: a bank the document did not
+  // choose is not better for being drawn without complaint (ADR 0031).
+  for (const [key, list] of featuresByHost) {
+    if (list.some((x) => refused.has(x))) featuresByHost.set(key, list.filter((x) => !refused.has(x)));
   }
 
   /**

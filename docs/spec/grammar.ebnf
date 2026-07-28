@@ -120,7 +120,12 @@ relational     = ( "at" , ( point | address | range | edge ) )
                     line-BRANCHING that 05 §4 stages.
                     It replaces reach= for DEPTH and for DIRECTION both (#175):
                     the side the feature runs to is the author's, and the
-                    water's side governs only a generated run. *)
+                    water's side governs only a generated run.
+                    Where `ref` is another jut/bite the feature is an ARM, and
+                    its "at" point may not lie on that host's own centerline —
+                    the side is a direction TOWARD that line, so on it there is
+                    none and the document has not said which bank. Refused,
+                    never picked — spec 05 §4, ADR 0031, #191. *)
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
                | ( "from" , endpoint , [ "via" , point , { point } ] ,

@@ -1714,3 +1714,66 @@ describe("the spline is centripetal (#189)", () => {
     expect(Math.max(...radii)).toBeLessThan(50.5);
   });
 });
+
+describe("an arm on its host's centerline is refused, not guessed (#191, ADR 0031)", () => {
+  // The side is the direction from the arm's anchor toward its host's own
+  // centerline, so on that centerline there is no direction — and the arm was
+  // left with no side at all, its bank decided by which of the host's two
+  // rails a vertex rounding happened to pick. The anchor an author reaches for
+  // is one of the host's own via controls, because that is the point on the
+  // canal they mean.
+  const doc = (arm: string): string => `map: region
+extent: 100x120mi
+
+[water]
+coastline shore : from (50,0) via (48,30) (52,60) (48,90) to (50,120)
+sea "S" : area (50,0) along shore (50,120) (100,120) (100,0)
+fjord hood "Hood Canal" : on shore at (52,60) via (46,62) (42,66) (38,72) size=2mi taper=0.15
+${arm}
+`;
+  const at = (point: string): string =>
+    `sound dabob "Dabob Bay" : on hood at ${point} size=1.5mi reach=5 taper=0.3`;
+  const messages = (src: string): string[] => renderSource(src).diagnostics.map((d) => d.message);
+
+  it("names the ambiguity rather than picking a bank", () => {
+    const [msg] = messages(doc(at("(42,66)")));
+    expect(msg).toMatch(/anchor lies on the centerline of 'hood'/);
+    expect(msg).toMatch(/does not say which bank it leaves from/);
+    // BOTH banks, because naming one would be the silent pick this refuses.
+    expect(msg).toMatch(/about \(-?[\d.]+,-?[\d.]+\) or \(-?[\d.]+,-?[\d.]+\)/);
+  });
+
+  it("gives the same answer at every control along the host", () => {
+    // The defect's signature: refusals that ALTERNATED down the canal while
+    // ignoring the feature's size entirely — ok, NO, ok, NO, ok — because each
+    // anchor's nearest outline vertex landed on a different rail.
+    for (const point of ["(46,62)", "(42,66)", "(38,72)"]) {
+      const [msg] = messages(doc(at(point)));
+      expect(msg, point).toMatch(/does not say which bank/);
+    }
+  });
+
+  it("does not depend on the size, because the size was never the cause", () => {
+    for (const size of ["1.5mi", "1mi", "0.5mi"]) {
+      const [msg] = messages(doc(`sound dabob "Dabob Bay" : on hood at (42,66) size=${size} reach=5 taper=0.3`));
+      expect(msg, size).toMatch(/does not say which bank/);
+    }
+  });
+
+  it("offers two points that both draw", () => {
+    // Not a validated suggestion in the sense #183 promises — but a bank the
+    // author is sent to should not be a second refusal, and both banks work
+    // now that the side comes from the host rather than from a distant sea.
+    const [msg] = messages(doc(at("(42,66)")));
+    const found = [...msg!.matchAll(/\((-?[\d.]+),(-?[\d.]+)\)/g)].slice(-2);
+    expect(found).toHaveLength(2);
+    for (const m of found) {
+      expect(messages(doc(at(`(${m[1]},${m[2]})`))), `${m[1]},${m[2]}`).toEqual([]);
+    }
+  });
+
+  it("draws from a bank, and from either one", () => {
+    expect(messages(doc(at("(41.2,65.4)")))).toEqual([]);
+    expect(messages(doc(at("(42.8,66.6)")))).toEqual([]);
+  });
+});
