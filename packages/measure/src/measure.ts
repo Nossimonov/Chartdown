@@ -361,6 +361,11 @@ function coast(options: Options): void {
   const via = thinned.slice(1, -1).map(at).join(" ");
   console.log(`; traced from ${options.image} — inlets narrower than ${round(options.fill * 2, 2)}mi filled, ${thinned.length} controls at ${round(options.tolerance, 2)}mi`);
   console.log(`; the two arcs run ${round(got.forwardMiles, 1)}mi and ${round(got.backwardMiles, 1)}mi; took the one that is ${Math.round(got.forwardOnFrame * 100)}% picture-edge over the one that is ${Math.round(got.backwardOnFrame * 100)}%${options.through ? ", as --through says" : ""}.`);
+  // HOW FAR EACH END MOVED. A point given in open water snaps to the nearest
+  // shore, which is right and worth seeing: it was a seven-mile snap onto the
+  // top row of the photograph that showed the ends were not being kept off the
+  // picture's edge at all, while the other end moved 1.5mi onto a real bank.
+  console.log(`; the ends moved ${round(got.fromMovedMiles, 1)}mi and ${round(got.toMovedMiles, 1)}mi to reach the nearest shore.`);
   console.log(`${subject} : from ${at(thinned[0]!)}${via ? ` via ${via}` : ""} to ${at(thinned[thinned.length - 1]!)}`);
   console.log("");
   if (options.origin) {

@@ -133,14 +133,33 @@ export function traceRing(mask: Mask): XY[] {
   return out;
 }
 
-/** Index of the ring vertex nearest a point. */
-const nearestOn = (ring: XY[], at: XY): number => {
-  let best = 0;
+/** Is this pixel on the edge of the picture rather than on a shore? */
+const atFrame = (p: XY, mask: Mask): boolean =>
+  p.x <= 1 || p.y <= 1 || p.x >= mask.width - 2 || p.y >= mask.height - 2;
+
+/**
+ * Index of the ring vertex nearest a point, ignoring the picture's own edge.
+ *
+ * A coastline's ENDS are as vulnerable to the frame as its middle (#198). Where
+ * land runs off the image the ring follows the border, and a bare
+ * nearest-vertex search will snap an endpoint onto it: measured on the exercise
+ * imagery, `--from (68,0)` landed on pixel row ZERO — seven miles from where it
+ * was asked for, on the top of the photograph — and the emitted coastline
+ * therefore began somewhere no shore exists. The other endpoint, over real
+ * water, snapped 1.5mi to an actual bank, so the two behaved differently and
+ * only one was wrong.
+ */
+const nearestOn = (ring: XY[], at: XY, mask?: Mask): number => {
+  let best = -1;
   let bestD = Infinity;
   for (let i = 0; i < ring.length; i++) {
+    if (mask && atFrame(ring[i]!, mask)) continue;
     const d = Math.hypot(ring[i]!.x - at.x, ring[i]!.y - at.y);
     if (d < bestD) { bestD = d; best = i; }
   }
+  // Every vertex on the frame means there is no shore to snap to at all, and
+  // the bare nearest is the only answer left.
+  if (best < 0) return nearestOn(ring, at);
   return best;
 };
 
@@ -160,9 +179,9 @@ export const runLength = (pts: XY[]): number => {
  * it chose — picking one silently is how a map comes to describe the wrong half
  * of an island.
  */
-export function arcsBetween(ring: XY[], from: XY, to: XY): { forward: XY[]; backward: XY[] } {
-  const a = nearestOn(ring, from);
-  const b = nearestOn(ring, to);
+export function arcsBetween(ring: XY[], from: XY, to: XY, mask?: Mask): { forward: XY[]; backward: XY[]; fromAt: XY; toAt: XY } {
+  const a = nearestOn(ring, from, mask);
+  const b = nearestOn(ring, to, mask);
   const forward: XY[] = [];
   for (let i = a; ; i = (i + 1) % ring.length) {
     forward.push(ring[i]!);
@@ -173,7 +192,7 @@ export function arcsBetween(ring: XY[], from: XY, to: XY): { forward: XY[]; back
     backward.push(ring[i]!);
     if (i === b) break;
   }
-  return { forward, backward };
+  return { forward, backward, fromAt: ring[a]!, toAt: ring[b]! };
 }
 
 export interface MeasuredCoast {
@@ -185,6 +204,9 @@ export interface MeasuredCoast {
   /** How much of each ran along the edge of the picture, as a fraction. */
   forwardOnFrame: number;
   backwardOnFrame: number;
+  /** How far each endpoint had to move to reach a shore, in miles. */
+  fromMovedMiles: number;
+  toMovedMiles: number;
 }
 
 /**
@@ -222,7 +244,7 @@ export function measureCoast(
 ): MeasuredCoast {
   const filled = fillInlets(mask, options.fill);
   const ring = traceRing(filled);
-  const { forward, backward } = arcsBetween(ring, options.from, options.to);
+  const { forward, backward, fromAt, toAt } = arcsBetween(ring, options.from, options.to, filled);
   const toMap = (pts: XY[]): XY[] => pts.map((p) => georef.toMap(p.x, p.y));
   const f = toMap(forward);
   const b = toMap(backward);
@@ -242,11 +264,14 @@ export function measureCoast(
     : Math.abs(forwardOnFrame - backwardOnFrame) > 0.05
       ? (forwardOnFrame < backwardOnFrame ? "forward" : "backward")
       : (forwardMiles >= backwardMiles ? "forward" : "backward");
+  const moved = (a: XY, b: XY): number => Math.hypot(a.x - b.x, a.y - b.y) * georef.milesPerPixel;
   return {
     points: pick === "forward" ? f : b,
     forwardMiles,
     backwardMiles,
     forwardOnFrame: pick === "forward" ? forwardOnFrame : backwardOnFrame,
     backwardOnFrame: pick === "forward" ? backwardOnFrame : forwardOnFrame,
+    fromMovedMiles: moved(fromAt, options.from),
+    toMovedMiles: moved(toAt, options.to),
   };
 }

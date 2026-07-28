@@ -147,3 +147,35 @@ describe("choosing which arc is the coastline", () => {
     expect(runLength(got.points)).toBeCloseTo(got.forwardMiles, 6);
   });
 });
+
+describe("an endpoint snaps to a shore, not to the picture's edge (#198)", () => {
+  // A coastline's ENDS are as vulnerable to the frame as its middle. Measured
+  // on the exercise imagery, `--from (68,0)` snapped to pixel row ZERO — seven
+  // miles away, on the top of the photograph — so the emitted coastline began
+  // where no shore exists. The other end, over real water, snapped 1.5mi to an
+  // actual bank: the two behaved differently and only one was wrong, which is
+  // why reporting how far each moved is part of the fix rather than decoration.
+  it("ignores frame vertices when snapping", () => {
+    const got = measureCoast(INLETS, georef(0.1), {
+      // Hard against the top-left corner, where the ring runs along the frame
+      // and the nearest vertex of any kind is a frame vertex.
+      from: { x: 0, y: 0 },
+      to: { x: W - 3, y: 40 },
+      fill: 3,
+    });
+    const start = got.points[0]!;
+    // In map miles: the shore is at y=4.0 (pixel row 40), the frame at y=0.
+    expect(start.y).toBeGreaterThan(3);
+  });
+
+  it("says how far each end had to move", () => {
+    const got = measureCoast(INLETS, georef(0.1), {
+      from: { x: 0, y: 0 },
+      to: { x: W - 3, y: 40 },
+      fill: 3,
+    });
+    // The far end was given on the shore already; the near one was not.
+    expect(got.fromMovedMiles).toBeGreaterThan(1);
+    expect(got.toMovedMiles).toBeLessThan(1);
+  });
+});
