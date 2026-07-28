@@ -272,6 +272,41 @@ export class VocabTable {
    * means every campfire glows unless the entity says otherwise).
    */
   /**
+   * Every facet key a word declares, unioned along its derivation chain (#195).
+   *
+   * The set a pair may legitimately override. Unioned rather than resolved,
+   * because `fjord : sound reach=20 taper=0.15` inherits `morph=` from `bay`
+   * without restating it, and an entity may override any of the three.
+   */
+  facetKeysOf(word: string): Set<string> {
+    const out = new Set<string>();
+    const seen = new Set<string>();
+    let current = this.entries.get(word);
+    while (current && !seen.has(current.word)) {
+      seen.add(current.word);
+      for (const pair of current.pairs) out.add(pair.key);
+      if (current.baseIsArchetype) break;
+      current = this.entries.get(current.base);
+    }
+    return out;
+  }
+
+  /**
+   * Words that are FIELDS, whose name is itself a parameter (spec 04 §5).
+   *
+   * Declaring `radiation : field` is what makes `radiation=40ft` mean something
+   * on an emitter — the parameter namespace is derived from the vocabulary
+   * rather than fixed, so it cannot be checked against a static list.
+   */
+  fieldWords(): Set<string> {
+    const out = new Set<string>();
+    for (const word of this.entries.keys()) {
+      if (this.archetypeOf(word) === "field") out.add(word);
+    }
+    return out;
+  }
+
+  /**
    * A word's facet value, walking the derivation chain (spec 04 §2).
    *
    * A value outside a closed set is SKIPPED rather than returned, so the walk

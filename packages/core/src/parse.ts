@@ -160,6 +160,76 @@ function checkDeclaredStates(
   }
 }
 
+/**
+ * Reserved parameters, usable on any content line whatever the word is.
+ *
+ * Generic in the sense that they say something about the ENTITY rather than
+ * about what kind of thing it is: where it sits, how big, what it links to,
+ * what the GM knows. Everything else has to be earned from the vocabulary.
+ */
+const RESERVED_PAIRS = new Set([
+  "gm", "link", "detail", "detail-at", "facing", "size", "side", "width",
+  "light", "elevation", "key", "level", "to", "through", "at",
+]);
+
+/**
+ * Warn on a `key=` no archetype, vocabulary word or section grammar can
+ * consume (#195).
+ *
+ * An unknown pair used to be read, discarded and never mentioned, so a typo in
+ * a KEY — unlike a typo in a value, which `checkFacetValues` catches — silently
+ * lost whatever it was meant to say: `taepr=0.3` drew a wedge where a
+ * parallel-sided inlet was asked for, and checked clean. It is the same hole
+ * spec 01's closed value sets close for header keys, left open one level down.
+ *
+ * The set a word can consume is RESOLVED rather than listed. Vocabulary brings
+ * its own facets — `fjord` earns `reach=` and `taper=` by derivation from
+ * `bay` — and a field word makes its own name a parameter on any emitter
+ * (spec 04 §5), so no static list could be right for a language whose whole
+ * design is an open vocabulary.
+ *
+ * The exemptions are `checkDeclaredStates`' and for the same reasons: an
+ * UNDEFINED word has no declared facets to compare against, and spec 04 §3
+ * promises a word may be used without defining it first; `border` has its own
+ * predicate grammar (ADR 0012). An `x-` prefix carries deliberate extension
+ * data without argument, mirroring `[x-*]` sections.
+ */
+function checkPairKeys(
+  typeWord: string | null,
+  pairs: { key: string; value: string }[],
+  vocabTable: VocabTable,
+  line: number,
+  diagnostics: Diagnostic[],
+): void {
+  if (typeWord === null || pairs.length === 0) return;
+  if (vocabTable.archetypeOf(typeWord) === null) return;
+  if (vocabTable.chain(typeWord).includes("border")) return;
+  const facets = vocabTable.facetKeysOf(typeWord);
+  const fields = vocabTable.fieldWords();
+  // WHAT THE ARCHETYPE CAN CONSUME, not only what the word happens to declare.
+  // `reach=` and `taper=` belong to placed morphology as such (spec 05 §4), and
+  // the stdlib declares them only where it has a non-default to state — so
+  // `bay` carries no `taper=` and `island` no `reach=`, while both accept one.
+  // Read from `morph=` rather than from a list of words, so a derived word or
+  // a document's own gets the same treatment.
+  const morph = vocabTable.facetOf(typeWord, "morph");
+  if (morph === "jut" || morph === "bite") {
+    facets.add("reach");
+    facets.add("taper");
+  } else if (morph === "detached") {
+    // On a detached feature `reach=` is ELONGATION, and there are no flanks to
+    // converge, so `taper=` is genuinely not one of its parameters.
+    facets.add("reach");
+  }
+  for (const pair of pairs) {
+    if (RESERVED_PAIRS.has(pair.key) || facets.has(pair.key) || fields.has(pair.key)) continue;
+    if (pair.key.startsWith("x-")) continue;
+    diagnostics.push(
+      warning(line, `'${pair.key}=' is not a parameter '${typeWord}' can use, so it is ignored — check the spelling, or give '${typeWord}' a ${pair.key}= facet in [vocab] (spec 04 §2)`),
+    );
+  }
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -707,6 +777,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // decision. Warning there would fire on every border line in the corpus.
     checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
     checkFacetValues(predicate.pairs, raw.line, diags);
+    checkPairKeys(subject.typeWord, predicate.pairs, vocabTable, raw.line, diags);
 
     const entity: EntityNode = {
       kind: "entity",
@@ -774,6 +845,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       checkDeclaredStates(subject.typeWord, predicate.flags, vocabTable, raw.line, diags);
     }
     checkFacetValues(predicate.pairs, raw.line, diags);
+    checkPairKeys(subject.typeWord, predicate.pairs, vocabTable, raw.line, diags);
 
     const detail: DetailNode = {
       kind: "detail",
