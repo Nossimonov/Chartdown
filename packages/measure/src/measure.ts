@@ -17,11 +17,13 @@ import { decodePng, ImageError } from "./png";
 import { fitGeoref, GeorefError, parseLandmark, parseOrigin, type Georef, type Landmark, type Origin, type XY } from "./georef";
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
 import { easeBends, measureFeature, MeasureError, simplify, tightestBend, withMouthLead } from "./feature";
+import { CoastError, measureCoast } from "./coast";
 
 const USAGE = `chartdown-measure — derive Chartdown declarations from imagery
 
 usage: chartdown-measure inspect <image.png> [options]
-       chartdown-measure feature <image.png> --mouth <px,py> --into <px,py> [options]
+       chartdown-measure feature <image.png> --mouth <point> --into <point> [options]
+       chartdown-measure coast <image.png> --from <point> --to <point> [options]
        chartdown-measure --help
 
   inspect   report what the tool sees: the classification it chose, and the
@@ -31,6 +33,23 @@ usage: chartdown-measure inspect <image.png> [options]
   feature   measure one inlet and print its declaration. Which water is "this
             inlet" and where its mouth lies are yours to say: no picture of
             Puget Sound contains a line marking where Hood Canal begins.
+
+  coast     trace a coastline with the inlets you intend to DECLARE removed.
+            A traced shore already contains every inlet — simplification keeps
+            a deep narrow one however coarse the tolerance — so declaring a
+            feature on it would draw that feature twice. This emits the spine.
+
+coast options:
+  --from <point>      where the coastline starts
+  --to <point>        where it ends. A ring has two arcs between them; the
+                      longer is taken and both lengths are reported.
+  --through <point>   a point the coast passes, where the longer is not the one
+  --fill <miles>      close the land by this much first, so every inlet
+                      narrower than TWICE it fills in and is left for its own
+                      declaration (2). Which water is a feature and which is
+                      the coast is your call, as --mouth is.
+  --tolerance <miles> thin the traced staircase to controls a person would
+                      write (0.5)
 
 feature options:
   --mouth <x>,<y>     a point in the channel AT ITS MOUTH, between the headlands
@@ -69,6 +88,11 @@ interface Options {
   origin?: Origin;
   mouth?: Given;
   into?: Given;
+  from?: Given;
+  to?: Given;
+  through?: Given;
+  fill: number;
+  tolerance: number;
   word: string;
   name?: string;
   id?: string;
@@ -117,7 +141,7 @@ function toPixels(given: Given, fit: Georef): XY {
 function parseArgs(argv: string[]): { command: string; options: Options } {
   const [command, image, ...rest] = argv;
   if (!command || !image) throw new Error(USAGE);
-  const options: Options = { image, landmarks: [], index: "luma", invert: false, close: 2, word: "sound" };
+  const options: Options = { image, landmarks: [], index: "luma", invert: false, close: 2, word: "sound", fill: 2, tolerance: 0.5 };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
     const value = rest[i + 1];
@@ -143,6 +167,14 @@ function parseArgs(argv: string[]): { command: string; options: Options } {
     } else if (flag === "--word" || flag === "--name" || flag === "--id") {
       if (!value) throw new Error(`${flag} needs a value`);
       options[flag === "--word" ? "word" : flag === "--name" ? "name" : "id"] = value;
+      i++;
+    } else if (flag === "--from" || flag === "--to" || flag === "--through") {
+      options[flag.slice(2) as "from" | "to" | "through"] = parsePoint(value, flag);
+      i++;
+    } else if (flag === "--fill" || flag === "--tolerance") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) throw new Error(`${flag} takes a distance in miles`);
+      options[flag === "--fill" ? "fill" : "tolerance"] = n;
       i++;
     } else if (flag === "--origin") {
       if (!value) throw new Error("--origin needs a document extent origin, as <lat>,<lon>");
@@ -313,6 +345,33 @@ function feature(options: Options): void {
   }
 }
 
+function coast(options: Options): void {
+  if (!options.from || !options.to) throw new Error("coast needs --from and --to");
+  const { mask, fit } = prepare(options);
+  const got = measureCoast(mask, fit, {
+    from: toPixels(options.from, fit),
+    to: toPixels(options.to, fit),
+    // Stated in miles because it is a judgement about the map, not the picture.
+    fill: options.fill / fit.milesPerPixel,
+    ...(options.through ? { through: toPixels(options.through, fit) } : {}),
+  });
+  const thinned = simplify(got.points, options.tolerance);
+  const subject = ["coastline", options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
+  const at = (p: XY): string => `(${round(p.x, 1)},${round(p.y, 1)})`;
+  const via = thinned.slice(1, -1).map(at).join(" ");
+  console.log(`; traced from ${options.image} — inlets narrower than ${round(options.fill * 2, 2)}mi filled, ${thinned.length} controls at ${round(options.tolerance, 2)}mi`);
+  console.log(`; the two arcs run ${round(got.forwardMiles, 1)}mi and ${round(got.backwardMiles, 1)}mi; took the one that is ${Math.round(got.forwardOnFrame * 100)}% picture-edge over the one that is ${Math.round(got.backwardOnFrame * 100)}%${options.through ? ", as --through says" : ""}.`);
+  console.log(`${subject} : from ${at(thinned[0]!)}${via ? ` via ${via}` : ""} to ${at(thinned[thinned.length - 1]!)}`);
+  console.log("");
+  if (options.origin) {
+    console.log(`; coordinates are measured from --origin ${round(options.origin.lat, 4)},${round(options.origin.lon, 4)} — this document's own frame.`);
+  } else {
+    console.log("; coordinates are measured from the IMAGE's top-left corner. Where a document's extent");
+    console.log("; starts elsewhere, pass --origin <lat>,<lon> — its north-west corner — or this lands off the map.");
+  }
+  console.log("; every inlet that filled is yours to declare on this line — measure each with `feature`.");
+}
+
 function main(argv: string[]): number {
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     console.log(USAGE);
@@ -322,6 +381,10 @@ function main(argv: string[]): number {
     const { command, options } = parseArgs(argv);
     if (command === "inspect") {
       inspect(options);
+      return 0;
+    }
+    if (command === "coast") {
+      coast(options);
       return 0;
     }
     if (command === "feature") {
