@@ -111,74 +111,16 @@ export function hashSeed(...nums: number[]): number {
 }
 
 /**
- * Catmull-Rom spline through the declared points — the TRUE curve: a pure
- * function of the input, no noise (spec 02 §9: finishing is not inventing;
- * authors control wiggle with via points). `closed` splines a ring.
+ * The connecting curve through declared controls — CENTRIPETAL (#189).
  *
- * CENTRIPETAL, not uniform (#189). The uniform spline gives every span an
- * equal share of the parameter however long it is, so a short span next to a
- * long one is traversed at a wildly different speed — and the curve bulges
- * past the short one to make up the difference. Where controls are crowded at
- * a bend and sparse down the straight after it, that bulge loops the line back
- * through itself, and a shape that is perfectly drawable is refused as a fold
- * the author never wrote: Hood Canal, measured off imagery, was refused at
- * every size down to a fifth of the one asked for, while the same shape stated
- * in two evenly spread controls drew at full size.
- *
- * Spacing the knots by the square root of chord length is the standard cure,
- * and it is a guarantee rather than a tuning: a centripetal Catmull-Rom cannot
- * cusp or self-intersect within a span (Yuksel et al. 2011). It also costs
- * nothing where controls are already even — equal chords make the knots equal,
- * which is the uniform spline exactly — so this changes only the curves that
- * were being drawn wrong.
+ * Re-exported from core rather than defined here (#192): the shape a `via`
+ * list means is not a rendering choice, and a measuring tool that has to know
+ * whether its own output can be drawn must spline it exactly as the renderer
+ * will. Two copies of this is how the measurement comes to check a line the
+ * renderer never draws.
  */
-export function catmullRom(pts: XY[], samples = 8, closed = false): XY[] {
-  if (pts.length < 3) return pts.slice();
-  const P = (i: number): XY =>
-    closed ? pts[((i % pts.length) + pts.length) % pts.length]! : pts[Math.max(0, Math.min(pts.length - 1, i))]!;
-  const knot = (a: XY, b: XY): number => Math.sqrt(Math.hypot(b.x - a.x, b.y - a.y));
-  const out: XY[] = [];
-  const segs = closed ? pts.length : pts.length - 1;
-  for (let i = 0; i < segs; i++) {
-    const p0 = P(i - 1);
-    const p1 = P(i);
-    const p2 = P(i + 1);
-    const p3 = P(i + 2);
-    // A zero-length knot span divides by zero. It arises two ways, and both
-    // want the same answer: at an open end, where the phantom control is the
-    // endpoint repeated, and at a repeated interior control. Borrowing the
-    // drawn span's own length leaves the blend well defined, and where the two
-    // points coincide every weighting of them is that point regardless.
-    const d1 = knot(p1, p2) || 1;
-    const d0 = knot(p0, p1) || d1;
-    const d2 = knot(p2, p3) || d1;
-    const t0 = 0;
-    const t1 = d0;
-    const t2 = t1 + d1;
-    const t3 = t2 + d2;
-    for (let s = 0; s < samples; s++) {
-      const t = t1 + (d1 * s) / samples;
-      // Barry-Goldman: three rounds of linear blends over the knot spans. The
-      // uniform spline is this with every span set to 1.
-      const a1x = ((t1 - t) * p0.x + (t - t0) * p1.x) / (t1 - t0);
-      const a1y = ((t1 - t) * p0.y + (t - t0) * p1.y) / (t1 - t0);
-      const a2x = ((t2 - t) * p1.x + (t - t1) * p2.x) / (t2 - t1);
-      const a2y = ((t2 - t) * p1.y + (t - t1) * p2.y) / (t2 - t1);
-      const a3x = ((t3 - t) * p2.x + (t - t2) * p3.x) / (t3 - t2);
-      const a3y = ((t3 - t) * p2.y + (t - t2) * p3.y) / (t3 - t2);
-      const b1x = ((t2 - t) * a1x + (t - t0) * a2x) / (t2 - t0);
-      const b1y = ((t2 - t) * a1y + (t - t0) * a2y) / (t2 - t0);
-      const b2x = ((t3 - t) * a2x + (t - t1) * a3x) / (t3 - t1);
-      const b2y = ((t3 - t) * a2y + (t - t1) * a3y) / (t3 - t1);
-      out.push({
-        x: ((t2 - t) * b1x + (t - t1) * b2x) / (t2 - t1),
-        y: ((t2 - t) * b1y + (t - t1) * b2y) / (t2 - t1),
-      });
-    }
-  }
-  if (!closed) out.push(pts[pts.length - 1]!);
-  return out;
-}
+import { catmullRom } from "@chartdown/core";
+export { catmullRom };
 
 /** Organic finishing: midpoint-displacement jitter of a polyline (two rounds). */
 export function meander(points: XY[], amount: number, random: () => number): XY[] {

@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { decodePng, ImageError } from "./png";
 import { fitGeoref, GeorefError, parseLandmark, type Georef, type Landmark, type XY } from "./georef";
 import { classifyWater, closeGaps, largestBody, type IndexName } from "./raster";
-import { measureFeature, MeasureError, simplify } from "./feature";
+import { easeBends, measureFeature, MeasureError, simplify, tightestBend } from "./feature";
 
 const USAGE = `chartdown-measure — derive Chartdown declarations from imagery
 
@@ -179,7 +179,16 @@ function feature(options: Options): void {
   // made of: measured on Hood Canal, the thinned line refused above 1.2mi
   // where the unthinned one drew at 2.2. The spline is centripetal now, so
   // spacing no longer decides a centerline's shape and the workaround is gone.
-  const controls = simplify(got.centerline, Math.max(got.size / 10, fit.milesPerPixel * 2)).slice(1);
+  const thinned = simplify(got.centerline, Math.max(got.size / 10, fit.milesPerPixel * 2));
+  // AND EASED TO A CURVE THE CHANNEL CAN FOLLOW (#192). A centerline is only
+  // meaningful down to the scale of the channel's own width, so curvature finer
+  // than the half-width is measurement noise — and a bend tighter than the
+  // half-width cannot be drawn at all, because that is where an offset curve
+  // folds (spec 05 §4). Each control may move within its own half-width of
+  // where it was measured and no further, which keeps the line in the water it
+  // describes.
+  const eased = easeBends(thinned);
+  const controls = eased.slice(1);
   const subject = [options.word, options.id, options.name ? `"${options.name}"` : ""].filter(Boolean).join(" ");
   // Each control carries the width measured there (#190). `size=` is the mouth
   // and `taper=` could only narrow from it, so a channel that widens into a
@@ -196,6 +205,19 @@ function feature(options: Options): void {
   console.log("; replace <shore> with the id of the coastline this hangs on.");
   if (controls.length === 0) {
     console.log("; no bends worth declaring — add reach= instead of via if you want a straight run.");
+  }
+  // SAY SO WHERE THE SHAPE STILL CANNOT BE DRAWN. Easing is bounded by the
+  // channel, so a genuinely hairpin waterway survives it and is refused by the
+  // renderer — correctly, since a channel several miles wide cannot make a turn
+  // of smaller radius. Better to hear it from the tool that produced the line
+  // than to paste it in and hear it from the renderer.
+  const bend = tightestBend(eased);
+  if (bend < 1) {
+    console.log(
+      `; NOTE: this centerline turns tighter than the channel is wide (${round(bend, 2)}x its half-width at the worst bend),`,
+    );
+    console.log("; so the renderer will refuse it and name the place. The water really does turn that sharply —");
+    console.log("; declare the sharpest stretch as its own narrower feature, or accept a wider mouth for it.");
   }
 }
 

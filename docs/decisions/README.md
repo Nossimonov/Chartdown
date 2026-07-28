@@ -41,3 +41,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0029](0029-a-shipped-dependency-is-ours-to-answer-for.md) | A shipped dependency is ours to answer for: built-ins before dependencies, shipped code audited in CI | Accepted |
 | [0030](0030-a-centerline-carries-its-own-width.md) | A centerline carries its own width: `via (x,y)@1.5mi`, so a channel may widen and narrow | Accepted |
 | [0031](0031-a-bank-the-document-did-not-choose.md) | A bank the document did not choose is refused, not picked: an arm on its host's centerline names the ambiguity | Accepted |
+| [0032](0032-a-measurement-emits-a-line-that-draws.md) | A measurement emits a line that draws, and checks it the way the renderer will | Accepted |

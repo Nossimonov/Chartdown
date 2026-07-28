@@ -4,7 +4,7 @@
  * Puget Sound exercise produced.
  */
 import { describe, expect, it } from "vitest";
-import { measureFeature, MeasureError, simplify } from "./feature";
+import { easeBends, measureFeature, MeasureError, simplify, tightestBend } from "./feature";
 import type { Mask } from "./raster";
 import type { Georef } from "./georef";
 
@@ -172,5 +172,112 @@ describe("a channel running DIAGONALLY, where the metric had to be right (#181)"
     // through it would measure 20. Finding 1.41mi rather than 2.0 is the
     // narrowest-chord search doing its job on a diagonal.
     expect(got.size).toBeCloseTo(1.41, 1);
+  });
+});
+
+describe("a centerline follows the trunk, not the arms (#192)", () => {
+  // Flooding behind a mouth captures the arms too, and an arm's water sits at
+  // much the same distance from the mouth as the trunk beside it — so a band
+  // spanning both had its centre BETWEEN them, and the line left the channel.
+  // On Hood Canal it doubled back through Dabob and Quilcene and returned: six
+  // controls reversing on themselves, carrying widths of 0.14, 0.1 and 0.38mi
+  // on a channel whose median is 1.5.
+  const TRUNK_LOW = 145;
+  const TRUNK_HIGH = 155;
+  // A straight channel east, with a BAY hanging off its north side: a narrow
+  // neck opening into a body wider than the trunk, which is what an arm looks
+  // like — Dabob off Hood Canal. An opening WIDER than the trunk is not an arm
+  // but a basin, and the channel there really does widen; this does not claim
+  // to tell those apart, because they are not different things.
+  const ARMED = scene((x, y) =>
+    (x >= 40 && x < 300 && y > TRUNK_LOW && y < TRUNK_HIGH)
+    || (x >= 160 && x < 172 && y > 118 && y <= TRUNK_LOW)
+    || (x >= 140 && x < 210 && y > 95 && y <= 118));
+
+  const got = measureFeature(ARMED, georef(0.1), { x: 45, y: 150 }, { x: 280, y: 150 });
+
+  it("stays in the trunk where an arm hangs off it", () => {
+    // Every control belongs to the channel it is describing. Pulled toward the
+    // arm, the centre of the band leaves the water entirely.
+    for (const p of got.centerline) {
+      const py = p.y / 0.1;
+      expect(py, `(${p.x},${p.y})`).toBeGreaterThan(TRUNK_LOW - 2);
+      expect(py, `(${p.x},${p.y})`).toBeLessThan(TRUNK_HIGH + 2);
+    }
+  });
+
+  it("never doubles back on itself", () => {
+    // The signature of the defect: a control behind the one before it.
+    for (let i = 1; i < got.centerline.length; i++) {
+      expect(got.centerline[i]!.x, `control ${i}`).toBeGreaterThan(got.centerline[i - 1]!.x - 1e-9);
+    }
+  });
+
+  it("does not report the arm as part of the trunk's own length", () => {
+    // 260 pixels of trunk at a tenth of a mile each; the arm adds none of it.
+    expect(got.depth).toBeGreaterThan(22);
+    expect(got.depth).toBeLessThan(30);
+  });
+});
+
+/** An elbow whose controls clear the width but whose splined curve does not. */
+const KINKED = [
+  { x: 0, y: 0, width: 4 }, { x: 10, y: 0, width: 4 },
+  { x: 11, y: 1.5, width: 4 }, { x: 11, y: 12, width: 4 },
+];
+
+/** Radius of the circle through each consecutive triple of controls. */
+const circumradii = (pts: { x: number; y: number }[]): number[] => {
+  const out: number[] = [];
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const a = pts[i - 1]!, b = pts[i]!, c = pts[i + 1]!;
+    const area = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+    if (area < 1e-12) continue;
+    out.push((Math.hypot(b.x - a.x, b.y - a.y) * Math.hypot(c.x - b.x, c.y - b.y) * Math.hypot(a.x - c.x, a.y - c.y)) / (4 * area));
+  }
+  return out;
+};
+
+describe("a measured centerline is checked as the renderer will draw it (#192)", () => {
+  // Spec 05 §4 refuses a bend whose radius drops below the half-width there,
+  // and the curve that has to satisfy it is the SPLINE, not the controls. An
+  // interpolating spline's curvature at a knot depends on its neighbours, so a
+  // control polygon can clear the rule everywhere while the curve through it
+  // does not: measured on Hood Canal, all 27 controls passed and the drawn
+  // line turned at 0.5mi carrying a half-width of 1.1.
+  it("sees a bend the control polygon hides", () => {
+    // Three controls whose own circumradius clears the width, splined into a
+    // turn that does not.
+    // Every consecutive triple's own circumradius clears the half-width; the
+    // curve through them does not.
+    expect(Math.min(...circumradii(KINKED))).toBeGreaterThan(KINKED[0]!.width / 2);
+    expect(tightestBend(KINKED)).toBeLessThan(1);
+  });
+
+  it("passes a line that turns gently for its width", () => {
+    const gentle = Array.from({ length: 9 }, (_, i) => ({
+      x: 20 * Math.cos((i * Math.PI) / 16), y: 20 * Math.sin((i * Math.PI) / 16), width: 2,
+    }));
+    expect(tightestBend(gentle)).toBeGreaterThan(1);
+  });
+
+  it("eases a bend the channel cannot follow, within the channel", () => {
+    const eased = easeBends(KINKED);
+    expect(tightestBend(eased)).toBeGreaterThan(tightestBend(KINKED));
+    // Bounded by the channel: a control may move within its own half-width of
+    // where it was measured, and no further — beyond that, easing would be
+    // inventing a course rather than reading one.
+    for (let i = 0; i < KINKED.length; i++) {
+      const moved = Math.hypot(eased[i]!.x - KINKED[i]!.x, eased[i]!.y - KINKED[i]!.y);
+      expect(moved, `control ${i}`).toBeLessThanOrEqual(KINKED[i]!.width / 2 + 1e-9);
+    }
+    // The endpoints are extents, not shape: the anchor and the head stay put.
+    expect(eased[0]).toEqual(KINKED[0]);
+    expect(eased[eased.length - 1]).toEqual(KINKED[KINKED.length - 1]);
+  });
+
+  it("leaves a straight line alone", () => {
+    const straight = Array.from({ length: 6 }, (_, i) => ({ x: i * 5, y: 0, width: 2 }));
+    expect(easeBends(straight)).toEqual(straight);
   });
 });

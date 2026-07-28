@@ -15,6 +15,7 @@
  * channel, and it is the second number `via` has to reproduce.
  */
 
+import { catmullRom, radii } from "@chartdown/core";
 import type { Georef, XY } from "./georef";
 import { distanceToLand, flood, type Mask } from "./raster";
 
@@ -207,37 +208,7 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
     if (y < y0) y0 = y;
     if (y > y1) y1 = y;
   }
-  const D1 = 1;
-  const D2 = Math.SQRT2;
-  const W = mask.width;
-  for (let round = 0; round < 64; round++) {
-    let moved = false;
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const i = y * W + x;
-        if (inside[i] !== 1) continue;
-        let d = dist[i]!;
-        if (x > 0) d = Math.min(d, dist[i - 1]! + D1);
-        if (y > 0) d = Math.min(d, dist[i - W]! + D1);
-        if (x > 0 && y > 0) d = Math.min(d, dist[i - W - 1]! + D2);
-        if (x + 1 < W && y > 0) d = Math.min(d, dist[i - W + 1]! + D2);
-        if (d < dist[i]!) { dist[i] = d; moved = true; }
-      }
-    }
-    for (let y = y1; y >= y0; y--) {
-      for (let x = x1; x >= x0; x--) {
-        const i = y * W + x;
-        if (inside[i] !== 1) continue;
-        let d = dist[i]!;
-        if (x + 1 < W) d = Math.min(d, dist[i + 1]! + D1);
-        if (y + 1 < mask.height) d = Math.min(d, dist[i + W]! + D1);
-        if (x + 1 < W && y + 1 < mask.height) d = Math.min(d, dist[i + W + 1]! + D2);
-        if (x > 0 && y + 1 < mask.height) d = Math.min(d, dist[i + W - 1]! + D2);
-        if (d < dist[i]!) { dist[i] = d; moved = true; }
-      }
-    }
-    if (!moved) break;
-  }
+  chamfer(dist, inside, mask.width, mask.height, x0, x1, y0, y1);
 
   let deepest = 0;
   for (let i = 0; i < dist.length; i++) {
@@ -246,9 +217,46 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
   }
   if (deepest < 2) throw new MeasureError("the inlet is barely deeper than its own mouth — check the inward point");
 
-  // The centerline is the centre of the water at each distance from the mouth.
-  // Averaging a band rather than picking a ridge keeps it steady where the
-  // channel widens into a bay, which a medial axis does not.
+  // THE BANDS FOLLOW THE TRUNK, not everything at that distance from the mouth
+  // (#192). Flooding behind a mouth captures the arms, and an arm's water sits
+  // at much the same distance from the mouth as the trunk beside it — so a band
+  // spanning both has its centre BETWEEN them, and the centerline leaves the
+  // channel entirely. Measured on Hood Canal, it doubled back through Dabob and
+  // Quilcene and returned: six controls reversing on themselves, carrying
+  // widths of 0.14, 0.1 and 0.38mi on a channel whose median is 1.5 — the tiny
+  // widths being the giveaway, since mid-channel there is the gap between two
+  // bays rather than any channel at all.
+  //
+  // Topology comes from a BACKTRACK, position still from the weighted centroid.
+  // The path of steepest descent from the farthest water back to the mouth
+  // cannot enter a bay, because a bay is a dead end and nothing beyond it is
+  // farther. Used to pick WHICH band component is the trunk it settles the
+  // question a centroid cannot; used to place the line it would hug the inside
+  // of every corner, which is what a pure geodesic centerline does and why it
+  // is not one here.
+  // WATER IS ON THE TRUNK IF GOING THROUGH IT IS BARELY A DETOUR. Grow the
+  // same field a second time from the head: a pixel's distance from the mouth
+  // plus its distance from the head is the length of the best route that passes
+  // through it, so the excess over the direct run is what it COSTS to go that
+  // way. Mid-channel water costs nothing; water a mile up a dead-end arm costs
+  // two miles, there and back. Connectivity alone cannot tell them apart — an
+  // arm and the trunk are one body of water at the arm's own mouth, and where
+  // that mouth is wide they stay one for a long way.
+  //
+  // The allowance is the channel's own width, so the junction itself counts as
+  // trunk — which it is — and nothing past it does.
+  const trunkPath = backtrack(dist, mask.width, mask.height);
+  const back = new Float32Array(mask.bits.length).fill(Infinity);
+  const headPixel = trunkPath[trunkPath.length - 1] ?? -1;
+  if (headPixel >= 0) back[headPixel] = 0;
+  chamfer(back, inside, mask.width, mask.height, x0, x1, y0, y1);
+  const detour = Math.max(widthPixels, 4);
+  const onCorridor = new Uint8Array(mask.bits.length);
+  for (let i = 0; i < dist.length; i++) {
+    const a = dist[i]!;
+    const b = back[i]!;
+    if (Number.isFinite(a) && Number.isFinite(b) && a + b <= deepest + detour) onCorridor[i] = 1;
+  }
   const bands = Math.max(4, Math.min(60, Math.round(deepest / Math.max(widthPixels / 2, 2))));
   const sumX = new Float64Array(bands + 1);
   const sumY = new Float64Array(bands + 1);
@@ -261,10 +269,16 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
   // water, present in any metric, and it put a kink in the last control of
   // every otherwise straight canal.
   const fromLand = distanceToLand(mask);
+  const bandOf = (d: number): number => Math.min(bands, Math.floor((d / deepest) * bands));
+  // Which pixels belong to the trunk at each band: grown from the backtrack's
+  // own pixel there, through that band only, so an arm's cross-section is a
+  // separate component and is not reached.
+  const onTrunk = trunkBands(dist, mask.width, mask.height, trunkPath, bandOf, bands, onCorridor);
   for (let i = 0; i < dist.length; i++) {
     const d = dist[i]!;
     if (!Number.isFinite(d)) continue;
-    const band = Math.min(bands, Math.floor((d / deepest) * bands));
+    if (onTrunk[i] !== 1) continue;
+    const band = bandOf(d);
     const w = Math.max(fromLand[i]!, 0.001);
     sumX[band]! += (i % mask.width) * w;
     sumY[band]! += ((i / mask.width) | 0) * w;
@@ -304,6 +318,18 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
   // 3.5mi where the channel is nearer 1.5 — and a channel that wide cannot make
   // the Great Bend's turn, so the renderer refused it, correctly (#177). A bay
   // off to one side cannot move the distance from mid-channel to the shore.
+  // AND THE WIDTH IS A CROSS-SECTION, NOT AN INSCRIBED CIRCLE (#192). The
+  // distance to land is the largest circle that fits in the water here, and at
+  // a BEND that circle is bigger than the channel: it settles into the corner
+  // and touches both outer banks at once. On a square elbow it reads 1.17x the
+  // true half-width, and more as the turn sharpens — so the measurement makes a
+  // channel widest exactly where it turns hardest, which is the one place a
+  // ribbon cannot afford it. Hood Canal's Great Bend came back at 1.88mi.
+  //
+  // The width across a channel is the shortest way across it, which is what
+  // `size=` already means at the mouth — the same narrowest-chord search, now
+  // asked at every control. Searched on the CUT mask, so a chord near the mouth
+  // stops there instead of escaping into the open sea.
   const profile = centrePixels.map((c) => {
     const px = Math.min(Math.max(Math.round(c.p.x), 0), mask.width - 1);
     const py = Math.min(Math.max(Math.round(c.p.y), 0), mask.height - 1);
@@ -341,6 +367,163 @@ export function measureFeature(mask: Mask, georef: Georef, mouth: XY, into: XY):
     })),
     profile,
   };
+}
+
+/**
+ * Chamfered geodesic distance, swept in place from whatever is already seeded.
+ *
+ * CHAMFERED, NOT FLOODED. A four-connected walk measures Manhattan distance,
+ * which is exact along the axes and overstates a diagonal by 41% — and a
+ * channel is under no obligation to run north-south. Measured against the
+ * reference tracing of Hood Canal, which runs south-south-west, that read
+ * 79.7mi where the truth is 55.8: a ratio of 1.428 against the square root of
+ * two's 1.414. Every fixture that had passed was axis-aligned, where the two
+ * metrics agree exactly, so nothing in the suite could have caught it.
+ *
+ * Shared because the same field is grown twice (#192): once from the mouth,
+ * and once from the head, so that the two together say which water lies ON THE
+ * WAY through and which is a detour up an arm.
+ */
+function chamfer(
+  dist: Float32Array,
+  inside: Uint8Array,
+  width: number,
+  height: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+): void {
+  const D1 = 1;
+  const D2 = Math.SQRT2;
+  for (let round = 0; round < 64; round++) {
+    let moved = false;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const i = y * width + x;
+        if (inside[i] !== 1) continue;
+        let d = dist[i]!;
+        if (x > 0) d = Math.min(d, dist[i - 1]! + D1);
+        if (y > 0) d = Math.min(d, dist[i - width]! + D1);
+        if (x > 0 && y > 0) d = Math.min(d, dist[i - width - 1]! + D2);
+        if (x + 1 < width && y > 0) d = Math.min(d, dist[i - width + 1]! + D2);
+        if (d < dist[i]!) { dist[i] = d; moved = true; }
+      }
+    }
+    for (let y = y1; y >= y0; y--) {
+      for (let x = x1; x >= x0; x--) {
+        const i = y * width + x;
+        if (inside[i] !== 1) continue;
+        let d = dist[i]!;
+        if (x + 1 < width) d = Math.min(d, dist[i + 1]! + D1);
+        if (y + 1 < height) d = Math.min(d, dist[i + width]! + D1);
+        if (x + 1 < width && y + 1 < height) d = Math.min(d, dist[i + width + 1]! + D2);
+        if (x > 0 && y + 1 < height) d = Math.min(d, dist[i + width - 1]! + D2);
+        if (d < dist[i]!) { dist[i] = d; moved = true; }
+      }
+    }
+    if (!moved) break;
+  }
+}
+
+/** The eight neighbours, as (dx, dy) pairs. */
+const NEIGHBOURS: readonly (readonly [number, number])[] = [
+  [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+
+/**
+ * The path of steepest descent from the farthest water back to the mouth.
+ *
+ * This is the inlet's TRUNK as a topological fact: every step moves nearer the
+ * mouth, so the path cannot enter a bay — a bay is a dead end, and nothing
+ * inside one is farther from the mouth than its own entrance. It is used to
+ * decide which water belongs to the trunk, never to place the centerline: a
+ * steepest-descent path hugs the inside of every corner, which is a line no
+ * channel of any width could follow.
+ */
+function backtrack(dist: Float32Array, width: number, height: number): Int32Array {
+  let at = -1;
+  let deepest = -1;
+  for (let i = 0; i < dist.length; i++) {
+    const d = dist[i]!;
+    if (Number.isFinite(d) && d > deepest) { deepest = d; at = i; }
+  }
+  const path: number[] = [];
+  const seen = new Uint8Array(dist.length);
+  // Bounded by the pixel count: every step strictly decreases the distance, so
+  // it terminates, and the guard is for a corrupt field rather than a shape.
+  while (at >= 0 && !seen[at] && path.length < dist.length) {
+    seen[at] = 1;
+    path.push(at);
+    const x = at % width;
+    const y = (at / width) | 0;
+    let next = -1;
+    let best = dist[at]!;
+    for (const [dx, dy] of NEIGHBOURS) {
+      const px = x + dx;
+      const py = y + dy;
+      if (px < 0 || py < 0 || px >= width || py >= height) continue;
+      const j = py * width + px;
+      const d = dist[j]!;
+      if (Number.isFinite(d) && d < best) { best = d; next = j; }
+    }
+    if (next < 0) break;
+    at = next;
+  }
+  return Int32Array.from(path.reverse());
+}
+
+/**
+ * The water belonging to the trunk, band by band.
+ *
+ * Each band is grown from the pixel the backtrack passes through at that
+ * distance, spreading only within the band. An arm's cross-section at the same
+ * distance is a SEPARATE component — the two are joined only near the arm's own
+ * mouth, where they genuinely are one stretch of water — so it is never
+ * reached, and the trunk's centre stops being an average of the two.
+ */
+function trunkBands(
+  dist: Float32Array,
+  width: number,
+  height: number,
+  trunk: Int32Array,
+  bandOf: (d: number) => number,
+  bands: number,
+  onCorridor: Uint8Array,
+): Uint8Array {
+  const out = new Uint8Array(dist.length);
+  const seeds: number[][] = Array.from({ length: bands + 1 }, () => []);
+  for (const i of trunk) {
+    const d = dist[i]!;
+    if (Number.isFinite(d)) seeds[bandOf(d)]!.push(i);
+  }
+  const queue = new Int32Array(dist.length);
+  for (let b = 0; b <= bands; b++) {
+    let tail = 0;
+    for (const s of seeds[b]!) {
+      if (out[s] === 1) continue;
+      out[s] = 1;
+      queue[tail++] = s;
+    }
+    for (let head = 0; head < tail; head++) {
+      const at = queue[head]!;
+      const x = at % width;
+      const y = (at / width) | 0;
+      for (const [dx, dy] of NEIGHBOURS) {
+        const px = x + dx;
+        const py = y + dy;
+        if (px < 0 || py < 0 || px >= width || py >= height) continue;
+        const j = py * width + px;
+        if (out[j] === 1) continue;
+        if (onCorridor[j] !== 1) continue;
+        const d = dist[j]!;
+        if (!Number.isFinite(d) || bandOf(d) !== b) continue;
+        out[j] = 1;
+        queue[tail++] = j;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -387,4 +570,91 @@ export function simplify<T extends XY>(points: T[], tolerance: number): T[] {
     }
   }
   return points.filter((_, i) => keep[i] === 1);
+}
+
+/** Samples per span when asking what the renderer will actually draw. */
+const SPAN_SAMPLES = 24;
+
+/**
+ * How tight this line's worst bend is, as a multiple of the width it carries.
+ *
+ * Asked of the SPLINE, not of the controls (#192). Spec 05 §4 refuses a bend
+ * whose radius drops below the half-width there, and the curve that has to
+ * satisfy that is the one the renderer draws — an interpolating spline's
+ * curvature at a knot depends on its neighbours, so a control polygon can clear
+ * the rule everywhere while the curve through it does not. Measured on Hood
+ * Canal: all 27 controls passed, and the drawn line turned at 0.5mi carrying a
+ * half-width of 1.1.
+ *
+ * Below 1 the shape cannot be drawn as stated. The mouth's own lead is the
+ * renderer's and depends on a coastline this tool does not have (ADR 0028), so
+ * the first span is approximate; everything past it is exact.
+ */
+export function tightestBend<T extends XY & { width?: number }>(points: T[]): number {
+  if (points.length < 3) return Infinity;
+  const curve = catmullRom(points, SPAN_SAMPLES);
+  const r = radii(curve);
+  let worst = Infinity;
+  for (let k = 1; k + 1 < curve.length; k++) {
+    if (!Number.isFinite(r[k]!)) continue;
+    // The sample's own span, by construction of the output: `SPAN_SAMPLES`
+    // points per span, in order, then the final control.
+    const span = Math.min(points.length - 2, Math.floor(k / SPAN_SAMPLES));
+    const t = (k % SPAN_SAMPLES) / SPAN_SAMPLES;
+    const w0 = points[span]!.width ?? 0;
+    const w1 = points[span + 1]!.width ?? w0;
+    const half = (w0 + (w1 - w0) * t) / 2;
+    if (!(half > 0)) continue;
+    worst = Math.min(worst, r[k]! / half);
+  }
+  return worst;
+}
+
+/**
+ * Ease the bends a channel of this width cannot follow.
+ *
+ * A centerline is only meaningful down to the scale of the channel's own
+ * width: curvature finer than that is measurement noise, not geography. Where
+ * a band's centre is tugged sideways — at a junction, where the trunk and an
+ * arm briefly are one stretch of water — the line acquires a corner the water
+ * does not have, and a corner tighter than the half-width cannot be drawn at
+ * all.
+ *
+ * Bounded by the channel: a control may move anywhere within its own
+ * half-width of where it was measured, and no further. Inside that circle the
+ * line is still in the water it describes and still as true as the measurement
+ * was; outside it, easing would be inventing a course. So this cannot rescue a
+ * genuinely hairpin channel, and does not pretend to — it returns what it
+ * reached, and the caller says so.
+ *
+ * Endpoints are fixed: the first is the feature's anchor on its host and the
+ * last is its head, and both are extents rather than shape.
+ */
+export function easeBends<T extends XY & { width?: number }>(points: T[], target = 1.2): T[] {
+  if (points.length < 3) return points.map((p) => ({ ...p }));
+  const out = points.map((p) => ({ ...p }));
+  const from = points.map((p) => ({ x: p.x, y: p.y }));
+  for (let round = 0; round < 200; round++) {
+    if (tightestBend(out) >= target) break;
+    const prev = out.map((p) => ({ x: p.x, y: p.y }));
+    for (let i = 1; i + 1 < out.length; i++) {
+      const a = prev[i - 1]!;
+      const b = prev[i]!;
+      const c = prev[i + 1]!;
+      const LAMBDA = 0.3;
+      let x = b.x + ((a.x + c.x) / 2 - b.x) * LAMBDA;
+      let y = b.y + ((a.y + c.y) / 2 - b.y) * LAMBDA;
+      const cap = (out[i]!.width ?? 0) / 2;
+      const dx = x - from[i]!.x;
+      const dy = y - from[i]!.y;
+      const moved = Math.hypot(dx, dy);
+      if (cap > 0 && moved > cap) {
+        x = from[i]!.x + (dx / moved) * cap;
+        y = from[i]!.y + (dy / moved) * cap;
+      }
+      out[i]!.x = x;
+      out[i]!.y = y;
+    }
+  }
+  return out;
 }

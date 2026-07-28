@@ -12,4 +12,5 @@ export { parseThemeDocument, THEME_PROPS, SURFACE_WORDS, ZONE_WORDS, type ThemeD
 export type { Diagnostic, Severity } from "./diagnostics";
 export { locationOf } from "./diagnostics";
 export { formatPoints, frameShape, parsePoints, unframeShape, type FramePoint, type Framed } from "./frame";
+export { catmullRom, radii, type SplinePoint } from "./spline";
 export type * from "./ast";
