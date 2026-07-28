@@ -95,3 +95,60 @@ describe("reading a landmark off the command line", () => {
     expect(() => parseLandmark("47.6,-122.33")).toThrow(/not in the form/);
   });
 });
+
+describe("map coordinates convert back to pixels (#193)", () => {
+  // Everything the tool prints is in map miles while the mouth and the inward
+  // point were pixels-only, so refining a mouth against a rendered map meant
+  // converting by hand in both directions — the class of error a measuring
+  // instrument should absorb rather than create.
+  const marks = [
+    "1146,2052=47.2690,-122.5517",
+    "1046,478=48.4061,-122.6433",
+    "202,838=48.1490,-123.5670",
+  ].map(parseLandmark);
+
+  it("is an exact inverse, not an approximation", () => {
+    // The fit is a similarity, so it inverts exactly. Checked at the corners
+    // and the middle, because a rotation error only shows away from the centre.
+    const fit = fitGeoref(marks, { width: 1957, height: 2696 });
+    for (const [px, py] of [[0, 0], [1957, 0], [0, 2696], [1957, 2696], [1059, 1143], [842, 1850]] as const) {
+      const m = fit.toMap(px, py);
+      const back = fit.toPixel(m.x, m.y);
+      expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
+      expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
+    }
+  });
+
+  it("inverts a ROTATED fit too", () => {
+    // Where the two frames differ only by scale a wrong rotation is invisible,
+    // and every other landmark set in this suite is square to north. Built by
+    // taking a known rotation and scale and running the projection BACKWARDS,
+    // so the three are a similarity by construction — landmarks invented by
+    // hand are not, and the fit rightly refuses them.
+    const MILES_PER_DEGREE = 69.09;
+    const lat0 = 47.6;
+    const lon0 = -122.6;
+    const theta = (18 * Math.PI) / 180;
+    const scale = 0.05;
+    const turned = [[100, 100], [900, 500], [500, 900]].map(([px, py]) => {
+      const ax = px! - 500;
+      const ay = py! - 500;
+      const wx = scale * (ax * Math.cos(theta) - ay * Math.sin(theta));
+      const wy = scale * (ax * Math.sin(theta) + ay * Math.cos(theta));
+      return {
+        px: px!,
+        py: py!,
+        lat: lat0 - wy / MILES_PER_DEGREE,
+        lon: lon0 + wx / (Math.cos((lat0 * Math.PI) / 180) * MILES_PER_DEGREE),
+      };
+    });
+    const fit = fitGeoref(turned, { width: 1000, height: 1000 });
+    expect(Math.abs(fit.rotationDegrees)).toBeGreaterThan(1);
+    for (const [px, py] of [[0, 0], [1000, 1000], [250, 750]] as const) {
+      const m = fit.toMap(px, py);
+      const back = fit.toPixel(m.x, m.y);
+      expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
+      expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
+    }
+  });
+});

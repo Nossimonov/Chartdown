@@ -31,6 +31,15 @@ export interface XY { x: number; y: number }
 export interface Georef {
   /** Image pixel to document coordinates, in miles from the map's NW corner. */
   toMap(px: number, py: number): XY;
+  /**
+   * Map coordinates back to a pixel — `toMap` run backwards (#193).
+   *
+   * The fit is a similarity, so it inverts exactly rather than approximately.
+   * It exists because everything this tool PRINTS is in map miles while the
+   * mouth and the inward point were given in pixels, and converting between
+   * them by hand is the class of error a measuring instrument should absorb.
+   */
+  toPixel(x: number, y: number): XY;
   /** The document extent the image covers, in miles. */
   extent: { width: number; height: number };
   milesPerPixel: number;
@@ -153,6 +162,15 @@ export function fitGeoref(marks: Landmark[], image: { width: number; height: num
     toMap: (px, py) => {
       const at = toWorld(px, py);
       return { x: at.x - minX, y: at.y - minY };
+    },
+    toPixel: (x, y) => {
+      // Undo the offset, then the rotation and scale that `toWorld` applied.
+      const bx = x + minX - wcx;
+      const by = y + minY - wcy;
+      return {
+        x: pcx + (bx * cos + by * sin) / scale,
+        y: pcy + (-bx * sin + by * cos) / scale,
+      };
     },
     extent,
     milesPerPixel,

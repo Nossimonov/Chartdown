@@ -33,8 +33,11 @@ usage: chartdown-measure inspect <image.png> [options]
             Puget Sound contains a line marking where Hood Canal begins.
 
 feature options:
-  --mouth <px>,<py>   a pixel in the channel AT ITS MOUTH, between the headlands
-  --into <px>,<py>    a pixel well inside the inlet, past the mouth
+  --mouth <x>,<y>     a point in the channel AT ITS MOUTH, between the headlands
+  --into <x>,<y>      a point well inside the inlet, past the mouth
+                      Both take IMAGE PIXELS bare — 1059,1143 — or MAP MILES
+                      written as Chartdown writes a point, (53.7,57.5), or with
+                      the unit, 53.7,57.5mi. Map form needs a --georef first.
   --word <word>       the vocabulary word to declare it as (default: sound)
   --name <text>       its display name
   --id <word>         its id
@@ -58,17 +61,51 @@ interface Options {
   index: IndexName;
   invert: boolean;
   close: number;
-  mouth?: XY;
-  into?: XY;
+  mouth?: Given;
+  into?: Given;
   word: string;
   name?: string;
   id?: string;
 }
 
-function parsePixel(text: string | undefined, flag: string): XY {
-  const m = /^\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*$/.exec(text ?? "");
-  if (!m) throw new Error(`${flag} needs a pixel, as <x>,<y>`);
-  return { x: Number(m[1]), y: Number(m[2]) };
+/** A point the author gave, in whichever frame they gave it in. */
+interface Given extends XY {
+  /** True where it was written in MAP coordinates rather than image pixels. */
+  map: boolean;
+}
+
+/**
+ * A point on the command line, in pixels or in map miles.
+ *
+ * Everything this tool PRINTS is in map miles, while the mouth and the inward
+ * point were pixels-only — so refining a mouth against a rendered map meant
+ * converting by hand, both ways, which is the class of error a measuring
+ * instrument should be absorbing rather than creating (#193).
+ *
+ * Map coordinates are marked the way Chartdown itself marks them: parenthesised
+ * as a point, `(53.7,57.5)`, so a coordinate can be pasted straight back out of
+ * a declaration — or with the unit, `53.7,57.5mi`, which needs no quoting in a
+ * shell. Bare numbers stay pixels, so every invocation already written keeps
+ * working and keeps meaning what it meant.
+ */
+function parsePoint(text: string | undefined, flag: string): Given {
+  const s = (text ?? "").trim();
+  const paren = /^\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)\s*([a-zA-Z]*)$/.exec(s);
+  const bare = /^\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*([a-zA-Z]*)$/.exec(s);
+  const m = paren ?? bare;
+  if (!m) {
+    throw new Error(`${flag} needs a point: <x>,<y> in image pixels, or (<x>,<y>) or <x>,<y>mi in map miles`);
+  }
+  const unit = (m[3] ?? "").toLowerCase();
+  if (unit && unit !== "mi") {
+    throw new Error(`${flag}: this tool works in miles, so '${unit}' is not a unit it can convert`);
+  }
+  return { x: Number(m[1]), y: Number(m[2]), map: Boolean(paren) || unit === "mi" };
+}
+
+/** Resolve a given point to image pixels, once the georeference is fitted. */
+function toPixels(given: Given, fit: Georef): XY {
+  return given.map ? fit.toPixel(given.x, given.y) : given;
 }
 
 function parseArgs(argv: string[]): { command: string; options: Options } {
@@ -92,10 +129,10 @@ function parseArgs(argv: string[]): { command: string; options: Options } {
       options.close = Math.round(n);
       i++;
     } else if (flag === "--mouth") {
-      options.mouth = parsePixel(value, "--mouth");
+      options.mouth = parsePoint(value, "--mouth");
       i++;
     } else if (flag === "--into") {
-      options.into = parsePixel(value, "--into");
+      options.into = parsePoint(value, "--into");
       i++;
     } else if (flag === "--word" || flag === "--name" || flag === "--id") {
       if (!value) throw new Error(`${flag} needs a value`);
@@ -167,7 +204,11 @@ function prepare(options: Options): { mask: ReturnType<typeof largestBody>; fit:
 function feature(options: Options): void {
   if (!options.mouth || !options.into) throw new Error("feature needs --mouth and --into");
   const { mask, fit } = prepare(options);
-  const got = measureFeature(mask, fit, options.mouth, options.into);
+  // Resolved AFTER the fit, because a map coordinate cannot become a pixel
+  // until there is a georeference to turn it with.
+  const mouthPx = toPixels(options.mouth, fit);
+  const intoPx = toPixels(options.into, fit);
+  const got = measureFeature(mask, fit, mouthPx, intoPx);
 
   // Thinned to what a person would write. Sixty controls down a canal is the
   // wall of coordinates ADR 0023 exists to remove, wearing a different hat —
@@ -210,6 +251,16 @@ function feature(options: Options): void {
     : "";
 
   console.log(`; measured from ${options.image} — depth ${round(got.depth, 1)}mi along the channel, mouth ${round(got.size, 2)}mi`);
+  // BOTH FRAMES, so the next run can be written in either. The anchor below is
+  // the mouth CHORD'S MIDPOINT rather than the point given, so it is not the
+  // coordinate to re-use for --mouth, and reading it as one lands a few pixels
+  // off — which is exactly the hand-conversion this is here to remove.
+  const mouthMi = fit.toMap(mouthPx.x, mouthPx.y);
+  const intoMi = fit.toMap(intoPx.x, intoPx.y);
+  console.log(
+    `; measured at --mouth ${round(mouthPx.x)},${round(mouthPx.y)} --into ${round(intoPx.x)},${round(intoPx.y)}`
+    + ` (in map coordinates: --mouth ${round(mouthMi.x, 2)},${round(mouthMi.y, 2)}mi --into ${round(intoMi.x, 2)},${round(intoMi.y, 2)}mi)`,
+  );
   const shape = controls.length > 0 ? "" : ` taper=${round(got.taper, 2)}`;
   console.log(`${subject} : on <shore> at (${round(got.anchor.x, 1)},${round(got.anchor.y, 1)})${via} size=${round(got.size, 2)}mi${shape}`);
   console.log("");

@@ -14,6 +14,7 @@ const H = 300;
 /** A georeference with no rotation and a round scale, so miles are readable. */
 const georef = (milesPerPixel: number): Georef => ({
   toMap: (px, py) => ({ x: px * milesPerPixel, y: py * milesPerPixel }),
+  toPixel: (x, y) => ({ x: x / milesPerPixel, y: y / milesPerPixel }),
   extent: { width: W * milesPerPixel, height: H * milesPerPixel },
   milesPerPixel,
   rotationDegrees: 0,
