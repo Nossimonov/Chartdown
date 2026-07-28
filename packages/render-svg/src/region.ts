@@ -185,23 +185,35 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     // The second means the declaration genuinely does not decide this spot,
     // and spec 05 §4 requires that reported rather than guessed.
     if (!course || bodies.length === 0) return null;
-    // The normal where the anchor actually sits, not an average of the coast.
-    let best = 0;
+    // The normal where the anchor actually sits, not an average of the coast —
+    // and taken at the nearest point ON the course rather than at its nearest
+    // VERTEX (#178). A `from … to` course with no via points has two vertices,
+    // so the nearest one to any anchor is an END of the coast: the probe then
+    // sampled the water at a corner of the map instead of beside the feature,
+    // and read "the map does not say" where it says perfectly well. Measured on
+    // #154's own fixture, a cape and a bay on one straight shore with one
+    // half-plane sea disagreed — the cape resolved and the bay did not.
+    let on = course[0]!;
+    let seg = { x: 1, y: 0 };
     let bestD = Infinity;
-    for (let i = 0; i < course.length; i++) {
-      const d = Math.hypot(course[i]!.x - at.x, course[i]!.y - at.y);
-      if (d < bestD) { bestD = d; best = i; }
+    for (let i = 1; i < course.length; i++) {
+      const a = course[i - 1]!;
+      const b = course[i]!;
+      const p = nearestOnSegment(a, b, at);
+      const d = Math.hypot(p.x - at.x, p.y - at.y);
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d < bestD && len > 0) {
+        bestD = d;
+        on = p;
+        seg = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+      }
     }
-    const a = course[Math.max(0, best - 1)]!;
-    const b = course[Math.min(course.length - 1, best + 1)]!;
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (!(len > 0)) return null;
-    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+    if (!Number.isFinite(bestD)) return null;
+    const n = { x: -seg.y, y: seg.x };
     // PROBED FROM THE SHORE, not from the anchor. An author places an anchor
     // by eye and it lands near the coast rather than on it; probing from there
     // can put both samples on the same side of the water's edge, which reads
     // as "the map does not say" when the map says perfectly well.
-    const on = course[best]!;
     // Far enough off the line to clear its own sampling, near enough to stay
     // local on a shore that turns.
     const step = Math.max(w, h) / 400;
@@ -266,12 +278,27 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // it — including for a half-plane, whose compass direction is undecidable
       // wherever the coast happens to run parallel to it.
       const local = localSeaward(host, anchorXY);
-      if (local === "ambiguous") {
+      // AND WHERE IT CANNOT TELL, THE FEATURE IS REFUSED (#178). Warning and
+      // then drawing on the global vector anyway is the worst of both: the
+      // message says the map does not decide this spot, and the shape is
+      // placed as though it did. Measured on a shoreline wrapping a peninsula
+      // with `sea : east of shore`, that drew a bay eight miles INTO THE SEA on
+      // the western limb — a render that looks finished and is wrong, which is
+      // the silent plausibility spec 05 §4 requires be reported instead.
+      //
+      // Only where the feature needs the answer. A declared centerline states
+      // its own direction (#175), so an ambiguous coast is no obstacle to a
+      // feature that says where it runs — and saying so is one of the two fixes
+      // worth naming.
+      const statesCourse = (p.via?.length ?? 0) > 0;
+      if (local === "ambiguous" && !statesCourse) {
+        const named = e.name === undefined ? `'${e.typeWord}'` : `'${e.name}' (${e.typeWord})`;
         diagnostics.push({
-          severity: "warning",
+          severity: "error",
           line: e.line,
-          message: `the water around '${host}' does not say which side '${e.typeWord}' faces at this point — both sides of the shore here read the same. Declare the sea's extent so it distinguishes them, or move the feature to a stretch where the shore has water on one side only (spec 05 §4)`,
+          message: `${named} cannot be drawn on '${host}' — the water's declaration does not say which side of '${host}' it lies on here: both sides read the same, so which way this faces would be a guess. Declare the sea as an area following its shores, or state the feature's own course with via (spec 05 §4)`,
         });
+        continue;
       }
       let seaward = (local && local !== "ambiguous" ? local : undefined) ?? seawardByHost.get(host);
       if (!seaward && waterCentres.length > 0) {

@@ -1494,9 +1494,9 @@ ${feature}
 
 describe("an undetermined side is reported, not guessed (#178)", () => {
   // Spec 05 §4: where the water's declaration does not determine the side at
-  // an anchor, a renderer MUST NOT guess silently. A shore with declared sea
-  // on BOTH sides — a spit, an isthmus — genuinely does not say which way a
-  // bay faces, and picking one is how a map comes to contradict its document.
+  // an anchor, a renderer MUST NOT guess. A shore with declared sea on BOTH
+  // sides — a spit, an isthmus — genuinely does not say which way a bay faces,
+  // and picking one is how a map comes to contradict its document.
   const SRC = `map: region
 extent: 100x100mi
 
@@ -1507,16 +1507,33 @@ sea "East" : east of shore
 bay b "B" : on shore at (50,50) size=4mi reach=1.5
 `;
 
-  it("says so, and says what would fix it", () => {
-    const warnings = renderSource(SRC).diagnostics.filter((d) => d.severity === "warning");
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]!.message).toMatch(/does not say which side/);
-    expect(warnings[0]!.message).toMatch(/spec 05 §4/);
+  it("refuses the feature, and says what would fix it", () => {
+    // This was a WARNING that drew the bay anyway, which is the worst of both:
+    // the message says the map does not decide this spot and the shape is
+    // placed as though it did. Measured on a shoreline wrapping a peninsula
+    // with `sea : east of shore`, that put a bay eight miles INTO THE SEA on
+    // the western limb — a render that looks finished and is wrong.
+    const errors = renderSource(SRC).diagnostics.filter((d) => d.severity === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.message).toMatch(/does not say which side/);
+    expect(errors[0]!.message).toMatch(/would be a guess/);
+    expect(errors[0]!.message).toMatch(/spec 05 §4/);
   });
 
-  it("still draws the map — this is a warning, not a refusal", () => {
-    expect(renderSource(SRC).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  it("still renders the rest of the map", () => {
+    // Refusing one feature is not refusing the document: the coast, the seas
+    // and everything else are unaffected, exactly as every other morphology
+    // refusal leaves the course undisturbed.
     expect(renderSource(SRC).svg).toContain("<svg");
+    expect(renderSource(SRC).svg).toContain("cd-document-shore");
+  });
+
+  it("says nothing where the feature states its own course", () => {
+    // A declared centerline chooses its own direction (#175), so an ambiguous
+    // coast is no obstacle to a feature that says where it runs — and saying so
+    // is one of the two fixes the message names.
+    const stated = SRC.replace("size=4mi reach=1.5", "via (56,50) size=4mi");
+    expect(renderSource(stated).diagnostics).toEqual([]);
   });
 });
 
@@ -1827,5 +1844,72 @@ fjord f "F" : on shore at (50,30) ${via} size=2mi taper=0.2
     expect(msg).not.toMatch(/from the normal/);
     // And it points at the hairpin, which IS a control that was written.
     expect(msg).toMatch(/near \(76,33.6\)/);
+  });
+});
+
+describe("a shore that wraps a peninsula faces landward on both limbs (#178)", () => {
+  // A single vector for a whole body is right on one limb and backwards on the
+  // next. #175's evidence had four of five anchors wrong while the fifth
+  // happened to be right, so this asserts SEVERAL anchors down each limb — one
+  // would pass on a coin flip.
+  const SHORE = "from (60,5) via (60,40) (58,62) (45,72) (32,62) (30,40) to (30,5)";
+  const SEA = `sea "S" : area (60,5) along shore (30,5) (0,5) (0,95) (100,95) (100,5)`;
+  const doc = (feature: string): string => `map: region
+extent: 100x100mi
+
+[water]
+coastline shore : ${SHORE}
+${SEA}
+${feature}
+`;
+
+  /** How far the drawn coast reaches east or west of an anchor, in miles. */
+  const excursion = (src: string, ax: number, ay: number): number => {
+    const out = renderSource(src);
+    expect(out.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    const scale = Number(/viewBox="0 0 ([\d.]+)/.exec(out.svg)![1]!) / 100;
+    const m = /id="cd-document-shore"[^>]*>.*?points="([^"]+)"/s.exec(out.svg)!;
+    let far = 0;
+    for (const p of m[1]!.trim().split(/\s+/)) {
+      const [px, py] = p.split(",").map(Number) as [number, number];
+      const mx = px / scale;
+      if (Math.abs(py / scale - ay) > 8) continue;
+      if (Math.abs(mx - ax) > 12) continue;
+      if (Math.abs(mx - ax) > Math.abs(far)) far = mx - ax;
+    }
+    return far;
+  };
+
+  it("bites INTO the land down the eastern limb", () => {
+    // Land lies west of this limb, so every bay must reach west.
+    for (const y of [15, 25, 35, 45]) {
+      expect(excursion(doc(`bay b "B" : on shore at (60,${y}) size=8mi reach=1`), 60, y), `y=${y}`)
+        .toBeLessThan(-1);
+    }
+  });
+
+  it("bites INTO the land down the western limb", () => {
+    // The same body of water, the opposite answer. One global vector cannot
+    // give both, which is the whole of #178.
+    for (const y of [15, 25, 35, 45]) {
+      expect(excursion(doc(`bay b "B" : on shore at (30,${y}) size=8mi reach=1`), 30, y), `y=${y}`)
+        .toBeGreaterThan(1);
+    }
+  });
+
+  it("juts SEAWARD on both limbs, which is the opposite answer again", () => {
+    expect(excursion(doc(`cape c "C" : on shore at (60,30) size=8mi`), 60, 30)).toBeGreaterThan(1);
+    expect(excursion(doc(`cape c "C" : on shore at (30,30) size=8mi`), 30, 30)).toBeLessThan(-1);
+  });
+
+  it("a generated run and the same course stated with via face the same way", () => {
+    // They need not have: one took its side from the map and the other from
+    // the author, so a wrong map answer showed up in one spelling only.
+    for (const [ax, sign] of [[60, -1], [30, 1]] as const) {
+      const generated = excursion(doc(`bay b "B" : on shore at (${ax},30) size=8mi reach=1`), ax, 30);
+      const stated = excursion(doc(`bay b "B" : on shore at (${ax},30) via (${ax + sign * 8},30) size=8mi`), ax, 30);
+      expect(Math.sign(generated), `generated at ${ax}`).toBe(sign);
+      expect(Math.sign(stated), `stated at ${ax}`).toBe(sign);
+    }
   });
 });
