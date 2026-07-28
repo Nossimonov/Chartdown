@@ -210,6 +210,24 @@ export function organicMass(
   });
 }
 
+/**
+ * Is this point inside this polygon? The standard crossing count.
+ *
+ * Here rather than beside its first caller because duplicating a predicate is
+ * how two callers come to disagree about what "inside" means — the region
+ * renderer's water checks and the channel floor (#185) must answer it the same
+ * way, or a symbol is drawn through land one of them thinks is sea.
+ */
+export function pip(pt: XY, poly: XY[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 export function nearestOnPolyline(pts: XY[], target: XY): XY {
   let best: XY = pts[0]!;
   let bestDist = Infinity;

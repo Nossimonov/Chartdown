@@ -79,7 +79,7 @@ Each stroke MUST be **clipped to the region it belongs to**, which is what makes
 
 The default is **`land`**, decided by arithmetic rather than convention: a coastline's line is dark ink and not a vignette, so at 1.2 units on a 200mi map it spans 0.29mi, and two shores 0.20mi apart paint their channel shut between them. Clipped to the water it is worse — 0.29mi from each side. Clipped to the land it puts nothing in the water at all.
 
-This does not make a **sub-pixel** channel visible; below about a pixel at the rendered size no clipping helps, and that is a separate mechanism.
+This does not make a **sub-pixel** channel visible; below about a pixel at the rendered size no clipping helps. That is the legibility floor of spec 05 §2 ([ADR 0035](../decisions/0035-a-channel-too-narrow-to-see-is-drawn-as-a-symbol.md)), which is a renderer convention and deliberately **not** a theme property — a floor a theme could lower is not a floor.
 
 Themes MUST NOT alter geometry, placement, or archetype semantics (spec 04 §4) — the property set makes violations inexpressible. Zone rendering quality is tiered by intent: the primitive renderer draws zones as cartographic edging (edge strokes under core strips; inset boundary bands); texture blending across zones is supporting-renderer territory that the format enables but does not mandate. Label prominence continues to flow from vocabulary tiers (spec 07 §1); typography is deliberately absent from v0.1's property set.
 

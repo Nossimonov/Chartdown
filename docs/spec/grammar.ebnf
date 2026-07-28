@@ -191,6 +191,9 @@ surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge"
                     line a border's ink lies on, clipped to that region. Never
                     centred: that is the ambiguity that loses narrow channels.
                     Spec 08 §3, ADR 0034, #185;
+                    there is deliberately NO pair for the LEGIBILITY FLOOR
+                    (spec 05 §2, ADR 0035), which draws a sub-floor channel as
+                    a symbol: a floor a theme could lower is not a floor;
                     glyph= and asset= values may be comma-separated variant pools,
                     chosen by deterministic position hash *)
 glyph-line     = word , ":" , string , EOL ;          (* SVG path data, 24x24 box centered on origin *)

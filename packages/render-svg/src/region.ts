@@ -16,8 +16,9 @@ import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, t
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
   catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
-  nearestOnPolyline, organicMass, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
+  nearestOnPolyline, organicMass, pip, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
 } from "./util";
+import { CHANNEL_FLOOR, narrowChannels } from "./channel";
 
 interface Resolved {
   point?: XY;
@@ -1377,7 +1378,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
    * that subtracts every water body, so a range can reach the shore without
    * bleeding onto it and a gulf can cut one named range in two.
    */
-  const waterPolys: { poly: XY[]; name?: string | undefined }[] = [];
+  const waterPolys: { poly: XY[]; name?: string | undefined; fill: string }[] = [];
   const hasWater = items.some(
     ({ e, chain }) => e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"),
   );
@@ -1460,8 +1461,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const isWater = e.section === "water";
       const isZone = !isWater && e.archetype === "zone";
       if (isWater) {
-        waterPolys.push({ poly, name: e.name ?? undefined });
-        layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: theme.terrainFill(["sea"]) })));
+        const seaFill = theme.terrainFill(["sea"]);
+        waterPolys.push({ poly, name: e.name ?? undefined, fill: seaFill });
+        layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: seaFill })));
       } else if (isZone) {
         // Nations are individuals, not a type: the tint keys on the realm's
         // NAME (theme fill= for the word still wins), so each nation reads
@@ -1558,7 +1560,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // line and the fill follows it exactly. Lakes sit on land: terrain
         // layer. Seas are the floor: water layer.
         const shore = r.polygon;
-        waterPolys.push({ poly: shore, name: e.name ?? undefined });
+        waterPolys.push({ poly: shore, name: e.name ?? undefined, fill: waterFill });
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
             el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
@@ -2239,6 +2241,46 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
   }
 
+  // A CHANNEL TOO NARROW TO SEE IS DRAWN AS A SYMBOL (#185 part 2, ADR 0035).
+  //
+  // The other half of the passage problem, and a different mechanism: part 1
+  // stops a stroke painting a channel shut, and does nothing at all for a
+  // channel that is simply smaller than a pixel. The floor is in VIEWPORT
+  // units, so magnifying the map by narrowing the viewBox leaves the symbol
+  // where it is and lets the true water grow past it — the two converge, and
+  // no polygon is touched on the way.
+  //
+  // NOT REPORTED, unlike the welded island above. This is the drawing
+  // convention applied uniformly and undone by zoom, the same standing a
+  // river's symbolic 2-unit width already has; a welded island is reported
+  // because the map contradicts a claim the document made, which is a
+  // different kind of fact.
+  for (const [i, ch] of narrowChannels(
+    islandInfos.map(({ poly }) => poly),
+    waterPolys.map(({ poly }) => poly),
+    { width: w, height: h },
+  ).entries()) {
+    // A hair-fine gap must not report as "0mi across", which reads as the
+    // contact #180 warns about rather than as the passage this is drawing.
+    const across = ch.narrowest / scale;
+    const trueWidth = across >= 0.1 ? `${round1(across)}${mapUnit}`
+      : across >= 0.01 ? `${across.toFixed(2)}${mapUnit}`
+      : `under 0.01${mapUnit}`;
+    layers.lines.push(
+      el("g", { id: `cd-channel-${model.doc.docId}-${i}` },
+        svgTitle(`this passage is ${trueWidth} across — drawn wider so it can be seen, and narrowing to its true width as you zoom in`),
+        el("polyline", {
+          points: pointsAttr(ch.spine),
+          fill: "none",
+          stroke: waterPolys[ch.water]?.fill ?? theme.terrainFill(["sea"]),
+          "stroke-width": CHANNEL_FLOOR,
+          "vector-effect": "non-scaling-stroke",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+        })),
+    );
+  }
+
   // A RIVER ENDING IN OPEN WATER (#166). Spec 05 §2's "water wins every
   // overlap" is stated for terrain of every kind, on the grounds that it is a
   // property of the map model rather than of one terrain kind — a path band is
@@ -2721,21 +2763,6 @@ function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing:
   return { size: 8, spacing: Math.max(0.5, perChar - 8 * 0.58) };
 }
 
-/**
- * Is this point inside this polygon? The standard crossing count.
- *
- * At module scope because the water check below needs it too, and duplicating
- * a predicate is how two callers end up disagreeing about what "inside" means.
- */
-function pip(pt: XY, poly: XY[]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i]!;
-    const b = poly[j]!;
-    if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
-}
 
 /**
  * Does any part of this footprint lie in water? (#164)
