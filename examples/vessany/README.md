@@ -47,3 +47,15 @@ Against Elena's checklist (use-cases §3): gridless human-writable positioning �
 - ~~Which side is the sea on?~~ — **resolved by [spec 05](../../docs/spec/05-map-primitives.md) §2** (via [#17](https://github.com/Nossimonov/Chartdown/issues/17)): this file's pattern is the blessed one. Water areas are ordinary terrain placed with the half-plane form, clipped to the coastline path; the sea is on whichever side the author says. Winding-order conventions were rejected.
 - ~~`blob` roughness and stability~~ — **resolved by spec 02 §9 and ADR 0025**: `blob <point> size=<measure>` declares an **extent**, not an outline. It draws a round mass measuring exactly `size=` across, and its finishing is texture that is a pure function of the word and the extent — so naming it, moving it, reordering the file or adding a `seed:` all leave it exactly where it was. This map's shapes are all extents, which is why its render is the same under every seed.
 - ~~Anchored placement must never silently reflow~~ / ~~live vs. frozen anchors~~ — **resolved by [spec 02](../../docs/spec/02-coordinates-and-grids.md) §8** (via [#14](https://github.com/Nossimonov/Chartdown/issues/14) as amended): resolution is order-bounded, deterministic (seeded), and fail-loud (exhausted anchors error; renderers never relocate); anchors are **live**, so deliberate upstream edits ripple by design, with the **remnant landmark** pattern (leave `ruin "Former site of X"` behind, anchor dependents to it) as the documented mitigation for moved/destroyed anchors. The lockfile bake is deferred, not rejected.
+
+## With the alternative theme
+
+[`vessany-vellum.theme.cd`](vessany-vellum.theme.cd) renders this map in **ink and vellum** — sepia on aged paper, hatched rather than flat:
+
+```sh
+chartdown render vessany.cd --theme vessany-vellum.theme.cd
+```
+
+It is a three-line overlay on [the travelling theme](../ink-and-vellum.theme.cd), which is keyed entirely on standard-library words and restyles all seven examples without knowing any of them. `use:` is not decoration here: it makes the base an **inherited** layer, which is what spec 08 §6 exempts from the dead-declaration lint — a shared theme deliberately styles words no single map uses, and selected directly it reports every one of them (69 on Brenmark). A realm map, so the overlay deepens the political wash — the tint is what the reading rests on here.
+
+No themed SVG is committed; the theme is live in [the playground](https://nossimonov.github.io/Chartdown/) under the Theme selector.
