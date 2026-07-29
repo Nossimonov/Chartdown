@@ -7,7 +7,7 @@
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
-import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
+import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
@@ -911,7 +911,19 @@ export function renderBattlemap(
         const windowLike = openingChain.includes("window") || openingChain.includes("arrow-slit");
         const stroke = model.theme.prop(openingChain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
         const width = Number(model.theme.prop(openingChain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
-        layers.openings.push(el("line", { ...seg, stroke, "stroke-width": width }));
+        // A DOOR'S STATE IS DRAWN HERE TOO (#206). This is the common path —
+        // an opening declared as a detail line under its structure — and it is
+        // the one the four `door` states were invisible on.
+        const ruinedOpening = d.flags.includes("ruined");
+        layers.openings.push(el("line", {
+          ...seg, stroke, "stroke-width": width,
+          "stroke-dasharray": ruinedOpening ? "4 4" : undefined,
+          opacity: ruinedOpening ? 0.6 : undefined,
+        }));
+        layers.openings.push(...openingStateMarks(
+          d, { a: { x: seg.x1, y: seg.y1 }, b: { x: seg.x2, y: seg.y2 } }, stroke, width,
+          model.theme.surface("paper", "fill", PAPER),
+        ));
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
@@ -1054,7 +1066,24 @@ export function renderBattlemap(
         continue;
       }
       const s = edgeSegment(p.at, p.dir);
-      parts.push(el("line", { x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, "stroke-width": width }));
+      // A DOOR'S STATE IS DRAWN (#206). `door` declares four — locked, barred,
+      // stuck, ruined — and every one of them rendered as an ordinary door, so
+      // the four most common facts a GM records about the most common opening
+      // in any dungeon were legal, checked, and invisible. A state that renders
+      // identically to its absence is the document saying something the map
+      // does not.
+      //
+      // `ruined` reuses the convention barriers already use for it — dashed and
+      // faded — so a reader learns one rule for the word rather than one per
+      // archetype. The other three are marks laid ON the opening, in its own
+      // ink, so they read at battle scale without a legend.
+      const ruinedDoor = e.flags.includes("ruined");
+      parts.push(el("line", {
+        x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, "stroke-width": width,
+        "stroke-dasharray": ruinedDoor ? "4 4" : undefined,
+        opacity: ruinedDoor ? 0.6 : undefined,
+      }));
+      parts.push(...openingStateMarks(e, s, stroke, width, model.theme.surface("paper", "fill", PAPER)));
     }
     if (parts.length > 1) layers.openings.push(el("g", { id: anchor }, ...parts));
   }
@@ -1439,6 +1468,63 @@ export function renderBattlemap(
 
 function hasOnlyRange(e: EntityNode): boolean {
   return e.placements.length > 0 && e.placements.every((p: Placement) => p.kind === "range");
+}
+
+/**
+ * The mark that says which state an opening is in (#206).
+ *
+ * Laid ON the opening rather than beside it, in the opening's own ink and
+ * scaled to its own width, so it reads at battle scale and needs no legend:
+ *
+ * - **locked** — a keyhole: a dot PUNCHED through the leaf, in the paper's
+ *   own colour, because a keyhole is a hole. Drawn in the door's ink it is a
+ *   brown dot on a brown door and cannot be seen at all — which is how it
+ *   first shipped, and why this is checked by eye and not only by a diff.
+ * - **barred** — the bar: a line across the opening, set off to one side, which
+ *   is how a barred door is drawn and how it works.
+ * - **stuck** — the wedge that jammed it, at the midpoint.
+ *
+ * `ruined` is not here: it dashes and fades the opening itself, which is the
+ * convention barriers already use for that word.
+ */
+function openingStateMarks(
+  e: { flags: string[] }, s: { a: XY; b: XY }, stroke: string, width: number, paper: string,
+): string[] {
+  const dx = s.b.x - s.a.x;
+  const dy = s.b.y - s.a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  // Outward from the opening, on the side the mark sits.
+  const nx = -uy;
+  const ny = ux;
+  const mid = { x: (s.a.x + s.b.x) / 2, y: (s.a.y + s.b.y) / 2 };
+  const out: string[] = [];
+  if (e.flags.includes("locked")) {
+    out.push(el("circle", { cx: mid.x, cy: mid.y, r: Math.max(1.6, width * 0.32), fill: paper }));
+  }
+  if (e.flags.includes("barred")) {
+    const off = width * 0.9;
+    const reach = len * 0.42;
+    out.push(el("line", {
+      x1: mid.x - ux * reach + nx * off, y1: mid.y - uy * reach + ny * off,
+      x2: mid.x + ux * reach + nx * off, y2: mid.y + uy * reach + ny * off,
+      stroke, "stroke-width": Math.max(1.2, width * 0.4), "stroke-linecap": "round",
+    }));
+  }
+  if (e.flags.includes("stuck")) {
+    const h = width * 0.85;
+    const w = len * 0.16;
+    out.push(el("polygon", {
+      points: [
+        `${fmt(mid.x - ux * w)},${fmt(mid.y - uy * w)}`,
+        `${fmt(mid.x + ux * w)},${fmt(mid.y + uy * w)}`,
+        `${fmt(mid.x + nx * h)},${fmt(mid.y + ny * h)}`,
+      ].join(" "),
+      fill: stroke,
+    }));
+  }
+  return out;
 }
 
 /**

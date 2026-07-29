@@ -199,6 +199,57 @@ describe("furniture and grid (spec 07 §4)", () => {
   });
 });
 
+describe("a door's state is drawn (#206)", () => {
+  // `door` declares four states and every one rendered as an ordinary door, so
+  // the four most common facts a GM records about the most common opening in
+  // any dungeon were legal, checked, and invisible. A state that renders
+  // identically to its absence is the document saying something the map does
+  // not — the silent-plausibility failure this phase spent its length removing.
+  const door = (state = ""): string =>
+    ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[structures]",
+     'building b "B" : D4..H8', `  door : F8.s ${state}`.trimEnd()].join("\n");
+  const svgOf = (state = ""): string => renderSource(door(state)).svg;
+
+  it("draws each of the four differently from a plain door", () => {
+    const plain = svgOf();
+    for (const state of ["locked", "barred", "stuck", "ruined"]) {
+      expect(svgOf(state), state).not.toBe(plain);
+    }
+  });
+
+  it("draws each of the four differently from EACH OTHER", () => {
+    // The weaker claim — "not the same as plain" — is satisfied by four states
+    // that all draw the same mark, which would be the same failure one level in.
+    const rendered = ["locked", "barred", "stuck", "ruined"].map(svgOf);
+    expect(new Set(rendered).size).toBe(4);
+  });
+
+  it("punches the keyhole rather than inking it", () => {
+    // A dot in the door's OWN colour is a brown dot on a brown door and cannot
+    // be seen at all, which is how this first shipped. A keyhole is a hole, so
+    // it takes the paper's colour — and that is only catchable by eye, which is
+    // why it is pinned here.
+    expect(svgOf("locked")).toMatch(/<circle[^>]*fill="#f9f5ea"/);
+  });
+
+  it("bars across the leaf and wedges the jamb", () => {
+    expect(svgOf("barred")).toMatch(/<line[^>]*stroke-linecap="round"/);
+    expect(svgOf("stuck")).toMatch(/<polygon[^>]*fill="#a8763e"/);
+  });
+
+  it("fades and breaks a ruined one, as a ruined WALL already does", () => {
+    // One rule per word rather than one per archetype: a reader who has learnt
+    // what `ruined` looks like on a wall has learnt it on a door.
+    expect(svgOf("ruined")).toMatch(/stroke-dasharray="4 4"/);
+    expect(svgOf("ruined")).toMatch(/opacity="0\.6"/);
+  });
+
+  it("leaves an opening that declares no state alone", () => {
+    expect(svgOf()).not.toMatch(/<circle/);
+    expect(svgOf()).not.toMatch(/stroke-dasharray/);
+  });
+});
+
 describe("a path's ends reach the edge of their terminal cells (#145)", () => {
   // A path is drawn through cell CENTRES, so its last vertex landed in the
   // middle of its final square and a road running to a gatehouse wall stopped
