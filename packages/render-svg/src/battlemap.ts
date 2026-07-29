@@ -757,7 +757,9 @@ export function renderBattlemap(
       } else if (p.kind === "shape" && p.shape === "path") {
         const addresses = p.args.filter((a): a is Address => a.kind === "address");
         const pts = addresses.map(cellCenter);
-        extendToFrame(pts, addresses, frame);
+        // Drawn to the edges of the terminal cells; RECORDED as the declared
+        // spine (#145) — see extendToCellEdge.
+        const drawn = extendToCellEdge(pts);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = model.theme.pathStroke(chain);
         const bandStroke = chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke;
@@ -766,11 +768,11 @@ export function renderBattlemap(
         // verges, a river with shallows.
         const pathZones = model.theme.zones(chain, bandStroke);
         if (pathZones) {
-          pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: pathZones.edge, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.edge, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
           const coreWidth = Math.max(width - 2 * pathZones.width, 1);
-          pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         } else {
-          pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         }
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
       } else if (p.kind === "range") {
@@ -1440,20 +1442,54 @@ function hasOnlyRange(e: EntityNode): boolean {
 }
 
 /**
- * Paths whose terminal cells touch the map boundary extend to the frame edge,
- * so a road that runs off-map reads as continuing rather than stopping short.
+ * A path's ends reach the edge of their own terminal cells (#145).
+ *
+ * A path is drawn through cell CENTRES, so its last vertex used to land in the
+ * middle of its final square and a road running to something — a gatehouse
+ * wall, a shoreline, the map's own edge — visibly stopped halfway through the
+ * square it was meant to reach. Fairwater Manor's King's Road was authored
+ * around it, ending a cell INSIDE the gatehouse so the two would meet, which
+ * put a road's band in a building's interior and said something the author
+ * never meant. The document was bent to fit the drawing.
+ *
+ * The rule is not "add half a cell" but a consequence of what a path already
+ * is: **a path occupies whole cells**, which is the model spec 06 §10's lints
+ * reason with ("a path is its band and a band is ground", #123/#147). So the
+ * drawn band spans its terminal cells rather than stopping at their middles,
+ * and a road ending at M13 covers M13.
+ *
+ * Along the direction of travel, so a diagonal run leaves through the corner
+ * rather than being clipped square. This SUBSUMES the frame case it replaces:
+ * a terminal cell on the boundary has its outer face ON the frame, so a road
+ * running off-map still reaches the edge — and one running ALONG the boundary
+ * now extends forward instead of being snapped sideways onto it.
+ *
+ * The DECLARED spine is left alone: `cells`, crossings and the lints keep
+ * reading the cell centres, because this is about where the ink stops and not
+ * about what the path covers. Extending those too would have the band's own
+ * footprint depend on its stroke width at the ends.
  */
-function extendToFrame(pts: XY[], addresses: Address[], frame: Frame): void {
-  if (pts.length < 2 || addresses.length < 2) return;
-  const fix = (index: 0 | -1): void => {
-    const address = index === 0 ? addresses[0]! : addresses[addresses.length - 1]!;
-    const point = index === 0 ? pts[0]! : pts[pts.length - 1]!;
-    const col = colToNumber(address.col);
-    if (address.row === 1) point.y = MARGIN;
-    else if (address.row === frame.rows) point.y = MARGIN + frame.rows * CELL;
-    else if (col === 1) point.x = MARGIN;
-    else if (col === frame.cols) point.x = MARGIN + frame.cols * CELL;
+function extendToCellEdge(pts: XY[]): XY[] {
+  if (pts.length < 2) return pts;
+  const out = pts.map((p) => ({ ...p }));
+  const reach = (end: XY, inward: XY): void => {
+    const dx = end.x - inward.x;
+    const dy = end.y - inward.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    // Where the ray from the cell's centre leaves the cell: the nearer face,
+    // which is the corner when the two components are equal.
+    const half = CELL / 2;
+    const t = Math.min(
+      Math.abs(ux) > 1e-9 ? half / Math.abs(ux) : Infinity,
+      Math.abs(uy) > 1e-9 ? half / Math.abs(uy) : Infinity,
+    );
+    end.x += ux * t;
+    end.y += uy * t;
   };
-  fix(0);
-  fix(-1);
+  reach(out[0]!, out[1]!);
+  reach(out[out.length - 1]!, out[out.length - 2]!);
+  return out;
 }

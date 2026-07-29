@@ -199,6 +199,67 @@ describe("furniture and grid (spec 07 §4)", () => {
   });
 });
 
+describe("a path's ends reach the edge of their terminal cells (#145)", () => {
+  // A path is drawn through cell CENTRES, so its last vertex landed in the
+  // middle of its final square and a road running to a gatehouse wall stopped
+  // halfway through the square it was meant to reach. Fairwater Manor's
+  // King's Road was authored around it — ending a cell INSIDE the building so
+  // the two would meet — which put a road's band in a building's interior and
+  // said something the author never meant.
+  const road = (path: string, extra: string[] = []): string =>
+    ["map: battlemap", "grid: square 5ft", "extent: 14x14", "[terrain]",
+     `road r "Road" : ${path}`, ...extra].join("\n");
+  const spine = (src: string): { x: number; y: number }[] => {
+    const m = /id="cd-[a-z0-9-]*r"><polyline points="([^"]+)"/.exec(renderSource(src).svg);
+    return m![1]!.trim().split(/\s+/).map((q) => {
+      const [x, y] = q.split(",").map(Number) as [number, number];
+      return { x, y };
+    });
+  };
+
+  it("runs the full length of its terminal cells, not centre to centre", () => {
+    // H13 to H8 spans six cells; drawn centre to centre it covers five.
+    const pts = spine(road("path H13 H8"));
+    expect(pts).toHaveLength(2);
+    expect(Math.abs(pts[1]!.y - pts[0]!.y)).toBeCloseTo(6 * 32, 6);
+  });
+
+  it("meets a building's wall exactly, with the road declared OUTSIDE it", () => {
+    // The done-state: `path M20 M13` renders meeting the wall, so the document
+    // no longer has to run the road into the gatehouse to look right.
+    const pts = spine(road("path H13 H8", ["[structures]", 'building gate "G" : F5..J7', "  door : H7.s"]));
+    // The building occupies rows 5..7, so its south wall is the row 7/8 line.
+    const wall = 24 + 7 * 32;
+    expect(Math.min(pts[0]!.y, pts[1]!.y)).toBeCloseTo(wall, 6);
+  });
+
+  it("leaves a diagonal run through the corner, not clipped square", () => {
+    // The extension follows the direction of travel, so the ray leaves the
+    // cell by its nearer face — which is the corner when the run is 45°.
+    const pts = spine(road("path C3 G7"));
+    const dx = Math.abs(pts[1]!.x - pts[0]!.x);
+    const dy = Math.abs(pts[1]!.y - pts[0]!.y);
+    expect(dx).toBeCloseTo(dy, 6);
+    expect(dx).toBeCloseTo(5 * 32, 6); // four cells of travel plus a half at each end
+  });
+
+  it("still reaches the frame where a path runs off the map", () => {
+    // This subsumes the rule it replaced: a terminal cell on the boundary has
+    // its outer face ON the frame.
+    const pts = spine(road("path H14 H8"));
+    expect(Math.max(pts[0]!.y, pts[1]!.y)).toBeCloseTo(24 + 14 * 32, 6);
+  });
+
+  it("extends a path running ALONG the boundary forward, not sideways onto it", () => {
+    // The rule it replaced snapped a terminal point to the frame on whichever
+    // axis matched, so a road in the top row was pulled up onto the edge
+    // whatever direction it ran.
+    const pts = spine(road("path C1 H1"));
+    for (const p of pts) expect(p.y).toBeCloseTo(24 + 0.5 * 32, 6);
+    expect(Math.abs(pts[1]!.x - pts[0]!.x)).toBeCloseTo(6 * 32, 6);
+  });
+});
+
 describe("crossings and layering (spec 06 §6)", () => {
   const base = [
     "map: battlemap",

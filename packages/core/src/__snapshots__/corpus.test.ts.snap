@@ -767,7 +767,7 @@ exports[`example corpus > fairwater-manor > AST snapshot is stable 1`] = `
                 {
                   "col": "M",
                   "kind": "address",
-                  "row": 12,
+                  "row": 13,
                 },
               ],
               "kind": "shape",

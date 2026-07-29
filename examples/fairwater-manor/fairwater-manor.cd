@@ -10,7 +10,7 @@ level: ground                ; unqualified sections are the ground floor
 
 [terrain]
 river fairwater "The Fairwater" : path A14 H14 P15 Z15 width=2
-road kingsroad "King's Road" : path M20 M12
+road kingsroad "King's Road" : path M20 M13
 bridge : on fairwater on kingsroad
 forest : area A1..B12
 grass : area X1..Z12

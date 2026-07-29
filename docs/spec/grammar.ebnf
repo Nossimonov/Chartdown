@@ -107,6 +107,11 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                  (* `raw` flag on an area = literal edges; without it a
                     TERRAIN area outline is organically finished (spec 02 §9,
                     #96). Water areas and `along`-spliced outlines are literal.
+                    a battlemap `path` names only its CORNERS and is drawn
+                    through cell centres — the drawn band spans its TERMINAL
+                    cells rather than stopping at their middles, along the
+                    direction of travel (spec 06 §6, #145). The declared spine
+                    is unchanged; this is where the ink stops.
                     with `on <ref> at`, the points are OFFSETS in the
                     referent's frame and the WHOLE shape moves with it —
                     spec 02 §9, #142. Anchoring one point deforms the shape. *)
