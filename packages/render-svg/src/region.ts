@@ -2119,6 +2119,33 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               }),
         ),
       );
+      // ERUPTING IS DRAWN (#206). `volcano` declares two states and both
+      // rendered as the same cone, so a map could say a mountain was in
+      // eruption and show a mountain at rest. The crater silhouette above
+      // already existed to hang this on.
+      //
+      // `dormant` deliberately has NO mark, and that is the written reason
+      // rather than an omission: a dormant volcano IS the resting cone, so the
+      // state states explicitly what the silhouette already says. Drawing a
+      // second symbol for it would invent a distinction the world does not
+      // have. What must not happen — and did — is `erupting` reading as rest.
+      if (chain.includes("volcano") && e.flags.includes("erupting")) {
+        const plume = shade(theme.terrainFill(chain));
+        layers.areas.push(el("g", {},
+          // A column of smoke leaving the crater, widening as it rises: three
+          // lobes rather than a cloud, so it reads at map scale where a
+          // detailed puff would silt up into a blob.
+          el("path", {
+            d: `M${fmt(x - s * 0.16)} ${fmt(y - s * 0.28)}`
+              + `C${fmt(x - s * 0.5)} ${fmt(y - s * 0.9)} ${fmt(x + s * 0.35)} ${fmt(y - s * 1.15)} ${fmt(x - s * 0.1)} ${fmt(y - s * 1.75)}`
+              + `C${fmt(x - s * 0.6)} ${fmt(y - s * 2.3)} ${fmt(x + s * 0.7)} ${fmt(y - s * 2.35)} ${fmt(x + s * 0.25)} ${fmt(y - s * 2.9)}`,
+            fill: "none", stroke: plume, "stroke-width": 1.6, "stroke-linecap": "round", opacity: 0.75,
+          }),
+          el("circle", { cx: x + s * 0.25, cy: y - s * 3.1, r: s * 0.26, fill: plume, opacity: 0.5 }),
+        ));
+        // The plume is part of the mark, so a label must not sit in it.
+        placer.block(x - s, y - s * 3.4, s * 2, s * 2.4, 2);
+      }
       placer.block(x - s, y - s, s * 2, s * 2, 2);
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
         deferLabel(1.2, () => {

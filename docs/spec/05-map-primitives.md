@@ -79,6 +79,10 @@ bay : terrain morph=bite        cove : bay          sound : bay         fjord : 
 island : terrain morph=detached islet : island      atoll : island      oxbow : terrain morph=detached
 ```
 
+**A declared state is drawn, or the reason it is not is written down** *([#206](https://github.com/Nossimonov/Chartdown/issues/206))*. A state that renders identically to its absence is the document saying something the map does not, and `check` cannot object because nothing is wrong — the silent-plausibility failure §4 exists to prevent, one level in. So `volcano`'s `erupting` MUST be distinguishable from a volcano at rest: the crater silhouette carries a plume.
+
+**`dormant` deliberately carries no mark, and that is the reason rather than an omission.** A dormant volcano *is* the resting cone, so the state states explicitly what the silhouette already says; a second symbol would invent a distinction the world does not have. The same reasoning covers `difficult` on a **region** map, where it is inert by design: difficulty is a tactical property of a square somebody walks across, and a region map has no tactical layer to express it on. Both are cases where identical rendering is correct — which is exactly why they have to be written down, so the next reader does not re-derive the question or "fix" them.
+
 **A solitary mountain is a point, not a small region.** `peak` places one mountain at a position — Erebor's meaning is that it stands *alone*, which `mountains … blob size=` cannot say, because that draws a small mountainous region. `volcano : peak` is an ordinary derivation, so it inherits the point-scale placement and a theme may swap the motif exactly as `licorice-forest` swaps a forest's; absent a theme the renderer still distinguishes the two silhouettes, so the derivation reads on the map rather than only in the display name ([#95](https://github.com/Nossimonov/Chartdown/issues/95)).
 
 The list is deliberately curated: every missing word is one `[vocab]` line away (spec 04 §3's escalation ladder), and a small library is a stable one.

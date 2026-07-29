@@ -199,6 +199,48 @@ describe("furniture and grid (spec 07 §4)", () => {
   });
 });
 
+describe("difficult and erupting are drawn (#206)", () => {
+  const bf = (l: string): string =>
+    ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[features]", l].join("\n");
+  const rg = (l: string): string => ["map: region", "extent: 200x150mi", "[terrain]", l].join("\n");
+  const hatches = (src: string): number => (renderSource(src).svg.match(/url\(#hatch\)/g) ?? []).length;
+
+  it("hatches a difficult FEATURE, which the hatch never reached", () => {
+    // It reached terrain and crossings only, so `pit : … difficult` — a hole in
+    // the floor, which is the entire reason the word carries the state — drew
+    // exactly like a pit you can walk over.
+    expect(hatches(bf("pit p : F6"))).toBe(0);
+    expect(hatches(bf("pit p : F6 difficult"))).toBe(1);
+    expect(hatches(bf("pit p : D4..F6"))).toBe(0);
+    expect(hatches(bf("pit p : D4..F6 difficult"))).toBe(1);
+  });
+
+  it("leaves a feature that declares no difficulty alone", () => {
+    expect(hatches(bf("table t : D4..F6"))).toBe(0);
+  });
+
+  it("gives an erupting volcano its plume", () => {
+    const rest = renderSource(rg('volcano v "V" : (100,75)')).svg;
+    expect(renderSource(rg('volcano v "V" : (100,75) erupting')).svg).not.toBe(rest);
+  });
+
+  it("gives a DORMANT one nothing, on purpose", () => {
+    // The written reason spec 05 §5 records: a dormant volcano IS the resting
+    // cone, so the state states explicitly what the silhouette already says.
+    // A second symbol would invent a distinction the world does not have. What
+    // must not happen — and did — is `erupting` reading as rest.
+    const rest = renderSource(rg('volcano v "V" : (100,75)')).svg;
+    expect(renderSource(rg('volcano v "V" : (100,75) dormant')).svg).toBe(rest);
+  });
+
+  it("leaves a plain peak alone, whatever state is written on it", () => {
+    // `erupting` belongs to `volcano`, and a peak that is not one gets no plume
+    // from a word it does not declare.
+    const plain = renderSource(rg('peak p "P" : (100,75)')).svg;
+    expect(renderSource(rg('peak p "P" : (100,75) erupting')).svg).toBe(plain);
+  });
+});
+
 describe("a door's state is drawn (#206)", () => {
   // `door` declares four states and every one rendered as an ordinary door, so
   // the four most common facts a GM records about the most common opening in

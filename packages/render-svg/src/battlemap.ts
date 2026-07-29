@@ -1411,6 +1411,14 @@ export function renderBattlemap(
         // its flame, footprint stairs their treads.
         fallbackGlyph(e, chainR, center, Math.max(1, Math.min(r.w, r.h) / CELL) * 0.8, footprintParts);
       }
+      // DIFFICULT IS DRAWN ON A FEATURE TOO (#206). The hatch reached terrain
+      // and crossings and never features, so `pit : D4..F6 difficult` — a hole
+      // in the floor, which is the whole reason the word carries the state —
+      // rendered exactly like a pit you can walk over. Laid OVER the glyph, so
+      // a hatched footprint still reads as the thing it is.
+      if (e.flags.includes("difficult")) {
+        footprintParts.push(el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: "url(#hatch)", rx: 2 }));
+      }
       into.push(el("g", { id: anchor }, ...footprintParts));
       if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
         const lbl = labelTextFor(model, e) ?? e.name;
@@ -1457,6 +1465,13 @@ export function renderBattlemap(
     // tooltips — visible text is reserved for display names, tokens, and zones.
     if (!e.name && !hasBattlemapGlyph(chain) && !themedGlyph && !drewFallback && !titleEl && e.typeWord) {
       parts.unshift(svgTitle(e.typeWord));
+    }
+    // A point-placed feature occupies its cell, so `difficult` hatches that
+    // cell (#206) — the same mark the terrain beside it uses, so the state
+    // reads the same wherever it is declared.
+    if (e.flags.includes("difficult")) {
+      const o = cellOrigin(address!);
+      parts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill: "url(#hatch)" }));
     }
     into.push(el("g", { id: anchor }, ...parts));
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
