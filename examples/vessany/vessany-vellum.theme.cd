@@ -1,0 +1,8 @@
+# Vessany — Ink and Vellum
+kind: theme
+use: ../ink-and-vellum.theme.cd
+
+[theme]
+; A realm map: the political wash carries the reading, so it is a shade
+; stronger here than the travelling theme sets it.
+realm : fill=#b09763

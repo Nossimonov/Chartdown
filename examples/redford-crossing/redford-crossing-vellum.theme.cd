@@ -1,0 +1,14 @@
+# Redford Crossing — Ink and Vellum
+; The travelling theme, plus what this map wants of it.
+;
+; NOTE, and it is a finding rather than an omission: `ford : stroke=`,
+; `fill=`, `width=` and `glyph=` are ALL inert. A crossing is drawn as a
+; restyled segment of the water's own band with its colours fixed at the draw
+; site, so the one feature this map is named for cannot be themed at all. That
+; is the same class as #150 and is recorded there.
+kind: theme
+use: ../ink-and-vellum.theme.cd
+
+[theme]
+; The river is the map's subject, so it carries more ink than the base sets.
+river : stroke=#4d6f79 width=2.5

@@ -1,0 +1,7 @@
+# Brenmark — Ink and Vellum
+kind: theme
+use: ../ink-and-vellum.theme.cd
+
+[theme]
+; A hexcrawl is read hex by hex, so the grid has to stay visible under the wash.
+grid : stroke=#b9a67a

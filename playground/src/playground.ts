@@ -10,6 +10,10 @@ import brenmark from "../../examples/brenmark/brenmark.cd";
 import tankard from "../../examples/gilded-tankard/gilded-tankard.cd";
 import manor from "../../examples/fairwater-manor/fairwater-manor.cd";
 import candyworld from "../../examples/gumdrop-vale/candyworld.theme.cd";
+import inkAndVellum from "../../examples/ink-and-vellum.theme.cd";
+
+/** A theme document that declares nothing — see the note in renderNow. */
+const EMPTY_OVERLAY = ["kind: theme", "", "[theme]", ""].join("\n");
 import gumdrop from "../../examples/gumdrop-vale/gumdrop-vale.cd";
 import redford from "../../examples/redford-crossing/redford-crossing.cd";
 import reach from "../../examples/sundered-reach/sundered-reach.cd";
@@ -73,7 +77,15 @@ function syncLevelButtons(levels: string[], defaultLevel: string): void {
 }
 
 function renderNow(): void {
-  const theme = themeSelect.value === "candyworld" ? candyworld : undefined;
+  // Ink and Vellum is the theme that TRAVELS, and it is written to be `use:`d
+  // rather than selected: keyed on standard-library words, it necessarily
+  // styles some a given map does not have. Passing it as an inherited layer
+  // under an empty selected one is exactly what a per-example overlay does
+  // (spec 08 §5), and it is what keeps #116's dead-declaration lint honest —
+  // selected directly, it correctly reports every line this map cannot use.
+  const theme = themeSelect.value === "candyworld" ? candyworld
+    : themeSelect.value === "vellum" ? [inkAndVellum, EMPTY_OVERLAY]
+    : undefined;
   const first = renderSource(editor.value, theme ? { mode, theme } : { mode });
   syncLevelButtons(first.document.levels, first.document.defaultLevel);
   const useLevel = first.document.levels.length > 0 && selectedLevel !== "all";
@@ -430,7 +442,7 @@ async function init(): Promise<void> {
         document.querySelector<HTMLButtonElement>('[data-mode="player"]')?.setAttribute("aria-pressed", "false");
       }
       const t = hash.get("t");
-      if (t === "candyworld") themeSelect.value = t;
+      if (t === "candyworld" || t === "vellum") themeSelect.value = t;
     } catch {
       editor.value = manor;
     }
