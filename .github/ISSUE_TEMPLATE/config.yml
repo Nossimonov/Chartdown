@@ -1,1 +1,11 @@
 blank_issues_enabled: true
+contact_links:
+  - name: How this project files and labels issues
+    url: https://github.com/Nossimonov/Chartdown/blob/main/CONTRIBUTING.md
+    about: Label taxonomy, the syntax-proposal process, and what a done-state means here.
+  - name: The language specification
+    url: https://github.com/Nossimonov/Chartdown/tree/main/docs/spec
+    about: The single source of truth. Anything not here is not Chartdown — worth a look before reporting a bug against behaviour.
+  - name: Try it in the playground
+    url: https://nossimonov.github.io/Chartdown/
+    about: Everything runs in the browser. A share link is often the fastest way to show what you mean.
