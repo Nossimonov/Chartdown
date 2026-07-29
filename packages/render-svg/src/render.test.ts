@@ -199,6 +199,48 @@ describe("furniture and grid (spec 07 §4)", () => {
   });
 });
 
+describe("a feature's footprint is cells, and a shape is refused (#207)", () => {
+  const bf = (l: string): string =>
+    ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[features]", l].join("\n");
+  const errs = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
+
+  it("refuses an area, where it used to draw nothing in silence", () => {
+    // `pit p : area D4..F6` rendered byte-identical to a document with no pit
+    // in it — no mark, no label, no diagnostic. An author who writes `area`
+    // having just written it for terrain three lines above had no way to find
+    // out but to notice an absence.
+    const reported = errs(bf('pit p "Oubliette" : area D4..F6'));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatch(/'pit' is placed with 'area'/);
+    // The message carries BOTH spellings that work, since the fix is one edit.
+    expect(reported[0]).toMatch(/F6/);
+    expect(reported[0]).toMatch(/D4\.\.F6/);
+  });
+
+  it("accepts the two forms that do draw", () => {
+    expect(errs(bf("pit p : F6"))).toEqual([]);
+    expect(errs(bf("pit p : D4..F6"))).toEqual([]);
+  });
+
+  it("catches a field too, which failed the same silent way", () => {
+    expect(errs(bf("light l : area D4..H8 light=20ft"))).toHaveLength(1);
+  });
+
+  it("leaves a REGION feature's declared outline alone", () => {
+    // On a region map an `area` on a feature is a declared outline (ADR 0026)
+    // and means something quite different — which is why the refusal lives in
+    // the battlemap renderer rather than in the parser.
+    const region = [
+      "map: region", "extent: 200x150mi", "[water]",
+      "coastline c : from (100,0) via (100,80) to (100,150)",
+      "sea s : west of c",
+      'island i "I" : near c at (80,70) area (0,-6) (5,0) (0,6) (-5,0)',
+    ].join("\n");
+    expect(errs(region)).toEqual([]);
+  });
+});
+
 describe("difficult and erupting are drawn (#206)", () => {
   const bf = (l: string): string =>
     ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[features]", l].join("\n");

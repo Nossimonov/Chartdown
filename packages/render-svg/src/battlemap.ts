@@ -1370,7 +1370,30 @@ export function renderBattlemap(
     }
     const address = addresses[0];
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
-    if (!address && !range) return;
+    if (!address && !range) {
+      // A FEATURE'S FOOTPRINT IS CELLS, AND `area` IS REFUSED (#207). It used
+      // to fall out here in silence: `pit p : area D4..F6` rendered
+      // byte-identical to a document with no pit in it — no mark, no label, no
+      // diagnostic — which is the failure this phase spent its length removing,
+      // at the placement layer. An author who writes `area` having just written
+      // it for terrain three lines above gets a clean render with their
+      // oubliette missing, and no way to find out but to notice an absence.
+      //
+      // Refused rather than drawn, because §2 already gives the footprint as a
+      // RANGE and the two forms would then say the same thing two ways. On a
+      // REGION map an `area` on a feature is a declared outline (ADR 0026) and
+      // means something quite different — which is why this lives here, in the
+      // battlemap renderer, rather than in the parser.
+      const shape = e.placements.find((p) => p.kind === "shape");
+      if (shape) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `'${e.typeWord ?? "feature"}' is placed with '${shape.kind === "shape" ? shape.shape : "a shape"}', and a feature's footprint on a battlemap is CELLS — give it a cell (\`F6\`) or a range (\`D4..F6\`). Drawn shapes are terrain's, not a feature's (spec 06 §2)`,
+        });
+      }
+      return;
+    }
 
     // A range placement is a feature's footprint (spec 06 §2): the high table
     // spans G3..I3 — dimensions are declared as placement, like everything else.

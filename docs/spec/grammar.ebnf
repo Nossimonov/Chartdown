@@ -112,6 +112,10 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                     cells rather than stopping at their middles, along the
                     direction of travel (spec 06 §6, #145). The declared spine
                     is unchanged; this is where the ink stops.
+                    On a BATTLEMAP these shape forms are TERRAIN's: a feature
+                    placed with one is an error, its footprint being a cell or
+                    a range (spec 06 §2, #207). On a REGION map an `area` on a
+                    feature is a declared outline (spec 05 §4, ADR 0026).
                     with `on <ref> at`, the points are OFFSETS in the
                     referent's frame and the WHOLE shape moves with it —
                     spec 02 §9, #142. Anchoring one point deforms the shape. *)
