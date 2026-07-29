@@ -4,6 +4,14 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Changed
+
+- **The toolchain moves to TypeScript 7** (#227), held back from the dependency batch in #226 because it reported one error the repo could not resolve. The error was real but misattributed: TS 7.0.2 blames the *enclosing* expression for an always-nullish operand nested inside it, so `TS2871: This expression is always nullish` named an expression that can return a string — and the obvious response, deleting the named expression, deletes working code. What it was pointing at, two levels down, was a dead `note` arm in the region point-label fallback: free text returns earlier in the loop and `continue`s, so nothing with `note` in its chain ever reached it. A mutation test proved it dead against the whole suite and every example. The arm also matched the literal type word, which [ADR 0016](docs/decisions/0016-derivation-carries-word-keyed-behaviour.md) calls non-conforming — a word *deriving* from `note` would have missed it and grown a marker beside its caption, which spec 07 §2 forbids. No rendered output changes.
+
+### Added
+
+- **A region free-text caption is pinned by test** (#227). Every previous `note` case was a battlemap, so the region path had no coverage — which is how the dead arm above survived. The new case covers a bare `note` and a word derived from it, and asserts the *absence of a marker* rather than the presence of the text: a caption that falls through to the point branch still puts its words on the map, just beside the marker that spec 07 §2 promises is not there.
+
 ## [0.4.0] — 2026-07-29
 
 The largest release so far, and the one with the most reasoning behind it: 22 ADRs, from [ADR 0016](docs/decisions/0016-derivation-carries-word-keyed-behaviour.md) to [ADR 0037](docs/decisions/0037-geometry-is-in-map-units-ink-is-in-canvas-units.md).

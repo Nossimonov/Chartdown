@@ -1229,6 +1229,32 @@ describe("free text renders as text alone (spec 07 §2, #104)", () => {
     expect(svg).toMatch(/<text(?![^>]*letter-spacing)[^>]*>range footprint<\/text>/);
   });
 
+  // Every case above is a battlemap. The region renderer takes free text down
+  // its own path, and nothing pinned it — which is how a dead `note` arm sat
+  // in the region point fallback long enough for a compiler to find it (#227).
+  it("a region caption renders, by the derivation-aware check (spec 07 §2, ADR 0016)", () => {
+    const bare = ["map: region", "extent: 200x160mi", "[labels]", 'note "a caption here" : at (80,60)'].join("\n");
+    expect(renderSource(bare).svg).toContain("a caption here");
+
+    // A word DERIVING from `note` is free text too, so matching the literal
+    // word would be non-conforming. This is the case that arm would have lost.
+    // A word DERIVING from `note` is free text too, so the check cannot match
+    // the literal word (ADR 0016). Asserting the TEXT alone would not catch
+    // that: a derived note that falls through to the point branch still gets
+    // its words on the map — as a point LABEL, beside a marker. The marker is
+    // what spec 07 §2 forbids, so the marker is what this asserts.
+    const derived = [
+      "map: region", "extent: 200x160mi",
+      "[vocab]", "aside : note",
+      "[labels]", 'aside "an aside here" : at (80,60)',
+    ].join("\n");
+    const out = renderSource(derived);
+    expect(out.diagnostics.map((d) => d.message)).toEqual([]);
+    expect(out.svg).toContain("an aside here");
+    expect(out.svg).not.toMatch(/<circle/);
+    expect(renderSource(bare).svg).not.toMatch(/<circle/);
+  });
+
   it("`along` sets the caption on the referenced course (#107, was a warning in 0.3.3)", () => {
     const src = [
       "map: battlemap",
