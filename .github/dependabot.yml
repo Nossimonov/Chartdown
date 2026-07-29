@@ -5,10 +5,16 @@
 # discovering a two-year-old transitive dependency at the moment it becomes a
 # vulnerability. Weekly rather than daily: the point is that updates are
 # unremarkable, not that they are constant.
+#
+# TARGETED AT PREVIEW, not the default branch. Changes reach main only by PR
+# from preview (issue #37's lanes, enforced by CI's gatekeeper job), so a
+# Dependabot PR into main fails that check and can never land — which is what
+# had quietly happened to seven of them.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: preview
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -24,6 +30,7 @@ updates:
   # image or checkout action is shipped surface too.
   - package-ecosystem: github-actions
     directory: /
+    target-branch: preview
     schedule:
       interval: weekly
     commit-message:

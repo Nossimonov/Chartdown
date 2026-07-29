@@ -25,15 +25,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           path: main
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: preview
           path: preview
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: Build production playground (main)
@@ -55,9 +55,9 @@ jobs:
           # LLM discoverability (#57): the spec digest IS llms-full.txt.
           cp main/docs/spec/digest.md site/llms-full.txt
           cp preview/docs/spec/digest.md site/preview/llms-full.txt
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
