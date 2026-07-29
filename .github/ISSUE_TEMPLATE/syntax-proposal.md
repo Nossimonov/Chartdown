@@ -26,3 +26,9 @@ labels: ["type: proposal", "area: syntax"]
 ## Interactions
 
 <!-- How does this compose with existing spec sections and open proposals? What does it constrain or conflict with? -->
+
+## Which area does this touch?
+
+<!-- Beyond `area: syntax`, which this template already applies: does it also touch
+     the renderer, the docs, or the tooling? In words, please — GitHub does not let
+     non-collaborators set labels. -->
