@@ -66,7 +66,7 @@ npx @chartdown/cli check map.cd                          # fail-loud validation
 **Embed in any web page** — the path this project exists for. One script tag renders every fenced ` ```chartdown ` block in place, entirely client-side:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@chartdown/browser@0.3/dist/chartdown.browser.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@chartdown/browser@0.4/dist/chartdown.browser.js" defer></script>
 ```
 
 **As a library** ([`@chartdown/core`](https://www.npmjs.com/package/@chartdown/core) + [`@chartdown/render-svg`](https://www.npmjs.com/package/@chartdown/render-svg), ESM with TypeScript types, zero runtime dependencies):
@@ -81,17 +81,18 @@ Working from a clone instead: `npm install && npm run build`, then `node package
 
 ## Project status
 
-**Spec v0.3 released and implemented** (the spec and the `@chartdown` packages version together — the [CHANGELOG](CHANGELOG.md) names what each version added). The specification ([sections 01–08](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)) is fully implemented by the reference implementation in [packages/](packages/) — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — and every example in [examples/](examples/) renders with it, verified in CI on every commit. Working today:
+**Spec v0.4 released and implemented** (the spec and the `@chartdown` packages version together — the [CHANGELOG](CHANGELOG.md) names what each version added). The specification ([sections 01–08](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)) is fully implemented by the reference implementation in [packages/](packages/) — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — and every example in [examples/](examples/) renders with it, verified in CI on every commit. Working today:
 
 - **Three map types**: gridded battlemaps, hex charts (ledger-style exploration logs), and gridless region maps with organic, seeded rendering
 - **The GM/player split**: `hidden`, `gm=`, and `[gm]` content strips fail-closed from player renders
 - **Battlemap depth**: walls/doors/windows with light and sight, derived crossings, elevation with fall edges, multi-level structures (floors, connectors, cellars, roofs), room-relative placement
-- **Region-map depth**: realm boundaries that follow coastlines and ridges (borders are relationships with states, not drawn lines), terrain in kinds — patches, variable-width mountain belts, climatic zones with named ground — and dense-map label conduct that shrinks, dodges, and yields like a human cartographer ([the Sundered Reach](examples/sundered-reach/) is the two-continent stress test that forced it all out)
+- **Region-map depth**: **placed morphology** — capes, bays, fjords and islands as discrete, nameable, promotable features on a smooth coast, each declaring its own centerline or outline and refused rather than silently deformed when it cannot be drawn — plus realm boundaries that follow coastlines and ridges (borders are relationships with states, not drawn lines), terrain in kinds — patches, variable-width mountain belts, climatic zones with named ground — and dense-map label conduct that shrinks, dodges, and yields like a human cartographer ([the Sundered Reach](examples/sundered-reach/) is the two-continent stress test that forced it all out)
 - **Themes as Chartdown documents**: appearance lives in swappable theme files, not in the map
 - **UVTT export**: battlemaps export one `.dd2vtt` per level — walls, doors, windows, and lights mapped for VTT import (Foundry, Arkenforge, …) — from the library, the playground, or the Obsidian plugin
+- **Measurement**: `chartdown-measure` turns georeferenced imagery into declarations — `inspect`, `feature`, `coast`, `island` — emitting a line the renderer will accept and checking it the way the renderer will, so a traced coastline is data rather than a wall of coordinates
 - **Tooling**: a CLI (`render`, `check`), a browser embed that renders fenced ` ```chartdown ` blocks in place, the [client-side playground](https://nossimonov.github.io/Chartdown/), an [Obsidian plugin](https://github.com/Nossimonov/obsidian-chartdown) (maps in your prep notes, with an LLM co-writing round trip), a [GitHub Action](https://github.com/Nossimonov/chartdown-action) that renders every map in a repo and keeps committed SVGs from drifting, and an [MCP server](https://www.npmjs.com/package/@chartdown/mcp) that gives agents the full authoring loop
 
-All five packages are [on npm under `@chartdown`](https://www.npmjs.com/org/chartdown). Not yet: remark/markdown-it integrations, the Obsidian community-store listing. See the [roadmap](docs/roadmap.md) for the plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
+All six packages are [on npm under `@chartdown`](https://www.npmjs.com/org/chartdown). Not yet: remark/markdown-it integrations, the Obsidian community-store listing. See the [roadmap](docs/roadmap.md) for the plan and the [issue tracker](https://github.com/Nossimonov/Chartdown/issues) for what's in flight.
 
 ## Repository layout
 

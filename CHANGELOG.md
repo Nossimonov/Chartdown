@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-07-29
+
 ### Changed
 
 - **BREAKING — a staging zone has one spelling** ([ADR 0015](docs/decisions/0015-one-staging-zone-spelling.md), #121): the word `start` (or anything deriving from it) with an area placement — `start party : J14..L15`. Spec 06 §4's inference rule ("a token-archetype word with an area placement renders as a staging zone") is removed, and a token word carrying an area is now a fail-loud error naming both fixes. Previously the same picture came from two spellings with **different theme subjects**: in `party start : …` the type word is `party`, so `start : fill=` styled nothing — a trap that caught a reader of that very section. The three example lines migrate; the rendered zone label changes from `start` to `party`. Because it breaks, this ships in 0.4, never a patch.
@@ -131,7 +133,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Nossimonov/Chartdown/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/Nossimonov/Chartdown/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Nossimonov/Chartdown/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Nossimonov/Chartdown/compare/v0.3.0...v0.3.1

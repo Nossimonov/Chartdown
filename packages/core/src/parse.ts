@@ -29,7 +29,7 @@ import { checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parse
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
-export const SPEC_VERSION = "0.3";
+export const SPEC_VERSION = "0.4";
 
 export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
