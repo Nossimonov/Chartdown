@@ -28,6 +28,39 @@ if (next === current) {
 const spec = (v) => v.split(".").slice(0, 2).join(".");
 const today = new Date().toISOString().slice(0, 10);
 
+// THE CHANGELOG GATE, AND IT RUNS BEFORE ANYTHING IS REWRITTEN. 0.4.0 shipped
+// with ONE bullet for 117 commits: the section had been written onto the wrong
+// branch, `git push origin preview` reported success for a no-op because it
+// pushes that REF rather than HEAD, and the old check — which only asked
+// whether [Unreleased] was EMPTY — saw one bullet and passed. Thin notes are
+// the same failure as absent ones, and thin is the one that gets through.
+//
+// Measured against the commits since the last tag, because "enough" is not a
+// constant: a three-commit patch needs less than a hundred-commit phase.
+// Ahead of every replaceIn, so a refusal never leaves the tree half-bumped.
+{
+  const changelog = read("CHANGELOG.md");
+  const head = changelog.indexOf("## [Unreleased]");
+  const section = changelog.slice(head + "## [Unreleased]".length, changelog.indexOf("## [", head + 5));
+  const bullets = (section.match(/^- /gm) ?? []).length;
+  let commits = 0;
+  try {
+    const lastTag = execSync("git describe --tags --abbrev=0", { encoding: "utf8" }).trim();
+    commits = Number(execSync(`git rev-list --count ${lastTag}..HEAD`, { encoding: "utf8" }).trim());
+  } catch {
+    commits = 0; // no tags yet, or not a checkout — the floor of 1 still applies
+  }
+  const wanted = Math.max(1, Math.min(12, Math.ceil(commits / 12)));
+  if (bullets < wanted) {
+    console.error(
+      `\u2717 CHANGELOG [Unreleased] has ${bullets} bullet(s) for ${commits} commit(s) since the last tag.`,
+    );
+    console.error("  A release nobody can read is a release nobody can adopt — write the section, then bump.");
+    console.error(`  (This check wants at least ${wanted}. Nothing has been modified.)`);
+    process.exit(1);
+  }
+}
+
 /** Replace exact text, byte-preserving everything else; loud when absent. */
 function replaceIn(path, from, to, { optional = false } = {}) {
   const text = read(path);
@@ -52,10 +85,6 @@ replaceIn("README.md", `Spec v${spec(current)}`, `Spec v${spec(next)}`, { option
 replaceIn("README.md", `@chartdown/browser@${spec(current)}`, `@chartdown/browser@${spec(next)}`, { optional: spec(current) === spec(next) });
 
 // CHANGELOG: the [Unreleased] items become the new section; links follow.
-const changelog = read("CHANGELOG.md");
-if (/## \[Unreleased\]\s*\n## \[/.test(changelog)) {
-  console.warn("⚠ CHANGELOG [Unreleased] is empty — the release gate requires a written section; add one before tagging");
-}
 replaceIn("CHANGELOG.md", "## [Unreleased]", `## [Unreleased]\n\n## [${next}] — ${today}`);
 replaceIn(
   "CHANGELOG.md",
