@@ -5,7 +5,7 @@
 ; `fill=`, `width=` and `glyph=` are ALL inert. A crossing is drawn as a
 ; restyled segment of the water's own band with its colours fixed at the draw
 ; site, so the one feature this map is named for cannot be themed at all. That
-; is the same class as #150 and is recorded there.
+; is #208.
 kind: theme
 use: ../ink-and-vellum.theme.cd
 
