@@ -2,6 +2,12 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [0.2.1] — 2026-07-29
+
+**Nothing about the plugin changes.** `main.js` is byte-identical to 0.2.0's — same renderer, same behaviour, same maps. If you are on 0.2.0 there is nothing here for you.
+
+It exists so the community-store scan has a clean release to read. The repository's own `@chartdown` pins had drifted two minor versions behind the renderer that actually ships, and the plugin's test files were being published as though they were plugin source, so the scan reported a type error on an API that exists perfectly well upstream. Both are fixed, and the release workflow now keeps them in step so neither can drift again — but the scanner caches its result per version, so a clean read needs a new number.
+
 ## [0.2.0] — 2026-07-29
 
 **Your existing maps will redraw.** This is a minor bump rather than a patch for exactly that reason: the plugin's own behaviour is unchanged, but the renderer inside it goes from **0.2 to 0.4** — two releases of the language, including deliberate changes to drawn geometry.
