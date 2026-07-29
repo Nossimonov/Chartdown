@@ -3,7 +3,7 @@
 // the list. The core test suite independently asserts all surfaces agree —
 // the script is the easy way, the test is the enforcement.
 //
-// Surfaces: six packages/*/package.json (+ render-svg's pin on core),
+// Surfaces: seven packages/*/package.json (+ render-svg's pin on core),
 // SPEC_VERSION in the parser (major.minor — the spec and packages version
 // together), the digest and grammar headers (served publicly as
 // llms-full.txt), the spec README status line, and the CHANGELOG (the
@@ -18,7 +18,7 @@ if (!/^\d+\.\d+\.\d+$/.test(next ?? "")) {
   process.exit(1);
 }
 
-const PACKAGES = ["core", "render-svg", "cli", "browser", "mcp", "action"];
+const PACKAGES = ["core", "render-svg", "cli", "browser", "mcp", "measure", "action"];
 const read = (path) => readFileSync(path, "utf8");
 const current = JSON.parse(read("packages/core/package.json").replace(/^﻿/, "")).version;
 if (next === current) {

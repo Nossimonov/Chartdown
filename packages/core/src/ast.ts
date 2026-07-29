@@ -25,6 +25,22 @@ export interface Point {
   y: number;
 }
 
+/**
+ * A control on a placed feature's centerline, which may carry the channel's
+ * WIDTH there (#190).
+ *
+ * `size=` gives the mouth and nothing else could vary, so a feature was a
+ * ribbon whose width fell monotonically from it. Measured off imagery, Hood
+ * Canal runs 2.2, 3.9, 1.3, 5.8 and 1.1 miles across down its own length —
+ * a chain of basins joined by narrows, which is what a drowned glacial valley
+ * is, and which that ribbon misses by up to 4.04mi against a median width of
+ * 1.64. The path was declared data already; this lets the breadth be too.
+ */
+export interface Control extends Point {
+  /** As written, unit and all — `1.5mi`. Absent, it is interpolated. */
+  width?: string;
+}
+
 export interface PointRange {
   kind: "point-range";
   from: Point;
@@ -45,6 +61,16 @@ export interface Shape {
   kind: "shape";
   shape: ShapeKind;
   args: Placement[];
+  /**
+   * `ridge on erebor at (…) (…)` (#142): the shape's points are offsets in the
+   * referent's frame, so the WHOLE shape travels when the referent moves.
+   *
+   * Anchoring only the first point was measured and rejected — it drags one
+   * end and leaves the rest, stretching a 60-unit spur to 183. A shape that
+   * belongs to a feature needs a frame, not an anchor point, which is the same
+   * conclusion spec 02 §7 reached for structure contents.
+   */
+  frame?: Ref;
 }
 
 /** A reference to another entity: bare word = id lookup, quoted = display-name lookup (spec 03 §2). */
@@ -57,6 +83,13 @@ export interface Ref {
 export interface Endpoint {
   at: Ref | Point;
   point?: Point;
+  /**
+   * `join <ref>` (#94): the endpoint is the nearest point on the referenced
+   * watercourse's finished curve, not a named or literal position. The first
+   * endpoint form that resolves to a DERIVED point — and a live one, so moving
+   * the trunk moves the confluence instead of silently detaching it.
+   */
+  join?: boolean;
 }
 
 export type Relational =
@@ -70,11 +103,24 @@ export type Relational =
    * its footprint grid (NW cell = A1), a path's frame is the document grid
    * (the crossing chooser, spec 06 §6).
    */
-  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge }
+  /**
+   * `via` carries a placed feature's CENTERLINE (#169): `on shore at (52,50)
+   * via (38,78)`. A bite is one straight run without it, and Hood Canal turns
+   * hard east at the Great Bend — a single inlet with one mouth and one head,
+   * which is not the line-branching `delta`/`fork` spec 05 §4 stages.
+   */
+  | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge; via?: Control[] }
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
   | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }
-  | { kind: "relational"; form: "along"; ref: Ref; face?: string };
+  | { kind: "relational"; form: "along"; ref: Ref; face?: string }
+  /**
+   * `every <measure> along <ref>` (#140): entities spaced down the referent's
+   * course. Unlike `every … in <range>`, which is arithmetic the parser can do
+   * itself, this needs geometry that only a renderer has resolved — so it
+   * survives parsing as a placement and is expanded where the course is known.
+   */
+  | { kind: "relational"; form: "every-along"; measure: string; ref: Ref };
 
 export type Placement = Address | AddressRange | Point | PointRange | Edge | Shape | Relational;
 
@@ -184,6 +230,8 @@ export interface SectionNode {
 export interface HeaderEntry {
   key: string;
   value: string;
+  /** One optional qualifier token before the colon — `light celebdil: daylight` (spec 01 §2). */
+  qualifier?: string;
   line: number;
 }
 

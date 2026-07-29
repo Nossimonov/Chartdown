@@ -6,15 +6,23 @@
  * Runtime dependencies: @chartdown/core only (ADR 0007).
  */
 
-import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type ParseOptions, type Placement } from "@chartdown/core";
+import { parse, type AddressRange, type Diagnostic, type DocumentNode, type EntityNode, type Pair, type ParseOptions, type Placement } from "@chartdown/core";
 import { battlemapFrame, renderBattlemap } from "./battlemap";
 import { titleBand } from "./grid";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildLegend } from "./legend";
-import { buildModel, type RenderMode } from "./model";
+import { buildModel, pairOf, type Model, type RenderMode } from "./model";
 import { renderRegion } from "./region";
 import { INK, PAPER, Theme } from "./theme";
 import { colLetters, colToNumber, el, fmt, text } from "./util";
+
+/**
+ * Region canvas widths (#139, ADR 0020). `reference` is 2x, which is where the
+ * measured returns flatten: 1640 and 2460 place the same number of line
+ * labels, and 3280 buys one more for four times the coordinate precision.
+ */
+const OVERVIEW_WIDTH = 820;
+const REFERENCE_WIDTH = 1640;
 
 export interface RenderOptions {
   /** Fail-closed default per spec 01 §6. */
@@ -76,8 +84,21 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
     const unitsW = Number(extent?.[1] ?? 800);
     const unitsH = Number(extent?.[2] ?? 600);
-    const scale = 820 / unitsW;
-    w = 820;
+    // Render resolution is an editorial choice, not a constant (#139, ADR
+    // 0020). An SVG is resolution-independent and a reader of a large regional
+    // map expects to zoom for detail, but every label decision was being made
+    // as though the map would only ever be seen fit-to-width — so names were
+    // shrunk, displaced and connected to win a competition that exists at one
+    // zoom level only. On the Middle-earth map, doubling the canvas takes
+    // labels forced below 10px from 42 to 13 and puts six more line labels on
+    // their own courses, with nothing else changed.
+    //
+    // `overview` stays the default so no existing document re-renders: the
+    // trade is real in both directions, since absolute font sizes mean a
+    // larger canvas is proportionally smaller text at a glance.
+    const canvasW = model.header.get("detail") === "reference" ? REFERENCE_WIDTH : OVERVIEW_WIDTH;
+    const scale = canvasW / unitsW;
+    w = canvasW;
     h = unitsH * scale;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderRegion(model, body, { w, h, scale }, diagnostics);
@@ -125,11 +146,51 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     }
   }
 
+  // Dead declarations in the selected theme (#116, ADR 0022). Last, because
+  // liveness is measured by what the render just asked for: a theme entry is
+  // live if it was consulted, and nothing can say so until the drawing is done.
+  for (const dead of theme.deadDeclarations(themeSubjects(model))) {
+    diagnostics.push({ severity: "warning", source: "theme", ...dead });
+  }
+
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fmt(w)} ${fmt(h)}" width="${fmt(w)}" height="${fmt(h)}" font-family="sans-serif">` +
     body.join("") +
     `</svg>`;
   return { svg, diagnostics };
+}
+
+/**
+ * How many entities each theme SUBJECT resolves to (#148).
+ *
+ * "Does this subject resolve?" is a fact about the document, and the theme
+ * cannot answer it — it only knows what the render asked it for. Told to guess
+ * from its own hits, it reported `chain : stroke=…` as matching nothing while
+ * four chains sat on the map, which sends an author looking for a typo that is
+ * not there.
+ *
+ * Keyed exactly as `[theme]` subjects are written (spec 08 §2), so each form
+ * answers for itself: a bare word counts everything deriving from it, a
+ * `word.state` counts only entities actually in that state, a zone counts by
+ * its base, and `side.<x>` counts by allegiance.
+ */
+function themeSubjects(model: Model): Map<string, number> {
+  const counts = new Map<string, number>();
+  const bump = (key: string): void => void counts.set(key, (counts.get(key) ?? 0) + 1);
+  const walk = (typeWord: string | null, flags: string[], pairs: Pair[]): void => {
+    for (const word of model.chainOf(typeWord)) {
+      bump(word);
+      for (const zone of ["core", "edge"]) bump(`${word}.${zone}`);
+      for (const flag of flags) bump(`${word}.${flag}`);
+    }
+    const side = pairOf(pairs, "side");
+    if (side !== undefined) bump(`side.${side}`);
+  };
+  for (const e of model.entities) {
+    walk(e.typeWord, e.flags, e.pairs);
+    for (const d of e.details) walk(d.typeWord, d.flags, d.pairs);
+  }
+  return counts;
 }
 
 /** Cells an entity's placements cover, as "col:row" keys (addresses, ranges, and area shapes). */
@@ -217,5 +278,8 @@ export function renderSource(source: string, options: RenderOptions & ParseOptio
 }
 
 export type { RenderMode } from "./model";
+// Re-exported so a consumer that only depends on the renderer can still say
+// WHERE a diagnostic is — a theme-sourced line is not a line of the map (#116).
+export { locationOf } from "@chartdown/core";
 export { readProvenance, stampProvenance, type Provenance } from "./provenance";
 export { exportUvtt, exportUvttSource, type UvttOptions, type UvttResult, type UvttSourceResult } from "./uvtt";

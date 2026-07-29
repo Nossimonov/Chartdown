@@ -21,4 +21,16 @@ With no theme: generic-but-legible — organic blob and polygon terrain in defau
 
 ## The lollipop test (spec 08)
 
-[candyworld.theme.cd](candyworld.theme.cd) is the shipped proof of the theme format: it restyles this map — lollipop glyphs scattered over the licorice forest (variant pool, position-hashed), edge-zoned gumdrop hills, a candy-banked river, custom cart/silo glyphs — **without touching `gumdrop-vale.cd`**. Rendered output: [gumdrop-vale-candy.svg](gumdrop-vale-candy.svg), or `chartdown render gumdrop-vale.cd --theme candyworld.theme.cd`.
+[candyworld.theme.cd](candyworld.theme.cd) is one half of the proof of the theme format — the half that **cannot travel**, since three of its subjects (`gumdrop-hills`, `hovercart`, `sugar-silo`) are this document's own words. [Ink and vellum](../ink-and-vellum.theme.cd) is the other half: keyed only on standard-library words, it restyles every example in this directory without knowing any of them. Both are needed to state the contract. Candyworld it restyles this map — lollipop glyphs scattered over the licorice forest (variant pool, position-hashed), edge-zoned gumdrop hills, a candy-banked river, custom cart/silo glyphs — **without touching `gumdrop-vale.cd`**. Rendered output: [gumdrop-vale-candy.svg](gumdrop-vale-candy.svg), or `chartdown render gumdrop-vale.cd --theme candyworld.theme.cd`.
+
+## With the alternative theme
+
+[`gumdrop-vale-vellum.theme.cd`](gumdrop-vale-vellum.theme.cd) renders this map in **ink and vellum** — sepia on aged paper, hatched rather than flat:
+
+```sh
+chartdown render gumdrop-vale.cd --theme gumdrop-vale-vellum.theme.cd
+```
+
+It is a three-line overlay on [the travelling theme](../ink-and-vellum.theme.cd), which is keyed entirely on standard-library words and restyles all seven examples without knowing any of them. `use:` is not decoration here: it makes the base an **inherited** layer, which is what spec 08 §6 exempts from the dead-declaration lint — a shared theme deliberately styles words no single map uses, and selected directly it reports every one of them (69 on Brenmark). Three of this map's words are its own — `gumdrop-hills`, `licorice-forest`, `taffy-river` — so the overlay names them. This is the map with **two** alternative themes: candyworld below, which cannot travel, and ink and vellum, which can.
+
+No themed SVG is committed; the theme is live in [the playground](https://nossimonov.github.io/Chartdown/) under the Theme selector.

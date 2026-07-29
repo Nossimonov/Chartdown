@@ -14,16 +14,35 @@ document       = [ title ] , header , { section } ;
                  (* pure-vocabulary library documents may omit the header
                     entirely (only [vocab] sections) — spec 04 §2 *)
 title          = "#" , text , EOL ;                  (* first non-blank line only *)
-header         = map-line , { header-line } ;
+header         = ( map-line | kind-line ) , { header-line } ;
+                 (* the first header line is map: or kind:, never both — spec 01 §2 *)
 map-line       = "map" , ":" , map-type , EOL ;
+kind-line      = "kind" , ":" , document-kind , EOL ;
+document-kind  = "vocabulary" | "theme" ;
 map-type       = "battlemap" | "hexcrawl" | "region" ;
                  (* experimental types carry a -beta suffix *)
 header-line    = header-key , ":" , predicate , EOL ;
-header-key     = "chartdown" | "id" | "grid" | "scale" | "extent" | "seed"
+header-key     = "ground" | "chartdown" | "id" | "grid" | "scale" | "extent" | "seed"
+               | "detail"
                | "use" | "theme" | "labels" | "legend" | "scale-bar"
-               | "compass" | "numbers" | "levels" | "level" ;
+               | "compass" | "numbers" | "levels" | "level" | "inset" ;
                  (* "use" is repeatable; unknown keys warn.
-                    levels: physical order topmost first; level: the default *)
+                    inset = doc-path , "at" , ref — the child half of a
+                    sub-map seam, validated against the parent (#143). 
+                    levels: physical order topmost first; level: the default.
+                    Values are unconstrained HERE, but five keys carry closed
+                    value sets checked semantically (spec 01 §2):
+                      labels    = "names" | "keyed" | "none" ;
+                      detail    = "overview" | "reference" ;
+                      legend | scale-bar | compass | numbers = "on" | "off" ;
+                    plus map-line/kind-line above. Out-of-set = error, never a
+                    silent default.
+                    Four more carry FORMATS, likewise checked (spec 01 §2):
+                      extent = number , "x" , number , [ unit ] ;
+                      seed   = [ "-" ] , digit , { digit } ;
+                      scale  = measure ;   (* unit optional, per `measure` below *)
+                      chartdown = number , { "." , number } ;
+                    Malformed = error, never a silent fallback. *)
 
 section        = "[" , section-name , [ " " , word ] , "]" , EOL , { content-line } ;
 section-name   = word ;                              (* known names per map type, spec 05/06/07;
@@ -33,35 +52,102 @@ section-name   = word ;                              (* known names per map type
                                                         optional qualifier token = level (spec 06 §8) *)
 content-line   = line | detail-line | hex-ledger-line | vocab-line | label-line ;
 line           = subject , ":" , predicate , EOL ;
-detail-line    = INDENT , line ;                     (* structure details only — spec 06 §3 *)
+detail-line    = INDENT , line ;                     (* structure details only — spec 06 §3.
+                                                        subject kinds: opening, wall-state,
+                                                        or a BARRIER word replacing that side
+                                                        (#130) — predicate = side words or
+                                                        edge tokens in all three cases. *)
 
 subject        = [ type-word ] , { id-word } , [ string ] ;
                  (* sections may permit omitting the type word (spec 01 §4);
                     identity/uniqueness rules: spec 03 §1 *)
 predicate      = { token } ;
 token          = placement | word | string | pair ;
-pair           = key , "=" , ( word | string | measure ) ;
+pair           = key , "=" , ( word | string | measure | level-span ) ;
+level-span     = level-name , [ ".." , level-name ] ;
+                 (* `to=`/`through=` accept a RANGE (spec 06 §8, #112):
+                    to=a..b lands on every level between; through=a..b is
+                    occupied but not opened onto and requires a to=. *)
 comment        = ";" , text , EOL ;                  (* legal at end of any line; ";" in strings is content *)
 
 (* ---- placements — spec 02 ---- *)
 
-placement      = address | range | edge | point | point-range | shape | relational ;
+placement      = address | range | edge | point | point-range | shape | relational
+               | repeat ;
+repeat         = ( "every" , step , "in" , range )
+               | ( "every" , measure , "along" , ref ) ;
+step           = number , [ "x" , number ] ;
+                 (* a QUALIFIER, not a relational form — spec 02 §9.
+                    Expands at parse time to one address per stepped cell,
+                    offsets measured from the range NW corner; >4096 = error.
+                    the `along` form spaces by MEASURE down a resolved
+                    course — expanded once the reference is in hand (#140). *)
 address        = col-letters , row-number ;          (* chess-style, all grid types; AA past Z *)
 range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
+control        = point , [ "@" , measure ] ;
+                 (* a centerline control, optionally stating the channel's
+                    WIDTH there — spec 05 §4, ADR 0030, #190. That width is the
+                    CROSS-SECTION SQUARE TO THE CENTERLINE (ADR 0033, #192):
+                    the distance between the rails, which is what a renderer
+                    draws — not the largest circle that fits, which inflates at
+                    a bend, and not the narrowest crossing in any direction,
+                    which is the reading a MOUTH takes. `size=` is the
+                    profile's first point; an omitted width is interpolated;
+                    where widths are stated they are the shape and `taper=`
+                    governs only the generated case.
+                    HOW MANY controls state a line does not change the line
+                    (#189): their spacing is not part of the shape, so a
+                    measured centerline and a sketched one describing the same
+                    curve draw the same. *)
 point-range    = point , ".." , point ;
 edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
-shape          = ( "area" | "path" | "blob" | "ridge" ) , { placement | pair } ;
+shape          = ( "area" | "path" | "blob" | "ridge" ) ,
+                 [ "on" , ref , "at" ] , { placement | pair } ;
+                 (* `raw` flag on an area = literal edges; without it a
+                    TERRAIN area outline is organically finished (spec 02 §9,
+                    #96). Water areas and `along`-spliced outlines are literal.
+                    a battlemap `path` names only its CORNERS and is drawn
+                    through cell centres — the drawn band spans its TERMINAL
+                    cells rather than stopping at their middles, along the
+                    direction of travel (spec 06 §6, #145). The declared spine
+                    is unchanged; this is where the ink stops.
+                    On a BATTLEMAP these shape forms are TERRAIN's: a feature
+                    placed with one is an error, its footprint being a cell or
+                    a range (spec 06 §2, #207). On a REGION map an `area` on a
+                    feature is a declared outline (spec 05 §4, ADR 0026).
+                    with `on <ref> at`, the points are OFFSETS in the
+                    referent's frame and the WHOLE shape moves with it —
+                    spec 02 §9, #142. Anchoring one point deforms the shape. *)
                  (* inside an "area" point list, "along" , ref between two
                     vertices makes the boundary follow the feature's curve
                     between their projections — spec 05 §2, ADR 0012 *)
 
 relational     = ( "at" , ( point | address | range | edge ) )
                | ( [ measure ] , compass , "of" , ref )
-               | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] )
+               | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] ,
+                   [ "via" , control , { control } ] )
+                 (* "via" after an "at" point declares a PLACED FEATURE's
+                    centerline — spec 05 §4, #169. A bite is one straight run
+                    without it, and Hood Canal turns hard east at the Great
+                    Bend. One mouth and one head, so this is not the
+                    line-BRANCHING that 05 §4 stages.
+                    It replaces reach= for DEPTH and for DIRECTION both (#175):
+                    the side the feature runs to is the author's, and the
+                    water's side governs only a generated run.
+                    A centerline MUST leave its host PERPENDICULAR, and a
+                    departure too skewed for a squared first control to rescue
+                    is reported as the skew with both bearings rather than as a
+                    fold — spec 05 §4, #183, #194.
+                    Where `ref` is another jut/bite the feature is an ARM, and
+                    its "at" point may not lie on that host's own centerline —
+                    the side is a direction TOWARD that line, so on it there is
+                    none and the document has not said which bank. Refused,
+                    never picked — spec 05 §4, ADR 0031, #191. *)
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
-               | ( "from" , endpoint , [ "via" , point , { point } ] , "to" , endpoint )
+               | ( "from" , endpoint , [ "via" , point , { point } ] ,
+                   ( ( "to" , endpoint ) | ( "join" , ref ) ) )
                | ( "along" , [ compass , "edge" , "of" ] , ref ) ;
                  (* closed grammar — no other relational forms exist.
                     multiple relational placements constrain jointly; two "on"
@@ -94,7 +180,7 @@ vocab-line     = word , ":" , ( archetype | word ) , { pair | word } , EOL ;
                  (* second form = derivation from another word, with overrides;
                     cycles are errors; shadowing order: stdlib < use: < document *)
 archetype      = "terrain" | "path" | "feature" | "structure" | "barrier"
-               | "opening" | "token" | "zone" | "light" ;
+               | "opening" | "token" | "zone" | "field" ;
                  (* closed; extensible by spec sections only.
                     unknown words never fail: archetype inferred from
                     shape token, else section, else feature — spec 04 §3 *)
@@ -106,8 +192,20 @@ theme-line     = theme-subject , ":" , { pair } , EOL ;
 theme-subject  = word , [ "." , word ]                (* word / word.state / word.core / word.edge *)
                | "side" , "." , word
                | surface-word ;
-surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge" ;
-                 (* pair keys (closed): fill stroke width dash opacity glyph asset edge;
+surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge"
+               | "leader" ;
+                 (* pair keys (closed): fill stroke width dash opacity glyph
+                    asset edge bank;
+                    bank = "land" | "water" | "both" — which side of its own
+                    line a border's ink lies on, clipped to that region. Never
+                    centred: that is the ambiguity that loses narrow channels.
+                    Spec 08 §3, ADR 0034, #185;
+                    there is deliberately NO pair for the LEGIBILITY FLOOR
+                    (spec 05 §2, ADR 0035), which draws a sub-floor channel as
+                    a symbol: a floor a theme could lower is not a floor;
+                    ink is in CANVAS units and geometry is in MAP units
+                    (spec 02 §9, ADR 0037): these pairs are ink, so they scale
+                    with extent: on purpose, while no shape may;
                     glyph= and asset= values may be comma-separated variant pools,
                     chosen by deterministic position hash *)
 glyph-line     = word , ":" , string , EOL ;          (* SVG path data, 24x24 box centered on origin *)
@@ -124,7 +222,12 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
 (* ---- reserved generic parameters and flags (usable on any content line) ----
    flags:  hidden, nolabel, difficult, seen, unexplored, ruined, overturned (state flags per vocab),
            drop (fall-edge boundary, spec 06 §5), open (unroofed structure, spec 06 §3)
-   pairs:  gm=, link=, detail=, facing=, size=, side=, width=, light=, elevation=, key=, level=, to=, at=
+   pairs:  gm=, link=, detail=, detail-at=, facing=, size=, side=, width=, light=,
+           elevation=, key=, level=, to=, through=, at=
+   A key OUTSIDE this set must be one the word can consume — a facet it
+   declares or inherits, one its archetype gives it (reach=/taper= on placed
+   morphology), or a declared field's name — else it WARNS (spec 04 §2, #195).
+   `x-` prefixed pairs are the silent extension namespace, as [x-*] sections are.
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
    non-resolving subject with placement = new GM-only entity; otherwise error. *)
 

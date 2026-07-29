@@ -1,0 +1,270 @@
+import { describe, expect, it } from "vitest";
+import { fitGeoref, GeorefError, parseLandmark, parseOrigin, type Landmark } from "./georef";
+
+const IMAGE = { width: 1000, height: 1000 };
+
+/** Puget Sound's latitude, where a degree of longitude is 0.67 of a degree of latitude. */
+const LAT = 47.6;
+const MPD = 69.09;
+
+/** Landmarks generated from a known scale, so the fit has a right answer. */
+const synthetic = (milesPerPixel: number, pairs: [number, number][]): Landmark[] =>
+  pairs.map(([px, py]) => ({
+    px,
+    py,
+    lat: LAT - (py * milesPerPixel) / MPD,
+    lon: -122 + (px * milesPerPixel) / (MPD * Math.cos((LAT * Math.PI) / 180)),
+  }));
+
+describe("fitting a georeference", () => {
+  // Equirectangular projection scales longitude by the cosine of ONE reference
+  // latitude, so it is exact only there. Over a 50mi map at 47.6° the factor
+  // drifts about 0.9% edge to edge, which lands as roughly a quarter of a
+  // percent of scale — an eighth of a mile over fifty. That is the model's
+  // accuracy, not a defect, and these bounds state it rather than pretending
+  // to more.
+  const WITHIN = 0.005;
+
+  it("recovers the scale it was built from", () => {
+    const fit = fitGeoref(synthetic(0.05, [[100, 100], [900, 900], [900, 100]]), IMAGE);
+    expect(Math.abs(fit.milesPerPixel - 0.05) / 0.05).toBeLessThan(WITHIN);
+    expect(Math.abs(fit.extent.width - 50) / 50).toBeLessThan(WITHIN);
+    expect(Math.abs(fit.extent.height - 50) / 50).toBeLessThan(WITHIN);
+    // North-up to well under a pixel of skew across the frame. Not zero: the
+    // reference latitude the fit picks is the landmarks' mean, which differs
+    // from the one they were generated about, and that lands as a fraction of
+    // a degree of apparent rotation.
+    expect(Math.abs(fit.rotationDegrees)).toBeLessThan(0.5);
+  });
+
+  it("puts the map's origin at the image's north-west corner", () => {
+    const fit = fitGeoref(synthetic(0.05, [[100, 100], [900, 900], [900, 100]]), IMAGE);
+    const nw = fit.toMap(0, 0);
+    expect(Math.hypot(nw.x, nw.y)).toBeLessThan(0.1);
+    // And y runs SOUTHWARD, as document coordinates do.
+    expect(fit.toMap(0, 1000).y).toBeGreaterThan(0);
+  });
+
+  it("does not confuse a degree of longitude with a degree of latitude", () => {
+    // The reported 15% error came from treating them alike. At this latitude
+    // the factor is cos(47.6) = 0.674, so a fit that ignored it would put the
+    // east-west extent out by a third.
+    const fit = fitGeoref(synthetic(0.05, [[0, 0], [1000, 0], [0, 1000]]), IMAGE);
+    expect(fit.extent.width / fit.extent.height).toBeCloseTo(1, 2);
+  });
+});
+
+describe("the error reported is the error in the coordinates emitted (#202)", () => {
+  // Raised because a reader rebuilt the transform from the tool's own printed
+  // replies, got an axis-aligned model, and measured half a mile of error that
+  // was their reconstruction rather than this fit. The reported number was
+  // right the whole time — so what these pin is that it STAYS right, and that
+  // the per-landmark breakdown behind it is the same quantity.
+  const skewed = (): Landmark[] => {
+    const marks = synthetic(0.05, [[100, 100], [900, 900], [900, 100]]);
+    marks[1]!.lat += 0.004; // about a quarter mile, well inside the tolerance
+    return marks;
+  };
+
+  it("gives a residual per landmark, and the RMS of those is the reported one", () => {
+    const fit = fitGeoref(skewed(), IMAGE);
+    expect(fit.residuals).toHaveLength(3);
+    const rms = Math.sqrt(fit.residuals.reduce((t, r) => t + r.offMiles ** 2, 0) / fit.residuals.length);
+    expect(rms).toBeCloseTo(fit.residualMiles, 9);
+  });
+
+  it("measures each against the point the emitted transform actually lands on", () => {
+    // The claim in the issue, tested directly: take the emitted `toMap`, ask it
+    // where each landmark goes, and compare with where the landmark was said to
+    // be. A translation is the only difference between `toMap` and the fit, so
+    // the DISTANCES are identical and this is checkable without knowing the
+    // origin — which is exactly why the reported number was already honest.
+    const marks = skewed();
+    const fit = fitGeoref(marks, IMAGE);
+    const world = marks.map((m) => fit.toMap(m.px, m.py));
+    for (let i = 0; i < marks.length; i++) {
+      for (let j = i + 1; j < marks.length; j++) {
+        const emitted = Math.hypot(world[i]!.x - world[j]!.x, world[i]!.y - world[j]!.y);
+        const truth = Math.hypot(
+          (marks[i]!.lon - marks[j]!.lon) * Math.cos((LAT * Math.PI) / 180) * MPD,
+          (marks[i]!.lat - marks[j]!.lat) * MPD,
+        );
+        // Within the sum of the two landmarks' own reported residuals: the fit
+        // cannot be further off than it says it is.
+        expect(Math.abs(emitted - truth)).toBeLessThanOrEqual(
+          fit.residuals[i]!.offMiles + fit.residuals[j]!.offMiles + 1e-9,
+        );
+      }
+    }
+  });
+
+  it("carries the rotation, which is what a reconstruction leaves out", () => {
+    // 0.39° on the exercise imagery — silent under the old 1° disclosure gate,
+    // and worth nearly half a mile at the corners of a 135mi frame. An
+    // axis-aligned model fitted to it comes back with two different scales,
+    // which is what the issue reported.
+    const turned = synthetic(0.05, [[100, 100], [900, 900], [900, 100]]).map((m) => ({ ...m }));
+    const fit = fitGeoref(turned, IMAGE);
+    const a = fit.toMap(0, 0);
+    const alongX = fit.toMap(1000, 0);
+    const alongY = fit.toMap(0, 1000);
+    // Isotropic BY CONSTRUCTION: the two axes are the same scale, whatever the
+    // landmarks say, so the fit cannot absorb a bad one as a stretch.
+    expect(Math.hypot(alongX.x - a.x, alongX.y - a.y)).toBeCloseTo(Math.hypot(alongY.x - a.x, alongY.y - a.y), 9);
+  });
+});
+
+describe("a georeference that cannot be trusted is refused (#181)", () => {
+  it("refuses landmarks too close together — which a residual cannot catch", () => {
+    // Two points fit a similarity EXACTLY, so the residual here is zero no
+    // matter how badly chosen they are. This is the check that catches the
+    // failure #181 actually hit.
+    const cramped = synthetic(0.05, [[480, 480], [520, 520]]);
+    expect(() => fitGeoref(cramped, IMAGE)).toThrow(GeorefError);
+    expect(() => fitGeoref(cramped, IMAGE)).toThrow(/span only \d+% of the image/);
+    expect(() => fitGeoref(cramped, IMAGE)).toThrow(/multiplied by/);
+  });
+
+  it("accepts a well-spread pair, and says the residual proves nothing", () => {
+    const fit = fitGeoref(synthetic(0.05, [[50, 50], [950, 950]]), IMAGE);
+    expect(fit.baseline).toBeGreaterThan(0.25);
+    expect(fit.residualMiles).toBeCloseTo(0, 6);
+  });
+
+  it("refuses landmarks that disagree with each other", () => {
+    const marks = synthetic(0.05, [[100, 100], [900, 900], [900, 100]]);
+    marks[2]!.lat += 0.5; // ~35mi out
+    expect(() => fitGeoref(marks, IMAGE)).toThrow(/landmarks disagree/);
+  });
+
+  it("needs at least two", () => {
+    expect(() => fitGeoref(synthetic(0.05, [[100, 100]]), IMAGE)).toThrow(/at least two landmarks/);
+  });
+});
+
+describe("reading a landmark off the command line", () => {
+  it("parses the documented form", () => {
+    expect(parseLandmark("120,340=47.6,-122.33")).toEqual({ px: 120, py: 340, lat: 47.6, lon: -122.33 });
+  });
+
+  it("catches coordinates given the wrong way round", () => {
+    expect(() => parseLandmark("10,10=-122.33,47.6")).toThrow(/other way round/);
+  });
+
+  it("rejects a shape it does not understand rather than guessing", () => {
+    expect(() => parseLandmark("47.6,-122.33")).toThrow(/not in the form/);
+  });
+});
+
+describe("map coordinates convert back to pixels (#193)", () => {
+  // Everything the tool prints is in map miles while the mouth and the inward
+  // point were pixels-only, so refining a mouth against a rendered map meant
+  // converting by hand in both directions — the class of error a measuring
+  // instrument should absorb rather than create.
+  const marks = [
+    "1146,2052=47.2690,-122.5517",
+    "1046,478=48.4061,-122.6433",
+    "202,838=48.1490,-123.5670",
+  ].map(parseLandmark);
+
+  it("is an exact inverse, not an approximation", () => {
+    // The fit is a similarity, so it inverts exactly. Checked at the corners
+    // and the middle, because a rotation error only shows away from the centre.
+    const fit = fitGeoref(marks, { width: 1957, height: 2696 });
+    for (const [px, py] of [[0, 0], [1957, 0], [0, 2696], [1957, 2696], [1059, 1143], [842, 1850]] as const) {
+      const m = fit.toMap(px, py);
+      const back = fit.toPixel(m.x, m.y);
+      expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
+      expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
+    }
+  });
+
+  it("inverts a ROTATED fit too", () => {
+    // Where the two frames differ only by scale a wrong rotation is invisible,
+    // and every other landmark set in this suite is square to north. Built by
+    // taking a known rotation and scale and running the projection BACKWARDS,
+    // so the three are a similarity by construction — landmarks invented by
+    // hand are not, and the fit rightly refuses them.
+    const MILES_PER_DEGREE = 69.09;
+    const lat0 = 47.6;
+    const lon0 = -122.6;
+    const theta = (18 * Math.PI) / 180;
+    const scale = 0.05;
+    const turned = [[100, 100], [900, 500], [500, 900]].map(([px, py]) => {
+      const ax = px! - 500;
+      const ay = py! - 500;
+      const wx = scale * (ax * Math.cos(theta) - ay * Math.sin(theta));
+      const wy = scale * (ax * Math.sin(theta) + ay * Math.cos(theta));
+      return {
+        px: px!,
+        py: py!,
+        lat: lat0 - wy / MILES_PER_DEGREE,
+        lon: lon0 + wx / (Math.cos((lat0 * Math.PI) / 180) * MILES_PER_DEGREE),
+      };
+    });
+    const fit = fitGeoref(turned, { width: 1000, height: 1000 });
+    expect(Math.abs(fit.rotationDegrees)).toBeGreaterThan(1);
+    for (const [px, py] of [[0, 0], [1000, 1000], [250, 750]] as const) {
+      const m = fit.toMap(px, py);
+      const back = fit.toPixel(m.x, m.y);
+      expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
+      expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
+    }
+  });
+});
+
+describe("coordinates come out in the document's frame when it says so (#196)", () => {
+  // Without an origin the frame is the IMAGE's own top-left corner, which an
+  // existing document does not share: a declaration measured against Puget
+  // Sound imagery and pasted into a map whose extent starts elsewhere landed
+  // seven miles from the water, and nothing warned — a feature in the wrong
+  // place is still a valid feature.
+  const marks = [
+    "1146,2052=47.2690,-122.5517",
+    "1046,478=48.4061,-122.6433",
+    "202,838=48.1490,-123.5670",
+  ].map(parseLandmark);
+  const IMAGE = { width: 1957, height: 2696 };
+
+  it("puts (0,0) at the declared origin", () => {
+    const origin = { lat: 48.65, lon: -123.75 };
+    const fit = fitGeoref(marks, IMAGE, origin);
+    const at = fit.toPixel(0, 0);
+    const back = fit.toMap(at.x, at.y);
+    expect(back.x).toBeCloseTo(0, 6);
+    expect(back.y).toBeCloseTo(0, 6);
+  });
+
+  it("shifts every point by the same offset, and nothing else", () => {
+    // The frame moves; the geometry does not. Distances measured in one frame
+    // must be identical in the other, or the origin would be rescaling the map.
+    const plain = fitGeoref(marks, IMAGE);
+    const shifted = fitGeoref(marks, IMAGE, { lat: 48.65, lon: -123.75 });
+    const a = [1059, 1143] as const;
+    const b = [842, 1850] as const;
+    const dx = plain.toMap(...a).x - shifted.toMap(...a).x;
+    const dy = plain.toMap(...a).y - shifted.toMap(...a).y;
+    expect(plain.toMap(...b).x - shifted.toMap(...b).x).toBeCloseTo(dx, 6);
+    expect(plain.toMap(...b).y - shifted.toMap(...b).y).toBeCloseTo(dy, 6);
+    const span = (g: typeof plain): number =>
+      Math.hypot(g.toMap(...a).x - g.toMap(...b).x, g.toMap(...a).y - g.toMap(...b).y);
+    expect(span(shifted)).toBeCloseTo(span(plain), 6);
+    // And the offset is a real one — this is the seven miles that went missing.
+    expect(Math.hypot(dx, dy)).toBeGreaterThan(5);
+  });
+
+  it("still inverts exactly with an origin in force", () => {
+    const fit = fitGeoref(marks, IMAGE, { lat: 48.65, lon: -123.75 });
+    for (const [px, py] of [[0, 0], [1957, 2696], [1059, 1143]] as const) {
+      const m = fit.toMap(px, py);
+      const back = fit.toPixel(m.x, m.y);
+      expect(back.x, `${px},${py}`).toBeCloseTo(px, 6);
+      expect(back.y, `${px},${py}`).toBeCloseTo(py, 6);
+    }
+  });
+
+  it("rejects an origin that is not a lat,lon", () => {
+    expect(() => parseOrigin("48.65")).toThrow(/is not in the form/);
+    expect(() => parseOrigin("123.75,-48.65")).toThrow(/latitude outside/);
+  });
+});

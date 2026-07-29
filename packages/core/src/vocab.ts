@@ -9,9 +9,53 @@ import type { Pair, Placement, VocabEntryNode } from "./ast";
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize } from "./lex";
 
+/**
+ * Facets with a CLOSED value set (spec 04 §1). Unlike `side=`, which feeds
+ * themes and degrades to a default colour, these feed the normative UVTT
+ * transform (spec 06 §9), where an unknown value has no safe degradation —
+ * and silently mapped to a shut portal, so `passes=opne` produced a locked
+ * door in the VTT with nothing to say so (#126).
+ */
+export const CLOSED_FACETS: Record<string, Set<string>> = {
+  passes: new Set(["open", "closed", "none"]),
+  sight: new Set(["all", "none"]),
+  // How a placed morphology feature relates to the line it sits on (spec 05
+  // §4, ADR 0023). The WORD says what a thing is and how it is coloured; this
+  // says what its geometry does to the host — so `bay` and `cove` both bite,
+  // and `island` and `oxbow` are both detached while being land and water.
+  morph: new Set(["jut", "bite", "detached"]),
+};
+
+/**
+ * Is this value one the facet accepts? Open facets accept anything.
+ *
+ * Resolution and validation MUST agree on this predicate. They did not (#131):
+ * `checkFacetValues` warned that "the vocabulary default applies" while the
+ * renderer passed the bad value straight through to a `!== "open"` test, so a
+ * typo exported a SHUT portal — the exact conformance failure #126 was filed
+ * about, now wearing a warning that said it had been handled.
+ */
+export const facetAccepts = (key: string, value: string): boolean =>
+  CLOSED_FACETS[key]?.has(value) ?? true;
+
+/** Warn on a value outside a closed facet set; the facet default then applies. */
+export function checkFacetValues(
+  pairs: { key: string; value: string }[],
+  line: number,
+  diagnostics: Diagnostic[],
+): void {
+  for (const p of pairs) {
+    const allowed = CLOSED_FACETS[p.key];
+    if (!allowed || allowed.has(p.value)) continue;
+    diagnostics.push(
+      warning(line, `'${p.key}=${p.value}' is not one of ${[...allowed].join(", ")} — the vocabulary default applies (spec 04 §1)`),
+    );
+  }
+}
+
 export const ARCHETYPES = new Set([
   "terrain", "path", "feature", "structure", "barrier",
-  "opening", "token", "zone", "light",
+  "opening", "token", "zone", "field",
 ]);
 
 /** The shipped standard library — normative content of specs 05 §1 and 06 §2. */
@@ -28,6 +72,8 @@ forest : terrain
 jungle : terrain
 hills : terrain
 mountains : terrain
+peak : terrain
+volcano : peak states=dormant,erupting
 marsh : terrain states=difficult
 desert : terrain
 dunes : desert
@@ -43,6 +89,26 @@ trail : road
 canal : river
 pass : path
 coastline : path
+
+; placed morphology (spec 05 §4, ADR 0023) — discrete features ON a line, each
+; a real addressable entity rather than generated noise. \`morph=\` says what the
+; geometry does to the host line; the word says what the thing IS, which is what
+; a theme colours, so a bite can be water and a jut can be land. \`reach=\` is
+; depth as a multiple of mouth width and \`taper=\` is how much of the mouth is
+; spent narrowing — calibrated against Puget Sound (#161), where the measured
+; ratios run from Point No Point at 0.33 to Hood Canal at 27.
+cape : terrain morph=jut reach=0.55
+headland : cape
+peninsula : cape reach=1.6
+spit : cape reach=5 taper=0.5
+bay : terrain morph=bite reach=1
+cove : bay reach=3 taper=0.7
+sound : bay reach=6 taper=0.4
+fjord : sound reach=20 taper=0.15
+island : terrain morph=detached
+islet : island
+atoll : island
+oxbow : terrain morph=detached
 
 ; crossings
 ford : feature states=difficult
@@ -84,7 +150,7 @@ building : structure states=ruined
 wall : barrier states=ruined
 fence : barrier sight=all
 pillar : barrier
-door : opening passes=closed sight=none
+door : opening passes=closed sight=none states=locked,barred,stuck,ruined
 gate : door
 window : opening passes=none sight=all
 arrow-slit : window
@@ -102,6 +168,7 @@ earth : terrain
 terrace : terrain
 roof : terrain
 air : terrain
+void : air
 wagon : feature states=overturned
 crates : feature
 barrel : feature
@@ -118,6 +185,9 @@ torch : feature light=20ft
 lantern : feature light=15ft
 brazier : feature light=20ft
 start : zone
+
+; fields — emanate from sources over an ambient baseline (spec 04 §6)
+light : field states=dark,dim,daylight,moonlight
 `;
 
 export class VocabTable {
@@ -178,15 +248,78 @@ export class VocabTable {
   }
 
   /**
+   * Declared states for a word, **unioned along the derivation chain** (spec
+   * 04 §2): `hovercart : wagon states=parked` is parked OR overturned, because
+   * derivation carries states exactly as it carries facets (ADR 0016).
+   */
+  statesOf(word: string): Set<string> {
+    const out = new Set<string>();
+    const seen = new Set<string>();
+    let current = this.entries.get(word);
+    while (current && !seen.has(current.word)) {
+      seen.add(current.word);
+      const declared = current.pairs.find((p) => p.key === "states")?.value;
+      if (declared) for (const s of declared.split(",").map((v) => v.trim()).filter(Boolean)) out.add(s);
+      if (current.baseIsArchetype) break;
+      current = this.entries.get(current.base);
+    }
+    return out;
+  }
+
+  /**
    * First facet pair for `key` along the derivation chain — vocabulary facets
    * are overridable defaults (spec 06 §2: `campfire : feature light=20ft`
    * means every campfire glows unless the entity says otherwise).
+   */
+  /**
+   * Every facet key a word declares, unioned along its derivation chain (#195).
+   *
+   * The set a pair may legitimately override. Unioned rather than resolved,
+   * because `fjord : sound reach=20 taper=0.15` inherits `morph=` from `bay`
+   * without restating it, and an entity may override any of the three.
+   */
+  facetKeysOf(word: string): Set<string> {
+    const out = new Set<string>();
+    const seen = new Set<string>();
+    let current = this.entries.get(word);
+    while (current && !seen.has(current.word)) {
+      seen.add(current.word);
+      for (const pair of current.pairs) out.add(pair.key);
+      if (current.baseIsArchetype) break;
+      current = this.entries.get(current.base);
+    }
+    return out;
+  }
+
+  /**
+   * Words that are FIELDS, whose name is itself a parameter (spec 04 §5).
+   *
+   * Declaring `radiation : field` is what makes `radiation=40ft` mean something
+   * on an emitter — the parameter namespace is derived from the vocabulary
+   * rather than fixed, so it cannot be checked against a static list.
+   */
+  fieldWords(): Set<string> {
+    const out = new Set<string>();
+    for (const word of this.entries.keys()) {
+      if (this.archetypeOf(word) === "field") out.add(word);
+    }
+    return out;
+  }
+
+  /**
+   * A word's facet value, walking the derivation chain (spec 04 §2).
+   *
+   * A value outside a closed set is SKIPPED rather than returned, so the walk
+   * continues to the next word up (#131). That is what "the vocabulary default
+   * applies" has to mean on a chain: for `mydoor : door passes=bogus`, the
+   * default is `door`'s `closed`, not the archetype's `open` — dropping all
+   * the way to the built-in would silently reopen every derived door.
    */
   facetOf(word: string, key: string): string | undefined {
     let current = this.entries.get(word);
     while (current) {
       const pair = current.pairs.find((p) => p.key === key);
-      if (pair) return pair.value;
+      if (pair && facetAccepts(key, pair.value)) return pair.value;
       if (current.baseIsArchetype) return undefined;
       current = this.entries.get(current.base);
     }
@@ -214,6 +347,7 @@ export function parseVocabLine(
     else if (t.kind === "chunk") flags.push(t.text);
     else diagnostics.push(error(line, "unexpected token in [vocab] line"));
   }
+  checkFacetValues(pairs, line, diagnostics);
   return {
     kind: "vocab-entry",
     word: first.text,

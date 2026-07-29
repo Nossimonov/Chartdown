@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, preview]
+    branches: [main, preview, 0.4-dev]
   pull_request:
 
 jobs:
@@ -18,6 +18,24 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+
+  # A published package's dependencies are the user's problem, not ours, the
+  # moment we ship them (ADR 0029). Scoped to what is SHIPPED — `--omit=dev`
+  # — because a advisory in a test runner is a chore and one in `@chartdown/mcp`
+  # is a vulnerability with our name on it. Two moderate advisories were
+  # already sitting in the published dependency tree when this was added, and
+  # nothing in the project would ever have mentioned them.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Audit shipped dependencies
+        run: npm audit --omit=dev --audit-level=moderate
 
   # Dogfooding our own Action driver (#60): the committed example SVGs must
   # never drift from their sources. Runs THIS branch's driver build — not the

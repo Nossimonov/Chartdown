@@ -8,15 +8,17 @@
  * sit on a marker declared later in the document.
  */
 
-import type { EntityNode, Point, Ref } from "@chartdown/core";
+import type { EntityNode, Placement, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
+import { ASPECT, deformCurve, type Morph, type PlacedFeature } from "./morphology";
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
-  blob, catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
-  nearestOnPolyline, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
+  catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
+  nearestOnPolyline, organicMass, pip, pointsAttr, QUANTUM, rng, subPolylineBetween, svgTitle, text, type XY,
 } from "./util";
+import { CHANNEL_FLOOR, narrowChannels } from "./channel";
 
 interface Resolved {
   point?: XY;
@@ -30,6 +32,8 @@ interface Resolved {
   /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
   alongSpans?: { ref: string; refKey?: string; start: number; end: number }[];
 }
+
+
 
 export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
   const { w, h, scale } = size;
@@ -52,6 +56,604 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const lookup = (ref: Ref): Resolved | undefined =>
     resolved.get(ref.form === "id" ? ref.value : (byName.get(ref.value) ?? slugify(ref.value)));
   const toXY = (p: Point): XY => ({ x: p.x * scale, y: p.y * scale });
+  /** A map coordinate an author can paste back into the document. */
+  const round1 = (n: number): string => String(Math.round(n * 10) / 10);
+  /** The unit `extent:` was written in, so a reported distance carries it. */
+  const mapUnit = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "")?.[3] ?? "";
+
+  // ---------- placed morphology (#93, spec 05 §4, ADR 0023) ----------
+  //
+  // Indexed from the PLACEMENTS before anything resolves, because a feature's
+  // geometry needs only its own data — kind, anchor, size — and the host's
+  // curve. Deforming inside the host's own resolution is what makes the rest
+  // of the pipeline follow for free: an `along`-following border splices the
+  // host's polyline during the same pass, so a realm bounded by a coast picks
+  // up that coast's capes without knowing they exist.
+  const refText = (ref: Ref): string => ref.value;
+  /** Which way the sea lies from a given line, from the water's own half-plane. */
+  const seawardByHost = new Map<string, XY>();
+  /**
+   * Rough centres of any BOUNDED water body, for coasts no half-plane names.
+   *
+   * An enclosed sea has no side to be on (#157): Puget Sound, the Baltic, the
+   * Mediterranean and most interesting water on a continent lie BETWEEN two
+   * shores, and a half-plane can only describe an open ocean. The idiom that
+   * draws them — `sea : area (…) along westshore (…) along eastshore` — states
+   * no direction at all, so every feature on either coast warned and the map
+   * could not be made.
+   *
+   * The literal points of that declaration are enough. Their centroid is
+   * inside the water by construction, and only the SIGN of the dot product
+   * with the coast's normal is needed — so an approximate direction settles it
+   * exactly. Taken from the declaration rather than the resolved polygon
+   * because the polygon FOLLOWS the coast, and the coast is what is being
+   * resolved: reading it there would be circular.
+   */
+  /**
+   * Declared control points per line id/name, for orienting a detached feature
+   * along its host (#159). From the DECLARATION rather than the resolved
+   * curve, for the same reason as `waterCentres`: an island may be written
+   * before its coast, and only a direction is needed.
+   */
+  const hostControls = new Map<string, XY[]>();
+  for (const e of model.entities) {
+    const pts: XY[] = [];
+    for (const p of e.placements) {
+      if (p.kind === "shape") pts.push(...p.args.filter((a): a is Point => a.kind === "point").map(toXY));
+      else if (p.kind === "relational" && p.form === "from-to") {
+        for (const ep of [p.from, ...p.via, p.to]) {
+          const at = "at" in ep ? ep.at : ep;
+          if (at && (at as { kind?: string }).kind === "point") pts.push(toXY(at as unknown as Point));
+        }
+      }
+    }
+    if (pts.length >= 2) for (const k of [...e.ids, ...(e.name ? [e.name] : [])]) hostControls.set(k, pts);
+  }
+
+  /**
+   * PROVISIONAL WATER, for answering "which side" LOCALLY (#178).
+   *
+   * The side is a property of a place on a shore, and it was being answered by
+   * one vector for a whole body — a compass direction, or a bearing to the
+   * nearest water's centroid — reduced to a sign by a dot product against the
+   * local normal. That is inverted wherever a shore wraps a peninsula, right on
+   * one limb and backwards on the next, and where the coast turns square to the
+   * vector the dot product is near zero and the answer is arithmetic noise. A
+   * generated run has nothing to contradict a wrong answer, so it does not fold
+   * and is not reported: it simply draws the bay on the wrong side of the land.
+   *
+   * Asked properly it is a point-in-polygon test, which needs the water's
+   * outline — and that is built long after features are sited, because an
+   * `along`-spliced sea follows the DEFORMED course. The cycle breaks on an
+   * observation: which side of a shore the sea lies on does not depend on the
+   * bays cut into it. So this builds the body from the host's UNDEFORMED
+   * course, which needs only what the author declared, and the answer is exact
+   * for the question being asked.
+   */
+  const undeformed = (key: string): XY[] | null => {
+    const controls = hostControls.get(key);
+    return controls && controls.length >= 2 ? catmullRom(controls, 8) : null;
+  };
+
+  /** Water bodies that touch this host, as polygons, from declarations alone. */
+  const provisionalWater = (hostKey: string): XY[][] => {
+    const course = undeformed(hostKey);
+    if (!course) return [];
+    const out: XY[][] = [];
+    for (const e of model.entities) {
+      if (e.section !== "water") continue;
+      for (const p of e.placements) {
+        // `sea : east of shore` — the half-plane FOLLOWS the coast and closes
+        // on the compass side, so it is the true region rather than a bearing.
+        if (p.kind === "relational" && p.form === "side-of" && refText(p.ref) === hostKey) {
+          out.push(halfPlanePolygon({ compass: p.compass, of: course }, w, h));
+          continue;
+        }
+        // `sea : area (…) along shore (…)` — the enclosed form (#157). Its
+        // boundary already contains this host's course; splicing the whole
+        // course in where the `along` sits is enough to say which side it
+        // encloses, which is all this is asked for.
+        if (p.kind !== "shape" || p.shape !== "area") continue;
+        const follows = p.args.some((a) => a.kind === "relational" && a.form === "along" && refText(a.ref) === hostKey);
+        if (!follows) continue;
+        const ring: XY[] = [];
+        for (const arg of p.args) {
+          if (arg.kind === "point") ring.push(toXY(arg));
+          else if (arg.kind === "relational" && arg.form === "along" && refText(arg.ref) === hostKey) {
+            const head = ring[ring.length - 1];
+            const forward = !head
+              || Math.hypot(course[0]!.x - head.x, course[0]!.y - head.y)
+                <= Math.hypot(course[course.length - 1]!.x - head.x, course[course.length - 1]!.y - head.y);
+            ring.push(...(forward ? course : [...course].reverse()));
+          }
+        }
+        if (ring.length >= 3) out.push(ring);
+      }
+    }
+    return out;
+  };
+
+  /**
+   * The seaward unit normal at a point on a host, or null where the map does
+   * not say. Null is not a licence to guess — spec 05 §4 requires it reported.
+   */
+  const localSeaward = (hostKey: string, at: XY): XY | "ambiguous" | null => {
+    const course = undeformed(hostKey);
+    const bodies = provisionalWater(hostKey);
+    // NO BODY FOUND is not the same as CANNOT TELL. The first means this
+    // routine had nothing to look at — water spelled some way it does not
+    // reconstruct — and the older global answer is still the best available.
+    // The second means the declaration genuinely does not decide this spot,
+    // and spec 05 §4 requires that reported rather than guessed.
+    if (!course || bodies.length === 0) return null;
+    // The normal where the anchor actually sits, not an average of the coast —
+    // and taken at the nearest point ON the course rather than at its nearest
+    // VERTEX (#178). A `from … to` course with no via points has two vertices,
+    // so the nearest one to any anchor is an END of the coast: the probe then
+    // sampled the water at a corner of the map instead of beside the feature,
+    // and read "the map does not say" where it says perfectly well. Measured on
+    // #154's own fixture, a cape and a bay on one straight shore with one
+    // half-plane sea disagreed — the cape resolved and the bay did not.
+    let on = course[0]!;
+    let seg = { x: 1, y: 0 };
+    let bestD = Infinity;
+    for (let i = 1; i < course.length; i++) {
+      const a = course[i - 1]!;
+      const b = course[i]!;
+      const p = nearestOnSegment(a, b, at);
+      const d = Math.hypot(p.x - at.x, p.y - at.y);
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d < bestD && len > 0) {
+        bestD = d;
+        on = p;
+        seg = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+      }
+    }
+    if (!Number.isFinite(bestD)) return null;
+    const n = { x: -seg.y, y: seg.x };
+    // PROBED FROM THE SHORE, not from the anchor. An author places an anchor
+    // by eye and it lands near the coast rather than on it; probing from there
+    // can put both samples on the same side of the water's edge, which reads
+    // as "the map does not say" when the map says perfectly well.
+    // Far enough off the line to clear its own sampling, near enough to stay
+    // local on a shore that turns.
+    const step = Math.max(w, h) / 400;
+    const wet = (s: number): boolean =>
+      bodies.some((body) => pip({ x: on.x + n.x * s, y: on.y + n.y * s }, body));
+    const plus = wet(step);
+    const minus = wet(-step);
+    if (plus === minus) return "ambiguous";
+    return plus ? n : { x: -n.x, y: -n.y };
+  };
+
+  const waterCentres: XY[] = [];
+  for (const e of model.entities) {
+    if (e.section !== "water") continue;
+    for (const p of e.placements) {
+      if (p.kind === "relational" && p.form === "side-of") {
+        const vec = COMPASS_VECTORS[p.compass];
+        if (vec) seawardByHost.set(refText(p.ref), vec);
+        continue;
+      }
+      if (p.kind !== "shape" || (p.shape !== "area" && p.shape !== "blob")) continue;
+      const pts = p.args.filter((a): a is Point => a.kind === "point").map(toXY);
+      if (pts.length >= 3) {
+        waterCentres.push({
+          x: pts.reduce((t, q) => t + q.x, 0) / pts.length,
+          y: pts.reduce((t, q) => t + q.y, 0) / pts.length,
+        });
+      }
+    }
+  }
+  interface PlacedRef {
+    f: PlacedFeature;
+    /** How the author names it — a name, else an id, else the bare word. */
+    label: string;
+    word: string;
+    /** Exactly as written, unit and all. */
+    sizeText: string;
+    morph: Morph;
+    line: number;
+    /** Every name this feature answers to, so an ARM can be hosted on it (#170). */
+    keys: string[];
+    /** The host it was declared on, for resolving an arm's water side (#170). */
+    host: string;
+  }
+  const featuresByHost = new Map<string, PlacedRef[]>();
+  for (const e of model.entities) {
+    const morph = model.facetOf(e.typeWord, "morph") as Morph | undefined;
+    if (!morph || morph === "detached") continue;
+    for (const p of e.placements) {
+      if (p.kind !== "relational" || p.form !== "on" || !p.point) continue;
+      const host = refText(p.ref);
+      const sizeText = pairOf(e.pairs, "size");
+      if (sizeText === undefined) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `'${e.typeWord}' on '${host}' has no size= — a placed feature needs an extent along its host to be drawn (spec 05 §4)` });
+        continue;
+      }
+      // The water's own half-plane if it has one; otherwise the nearest
+      // bounded water body, which is how an enclosed sea says it (#157).
+      const anchorXY = toXY(p.point);
+      // LOCAL FIRST (#178). Where the water's own outline settles the side at
+      // this anchor, that answer is exact and no global vector can improve on
+      // it — including for a half-plane, whose compass direction is undecidable
+      // wherever the coast happens to run parallel to it.
+      const local = localSeaward(host, anchorXY);
+      // AND WHERE IT CANNOT TELL, THE FEATURE IS REFUSED (#178). Warning and
+      // then drawing on the global vector anyway is the worst of both: the
+      // message says the map does not decide this spot, and the shape is
+      // placed as though it did. Measured on a shoreline wrapping a peninsula
+      // with `sea : east of shore`, that drew a bay eight miles INTO THE SEA on
+      // the western limb — a render that looks finished and is wrong, which is
+      // the silent plausibility spec 05 §4 requires be reported instead.
+      //
+      // Only where the feature needs the answer. A declared centerline states
+      // its own direction (#175), so an ambiguous coast is no obstacle to a
+      // feature that says where it runs — and saying so is one of the two fixes
+      // worth naming.
+      const statesCourse = (p.via?.length ?? 0) > 0;
+      if (local === "ambiguous" && !statesCourse) {
+        const named = e.name === undefined ? `'${e.typeWord}'` : `'${e.name}' (${e.typeWord})`;
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `${named} cannot be drawn on '${host}' — the water's declaration does not say which side of '${host}' it lies on here: both sides read the same, so which way this faces would be a guess. Declare the sea as an area following its shores, or state the feature's own course with via (spec 05 §4)`,
+        });
+        continue;
+      }
+      let seaward = (local && local !== "ambiguous" ? local : undefined) ?? seawardByHost.get(host);
+      if (!seaward && waterCentres.length > 0) {
+        let best = waterCentres[0]!;
+        for (const c of waterCentres) {
+          if (Math.hypot(c.x - anchorXY.x, c.y - anchorXY.y) < Math.hypot(best.x - anchorXY.x, best.y - anchorXY.y)) best = c;
+        }
+        const dx = best.x - anchorXY.x;
+        const dy = best.y - anchorXY.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 1e-9) seaward = { x: dx / len, y: dy / len };
+      }
+      // An ARM hosted on another feature takes its side from that feature, not
+      // from the map (#170) — resolved in the pass below, once every feature is
+      // known, so declaration order does not decide whether it works. Warning
+      // here would send an author to write `sea : west of hood`, which is not a
+      // sentence about Hood Canal: the canal IS water.
+      const hostedOnFeature = model.entities.some(
+        (other) => other !== e && [...other.ids, ...(other.name ? [other.name] : [])].includes(host)
+          && model.facetOf(other.typeWord, "morph") !== undefined,
+      );
+      if (!seaward && !hostedOnFeature) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `nothing on this map says which side of '${host}' the water is on, so '${e.typeWord}' cannot know which way to face — declare an open coast's sea with 'sea : west of ${host}', or an enclosed one as an area following its shores (spec 05 §4)` });
+      }
+      // How far across the host it reaches, as a multiple of size= — the thing
+      // that makes a fjord long and narrow where a cove is a shallow scoop.
+      // From the vocabulary, so derivation carries it (ADR 0016).
+      const numericFacet = (key: string): number | undefined => {
+        const text = pairOf(e.pairs, key) ?? model.facetOf(e.typeWord, key);
+        if (text === undefined) return undefined;
+        const value = Number(text);
+        if (!Number.isFinite(value)) {
+          diagnostics.push({ severity: "warning", line: e.line, message: `'${key}=${text}' is not a number — the vocabulary default applies (spec 05 §4)` });
+          return undefined;
+        }
+        return value;
+      };
+      const reach = numericFacet("reach");
+      const taper = numericFacet("taper");
+      // A DECLARED CENTERLINE REPLACES THE GENERATED ONE (#169). `reach=`
+      // generates a straight run of `size × reach`; `via` states the line the
+      // feature actually follows, and its own length is then the depth. The
+      // two are alternatives, so declaring both is an error for the same
+      // reason an outline and the dials are on a detached feature (ADR 0026):
+      // honouring either means discarding the other.
+      // A control may state the channel's width there (#190). Carried in
+      // rendered units alongside the point, so the ribbon can follow a profile
+      // instead of narrowing monotonically from the mouth.
+      const via = p.via?.map((c) => ({
+        ...toXY(c),
+        ...(c.width === undefined ? {} : { width: measureToNumber(c.width) * scale }),
+      }));
+      if (via && pairOf(e.pairs, "reach") !== undefined) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `'${e.name ?? e.typeWord}' declares a centerline with 'via' AND reach= — 'via' says where the feature runs and reach= generates a straight run instead, so one would have to be discarded. Drop reach=, or drop the via points (spec 05 §4)`,
+        });
+        continue;
+      }
+      const entry: PlacedRef = {
+        f: { morph, anchor: anchorXY, size: measureToNumber(sizeText) * scale, ...(seaward ? { seaward } : {}), ...(reach !== undefined ? { reach } : {}), ...(taper !== undefined ? { taper } : {}), ...(via && via.length > 0 ? { via } : {}) },
+        // The ENTITY as the author would recognise it: three `sound`s on one
+        // coast all reported as "'sound'" gave nothing to tell them apart
+        // (#156). And `sizeText` is carried verbatim rather than recomputed
+        // from pixels, because rounding it turned `size=1.5mi` into `size=2`
+        // and read as though the edit had not been saved.
+        label: e.name ?? e.ids[0] ?? e.typeWord ?? "feature",
+        word: e.typeWord ?? "feature",
+        sizeText,
+        morph,
+        line: e.line,
+        keys: [...e.ids, ...(e.name ? [e.name] : [])],
+        host,
+      };
+      const list = featuresByHost.get(host) ?? [];
+      list.push(entry);
+      featuresByHost.set(host, list);
+    }
+  }
+  /**
+   * The axis of the CHANNEL this point sits in, if it sits in one (#167).
+   *
+   * An island in an inlet lies ALONG the inlet — Hartstene, Squaxin, McNeil and
+   * Anderson each parallel the channels either side of them, because the same
+   * ice cut the island and the water. Taking the long axis from the HOST LINE
+   * instead (#159) reads the coastline's direction, which runs across the inlet
+   * rather than along it, so an island placed in one came out as a bar damming
+   * the channel instead of an island splitting it.
+   *
+   * Read from the INLET'S OWN DECLARATION rather than from the rendered water.
+   * Measuring the drawn sea would give the same answer here — its principal
+   * axis inside this inlet comes out along the channel, and open water is
+   * detectably round rather than elongated — but it would make an island's
+   * shape depend on rendered geometry, so an unrelated edit to the coastline
+   * could silently re-point an island a campaign had already named. ADR 0023
+   * requires a feature's geometry to be a pure function of the placed data, and
+   * two declarations are exactly that.
+   */
+  const channelAxisAt = (pt: XY): number | undefined => {
+    let best: { axis: XY; area: number; anchor: XY; line: number } | undefined;
+    for (const entry of [...featuresByHost.values()].flat()) {
+      // Only water divides: a jut is land, and an island cannot sit inside one.
+      if (entry.morph !== "bite") continue;
+      const seaward = entry.f.seaward;
+      if (!seaward) continue;
+      // A bite runs LANDWARD — away from the water that named its direction.
+      const axis = { x: -seaward.x, y: -seaward.y };
+      const depth = entry.f.size * (entry.f.reach ?? ASPECT);
+      const dx = pt.x - entry.f.anchor.x;
+      const dy = pt.y - entry.f.anchor.y;
+      const along = dx * axis.x + dy * axis.y;
+      const across = dx * -axis.y + dy * axis.x;
+      if (along < 0 || along > depth || Math.abs(across) > entry.f.size / 2) continue;
+      const area = entry.f.size * depth;
+      // The SMALLEST containing channel wins — an inlet inside a sound is the
+      // more specific statement about where this island actually is. Ties are
+      // broken on declared position and then line, so the answer never depends
+      // on map iteration order.
+      const better = !best || area < best.area ||
+        (area === best.area && (entry.f.anchor.x - best.anchor.x || entry.f.anchor.y - best.anchor.y || entry.line - best.line) < 0);
+      if (better) best = { axis, area, anchor: entry.f.anchor, line: entry.line };
+    }
+    return best ? Math.atan2(best.axis.y, best.axis.x) : undefined;
+  };
+
+  /**
+   * AN ARM TAKES ITS WATER SIDE FROM THE ARM IT HANGS OFF (#170).
+   *
+   * Every secondary arm of Puget Sound hangs off a primary one — Dabob and
+   * Quilcene off Hood Canal, Dyes off Sinclair, Oakland off Hammersley — and
+   * none of them could say which way to face, because the map declares a side
+   * for the COAST and `sea : west of hood` is not a sentence about a canal.
+   * The canal is water, and the arm's water is the canal, so the side is the
+   * direction from the arm's mouth toward its host's own centerline. This is
+   * ADR 0024's "ask the containing feature" asked by a bite instead of an
+   * island.
+   *
+   * Resolved AFTER the whole pre-scan, so it does not matter whether the canal
+   * was declared before or after the bay hanging off it.
+   */
+  const refused = new Set<PlacedRef>();
+  for (const list of featuresByHost.values()) {
+    for (const arm of list) {
+      const host = [...featuresByHost.values()].flat().find((h) => h.keys.includes(arm.host));
+      // AND THE HOST'S ANSWER WINS, where there is a host. This used to run
+      // only for an arm that had no side yet, which meant the map's global
+      // guess — the direction to the nearest water body's centre — got there
+      // first and the host was never asked. §4 requires the opposite: an arm's
+      // water side comes from its host, because the canal IS the arm's water
+      // and no vector aimed at a distant sea is a sentence about it.
+      // A DECLARED CENTERLINE IS ENOUGH ON ITS OWN (#175). Only the GENERATED
+      // run needs the host's water side, to know which way to leave the shore;
+      // where the host states its course, that course already is the answer.
+      // Requiring a side either way meant an arm on a canal that says exactly
+      // where it runs was dropped because the map could not work out something
+      // the arm never needed — which is how Dabob Bay came to depend on how the
+      // sea two features away happened to be spelled.
+      const stated = host?.f.via && host.f.via.length > 0;
+      if (!host || (!stated && !host.f.seaward)) continue;
+      // The host's centerline: its mouth, then either its declared controls or
+      // a straight run landward — away from the water that gave it ITS side.
+      const back = { x: -(host.f.seaward?.x ?? 0), y: -(host.f.seaward?.y ?? 0) };
+      const depth = host.f.size * (host.f.reach ?? ASPECT);
+      const line = stated
+        ? [host.f.anchor, ...host.f.via!]
+        : [host.f.anchor, { x: host.f.anchor.x + back.x * depth, y: host.f.anchor.y + back.y * depth }];
+      let best: XY | null = null;
+      let bestD = Infinity;
+      let along: XY | null = null;
+      for (let i = 1; i < line.length; i++) {
+        const p = nearestOnSegment(line[i - 1]!, line[i]!, arm.f.anchor);
+        const d = Math.hypot(p.x - arm.f.anchor.x, p.y - arm.f.anchor.y);
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+          const dx = line[i]!.x - line[i - 1]!.x;
+          const dy = line[i]!.y - line[i - 1]!.y;
+          const len = Math.hypot(dx, dy);
+          along = len > 0 ? { x: dx / len, y: dy / len } : null;
+        }
+      }
+      if (!best) continue;
+      // AN ANCHOR ON THE HOST'S OWN CENTERLINE DOES NOT SAY WHICH BANK
+      // (#191, ADR 0031). The side is the direction from the anchor toward that
+      // centerline, so on the line itself there is no direction — and the arm
+      // was left with no side at all, its bank decided by which of the host's
+      // two rails a vertex rounding happened to pick. Measured on a canal, the
+      // two rails sat 0.752mi from the anchor apiece and answered differently:
+      // one bank drew, the other drove the bite into the canal and was refused
+      // as a fold. The anchor an author reaches for is one of the host's own
+      // `via` controls, because that is the point on the canal they mean.
+      //
+      // The threshold is float noise and nothing more. Swept perpendicular to
+      // a 2mi canal, an anchor off the centerline by 0.001mi — five feet on a
+      // hundred-mile map — already answers stably and the same way at every
+      // distance out to the bank. The coordinate states a side as soon as it
+      // is not on the line, so refusing any wider would refuse documents that
+      // do say which bank they mean.
+      if (bestD <= Math.max(host.f.size, 1) * 1e-9) {
+        const named = arm.label === arm.word ? `'${arm.word}'` : `'${arm.label}' (${arm.word})`;
+        // Both banks, because naming one would be the silent pick this refuses
+        // — offered as positions the author chooses between, not as a
+        // suggestion the renderer has validated.
+        const half = host.f.size / 2;
+        const banks = along
+          ? [1, -1].map((s) =>
+              `(${round1((best!.x - along!.y * half * s) / scale)},${round1((best!.y + along!.x * half * s) / scale)})`,
+            ).join(" or ")
+          : "either side of it";
+        diagnostics.push({
+          severity: "error",
+          line: arm.line,
+          message: `${named} cannot be drawn on '${arm.host}' — its anchor lies on the centerline of '${arm.host}', which does not say which bank it leaves from. Move it to one: about ${banks} (spec 05 §4)`,
+        });
+        refused.add(arm);
+        continue;
+      }
+      arm.f.seaward = { x: (best.x - arm.f.anchor.x) / bestD, y: (best.y - arm.f.anchor.y) / bestD };
+    }
+  }
+  // Dropped rather than drawn without a side: a bank the document did not
+  // choose is not better for being drawn without complaint (ADR 0031).
+  for (const [key, list] of featuresByHost) {
+    if (list.some((x) => refused.has(x))) featuresByHost.set(key, list.filter((x) => !refused.has(x)));
+  }
+
+  /**
+   * The midpoint of a placed feature's own body (#171).
+   *
+   * Reconstructed from the DECLARED data — anchor, size, reach, via, and the
+   * water's side — rather than from the drawn shape, because the label is
+   * resolved before any course is finished. That also keeps it a pure function
+   * of the declaration, as ADR 0023 requires of everything else about a
+   * feature. Returns null for a word that is not a jut or a bite, whose anchor
+   * already is its position.
+   */
+  const featureLabelPoint = (e: EntityNode, anchor: XY, via: XY[] | undefined, hostKey: string): XY | null => {
+    const morph = model.facetOf(e.typeWord, "morph");
+    if (morph !== "jut" && morph !== "bite") return null;
+    if (via && via.length > 0) {
+      // Halfway along the declared centerline by arc length — spec 07 §5's
+      // rule for a line feature, applied to the line this feature runs along.
+      const line = [anchor, ...via];
+      const lengths = line.map((p, i) => (i === 0 ? 0 : Math.hypot(p.x - line[i - 1]!.x, p.y - line[i - 1]!.y)));
+      const total = lengths.reduce((s, d) => s + d, 0);
+      let walked = 0;
+      for (let i = 1; i < line.length; i++) {
+        if (walked + lengths[i]! >= total / 2) {
+          const k = lengths[i]! > 0 ? (total / 2 - walked) / lengths[i]! : 0;
+          return { x: line[i - 1]!.x + (line[i]!.x - line[i - 1]!.x) * k, y: line[i - 1]!.y + (line[i]!.y - line[i - 1]!.y) * k };
+        }
+        walked += lengths[i]!;
+      }
+      return line[line.length - 1]!;
+    }
+    const sizeText = pairOf(e.pairs, "size");
+    // The HOST's water side, not the feature's own names — a bite runs away
+    // from the water its host faces. Absent, the feature is already warned
+    // about elsewhere and the anchor stands as a least-bad position.
+    const seaward = seawardByHost.get(hostKey);
+    if (sizeText === undefined || !seaward) return null;
+    const reachText = pairOf(e.pairs, "reach") ?? model.facetOf(e.typeWord, "reach");
+    const reach = reachText === undefined ? ASPECT : Number(reachText);
+    if (!Number.isFinite(reach)) return null;
+    // Half the depth along the way the feature runs: a bite goes landward,
+    // away from the water that named its direction, and a jut goes seaward.
+    const step = (morph === "bite" ? -1 : 1) * (measureToNumber(sizeText) * scale * reach) / 2;
+    return { x: anchor.x + seaward.x * step, y: anchor.y + seaward.y * step };
+  };
+
+  /** Every name this entity answers to, since a feature may reference either. */
+  const hostKeys = (e: EntityNode): string[] => [...e.ids, ...(e.name ? [e.name] : [])];
+
+  /**
+   * The finished course of a line: spec 02 §9's noise-free spline, then the
+   * features DECLARED on it (spec 05 §4).
+   *
+   * Both spellings of a course go through here. A coastline may be written
+   * `coastline : path (…) (…)` or `coastline : from (…) via (…) to (…)`, and
+   * those are handled in different branches — wiring the deformation into only
+   * one of them made every feature on a `from`/`to` coast silently do nothing,
+   * which is exactly what happened to Vessany's Gull Bay.
+   */
+  const finishCourse = (e: EntityNode, controls: XY[]): XY[] => {
+    const placed = hostKeys(e).flatMap((k) => featuresByHost.get(k) ?? []);
+    if (placed.length === 0) return catmullRom(controls, 8);
+    // Density is `deformCurve`'s business now, not the caller's: it resamples
+    // to a uniform spacing so a feature behaves the same however many `via`
+    // points the host happens to carry (#154, #155).
+    const curve = catmullRom(controls, 8);
+    // Drawn as declared or reported — never quietly resized. A clamp would
+    // make `size=` a lie, since the same 90mi cape would come out different
+    // lengths on different stretches of coast, and a renderer that silently
+    // gives an author something other than what they asked for is the failure
+    // ADR 0023 exists to prevent.
+    // ARMS HANG OFF ARMS, IN A SECOND PASS (#170). Dabob Bay is declared `on
+    // hood`, and Hood Canal is a feature rather than a course — so nothing
+    // ever asked for Dabob and it was dropped without a word, which is why it
+    // rendered as nothing at all rather than as something facing wrongly.
+    //
+    // Two passes rather than one list, because a window is measured on its
+    // HOST AS ITS HOST STANDS: the canal's own window belongs to the
+    // undeformed coast, and the bay's belongs to the coast with the canal
+    // already spliced into it. Putting both in one pass would measure the
+    // bay's mouth against a stretch of shoreline that is no longer there —
+    // the same drift #163 fixed by measuring siblings on the undeformed host.
+    const arms = placed.flatMap((x) => x.keys.flatMap((k) => featuresByHost.get(k) ?? []));
+    const byFeature = new Map([...placed, ...arms].map((x) => [x.f, x] as const));
+    const passes = arms.length > 0 ? [placed, arms] : [placed];
+    // Only the FIRST pass is handed a declared course; the second is handed
+    // this function's own output, whose feature outlines must survive intact
+    // (#179).
+    return passes.reduce((into, pass, index) => deformCurve(into, pass.map((x) => x.f), (f, why) => {
+      const x = byFeature.get(f);
+      if (!x) return;
+      const named = (y: typeof x): string => (y.label === y.word ? `'${y.word}'` : `'${y.label}' (${y.word})`);
+      // Each refusal names its OWN cause and its own fix. An overlap reported
+      // as a fold would send an author to shrink a feature that fits.
+      const because =
+        why.kind === "off-end"
+          ? `half of its mouth would lie off the end of '${keyOf(e)}'. Move it further along the course, or use a smaller size=`
+          : why.kind === "overlap"
+            ? `it claims the same stretch of '${keyOf(e)}' as ${named(byFeature.get(why.other) ?? x)}. Move one of them, or use a smaller size= on either`
+            : why.kind === "off-normal"
+              // ONE CAUSE, TWO REMEDIES (#194). Where squaring the first control
+              // draws, that point is offered and it is known to work. Where it
+              // does not, the skew is still the cause — a corner between this
+              // renderer's own mouth lead and the author's first control — and
+              // saying so with both bearings beats naming a bend they did not
+              // write and cannot move.
+              ? why.suggest
+                ? `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and a centerline must leave perpendicular. Try a first via point at (${round1(why.suggest.x / scale)},${round1(why.suggest.y / scale)})`
+                : `its centerline leaves the host at ${Math.round(why.degrees)}° from the normal, and squaring the first via point is not enough to draw it — so this feature is on the wrong stretch of coast, or this coast is not the one it was drawn against. It leaves heading (${round1(why.leaves.x)},${round1(why.leaves.y)}) while the shore here faces (${round1(why.normal.x)},${round1(why.normal.y)})`
+              : why.kind === "pinch"
+                // The place, the two numbers, and the rule connecting them. A
+                // fold is local, so an author needs to be told WHERE: on a
+                // canal stated in eight controls there is no reading the one
+                // bend that is too tight off a list of coordinates.
+                ? `its centerline turns with a radius of ${round1(why.radius / scale)} near (${round1(why.at.x / scale)},${round1(why.at.y / scale)}), and a channel cannot follow a turn tighter than its own half-width — ${round1(why.half / scale)} there. Spread the via points through that bend, or narrow the channel there`
+                : `${x.morph === "jut" ? "a jut that long" : "a bite that deep"} would fold this stretch of the course back through itself. Use a smaller size= or reach=, or move it to a straighter stretch`;
+      // The size is named where the size is worth changing. On a skewed
+      // departure it is not, and quoting it invites exactly the wrong edit —
+      // which is what six rounds of shrinking a perfectly good inlet came from.
+      // Nor on a pinch: the width that folds is the one at the bend, which on
+      // a declared profile is not `size=` at all.
+      const at = why.kind === "off-normal" || why.kind === "pinch" ? "" : ` at size=${x.sizeText}`;
+      diagnostics.push({
+        severity: "error",
+        line: x.line,
+        message: `${named(x)} cannot be drawn${at} on '${x.host}' — ${because} (spec 05 §4)`,
+      });
+    }, index === 0), curve);
+  };
 
   const refPoint = (ref: Ref): XY | null => {
     const r = lookup(ref);
@@ -66,10 +668,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // run through the same points reuse the coastline's exact curve, so the sea
   // fill and the shore line cannot mismatch (owner round-three note).
   const coastCurves: { raw: XY[]; finished: XY[] }[] = [];
-  // Ordinals for identity-keyed blobs: nth anonymous blob of a given
-  // word+size keeps its shape when MOVED (shape belongs to the thing, not
-  // the place); only inserting an identical sibling before it renumbers.
-  const blobOrdinals = new Map<string, number>();
+  /**
+   * The finishing for a mass of this word at this extent (#173, ADR 0025).
+   *
+   * The WORD and the SIZE, and deliberately nothing else — not the document
+   * seed, not the entity's id or name, not its position, not its ordinal among
+   * siblings. Each of those was in the key it replaces, and each had an edit
+   * that silently redrew a landform a campaign may already have named.
+   *
+   * The cost is that two same-word masses of exactly the same size are twins.
+   * ADR 0023 already took that trade for detached features on the same
+   * reasoning: it is the honest consequence of two identical declarations, and
+   * it is cheap to escape by differing the size.
+   */
+  const massRng = (word: string | undefined, size: number): (() => number) =>
+    rng(hashSeed(hashString(word ?? "mass"), Math.round(size * 1000)));
 
   const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
   const runMatches = (pts: XY[], start: number, raw: XY[], reversed: boolean): boolean => {
@@ -170,6 +783,118 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const chain = model.chainOf(e.typeWord);
     const out: Resolved = {};
     let onRef: Ref | null = null;
+    // A DETACHED feature is a shape beside its host rather than a deformation
+    // of it (spec 05 §4): an island, an islet, an oxbow. It needs no host
+    // curve, only its own anchor and size — which is why it is resolved here
+    // rather than in `finishCourse`.
+    //
+    // Its outline is keyed on WHAT IT IS — the word and its size — and on
+    // nothing else. Not on identity, so naming it cannot reshape it; not on
+    // position, so moving it slides the same island rather than drawing a
+    // different one; not on the document seed or on declaration order.
+    //
+    // The cost is that two same-word islands of exactly the same size are
+    // twins. That is the honest consequence of two identical declarations, and
+    // it is cheap to escape — differing sizes differ the shape — whereas every
+    // other key has an edit that silently redraws a thing a campaign may have
+    // named. (An earlier draft keyed on position and got the naming case right
+    // while getting the moving case wrong; both must hold.)
+    if (model.facetOf(e.typeWord, "morph") === "detached") {
+      const anchor = e.placements.find((p): p is Point => p.kind === "point")
+        ?? e.placements.flatMap((p) => (p.kind === "relational" && p.form === "at" && p.target.kind === "point" ? [p.target] : []))[0];
+      const sizeText = pairOf(e.pairs, "size");
+
+      // A DETACHED FEATURE MAY CARRY ITS OWN OUTLINE (#172, ADR 0026).
+      //
+      // Three numbers produce a lozenge. That is right for the anonymous
+      // mid-river islet ADR 0023 is written around, and wrong for Whidbey
+      // Island, which doglegs at Coupeville — and a landform a reader
+      // recognises is exactly what a campaign attaches itself to, which is the
+      // ADR's own test for what must be declared data. Shape was the one thing
+      // about a feature that could not be declared.
+      //
+      // The points are FRAMED — offsets from the anchor in map units, the same
+      // referent-frame rule ADR 0009 sets for `on … at` — so moving the island
+      // is still one coordinate, not a transform of the whole set, and the
+      // feature stays attached to its host the way a placed feature must.
+      const outline = e.placements.find(
+        (p): p is Extract<Placement, { kind: "shape" }> => p.kind === "shape" && p.shape === "area",
+      );
+      if (anchor && outline) {
+        // An outline and the dials together are an ERROR, not a warning:
+        // honouring either one means discarding the other, and a renderer that
+        // silently picks is the failure this phase exists to remove. Only what
+        // is written ON THE ENTITY LINE counts — a `reach=` inherited from the
+        // vocabulary would otherwise make every outline on a derived word an
+        // error (`skerry : island reach=0.2`).
+        const dials = ["size", "reach", "taper"].filter((k) => pairOf(e.pairs, k) !== undefined);
+        if (dials.length > 0) {
+          diagnostics.push({
+            severity: "error",
+            line: e.line,
+            message: `'${e.name ?? e.typeWord}' declares an outline AND ${dials.map((d) => `${d}=`).join(", ")} — an outline says what the feature looks like and the dials generate a shape instead, so one would have to be discarded. Drop ${dials.map((d) => `${d}=`).join("/")}, or drop the outline (spec 05 §4)`,
+          });
+          return out;
+        }
+        const centre = toXY(anchor);
+        const framed = outline.args
+          .filter((arg): arg is Point => arg.kind === "point")
+          .map((arg) => ({ x: centre.x + arg.x * scale, y: centre.y + arg.y * scale }));
+        if (framed.length >= 3) {
+          // Organically finished, like any declared silhouette (spec 02 §9,
+          // ADR 0025): the author gives the shape, the renderer gives it a
+          // drawn edge. Left raw it reads as a surveyed polygon — strangely
+          // angular against every other coastline on the map.
+          out.polygon = organicOutline(framed, hashSeed(hashString(e.typeWord ?? "island"), framed.length));
+          out.point = centre;
+          return out;
+        }
+        diagnostics.push({
+          severity: "warning",
+          line: e.line,
+          message: `'${e.name ?? e.typeWord}' has an outline of ${framed.length} point${framed.length === 1 ? "" : "s"} — an outline needs at least three (spec 05 §4)`,
+        });
+        return out;
+      }
+
+      if (anchor && sizeText !== undefined) {
+        const center = toXY(anchor);
+        const radius = (measureToNumber(sizeText) / 2) * scale;
+        // `size=` is the LONG axis and `reach=` the short one as a multiple of
+        // it — the same "the other dimension" `reach=` already means for juts
+        // and bites (#159). At 1 this is the circle it has always drawn, so no
+        // existing render moves. Real islands are rarely round and the ones
+        // that matter least of all: Whidbey is 40mi by 2–9mi.
+        const reachText = pairOf(e.pairs, "reach") ?? model.facetOf(e.typeWord, "reach");
+        const reachNum = reachText === undefined ? 1 : Number(reachText);
+        if (reachText !== undefined && !Number.isFinite(reachNum)) {
+          diagnostics.push({ severity: "warning", line: e.line, message: `'reach=${reachText}' is not a number — the vocabulary default applies (spec 05 §4)` });
+        }
+        const shortRatio = Number.isFinite(reachNum) && reachNum > 0 ? reachNum : 1;
+        // The long axis is inferred rather than declared: every long island in
+        // a sound parallels the water it sits in, because the same glacier cut
+        // both. THE CHANNEL WINS WHERE THERE IS ONE (#167) — an island inside
+        // an inlet lies along the inlet, not along the coastline that inlet
+        // was cut into, which runs across it. Elsewhere the host's own course
+        // still answers, so no island in open water moves.
+        const hostRef = e.placements.find((p): p is Extract<Placement, { kind: "relational"; form: "near" }> =>
+          p.kind === "relational" && p.form === "near" && p.target.kind === "ref");
+        const controls = hostRef && hostRef.target.kind === "ref" ? hostControls.get(hostRef.target.value) : undefined;
+        const angle = channelAxisAt(center) ?? (controls ? tangentAngle(controls, center) : 0);
+        // Same generator, same contract as a `blob` (#173, ADR 0025): the long
+        // axis measures exactly `size=`. Spec 05 §4 promises a placed feature
+        // is "drawn at its DECLARED size or reported — never quietly resized",
+        // and the outline it was given overshot that by a few percent in a
+        // direction nothing measured.
+        out.polygon = organicMass(center, radius * 2, shortRatio, angle, massRng(e.typeWord ?? undefined, radius * 2));
+        out.point = center;
+        out.radius = radius;
+        return out;
+      }
+      if (anchor && sizeText === undefined) {
+        diagnostics.push({ severity: "warning", line: e.line, message: `'${e.typeWord}' has no size= — a placed feature needs an extent to be drawn (spec 05 §4)` });
+      }
+    }
     for (const p of e.placements) {
       if (p.kind === "point") out.point = toXY(p);
       else if (p.kind === "point-range") {
@@ -177,20 +902,35 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const b = toXY(p.to);
         out.polygon = [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
       } else if (p.kind === "shape") {
-        const pts = p.args.filter((arg): arg is Point => arg.kind === "point").map(toXY);
+        // A framed shape's points are offsets from the referent (#142), so the
+        // WHOLE shape travels with it. Anchoring only the first point was
+        // measured and rejected: it drags one end and leaves the rest, turning
+        // a 60-unit spur into a 183-unit smear — worse than today's clean
+        // detachment, because the shape deforms instead of merely sitting in
+        // the wrong place.
+        let origin: XY | null = null;
+        if (p.frame) {
+          origin = refPoint(p.frame);
+          if (!origin) {
+            diagnostics.push({ severity: "warning", line: e.line, message: `'${p.frame.value}' has no position to frame this ${p.shape} against — its offsets are read as absolute (spec 02 §9)` });
+          }
+        }
+        const framed = (pt: XY): XY => (origin ? { x: origin.x + pt.x, y: origin.y + pt.y } : pt);
+        const pts = p.args
+          .filter((arg): arg is Point => arg.kind === "point")
+          .map((arg) => (origin ? framed({ x: arg.x * scale, y: arg.y * scale }) : toXY(arg)));
         if (p.shape === "blob") {
           const center = pts[0] ?? out.point ?? { x: w / 2, y: h / 2 };
-          const radius = (measureToNumber(pairOf(e.pairs, "size") ?? "40") / 2) * scale;
-          // Identity-keyed shape: id (or word) + size + doc seed — MOVING a
-          // blob slides the same shape (owner round three); same-size
-          // anonymous siblings differ by ordinal. Never keyed by position or
-          // by document order at large.
-          const idKey = `${entityAnchor(e) ?? e.typeWord ?? "blob"}:${radius}`;
-          const n = blobOrdinals.get(idKey) ?? 0;
-          blobOrdinals.set(idKey, n + 1);
-          out.polygon = catmullRom(blob(center, radius, rng(hashSeed(model.seed, radius, hashString(idKey), n))), 5, true);
+          const diameter = measureToNumber(pairOf(e.pairs, "size") ?? "40") * scale;
+          // A BLOB DECLARES AN EXTENT (#173, ADR 0025): a round mass measuring
+          // exactly `size=` across, keyed on the WORD AND THE SIZE and nothing
+          // else. The key it replaces carried the document seed, the entity's
+          // identity and its ordinal among same-size siblings, so naming a
+          // blob reshaped it, adding a `seed:` reshaped every blob on the map,
+          // and swapping two lines in the file swapped two islands' outlines.
+          out.polygon = organicMass(center, diameter, 1, 0, massRng(e.typeWord ?? undefined, diameter));
           out.point = center;
-          out.radius = radius;
+          out.radius = diameter / 2;
         } else if (p.shape === "area") {
           // Boundary segments may FOLLOW features (#81): `along <ref>`
           // between two vertices splices the feature's rendered curve
@@ -225,10 +965,28 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             }
           }
           if (spans.length) out.alongSpans = spans;
-          out.polygon = e.section === "water" ? assembleWaterBoundary(spliced) : spliced;
+          // Spec 02 §9 promises the renderer finishes a sketch organically.
+          // Coastlines, blobs and ridge belts got that; `area` did not, so a
+          // shaped forest came out a straight-edged polygon and the only way
+          // to fake curves was thirty hand-placed points (#96).
+          //
+          // Three things stay literal, each for its own reason:
+          //  - `raw`, the author's explicit opt-out (surveyed parcels, enclaves);
+          //  - water, whose coastlines carry their OWN finishing — smoothing
+          //    the assembled boundary would fight it;
+          //  - any outline with `along` spans, because those segments ARE a
+          //    feature's finished curve (ADR 0012) and re-splining them would
+          //    pull the border off the thing it is defined to follow.
+          const literal = e.flags.includes("raw") || e.section === "water" || spans.length > 0;
+          out.polygon =
+            e.section === "water" ? assembleWaterBoundary(spliced)
+            : literal || e.archetype !== "terrain" || spliced.length < 3 ? spliced
+            : organicOutline(spliced, hashSeed(model.seed, hashString(entityAnchor(e) ?? e.typeWord ?? "area"), spliced.length));
         } else {
-          // The TRUE curve: a spline through the declared points, no noise.
-          out.polyline = catmullRom(pts, 8);
+          // The TRUE curve: a spline through the declared points, no noise
+          // (spec 02 §9, affirmed by ADR 0023) — then the features DECLARED
+          // on it, which is a discrete layer rather than roughness.
+          out.polyline = finishCourse(e, pts);
           out.ridge = p.shape === "ridge";
           if (out.ridge) {
             const declared = pairOf(e.pairs, "width");
@@ -273,7 +1031,16 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }
           case "on":
             onRef = p.ref;
-            if (p.point) out.point = toXY(p.point);
+            // A PLACED FEATURE IS NAMED ON ITS BODY, NOT AT ITS MOUTH (#171).
+            // The anchor is a point on the HOST shoreline, so labelling there
+            // put a 40mi canal's name on the coast with forty miles of canal
+            // unnamed below it, and piled four South Sound inlets' names into
+            // a six-mile square while the water they name lay thirty miles
+            // apart and unlabelled. Spec 07 §5 already says an area-shaped
+            // feature is named in its body and a line feature at its
+            // arc-length midpoint; a bite is drawn as an area, so the anchor
+            // was simply the only position the label code had been handed.
+            if (p.point) out.point = featureLabelPoint(e, toXY(p.point), p.via?.map(toXY), refText(p.ref)) ?? toXY(p.point);
             break;
           case "near": {
             const target = p.target.kind === "point" ? toXY(p.target) : refPoint(p.target);
@@ -288,6 +1055,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const resolveEnd = (ep: typeof p.from): { p: XY | null; shore: XY[] | null } => {
               if (ep.at.kind === "point") return { p: toXY(ep.at), shore: null };
               const target = lookup(ep.at);
+              // `join <ref>` (#94): end on the trunk's finished curve. This is
+              // the same projection a river mouth already does against a
+              // coastline — the confluence is a clean Y instead of two lines
+              // ending near each other and hoping. Live, like any anchor:
+              // moving the trunk moves the join.
+              if (ep.join) {
+                if (!target?.polyline) {
+                  diagnostics.push({ severity: "warning", line: e.line, message: `'join ${ep.at.value}' needs a watercourse with a course to meet and that one has none — the endpoint falls back to its position (spec 02 §7)` });
+                  return { p: refPoint(ep.at), shore: null };
+                }
+                return { p: refPoint(ep.at), shore: target.polyline };
+              }
               if (ep.point) {
                 const raw = toXY(ep.point);
                 if (target?.polyline) return { p: nearestOnPolyline(target.polyline, raw), shore: null };
@@ -302,7 +1081,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               const via = p.via.map(toXY);
               const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
               const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
-              out.polyline = catmullRom([a, ...via, b], 8);
+              out.polyline = finishCourse(e, [a, ...via, b]);
               // Coastlines declared from/via/to register their curves too —
               // sea boundaries must reuse them however the coast was written.
               if (chain.includes("coastline")) coastCurves.push({ raw: [a, ...via, b], finished: out.polyline });
@@ -310,6 +1089,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             break;
           }
           case "along": {
+            // `along <ref>` as the ONLY placement (free text, spec 07 §2 #107):
+            // the entity has no course of its own, so it takes the referent's
+            // whole line. With endpoints it splices instead, below.
+            if (!out.polyline) {
+              const whole = lineAspect(p.ref, p.face, null, null, e.line);
+              if (whole) out.polyline = whole;
+              break;
+            }
             if (out.polyline) {
               // `A to B along X`: anchor at both endpoint markers and follow
               // X's shape between their projections — nudged landward so a
@@ -365,6 +1152,50 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const chain = model.chainOf(e.typeWord);
     chainByKey.set(key, chain);
     items.push({ e, r, chain });
+  }
+
+  // Two watercourses that cross without meeting are nonsense on the ground:
+  // water does not flow over water. Nothing governed this before — the
+  // Baranduin and the Gwathló were routed to adjacent mouths and drew a visible
+  // X near Tharbad in silence, because no rule covered two linear features
+  // sharing space (#94). The battlemap has a crossing rule (spec 06 §6) but it
+  // is cell-based and does not reach region maps.
+  //
+  // A `join` is exactly the declaration that makes a meeting intentional, so
+  // the check is: courses that touch must be related. Shared endpoints count
+  // too — `from <river>` is a distributary leaving its trunk, equally declared.
+  const watercourses = items.filter((it) => it.chain.includes("river") && it.r.polyline);
+  const joinRefs = new Map<string, Set<string>>();
+  for (const it of watercourses) {
+    const named = new Set<string>();
+    for (const p of it.e.placements) {
+      if (p.kind !== "relational") continue;
+      if (p.form === "from-to") {
+        for (const ep of [p.from, p.to]) if (ep.at.kind === "ref") named.add(ep.at.value);
+      }
+    }
+    joinRefs.set(keyOf(it.e), named);
+  }
+  const relatedByName = (a: Item, b: Item): boolean => {
+    const names = (it: Item): string[] => [...it.e.ids, ...(it.e.name ? [it.e.name] : [])];
+    const aRefs = joinRefs.get(keyOf(a.e)) ?? new Set<string>();
+    const bRefs = joinRefs.get(keyOf(b.e)) ?? new Set<string>();
+    return names(b).some((n) => aRefs.has(n)) || names(a).some((n) => bRefs.has(n));
+  };
+  for (let i = 0; i < watercourses.length; i++) {
+    for (let j = i + 1; j < watercourses.length; j++) {
+      const a = watercourses[i]!;
+      const b = watercourses[j]!;
+      if (relatedByName(a, b)) continue;
+      const hit = firstCrossing(a.r.polyline!, b.r.polyline!);
+      if (!hit) continue;
+      const label = (it: Item): string => it.e.name ?? it.e.ids[0] ?? it.e.typeWord ?? "a watercourse";
+      diagnostics.push({
+        severity: "warning",
+        line: b.e.line,
+        message: `'${label(a)}' and '${label(b)}' cross at (${Math.round(hit.x)},${Math.round(hit.y)}) without meeting — water does not flow over water; 'join' one to the other, or route them apart (spec 02 §7)`,
+      });
+    }
   }
 
   // Paths serving as ZONAL FRONTIERS (a tundra's frostline) render in the
@@ -435,23 +1266,34 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       }
       beltObstacles.set(keyOf(e), own);
     } else {
-      // Every sample point: gap-free, so parallel-line labels can't slip
-      // through holes between obstacle boxes (the Deepflow/Deep Road pair).
+      // The corridor is the line's RENDERED stroke plus a hair of clearance,
+      // not a constant (#134). A flat ±3 reserved ~6 units either side of a
+      // 2-unit river — three times the ink — and did it absolutely, before
+      // the label ladder ran, so a settlement near a river could not place
+      // its name at ANY size. Minas Tirith sits ~9 units from the Anduin and
+      // was dropped entirely; Edoras was shrunk 13 → 10 by the same reserve.
+      //
+      // Soft, like the ridge belts above. `tryClaim` rejects on ANY overlap
+      // whatever the weight, so the preferred path still keeps names off the
+      // line; weight only prices the least-bad fallback — and there, a name
+      // brushing the river it stands on beats no name at all. That ordering
+      // is the cartography: on the reference map these names touch their
+      // rivers, because the adjacency is the point.
+      //
+      // Still one box per sample point, NOT resampled along the segments.
+      // The claim this comment used to make — "gap-free" — was never true:
+      // resolved spacing runs from 0.6 to 122 units on a real map, so coarse
+      // stretches always had holes. Filling them was tried and costs far more
+      // than it buys, because overlapping obstacle boxes double-count in the
+      // cost sum and shut out labels the narrower corridor had just admitted.
+      // The Deepflow/Deep Road pair this guards is covered by its own test.
+      const strokeW = Number(pairOf(e.pairs, "width") ?? (model.chainOf(e.typeWord).includes("coastline") ? 1.2 : 2));
+      const half = strokeW / 2 + 1;
       for (const pt of r.polyline) {
-        placer.block(pt.x - 3, pt.y - 3, 6, 6);
+        placer.block(pt.x - half, pt.y - half, half * 2, half * 2, 0.35);
       }
     }
   }
-
-  const pip = (pt: XY, poly: XY[]): boolean => {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i]!;
-      const b = poly[j]!;
-      if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-    }
-    return inside;
-  };
 
   // Name homes (owner: the ROAD's label dodges the forest's name, never
   // the reverse): each named area reserves its natural centroid label spot
@@ -498,10 +1340,11 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const layers = { water: [] as string[], realms: [] as string[], areas: [] as string[], lines: [] as string[], points: [] as string[], labels: [] as string[] };
   let pathLabelCount = 0;
 
-  // Point labels move LAST (owner: a point label's proximity IS its meaning);
-  // things with room to roam yield. Claims run in priority order — 0 author
-  // overrides (fixed), 1 point markers (capitals before minor features),
-  // 2 curve labels, 3 area names, 4 water/realm sprawls — while paint order
+  // Claims run in priority order — 0 author overrides (fixed), 2 curve
+  // labels, 2.2 point markers (capitals before minor features), 3 area names,
+  // 4 water/realm sprawls. Line labels go first because they are the only
+  // kind with no recovery: a point name can leave its marker and stay legible
+  // on a leader, a river's name cannot leave its river (ADR 0019). — while paint order
   // stacks the reverse, so big faint names sit beneath the small precise
   // ones. Under density each label shrinks before it moves far, and is
   // omitted rather than drawn over other text (spec 07 §5).
@@ -523,6 +1366,8 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   // `frame` marks half-plane realms: their polygon is mostly viewport edge,
   // so only border-stated stretches stroke (no outline around the map rim).
   const realmInfos: { e: EntityNode; key: string; poly: XY[]; spans: { ref: string; start: number; end: number }[]; fill: string; frame?: boolean }[] = [];
+  /** Every island's drawn footprint, checked against the water once all of it is known (#164). */
+  const islandInfos: { e: EntityNode; poly: XY[] }[] = [];
   const borderDecls: EntityNode[] = [];
 
   /**
@@ -533,12 +1378,31 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
    * that subtracts every water body, so a range can reach the shore without
    * bleeding onto it and a gulf can cut one named range in two.
    */
-  const waterPolys: XY[][] = [];
+  const waterPolys: { poly: XY[]; name?: string | undefined; fill: string }[] = [];
   const hasWater = items.some(
     ({ e, chain }) => e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"),
   );
   const landMaskId = `cd-land-${model.doc.docId}`;
   const landMask = hasWater ? `url(#${landMaskId})` : undefined;
+  /** One per island: shows its shore only where it meets water, not other land (#165). */
+  const shoreMaskId = (i: number): string => `cd-shore-${model.doc.docId}-${i}`;
+  /** One per island: its own footprint, for clipping its shore to one side (#185). */
+  const insideMaskId = (i: number): string => `cd-inside-${model.doc.docId}-${i}`;
+  /** Hides the mainland's coastline wherever an island has merged with it (#165). */
+  const coastMaskId = `cd-coast-union-${model.doc.docId}`;
+  /**
+   * Shows only WATER — every declared body, with all land punched back out
+   * (#185, ADR 0034).
+   *
+   * A border clipped to this lies wholly on the water side of its own line,
+   * which is what stops two approaching shores filling the channel between
+   * them with each other's ink.
+   */
+  const waterMaskId = `cd-water-${model.doc.docId}`;
+  // Known BEFORE the draw loop, because a coastline may be drawn long before
+  // the islands that merge with it are reached — and a mask reference to a
+  // definition that never gets emitted is an error, not a no-op.
+  const hasIslands = model.entities.some((e) => model.chainOf(e.typeWord ?? "").includes("island"));
 
   for (const { e, r, chain } of items) {
     const anchor = anchorAttr(model, e);
@@ -556,6 +1420,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     // the sheet, not the fiction.
     if (chain.includes("note")) {
       const label = e.texts[0] ?? e.name;
+      // `along <ref>` sets the text on the referenced course itself (#107).
+      if (label && r.polyline && r.polyline.length > 1) {
+        const pid = `cdnote-${model.doc.docId}-${pathLabelCount++}`;
+        const lp = r.polyline;
+        const d = `M${fmt(lp[0]!.x)} ${fmt(lp[0]!.y)}` + lp.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
+        labelBuckets[0]!.push(
+          `<defs><path id="${pid}" d="${d}"/></defs>` +
+            `<text font-size="11" fill="${theme.prop(chain, "fill") ?? theme.surface("ink", "fill", INK)}" opacity="0.85" text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="50%"><tspan dy="-4">${esc(label)}</tspan></textPath></text>`,
+        );
+        continue;
+      }
       const at = r.point ?? (r.polygon ? centroid(r.polygon) : null);
       if (label && at) {
         const span = r.polygon ? Math.max(...r.polygon.map((p) => p.x)) - Math.min(...r.polygon.map((p) => p.x)) : 0;
@@ -585,8 +1461,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       const isWater = e.section === "water";
       const isZone = !isWater && e.archetype === "zone";
       if (isWater) {
-        waterPolys.push(poly);
-        layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: theme.terrainFill(["sea"]) })));
+        const seaFill = theme.terrainFill(["sea"]);
+        waterPolys.push({ poly, name: e.name ?? undefined, fill: seaFill });
+        layers.water.push(el("g", { id: anchor }, titleEl, el("polygon", { points: pointsAttr(poly), fill: seaFill })));
       } else if (isZone) {
         // Nations are individuals, not a type: the tint keys on the realm's
         // NAME (theme fill= for the word still wins), so each nation reads
@@ -628,7 +1505,54 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // Polygon water (#76): a [water] entity with an area/blob placement is
       // a bounded sea or lake — full water fill and a shore line, not the
       // faint zone tint. This is what lets a world have TWO continents.
-      if (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water")) {
+      // AN ISLAND IS LAND, even declared among the water it sits in. Spec 05
+      // §2 already says so — "islands are the converse and stay land: an
+      // island rises above the sea that surrounds it" — but this branch
+      // painted anything in `[water]` with the sea's own fill, by section
+      // rather than by word. Unreachable until #93 made `island` a placeable
+      // stdlib word; on a coastline map every island came out invisible
+      // against the sound. `oxbow` stays water, which is why the test is the
+      // word and not the `detached` facet.
+      // A NAMED STRETCH OF WATER is a name, not a mass (#160). A zone declared
+      // among the water — "Central Basin", "Admiralty Inlet" — is part of the
+      // sea it sits in, so it takes a label and at most a faint boundary in
+      // the water's own tint, never a fill. The same restraint the frontier
+      // register already uses for zonal terrain (spec 05 §2).
+      //
+      // Neither existing register was right: in `[terrain]` a zone drew a land
+      // tint sitting ON the water, and in `[water]` it drew an opaque
+      // sea-coloured polygon that occluded whatever lay beneath it.
+      if (e.archetype === "zone" && e.section === "water") {
+        const tint = theme.terrainFill(["sea"]);
+        layers.water.push(
+          el("g", { id: anchor }, titleEl,
+            el("polygon", {
+              points: pointsAttr(r.polygon), fill: "none", stroke: shade(tint),
+              "stroke-width": 1, "stroke-dasharray": "1 5", opacity: 0.55, "stroke-linejoin": "round",
+            }),
+          ),
+        );
+        if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+          deferLabel(4, () => {
+            const c = centroid(r.polygon!);
+            const label = (model.labelsMode === "keyed" ? labelTextFor(model, e) : null) ?? e.name!;
+            const bboxW = Math.max(...r.polygon!.map((q) => q.x)) - Math.min(...r.polygon!.map((q) => q.y === q.y ? q.x : q.x));
+            const { size, spacing } = fitLabel(label, Math.max(bboxW * 0.8, 40), 10, 1);
+            const width = label.length * (size * 0.58 + spacing);
+            const cx = Math.min(Math.max(c.x, width / 2 + 10), w - width / 2 - 10);
+            labelBuckets[4]!.push(
+              text(label, {
+                x: cx, y: placer.place(cx, c.y, label, size, "middle", width),
+                "font-size": size, "letter-spacing": spacing, fill: "#5a7a96",
+                opacity: 0.75, "font-style": "italic", "text-anchor": "middle", "font-family": "sans-serif",
+              }),
+            );
+          });
+        }
+        continue;
+      }
+      const landInWater = chain.includes("island");
+      if (!landInWater && (e.section === "water" || chain.some((word) => word === "sea" || word === "lake" || word === "water"))) {
         const isLake = chain.includes("lake");
         const waterFill = theme.terrainFill(isLake ? ["lake"] : ["sea"]);
         // The boundary already reuses coastline curves (assembleWaterBoundary)
@@ -636,7 +1560,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // line and the fill follows it exactly. Lakes sit on land: terrain
         // layer. Seas are the floor: water layer.
         const shore = r.polygon;
-        waterPolys.push(shore);
+        waterPolys.push({ poly: shore, name: e.name ?? undefined, fill: waterFill });
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
             el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
@@ -751,10 +1675,31 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // Islands are LAND (owner round three): paper surface and a coastline
       // stroke, exactly like the continents — not a tinted blob.
       if (chain.includes("island")) {
+        // Checked AFTER the loop, not here: `waterPolys` is filled as the
+        // items are walked, so an island declared before its sea would be
+        // measured against water that does not exist yet (#164).
+        const islandIndex = islandInfos.length;
+        islandInfos.push({ e, poly: r.polygon });
         const coast = theme.pathStroke(["coastline"]);
+        // An island's shore is a coastline and lies on one side of itself too
+        // (#185, ADR 0034). Nesting its own footprint inside #165's mask
+        // INTERSECTS the two: what survives is the half of the stroke that is
+        // inside this island AND has water outside it, which is the land-side
+        // stroke and the #165 rule at once.
+        const islandBank = theme.bank(["coastline"]);
+        // FILL AND STROKE ARE SEPARATE SHAPES so only the stroke is masked
+        // (#165). The fill is land wherever it lands — paper over paper where
+        // it meets the mainland, which is invisible and correct — while the
+        // shore is drawn only where there is water to have a shore against.
         layers.areas.push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(r.polygon), fill: groundFill ?? theme.surface("paper", "fill", "#f9f5ea"), stroke: coast.stroke, "stroke-width": 1.2, "stroke-linejoin": "round" }),
+            el("polygon", { points: pointsAttr(r.polygon), fill: groundFill ?? theme.surface("paper", "fill", "#f9f5ea") }),
+            el("g", { mask: `url(#${shoreMaskId(islandIndex)})` },
+              el("g", islandBank === "both" ? {} : { mask: `url(#${insideMaskId(islandIndex)})` },
+                el("polygon", {
+                  points: pointsAttr(r.polygon), fill: "none", stroke: coast.stroke,
+                  "stroke-width": islandBank === "both" ? 1.2 : 2.4, "stroke-linejoin": "round",
+                }))),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -772,12 +1717,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         continue;
       }
       const areaParts: string[] = [titleEl];
-      const edgeFill = r.alongSpans?.length ? undefined : theme.prop(chain, "fill", { zone: "edge" });
-      if (edgeFill) {
-        // Edge zone (spec 08 §2): boundary band in the edge style, interior in core.
-        const edgeW = theme.edgeWidth(chain) ?? 4;
-        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: edgeFill, stroke: shade(edgeFill), "stroke-width": 1 }));
-        areaParts.push(el("polygon", { points: pointsAttr(shrinkPolygon(r.polygon, edgeW * 2)), fill: wordFill }));
+      const zones = r.alongSpans?.length ? null : theme.zones(chain, wordFill);
+      if (zones) {
+        // Zones (spec 08 §2): boundary band in the edge style, interior in
+        // core. The interior used the word's plain fill, so `forest.core` was
+        // the one half of the sentence nothing read (#150).
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: zones.edge, stroke: shade(zones.edge), "stroke-width": 1 }));
+        areaParts.push(el("polygon", { points: pointsAttr(shrinkPolygon(r.polygon, zones.width * 2)), fill: zones.core }));
       } else if (r.alongSpans?.length) {
         // An area whose boundary FOLLOWS features doesn't stroke itself —
         // the followed features own their lines (the coast draws the coast,
@@ -884,23 +1830,56 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // island outline weight the owner preferred), unless width= says so.
         const width = Number(pairOf(e.pairs, "width") ?? (chain.includes("coastline") ? 1.2 : 2));
         const lineParts: string[] = [titleEl];
+        // Double where the stroke will be clipped to one side, so the half that
+        // survives is the width that was asked for.
+        const oneSided = chain.includes("coastline") && theme.bank(chain) !== "both" && hasWater;
+        const inkW = oneSided ? width * 2 : width;
         const edgeW = theme.edgeWidth(chain);
         if (edgeW) {
           const edgeStroke = theme.prop(chain, "stroke", { zone: "edge" }) ?? theme.prop(chain, "fill", { zone: "edge" }) ?? stroke.stroke;
           lineParts.push(
             el("polyline", {
               points: pointsAttr(r.polyline), fill: "none", stroke: edgeStroke,
-              "stroke-width": width + 2 * edgeW, "stroke-linejoin": "round", "stroke-linecap": "round",
+              "stroke-width": inkW + 2 * edgeW, "stroke-linejoin": "round", "stroke-linecap": "round",
             }),
           );
         }
+        // A path band's CORE is its centre strip (spec 08 §2, #150). Only the
+        // edge margins were read here, so half the sentence was inert.
+        const coreStroke = theme.prop(chain, "fill", { zone: "core" }) ?? theme.prop(chain, "stroke", { zone: "core" }) ?? stroke.stroke;
         lineParts.push(
           el("polyline", {
-            points: pointsAttr(r.polyline), fill: "none", stroke: stroke.stroke,
-            "stroke-width": width, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
+            points: pointsAttr(r.polyline), fill: "none", stroke: coreStroke,
+            "stroke-width": inkW, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
           }),
         );
-        layers.lines.push(el("g", { id: anchor }, ...lineParts));
+        // A coastline stops where an island has merged with it (#165). The
+        // island's fill already makes that stretch land; leaving the shore
+        // line drawn over it is what made an island touching the shore read
+        // as a ring lying across the peninsula.
+        //
+        // AND IT LIES ON ONE SIDE OF ITSELF (#185, ADR 0034). A stroke centred
+        // on a boundary puts half its ink on each side, so where two shores
+        // approach, the two water-side halves meet and fill the channel
+        // between them — the passage is not thin, it is painted over. Clipped
+        // to the water, a border can only ever darken water, so a bold theme
+        // may make a channel ugly and cannot make it disappear.
+        //
+        // Done by clipping a DOUBLE-WIDTH centred stroke rather than by
+        // offsetting the line, which would need the outward normal at every
+        // vertex and an answer at every join. The mask keeps the half that
+        // belongs to the region, and this file already knew the trick: #165's
+        // note that clipping an island's shore to water "comes out
+        // half-width" is the same observation, seen as a problem.
+        const isCoast = chain.includes("coastline");
+        const bank = isCoast ? theme.bank(chain) : "both";
+        const banked = bank !== "both" && hasWater
+          ? [el("g", { mask: `url(#${bank === "water" ? waterMaskId : landMaskId})` }, ...lineParts)]
+          : lineParts;
+        layers.lines.push(el("g", {
+          id: anchor,
+          ...(hasIslands && isCoast ? { mask: `url(#${coastMaskId})` } : {}),
+        }, ...banked));
         }
       }
       if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -950,8 +1929,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           }
           // On-crest (ridge) text has no inside/outside — only total bend.
           const inside = !isRidge && ((above && signed < 0) || (!above && signed > 0));
-          // Weighted to beat slot-order bias and belt brushes: a mushed
-          // label is worse than an off-center or on-belt one.
+          // Curvature is only a problem past the point where glyph spacing
+          // suffers. Charging for it LINEARLY did not merely avoid harmful
+          // bends, it maximised straightness — so on a winding river the
+          // label landed on the one flat stretch every time, which is the
+          // least characteristic part of the feature. Measured on the
+          // Middle-earth map: the Bruinen's name sat where its river bends
+          // 1.2px while the river itself bends 29px, and the Isen's on 0.7px
+          // of 54.4px. Mathematically on the river; visually laid across it.
           return sum * 80 + (inside ? Math.abs(signed) * 120 : 0);
         };
         const candidatesAt = (size: number): Cand[] => {
@@ -1004,7 +1989,14 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // A big label brushing an obstacle beats a shrunken migrated one:
           // largest size whose least-bad slot only brushes (≤12% of its own
           // area), then floor-size up to half-covered, then omit (spec 07 §5).
-          const leastBad = (size: number): { c: Cand; score: number } => {
+          // Bend penalty and slot order RANK the candidates; only the ink
+          // that would actually be covered decides whether to accept, shrink
+          // or give up. Mixing them meant a stricter curvature rule pushed
+          // labels off their courses onto the horizontal fallback entirely —
+          // 19 course-following labels became 12 the moment BEND_COST rose.
+          // Same defect as #132 in labels.ts: a preference weighed against a
+          // threshold it has no business meeting.
+          const leastBad = (size: number): { c: Cand; overlap: number } => {
             const finalists = candidatesAt(size);
             let best = finalists[0]!;
             let bestScore = Infinity;
@@ -1015,15 +2007,48 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
                 best = c;
               }
             });
-            return { c: best, score: bestScore };
+            return { c: best, overlap: costOf(best) };
           };
           for (let size = 10; size >= 8 && !pick; size--) {
             const b = leastBad(size);
-            if (b.score <= b.c.wpx * 9 * 0.12) pick = b.c;
+            if (b.overlap <= b.c.wpx * 9 * 0.12) pick = b.c;
           }
           if (!pick) {
             const b = leastBad(8);
-            if (b.score > b.c.wpx * 9 * 0.5) return; // omit before overwriting
+            if (b.overlap > b.c.wpx * 9 * 0.5) {
+              // Nothing on the course will take this name. Before dropping it,
+              // offer it open space with a leader back to the course, the same
+              // rung point markers get (spec 07 §5 rule 3, #133 extended).
+              // This is the wall #137 ended at: a river whose whole course is
+              // built over — the Entwash under Fangorn, three roads under the
+              // settlements they connect — cannot be scored onto a free slot
+              // that does not exist, and relocation is the only move left.
+              // A leader may meet the course anywhere along it, so the anchor
+              // is swept like any other candidate — mid-course first, then
+              // outward. Anchoring only at the midpoint left names on rivers
+              // whose middle is the most built-over part of them.
+              let anchor: XY | null = null;
+              let led: ReturnType<typeof placer.placeWithLeader> = null;
+              for (const f of [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9]) {
+                const a = alongAt(lp, f).p;
+                const attempt = placer.placeWithLeader(a.x, a.y, lbl, 10);
+                if (attempt) {
+                  anchor = a;
+                  led = attempt;
+                  break;
+                }
+              }
+              if (!led || !anchor) return; // omit before overwriting (spec 07 §5 rule 4)
+              const lead = theme.surface("leader", "stroke", ink);
+              labelBuckets[2]!.push(
+                el("line", {
+                  x1: led.from.x, y1: led.from.y, x2: anchor.x, y2: anchor.y,
+                  stroke: lead, "stroke-width": 0.6, opacity: 0.55,
+                }),
+                text(lbl, { x: led.x, y: led.y, "font-size": led.size, fill: ink, opacity: 0.75, "text-anchor": led.anchor, "font-style": "italic", "font-family": "sans-serif" }),
+              );
+              return;
+            }
             pick = b.c;
           }
         }
@@ -1066,6 +2091,75 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       continue;
     }
 
+    // A solitary peak (#95): the massif language at a single point. Erebor's
+    // whole meaning is that it stands alone, and `mountains … blob size=` drew
+    // a small round region — the silhouette that says "one mountain" existed
+    // only inside ridge belts, with no point-scale entry. A theme may swap the
+    // motif (`volcano` for a crater and plume) exactly as `licorice-forest`
+    // swaps a forest's; absent one, the derived word still reads as high
+    // ground because it inherits the peak silhouette.
+    if (r.point && chain.includes("peak")) {
+      const themed = theme.glyphFor(chain, r.point.x, r.point.y);
+      const s = 11;
+      const { x, y } = r.point;
+      const fill = theme.terrainFill(chain);
+      layers.areas.push(
+        el("g", { id: anchor }, titleEl,
+          themed
+            ? glyphEl(themed, x, y, 1, ink)
+            : el("path", {
+                // A volcano is a truncated cone with a crater notch, so the
+                // derivation reads on the map and not only in the name — the
+                // complaint that motivated this was that "nothing volcanic
+                // survives". A theme may still swap the whole motif.
+                d: chain.includes("volcano")
+                  ? `M${fmt(x - s)} ${fmt(y + s * 0.7)}L${fmt(x - s * 0.42)} ${fmt(y - s * 0.55)}L${fmt(x - s * 0.16)} ${fmt(y - s * 0.28)}L${fmt(x + s * 0.16)} ${fmt(y - s * 0.28)}L${fmt(x + s * 0.42)} ${fmt(y - s * 0.55)}L${fmt(x + s)} ${fmt(y + s * 0.7)}Z`
+                  : `M${fmt(x - s)} ${fmt(y + s * 0.7)}L${fmt(x)} ${fmt(y - s)}L${fmt(x + s)} ${fmt(y + s * 0.7)}Z`,
+                fill, stroke: shade(fill), "stroke-width": 1.2, "stroke-linejoin": "round",
+              }),
+        ),
+      );
+      // ERUPTING IS DRAWN (#206). `volcano` declares two states and both
+      // rendered as the same cone, so a map could say a mountain was in
+      // eruption and show a mountain at rest. The crater silhouette above
+      // already existed to hang this on.
+      //
+      // `dormant` deliberately has NO mark, and that is the written reason
+      // rather than an omission: a dormant volcano IS the resting cone, so the
+      // state states explicitly what the silhouette already says. Drawing a
+      // second symbol for it would invent a distinction the world does not
+      // have. What must not happen — and did — is `erupting` reading as rest.
+      if (chain.includes("volcano") && e.flags.includes("erupting")) {
+        const plume = shade(theme.terrainFill(chain));
+        layers.areas.push(el("g", {},
+          // A column of smoke leaving the crater, widening as it rises: three
+          // lobes rather than a cloud, so it reads at map scale where a
+          // detailed puff would silt up into a blob.
+          el("path", {
+            d: `M${fmt(x - s * 0.16)} ${fmt(y - s * 0.28)}`
+              + `C${fmt(x - s * 0.5)} ${fmt(y - s * 0.9)} ${fmt(x + s * 0.35)} ${fmt(y - s * 1.15)} ${fmt(x - s * 0.1)} ${fmt(y - s * 1.75)}`
+              + `C${fmt(x - s * 0.6)} ${fmt(y - s * 2.3)} ${fmt(x + s * 0.7)} ${fmt(y - s * 2.35)} ${fmt(x + s * 0.25)} ${fmt(y - s * 2.9)}`,
+            fill: "none", stroke: plume, "stroke-width": 1.6, "stroke-linecap": "round", opacity: 0.75,
+          }),
+          el("circle", { cx: x + s * 0.25, cy: y - s * 3.1, r: s * 0.26, fill: plume, opacity: 0.5 }),
+        ));
+        // The plume is part of the mark, so a label must not sit in it.
+        placer.block(x - s, y - s * 3.4, s * 2, s * 2.4, 2);
+      }
+      placer.block(x - s, y - s, s * 2, s * 2, 2);
+      if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
+        deferLabel(1.2, () => {
+          const lbl = labelTextFor(model, e) ?? e.name!;
+          const spot = placer.placeBesideOrDrop(x + s + 3, x - s - 3, y + 4, lbl, 11);
+          if (!spot) return;
+          labelBuckets[1]!.push(
+            text(lbl, { x: spot.x, y: spot.y, "font-size": spot.size, fill: ink, "text-anchor": spot.anchor, "font-family": "sans-serif" }),
+          );
+        });
+      }
+      continue;
+    }
+
     if (r.point) {
       const tier = tierFor(chain);
       const glyphPath = theme.glyphFor(chain, r.point.x, r.point.y);
@@ -1089,12 +2183,31 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {
         const pt = r.point;
-        // Within the point tier, importance = marker size: capitals claim
-        // before towns before minor features, so when a name must shrink or
-        // drop under density, it's the less-important one that gives way.
-        deferLabel(1 + (24 - tier.font) / 100, () => {
+        // Claims AFTER line labels (2), not before (ADR 0019). A point name
+        // displaced from its marker recovers via a leader; a river's name set
+        // aside from its river does not — it becomes a caption pointing at
+        // water. So the kind that cannot move claims first. Within the point
+        // tier, importance = marker size: capitals before towns before minor
+        // features, so the less-important name gives way first.
+        deferLabel(2.2 + (24 - tier.font) / 100, () => {
           const spot = placer.placeBesideOrDrop(pt.x + tier.r + 3, pt.x - tier.r - 3, pt.y + 4, label, tier.font);
-          if (!spot) return; // omit before overwriting (spec 07 §5)
+          if (!spot) {
+            // Every adjacent slot failed at every size. Before giving the name
+            // up, try open space with a leader line to carry the association
+            // (spec 07 §5, #133) — this competes with omission, not with good
+            // placement, so a connected name beats no name.
+            const led = placer.placeWithLeader(pt.x, pt.y, label, tier.font);
+            if (!led) return; // omit before overwriting (spec 07 §5)
+            const lead = theme.surface("leader", "stroke", ink);
+            labelBuckets[1]!.push(
+              el("line", {
+                x1: led.from.x, y1: led.from.y, x2: pt.x, y2: pt.y,
+                stroke: lead, "stroke-width": 0.6, opacity: 0.55,
+              }),
+              text(label, { x: led.x, y: led.y, "font-size": led.size, "font-weight": tier.weight, fill: ink, "text-anchor": led.anchor, "font-family": "sans-serif" }),
+            );
+            return;
+          }
           labelBuckets[1]!.push(
             // text-anchor is ALWAYS written: SVG's default is start, so an
             // omitted "middle" renders shifted right (the clipped Deepwatch).
@@ -1102,6 +2215,143 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           );
         });
       }
+    }
+  }
+
+  // AN ISLAND WITH NO WATER AROUND IT (#164). Spec 05 §2: "an island rises
+  // above the sea that surrounds it" — so an island whose footprint lies
+  // wholly on land is a sentence the document can write and the renderer will
+  // draw, as a stroked contour on open grass with a place-name beside it.
+  //
+  // Nobody notices while authoring, because at full-map zoom it reads as a
+  // faint mark and nothing says otherwise: on the Puget Sound exercise map
+  // NINE of fifteen islands were misplaced, in the map's headline feature.
+  // This is the region-map form of #123's door onto solid rock, and strictly
+  // easier — a geometric fact rather than an inference about intent.
+  //
+  // A warning, like every other coherence check, and only for the WHOLLY dry
+  // case: an island half a mile offshore legitimately overlaps its shore at
+  // map scale, which is #165's business rather than a mistake.
+  const waters = waterPolys.map((body) => body.poly);
+  if (waters.length) {
+    for (const { e, poly } of islandInfos) {
+      const named = e.name ? `'${e.name}'` : `the ${e.typeWord ?? "island"} on line ${e.line}`;
+      if (!coversWater(poly, waters)) {
+        diagnostics.push({
+          severity: "warning",
+          line: e.line,
+          message: `${named} is an island with no water around it — its footprint lies entirely on land. An island rises above the sea that surrounds it (spec 05 §2)`,
+        });
+        continue;
+      }
+      // AND THE WEAKER FAILURE THAT MATTERS MORE (#180): still mostly in water,
+      // but touching the shore, so the union joins it to the mainland and the
+      // document's island is not one on the map. Warned rather than repaired —
+      // opening a channel would be the renderer inventing water nobody
+      // declared, against "drawn as declared or reported". The author's fixes
+      // are real: widen the channel, move it, or stop calling it an island.
+      const { wet, at, depth } = surroundedByWater(poly, waters);
+      if (wet >= 0.98) continue;
+      // Stated as the CONTACT, not as the clearance. "98% of its shore has
+      // water beyond it" is true and reads like a clean island, which is the
+      // opposite of what it means — at any contact the union welds and the
+      // island is gone. The touching share, where it touches, and how far to
+      // move it are the three things an author needs to fix it in one edit.
+      const share = Math.max(1, Math.round((1 - wet) * 100));
+      const where = at ? ` near (${round1(at.x / scale)},${round1(at.y / scale)})` : "";
+      const far = depth > 0 ? `, reaching about ${round1(depth / scale)}${mapUnit} inland` : "";
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `${named} touches the mainland along ${share}% of its shore${where}${far}, so the two are drawn as one landmass and it is no longer an island. Widen the channel, move it clear, or declare it as land rather than an island (spec 05 §2)`,
+      });
+    }
+  }
+
+  // A CHANNEL TOO NARROW TO SEE IS DRAWN AS A SYMBOL (#185 part 2, ADR 0035).
+  //
+  // The other half of the passage problem, and a different mechanism: part 1
+  // stops a stroke painting a channel shut, and does nothing at all for a
+  // channel that is simply smaller than a pixel. The floor is in VIEWPORT
+  // units, so magnifying the map by narrowing the viewBox leaves the symbol
+  // where it is and lets the true water grow past it — the two converge, and
+  // no polygon is touched on the way.
+  //
+  // NOT REPORTED, unlike the welded island above. This is the drawing
+  // convention applied uniformly and undone by zoom, the same standing a
+  // river's symbolic 2-unit width already has; a welded island is reported
+  // because the map contradicts a claim the document made, which is a
+  // different kind of fact.
+  for (const [i, ch] of narrowChannels(
+    islandInfos.map(({ poly }) => poly),
+    waterPolys.map(({ poly }) => poly),
+    { width: w, height: h },
+  ).entries()) {
+    // A hair-fine gap must not report as "0mi across", which reads as the
+    // contact #180 warns about rather than as the passage this is drawing.
+    const across = ch.narrowest / scale;
+    const trueWidth = across >= 0.1 ? `${round1(across)}${mapUnit}`
+      : across >= 0.01 ? `${across.toFixed(2)}${mapUnit}`
+      : `under 0.01${mapUnit}`;
+    layers.lines.push(
+      el("g", { id: `cd-channel-${model.doc.docId}-${i}` },
+        svgTitle(`this passage is ${trueWidth} across — drawn wider so it can be seen, and narrowing to its true width as you zoom in`),
+        el("polyline", {
+          points: pointsAttr(ch.spine),
+          fill: "none",
+          stroke: waterPolys[ch.water]?.fill ?? theme.terrainFill(["sea"]),
+          "stroke-width": CHANNEL_FLOOR,
+          "vector-effect": "non-scaling-stroke",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+        })),
+    );
+  }
+
+  // A RIVER ENDING IN OPEN WATER (#166). Spec 05 §2's "water wins every
+  // overlap" is stated for terrain of every kind, on the grounds that it is a
+  // property of the map model rather than of one terrain kind — a path band is
+  // neither, so it was exempt by omission rather than by decision, and the
+  // result is the one thing the rule exists to prevent: something drawn over
+  // the sea that should have stopped at it.
+  //
+  // Reported rather than clipped, because a river crossing water is nearly
+  // always a typo rather than a claim, and because the FIX IS A REAL SPELLING
+  // that already works — so the diagnostic can name it. Clipping would also
+  // have to carve out bridges, fords, canals and `join`, each of which touches
+  // water on purpose.
+  //
+  // `to <coastline> at (…)` and `join <ref>` are those correct spellings, so a
+  // course declared either way is never questioned however its curve lands.
+  if (waters.length) {
+    for (const { e, r, chain } of items) {
+      if (!chain.includes("river") || !r.polyline || r.polyline.length < 2) continue;
+      const course = e.placements.find(
+        (p): p is Extract<Placement, { kind: "relational"; form: "from-to" }> =>
+          p.kind === "relational" && p.form === "from-to",
+      );
+      // EITHER END, not just the last one. Rivers are commonly authored
+      // MOUTH-FIRST — `from` the sea and inland — which is how nine of the
+      // Puget Sound map's rivers came to start a mile or two offshore.
+      // Checking only `to` missed every one of them.
+      const ends = [
+        { pt: r.polyline[0]!, spelled: course ? course.from.at.kind !== "point" || course.from.join === true : false },
+        { pt: r.polyline[r.polyline.length - 1]!, spelled: course ? course.to.at.kind !== "point" || course.to.join === true : false },
+      ];
+      const body = ends
+        .filter((end) => !end.spelled)
+        .flatMap((end) => waterPolys.filter((water) => pip(end.pt, water.poly)))[0];
+      if (!body) continue;
+      const named = e.name ? `'${e.name}'` : `the ${e.typeWord ?? "river"} on line ${e.line}`;
+      const into = body.name ? `'${body.name}'` : "open water";
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        // No coordinates in the suggestion: the endpoint is known here in
+        // RENDERED units, and quoting those back at an author writing map
+        // units would be worse than saying nothing.
+        message: `${named} ends inside ${into} — it is drawn across the water and out the far side. Declare that end at the shore, with 'to <coastline> at (…)' or 'from <coastline> at (…)' (spec 05 §2, 02 §7)`,
+      });
     }
   }
 
@@ -1382,15 +2632,78 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   layers.labels.push(...labelBuckets[4]!, ...labelBuckets[3]!, ...labelBuckets[2]!, ...labelBuckets[1]!, ...labelBuckets[0]!);
 
   // The land mask (#98): white everywhere, black over every water body, so
-  // terrain drawn through it stops at the shore.
+  // terrain drawn through it stops at the shore — AND white again over every
+  // island, because an island is land (#165). Without that last step a wood
+  // declared on an island is masked away by the sea the island sits in.
+  const frame = { x: 0, y: 0, width: w, height: h };
+  const maskBox = `maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(w)}" height="${fmt(h)}"`;
+  const defs: string[] = [];
   if (hasWater) {
-    body.push(
-      `<defs><mask id="${landMaskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(w)}" height="${fmt(h)}">` +
-        el("rect", { x: 0, y: 0, width: w, height: h, fill: "#fff" }) +
-        waterPolys.map((poly) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
-        `</mask></defs>`,
+    defs.push(
+      `<mask id="${landMaskId}" ${maskBox}>` +
+        el("rect", { ...frame, fill: "#fff" }) +
+        waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        islandInfos.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#fff" })).join("") +
+        `</mask>`,
     );
   }
+
+  // LAND IS ONE REGION, so a coastline is drawn only where land meets WATER
+  // (#165). Every land shape used to stroke its own whole outline regardless
+  // of what was already land beneath it, so an island touching the shore drew
+  // a ring lying across the peninsula and two overlapping islands drew a lens
+  // with a seam through it. At map scale that is the common case rather than
+  // an edge case: Bainbridge really is separated from the Kitsap Peninsula by
+  // about half a mile of water, which on a 100mi-wide map is thinner than the
+  // stroke, so the correct rendering is one merged landmass.
+  //
+  // Taken as a MASK rather than as a polygon union, which would need a
+  // boolean-geometry engine the renderer does not carry (ADR 0007). The result
+  // is the same boundary: each island's stroke shows only over water and not
+  // over another island, and the mainland's coastline is hidden under every
+  // island — so what survives is exactly the outline of the union.
+  if (hasWater) {
+    defs.push(
+      `<mask id="${waterMaskId}" ${maskBox}>` +
+        el("rect", { ...frame, fill: "#000" }) +
+        waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#fff" })).join("") +
+        // Islands are LAND inside the water they sit in, so their own interiors
+        // come back out: an island's border must lie on its water side too,
+        // and the mask that grants that is the same one.
+        islandInfos.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        `</mask>`,
+    );
+  }
+  if (hasIslands) {
+    islandInfos.forEach(({ poly }, i) => {
+      defs.push(
+        `<mask id="${insideMaskId(i)}" ${maskBox}>` +
+          el("rect", { ...frame, fill: "#000" }) +
+          el("polygon", { points: pointsAttr(poly), fill: "#fff" }) +
+          `</mask>`,
+      );
+      defs.push(
+        `<mask id="${shoreMaskId(i)}" ${maskBox}>` +
+          // No water declared anywhere: nothing to merge against, so show the
+          // island whole rather than erasing it.
+          (waterPolys.length
+            ? el("rect", { ...frame, fill: "#000" }) +
+              waterPolys.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#fff" })).join("") +
+              // Every OTHER island, not this one: an island's own interior must
+              // not eat its own stroke, or every shore comes out half-width.
+              islandInfos.filter((__, j) => j !== i).map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("")
+            : el("rect", { ...frame, fill: "#fff" })) +
+          `</mask>`,
+      );
+    });
+    defs.push(
+      `<mask id="${coastMaskId}" ${maskBox}>` +
+        el("rect", { ...frame, fill: "#fff" }) +
+        islandInfos.map(({ poly }) => el("polygon", { points: pointsAttr(poly), fill: "#000" })).join("") +
+        `</mask>`,
+    );
+  }
+  if (defs.length) body.push(`<defs>${defs.join("")}</defs>`);
   body.push(...layers.water, ...layers.realms, ...layers.areas, ...layers.lines, ...layers.points, ...layers.labels);
 }
 
@@ -1398,6 +2711,104 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
  * Shrink a letter-spaced label until it fits `maxPx` (floor 8px, spacing
  * scaled proportionally) — no label is too big to exist on the map.
  */
+/**
+ * Where two polylines first cross, or null. Endpoints touching within a hair
+ * do NOT count: a tributary that ends on its trunk meets it, and reporting
+ * that as a crossing would fire on every correct confluence (#94).
+ */
+/**
+ * Organic finishing for an `area` outline (#96). Spec 02 §9 has always said a
+ * renderer "finishes organically"; coastlines, blobs and ridge belts got it and
+ * `area` did not, so a forest drawn as a shaped silhouette came out a
+ * straight-edged polygon — a surveyor's boundary, not a wood. The only way to
+ * fake curves was thirty hand-placed points per patch.
+ *
+ * Control points are subdivided and nudged perpendicular to the local edge, at
+ * an amplitude proportional to that edge's own length, so a large patch ripples
+ * at the scale of a large patch and a small one does not dissolve. Then the
+ * whole ring is splined. Seeded by identity, so the same document renders the
+ * same wood every time (spec 02 §8.2).
+ *
+ * EVERY NUMBER HERE IS RELATIVE TO THE SHAPE, and that is the fix for #203
+ * rather than a tidying. The two constants this used to carry — skip an edge
+ * under 8 units, cap the nudge at 16 — were in RENDERED units, which are a
+ * fraction of the canvas rather than a distance, so the same declaration drew a
+ * different shape at a different `extent:`. Measured on the Puget Sound map, an
+ * island's drawn centroid moved 0.16mi between a 100mi and a 350mi extent and
+ * its bounding box grew 1.3%, which was enough to close a 0.1mi channel and
+ * make `check` report a welded island on a document that passed at the other
+ * extent. Spec 05 §4 and ADR 0023 both forbid that; neither anticipated
+ * `extent:` as an input to a shape.
+ *
+ * They are not re-expressed in MILES either, which was the first proposal. The
+ * committed examples run from a 12mi survey to a 1600mi continent, where the
+ * old gate works out at 0.12mi and 15.61mi — a 133x spread that no single
+ * distance can serve. A fraction of the shape's own extent works at every
+ * scale, and it is the model `organicMass` already uses for the same job
+ * (ADR 0025: texture is "a pure function of the arguments").
+ *
+ * The one absolute floor left is `QUANTUM`, and it is legitimate because below
+ * the output's own precision the geometry cannot be expressed at all (#176).
+ */
+function organicOutline(pts: XY[], seed: number): XY[] {
+  const random = rng(seed);
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  // The shape's own diagonal — what "large" and "small" mean for this outline.
+  const extent = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  // Texture may not become silhouette: past this the author's own outline stops
+  // governing the shape. It almost never binds — an edge has to run beyond two
+  // thirds of the whole shape's diagonal to reach it — which is the point, and
+  // is why the old 16-unit cap could sit there for so long looking harmless.
+  const cap = extent * 0.15;
+  const out: XY[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]!;
+    const b = pts[(i + 1) % pts.length]!;
+    out.push(a);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    // Degenerate only. Any edge the output can express gets its texture, and an
+    // edge too short for the texture to be SEEN still gets it — sub-pixel
+    // wiggle costs two vertices and nothing else, where skipping it moves the
+    // land.
+    if (len < QUANTUM) continue;
+    const nx = -dy / len;
+    const ny = dx / len;
+    // Two intermediate points per edge: enough to read as ragged, few enough
+    // that the author's silhouette still governs the shape.
+    for (const t of [0.34, 0.68]) {
+      const amp = (random() - 0.5) * Math.min(len * 0.22, cap);
+      out.push({ x: a.x + dx * t + nx * amp, y: a.y + dy * t + ny * amp });
+    }
+  }
+  return catmullRom(out, 5, true);
+}
+
+function firstCrossing(a: XY[], b: XY[]): XY | null {
+  const NEAR = 1.5;
+  const ends = [a[0]!, a[a.length - 1]!, b[0]!, b[b.length - 1]!];
+  for (let i = 1; i < a.length; i++) {
+    for (let j = 1; j < b.length; j++) {
+      const hit = segmentIntersection(a[i - 1]!, a[i]!, b[j - 1]!, b[j]!);
+      if (!hit) continue;
+      if (ends.some((e) => Math.hypot(e.x - hit.x, e.y - hit.y) <= NEAR)) continue;
+      return hit;
+    }
+  }
+  return null;
+}
+
+function segmentIntersection(p1: XY, p2: XY, p3: XY, p4: XY): XY | null {
+  const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+  if (Math.abs(d) < 1e-9) return null; // parallel: a shared bank, not a crossing
+  const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+  const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+}
+
 function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing: number): { size: number; spacing: number } {
   // Prefer a BIGGER font with tighter tracking over a smaller font with
   // airy tracking: at each size, natural spacing if it fits, else the
@@ -1411,6 +2822,134 @@ function fitLabel(textStr: string, maxPx: number, baseSize: number, baseSpacing:
     if (needed >= 0.5) return { size, spacing: needed };
   }
   return { size: 8, spacing: Math.max(0.5, perChar - 8 * 0.58) };
+}
+
+
+/**
+ * Does any part of this footprint lie in water? (#164)
+ *
+ * SAMPLED rather than solved. An exact polygon intersection would be a
+ * boolean-geometry engine, which the renderer deliberately does not carry
+ * (ADR 0007 keeps it free of runtime dependencies), and the question is
+ * coarse by design: "is there ANY water under this", not "how much of it".
+ *
+ * The grid can miss a very thin island — a `reach=0.15` skerry is a few pixels
+ * across — so a footprint no sample lands inside falls back to its own
+ * vertices and centre. Reporting a real island because the sampler was too
+ * coarse would be worse than the defect this exists to catch.
+ */
+function coversWater(poly: XY[], waters: XY[][]): boolean {
+  const xs = poly.map((p) => p.x);
+  const ys = poly.map((p) => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const STEPS = 12;
+  const inside: XY[] = [];
+  for (let i = 0; i <= STEPS; i++) {
+    for (let j = 0; j <= STEPS; j++) {
+      const p = { x: x0 + ((x1 - x0) * i) / STEPS, y: y0 + ((y1 - y0) * j) / STEPS };
+      if (pip(p, poly)) inside.push(p);
+    }
+  }
+  const probes = inside.length ? inside : [...poly, centroid(poly)];
+  return probes.some((p) => waters.some((water) => pip(p, water)));
+}
+
+/**
+ * What fraction of the ring JUST OUTSIDE this outline lies in water (#180).
+ *
+ * The navigational question, asked geometrically: could a reader sail round
+ * it? An island a boat can circle has water beyond every part of its shore.
+ * Where its outline crosses the coast, #165's union welds the two and the
+ * document's island quietly becomes a lobe of the mainland — which #164 does
+ * not catch, because that fires only when a footprint is WHOLLY dry, and the
+ * cases that matter are mostly wet. Measured on the exercise map, Harstine was
+ * 68% in water and joined at its southern end, and nothing said so; the map
+ * then denied a passage that boats actually use.
+ *
+ * Probed just outside rather than at the outline itself, because a vertex on
+ * the shared boundary belongs to both and answers neither. The offset is small
+ * on purpose: a channel only has to be wider than this to count, so a narrow
+ * but genuine passage stays an island. Outward is found per edge by testing
+ * the normal against the outline, so a concave shape — Harstine is a wishbone
+ * — is probed correctly along its notch rather than from a centroid that lies
+ * outside it.
+ */
+interface Contact {
+  /** Fraction of the ring outside the outline that lies in water. */
+  wet: number;
+  /** The worst point of contact, or null where there is none. */
+  at: XY | null;
+  /** How far that point is from open water — how far the island must move. */
+  depth: number;
+}
+
+function surroundedByWater(poly: XY[], waters: XY[][]): Contact {
+  if (poly.length < 3) return { wet: 1, at: null, depth: 0 };
+  const xs = poly.map((p) => p.x);
+  const ys = poly.map((p) => p.y);
+  const diag = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  // A FRACTION OF THE ISLAND, floored only at what the output can express
+  // (#203). This used to floor at 0.5 RENDERED units, which is 0.061mi on a
+  // 100mi map and 0.214mi on a 350mi one — so the probe stepped three and a
+  // half times further off the shore at the wider extent, and this check gave
+  // a different answer about the same island on the same document. A rule
+  // about whether two landmasses touch cannot depend on how big the picture
+  // is printed.
+  const step = Math.max(QUANTUM, diag * 0.01);
+  const dry: XY[] = [];
+  let wet = 0;
+  let total = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) continue;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    let n = { x: -dy / len, y: dx / len };
+    if (pip({ x: mid.x + n.x * step, y: mid.y + n.y * step }, poly)) n = { x: -n.x, y: -n.y };
+    const probe = { x: mid.x + n.x * step, y: mid.y + n.y * step };
+    total++;
+    if (waters.some((water) => pip(probe, water))) wet++;
+    else dry.push(probe);
+  }
+  if (total === 0) return { wet: 1, at: null, depth: 0 };
+  // WHERE IT TOUCHES, AND HOW FAR IN. A bare percentage is not actionable, and
+  // at 98% it actively misleads — that reads like a clean island when it means
+  // the union has welded the two. The author still has to find which end is
+  // touching and guess how far to move it, which on a long island is several
+  // edits. The deepest dry probe is the worst point of contact, and its
+  // distance to open water is how far the island has to move to clear it.
+  let at: XY | null = null;
+  let depth = 0;
+  for (const p of dry) {
+    let best = Infinity;
+    for (const water of waters) {
+      for (let i = 0; i < water.length; i++) {
+        const a = water[i]!;
+        const b = water[(i + 1) % water.length]!;
+        const q = nearestOnSegment(a, b, p);
+        best = Math.min(best, Math.hypot(q.x - p.x, q.y - p.y));
+      }
+    }
+    if (Number.isFinite(best) && best >= depth) {
+      depth = best;
+      at = p;
+    }
+  }
+  return { wet: wet / total, at, depth };
+}
+
+/** The point on segment a..b nearest to p. */
+function nearestOnSegment(a: XY, b: XY, p: XY): XY {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 <= 0) return a;
+  const t = Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return { x: a.x + dx * t, y: a.y + dy * t };
 }
 
 function halfPlanePolygon(hp: { compass: string; of: XY[] }, w: number, h: number): XY[] {
@@ -1502,4 +3041,21 @@ function scatterGlyphs(poly: XY[], glyphValue: string, theme: import("./theme").
     }
   }
   return out;
+}
+
+/** Direction of the declared course nearest a point, as an angle in radians. */
+function tangentAngle(controls: XY[], at: XY): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i + 1 < controls.length; i++) {
+    const a = controls[i]!;
+    const b = controls[i + 1]!;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const d = Math.hypot(mid.x - at.x, mid.y - at.y);
+    if (d < bestD) {
+      bestD = d;
+      best = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+  }
+  return best;
 }

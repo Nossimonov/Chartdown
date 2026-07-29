@@ -50,3 +50,15 @@ Against Marcus's checklist (use-cases §2): orientation/parity/dimensions/scale 
 - ~~Ledger density~~ — **resolved by spec 02 §4**: ledger form (`C4 forest`) is canonical and tool-emitted; grouped form (`forest : C4 D3 D4`) is legal human sugar; letter addresses soften the wall.
 - ~~Feature words vs. the vocabulary question~~ — **resolved by [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) (mechanism) and [spec 05](../../docs/spec/05-map-primitives.md) §1 (content)**: `keep`, `lair`, `dungeon` are standard-library entries; the ledger grammar (first word terrain, then contents) is spec 05 §3.
 - ~~Exploration state granularity~~ — **resolved by [spec 05](../../docs/spec/05-map-primitives.md) §3** (via [#17](https://github.com/Nossimonov/Chartdown/issues/17)): omission = unexplored; `seen` renders terrain but hides contents (demonstrated at G2, the white peak); `unexplored` force-fogs a mentioned hex so GMs can pre-author and reveal per session. GM mode ignores both.
+
+## With the alternative theme
+
+[`brenmark-vellum.theme.cd`](brenmark-vellum.theme.cd) renders this map in **ink and vellum** — sepia on aged paper, hatched rather than flat:
+
+```sh
+chartdown render brenmark.cd --theme brenmark-vellum.theme.cd
+```
+
+It is a three-line overlay on [the travelling theme](../ink-and-vellum.theme.cd), which is keyed entirely on standard-library words and restyles all seven examples without knowing any of them. `use:` is not decoration here: it makes the base an **inherited** layer, which is what spec 08 §6 exempts from the dead-declaration lint — a shared theme deliberately styles words no single map uses, and selected directly it reports every one of them (69 on Brenmark). A hexcrawl is read hex by hex, so the overlay keeps the grid visible under the wash. It is also the map that proved the base's `fog` was wrong: unexplored ground is most of this sheet, and a fog dark enough to read as a stain swallowed it.
+
+No themed SVG is committed; the theme is live in [the playground](https://nossimonov.github.io/Chartdown/) under the Theme selector.

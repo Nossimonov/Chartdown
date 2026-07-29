@@ -69,3 +69,53 @@ describe("UVTT export (spec 06 §9)", () => {
     expect(diagnostics.some((d) => d.severity === "error" && d.message.includes("battlemap-only"))).toBe(true);
   });
 });
+
+/**
+ * #131: the recovery half of #126. Validation warned "the vocabulary default
+ * applies" while resolution passed the bad value through a `!== "open"` test,
+ * so a typo shipped a shut portal into the normative export.
+ *
+ * `arch` is the isolating case: it derives from `opening` with no `passes=`,
+ * so its vocabulary default is `open`. A `door` cannot show the bug — its own
+ * default IS `closed`, so wrong and right coincide.
+ */
+describe("out-of-set facet values fall back, not through (#131)", () => {
+  const arch = (suffix: string): string =>
+    [
+      "map: battlemap", "grid: square 8x6", "scale: 5ft",
+      "[vocab]", "arch : opening sight=all",
+      "[structures]", "building b1 : B2..E5", `  arch : E3.e${suffix}`,
+    ].join("\n");
+  const portalsOf = (src: string): unknown[] =>
+    exportUvttSource(src, {}).uvtt!["portals"] as unknown[];
+
+  it("passes=<bogus> exports like the default, matching the warning", () => {
+    expect(portalsOf(arch("")), "unset").toHaveLength(0);
+    expect(portalsOf(arch(" passes=open")), "open").toHaveLength(0);
+    expect(portalsOf(arch(" passes=bogus")), "bogus").toHaveLength(0); // was 1
+    expect(portalsOf(arch(" passes=closed")), "closed").toHaveLength(1);
+  });
+
+  it("still warns while recovering — the value is wrong, not ignorable", () => {
+    const { diagnostics } = exportUvttSource(arch(" passes=bogus"), {});
+    expect(diagnostics.some((d) => d.message.includes("'passes=bogus' is not one of"))).toBe(true);
+  });
+
+  it("line_of_sight is unaffected either way (spec 06 §9 subtracts every opening)", () => {
+    for (const s of ["", " passes=open", " passes=bogus", " passes=closed"]) {
+      expect((exportUvttSource(arch(s), {}).uvtt!["line_of_sight"] as unknown[]), s).toHaveLength(15);
+    }
+  });
+
+  it("the fallback is the CHAIN's default, not the archetype's", () => {
+    // `mydoor : door passes=bogus` must land on door's `closed`, not on the
+    // archetype's `open` — dropping the whole way would silently reopen every
+    // derived door in the document.
+    const src = [
+      "map: battlemap", "grid: square 8x6", "scale: 5ft",
+      "[vocab]", "mydoor : door",
+      "[structures]", "building b1 : B2..E5", "  mydoor : E3.e passes=bogus",
+    ].join("\n");
+    expect(portalsOf(src)).toHaveLength(1);
+  });
+});

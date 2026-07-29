@@ -1,0 +1,11 @@
+# The Sundered Reach — Ink and Vellum
+; The travelling theme, plus this map's own word. `use:` is not decoration: it
+; makes the base an INHERITED layer, which is what spec 08 §6 exempts from the
+; dead-declaration lint — a shared theme deliberately styles words no single
+; map uses, and selecting it directly reports every one of them.
+kind: theme
+use: ../ink-and-vellum.theme.cd
+
+[theme]
+; Its islands are the subject of the map, so they carry more ink than the main.
+island : fill=#ded0ac

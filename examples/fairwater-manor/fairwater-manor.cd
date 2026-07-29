@@ -10,7 +10,7 @@ level: ground                ; unqualified sections are the ground floor
 
 [terrain]
 river fairwater "The Fairwater" : path A14 H14 P15 Z15 width=2
-road kingsroad "King's Road" : path M20 M12
+road kingsroad "King's Road" : path M20 M13
 bridge : on fairwater on kingsroad
 forest : area A1..B12
 grass : area X1..Z12
@@ -59,6 +59,9 @@ roof : area L11..N12 difficult   ; the Gatehouse's
 
 [terrain cellar]
 earth : area A1..Z20        ; solid ground — there is nothing to break through to
+; the Fairwater seeps in: standing water in one corner of the Undercroft,
+; covering part of its floor and touching none of its walls
+water : area F8..H9 difficult
 
 [structures cellar]
 building undercroft "The Undercroft" : E7..K10
@@ -96,7 +99,7 @@ guards g1 g2 : M12 M16 side=foe
 guard g3 : R8 side=foe
 lord "Lord Fairwater" : I4
 assassin "The Whisper" : O4 hidden side=foe
-party start : K19..O20
+start party : K19..O20
 
 [gm]
 trigger alarm : L10..N10 "If the party is spotted, the gate guard rings the bell — g3 and the Whisper join in 2 rounds."

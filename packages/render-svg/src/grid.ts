@@ -89,6 +89,77 @@ export function structureCells(e: { placements: Placement[] }): Map<string, Cell
   return cells;
 }
 
+/**
+ * Cells a terrain or path entity covers: area shapes flatten to their ranges,
+ * a `path` shape becomes its band (#146, #147). One definition, so the lints,
+ * the wall collector, and the UVTT exporter cannot disagree about what ground
+ * a cell has on it — two definitions of "solid" is the shape of #131.
+ */
+export function surfaceCells(e: { pairs: { key: string; value: string }[]; placements: Placement[] }): Map<string, Cell> {
+  const width = Number(e.pairs.find((p) => p.key === "width")?.value ?? 1) || 1;
+  const cells = new Map<string, Cell>();
+  for (const p of e.placements) {
+    if (p.kind === "shape" && p.shape === "path") {
+      const vertices = p.args
+        .filter((a): a is Address => a.kind === "address")
+        .map((a) => ({ col: colToNumber(a.col), row: a.row }));
+      for (const [key, cell] of pathBandCells(vertices, width)) cells.set(key, cell);
+      continue;
+    }
+    const flat = p.kind === "shape" ? p.args : [p];
+    for (const [key, cell] of structureCells({ placements: flat })) cells.set(key, cell);
+  }
+  return cells;
+}
+
+/**
+ * Cells a PATH covers, in grid space (#146, #147).
+ *
+ * A path is a polyline through cell centres with a width in cells (spec 06
+ * §6), so its args are only its corners: `road : path A8 T8 width=3` names two
+ * cells and covers fifty-seven. Anything asking what ground a road lies on —
+ * whether it is walkable, whether it overpaints rock — needs the band, and
+ * counting corners answered "almost none of it".
+ *
+ * Membership is the spec's plain reading: a cell is in the band when its
+ * centre lies within `width / 2` cells of the polyline. The renderer draws
+ * marginally narrower (a 0.85 factor, so adjacent bands show a gap), which is
+ * a drawing choice; for the questions above, being a shade generous is the
+ * right direction to err.
+ */
+export function pathBandCells(vertices: Cell[], widthCells: number): Map<string, Cell> {
+  const cells = new Map<string, Cell>();
+  if (vertices.length === 0) return cells;
+  const half = Math.max(widthCells, 1) / 2;
+  const pad = Math.ceil(half) + 1;
+  const cols = vertices.map((v) => v.col);
+  const rows = vertices.map((v) => v.row);
+  const c0 = Math.max(1, Math.min(...cols) - pad);
+  const c1 = Math.max(...cols) + pad;
+  const r0 = Math.max(1, Math.min(...rows) - pad);
+  const r1 = Math.max(...rows) + pad;
+  for (let col = c0; col <= c1; col++) {
+    for (let row = r0; row <= r1; row++) {
+      const p = { x: col - 0.5, y: row - 0.5 };
+      let best = Infinity;
+      for (let i = 0; i + 1 < vertices.length; i++) {
+        best = Math.min(best, distToSegment(p, vertices[i]!, vertices[i + 1]!));
+      }
+      if (vertices.length === 1) best = Math.hypot(p.x - (vertices[0]!.col - 0.5), p.y - (vertices[0]!.row - 0.5));
+      if (best <= half) cells.set(cellKey({ col, row }), { col, row });
+    }
+  }
+  return cells;
+}
+
+function distToSegment(p: { x: number; y: number }, a: Cell, b: Cell): number {
+  const ax = a.col - 0.5, ay = a.row - 0.5, bx = b.col - 0.5, by = b.row - 0.5;
+  const dx = bx - ax, dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / lengthSquared));
+  return Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy));
+}
+
 export type EdgeFacing = "n" | "e" | "s" | "w";
 
 export interface PerimeterEdge {

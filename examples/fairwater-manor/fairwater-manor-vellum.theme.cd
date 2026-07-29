@@ -1,0 +1,11 @@
+# Fairwater Manor — Ink and Vellum
+kind: theme
+use: ../ink-and-vellum.theme.cd
+
+[theme]
+; `ladder : stairs` is this document's own derivation (spec 04 §3), and a
+; ladder is not a stair: its own treads, and lighter ink.
+ladder : glyph=rungs
+
+[glyphs]
+rungs : "M-4,8 L-4,-8 M4,8 L4,-8 M-4,4 L4,4 M-4,0 L4,0 M-4,-4 L4,-4"

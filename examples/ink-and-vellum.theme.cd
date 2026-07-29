@@ -1,0 +1,120 @@
+# Ink and Vellum
+; The second theme (spec 08 §5), and the one that has to travel: keyed ENTIRELY
+; on standard-library words, so it restyles every example in this directory
+; without knowing a single one of them. Candyworld is the other half of the
+; proof and cannot travel — three of its subjects are Gumdrop Vale's own words.
+;
+; Sepia ink on aged paper, hatched rather than flat, so the theme has to exercise
+; stroke=, dash= and glyph= and not only swap fills. A palette swap would satisfy
+; the eye without proving the contract.
+kind: theme
+use: default
+
+[theme]
+
+; ---- the sheet ------------------------------------------------------------
+paper : fill=#e9ddbf
+ink : fill=#3a2a19
+grid : stroke=#cbb98f
+fog : fill=#d6cbac      ; a veil over unexplored ground, not a stain — on a hexcrawl this is most of the sheet
+light : fill=#e8c98a
+ledge : stroke=#6d5a3c
+leader : stroke=#7b6642
+
+; ---- water ----------------------------------------------------------------
+; A wash, not a colour: the sea is the paper showing through a thin blue-grey.
+sea : fill=#c2cfcc
+lake : fill=#b9c9c7
+water : fill=#c2cfcc
+river : stroke=#5c7c85 width=2
+stream : stroke=#5c7c85 width=1.2
+canal : stroke=#5c7c85 dash=6,3
+coastline : stroke=#2e2217 width=1.4
+
+; ---- land -----------------------------------------------------------------
+plains : fill=#e2d5b4
+ground : fill=#e2d5b4
+island : fill=#e2d5b4
+forest : fill=#b6c2a0 glyph=conifer,conifer-bare
+hills : fill=#d9caa5
+mountains : fill=#cfc3a4
+marsh : fill=#c1c6a7 glyph=tussock
+snowfield : fill=#eae8de
+icecap : fill=#eae8de
+tundra : fill=#dcdac9
+desert : fill=#ecdfb6
+wasteland : fill=#d8ccaf
+volcano : fill=#b9a68c
+
+; ---- ways -----------------------------------------------------------------
+; Dashed, because a surveyed road on a drawn map is a convention rather than
+; a strip of ground.
+road : stroke=#6a5432 dash=7,4 width=2
+trail : stroke=#6a5432 dash=2,4
+pass : stroke=#6a5432 dash=3,3
+border : stroke=#7a5939 dash=5,3
+
+; ---- realms and named places ----------------------------------------------
+realm : fill=#b9a271
+region : fill=#c0b189
+capital : fill=#3a2a19
+city : fill=#4a3721
+town : fill=#5a4428
+village : fill=#6a5432
+hamlet : fill=#7b643f
+ruin : fill=#6d6250
+keep : fill=#4a3721
+castle : fill=#4a3721
+tower : fill=#4a3721
+temple : fill=#4a3721
+shrine : fill=#5a4428
+port : fill=#4a3721
+mine : fill=#4a3721
+landmark : fill=#5a4428
+
+; ---- structures, battlemap ------------------------------------------------
+building : fill=#f0e7cf
+building.open : fill=#e3d6b4
+building.ruined : fill=#ddd2b6
+roof : fill=#d9c9a2
+terrace : fill=#e2d5b4
+earth : fill=#574c3a
+air : fill=#dfe4e6
+rubble : fill=#c9bfa6
+
+wall : stroke=#2e2217 width=3
+fence : stroke=#7a6a4a width=2 dash=3,3
+door : stroke=#8a5a2a width=5
+window : stroke=#7d98a4 width=2.5
+pillar : fill=#4a3d29
+stairs : glyph=treads
+ramp : stroke=#6a5432 width=2
+
+; ---- props ----------------------------------------------------------------
+table : fill=#a98455
+barrel : fill=#8e6a3e
+crates : fill=#9b7748
+chest : fill=#8e6a3e
+altar : fill=#cfc3a4
+statue : fill=#b3ab97
+well : fill=#8b8672
+boulder : fill=#a89f88
+tree : fill=#8fa276
+campfire : fill=#c4692f
+torch : fill=#c4692f
+lantern : fill=#c4692f
+brazier : fill=#c4692f
+hearth : fill=#c4692f
+wagon : fill=#8e6a3e
+
+; ---- sides ----------------------------------------------------------------
+side.party : fill=#3f6b52
+side.ally : fill=#4a6b8a
+side.foe : fill=#8a3f3f
+
+[glyphs]
+; Drawn as strokes rather than silhouettes, so they read as pen work on paper.
+conifer : "M0,10 L0,-2 M0,-9 L-5,1 L5,1 Z M0,-3 L-7,6 L7,6 Z"
+conifer-bare : "M0,10 L0,-8 M0,-4 L-6,-8 M0,-4 L6,-8 M0,2 L-5,-2 M0,2 L5,-2"
+tussock : "M-6,6 L-3,-4 M-2,6 L0,-6 M2,6 L4,-3 M6,6 L7,-1"
+treads : "M-7,7 L-7,-7 L7,-7 M-7,2 L2,2 M-7,-3 L2,-3"

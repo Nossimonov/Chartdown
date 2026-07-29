@@ -9,7 +9,7 @@ scale-bar: on
 [water]
 coastline coast : from (210,0) via (150,130) (200,300) (120,390) (170,520) to (140,600)
 sea "The Argen Sea" : west of coast
-bay "Gull Bay" : on coast at (120,390)
+bay "Gull Bay" : on coast at (120,390) size=90mi   ; bites landward — the sea says which way (#93)
 
 [terrain]
 mountains "The Serpent's Spine" : ridge (700,60) (740,280) (690,530) width=60mi

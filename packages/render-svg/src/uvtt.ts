@@ -44,6 +44,32 @@ export interface UvttSourceResult extends UvttResult {
   document: DocumentNode;
 }
 
+/**
+ * The declared `light:` ambient as a UVTT scene colour (spec 06 §9, #106).
+ * Until now this was hardcoded fully lit, so a pitch-dark dungeon arrived in a
+ * VTT brightly lit with lamps sitting in it — the export said the opposite of
+ * the document. Only the shipped `light` field maps: UVTT has one ambient
+ * field, and a setting's own fields (radiation, silence) have no counterpart.
+ * An unrecognized value stays fully lit rather than guessing a tone.
+ */
+const AMBIENT_LIGHT: Record<string, string> = {
+  dark: "ff000000",
+  dim: "ff404040",
+  moonlight: "ff30405f",
+  daylight: "ffffffff",
+};
+
+function ambientLight(doc: DocumentNode, header: Map<string, string>, level: string | undefined): string {
+  let value: string | undefined;
+  for (const h of doc.header) {
+    if (h.key !== "light") continue;
+    if (h.qualifier === undefined) value = h.value;
+    else if (level !== undefined && h.qualifier === level) return AMBIENT_LIGHT[h.value] ?? "ffffffff";
+  }
+  void header;
+  return value === undefined ? "ffffffff" : (AMBIENT_LIGHT[value] ?? "ffffffff");
+}
+
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;
 
 export function exportUvtt(doc: DocumentNode, options: UvttOptions = {}): UvttResult {
@@ -124,7 +150,7 @@ export function exportUvtt(doc: DocumentNode, options: UvttOptions = {}): UvttRe
       closed: p.closed,
       freestanding: false,
     })),
-    environment: { baked_lighting: false, ambient_light: "ffffffff" },
+    environment: { baked_lighting: false, ambient_light: ambientLight(doc, model.header, level) },
     lights,
     image: options.image ?? "",
   };

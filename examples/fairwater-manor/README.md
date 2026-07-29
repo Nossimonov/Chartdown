@@ -15,3 +15,15 @@ Nearly the whole battlemap vocabulary, including **multi-level structures** (spe
 ## Renders
 
 [fairwater-manor.svg](fairwater-manor.svg) (player) · [fairwater-manor-gm.svg](fairwater-manor-gm.svg) (GM — the Whisper, the alarm zone, and the secrets appear).
+
+## With the alternative theme
+
+[`fairwater-manor-vellum.theme.cd`](fairwater-manor-vellum.theme.cd) renders this map in **ink and vellum** — sepia on aged paper, hatched rather than flat:
+
+```sh
+chartdown render fairwater-manor.cd --theme fairwater-manor-vellum.theme.cd
+```
+
+It is a three-line overlay on [the travelling theme](../ink-and-vellum.theme.cd), which is keyed entirely on standard-library words and restyles all seven examples without knowing any of them. `use:` is not decoration here: it makes the base an **inherited** layer, which is what spec 08 §6 exempts from the dead-declaration lint — a shared theme deliberately styles words no single map uses, and selected directly it reports every one of them (69 on Brenmark). `ladder : stairs` is this document's own derivation, and a ladder is not a stair — the overlay gives it its own rungs. It is also the map that proved the base's `earth` was wrong, by lifting the Undercroft out of the dark it is meant to sit in.
+
+No themed SVG is committed; the theme is live in [the playground](https://nossimonov.github.io/Chartdown/) under the Theme selector.

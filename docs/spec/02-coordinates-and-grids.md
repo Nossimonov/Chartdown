@@ -6,6 +6,7 @@
 
 - Grids are 1-indexed. Row 1 (grids) and y=0 (gridless) are north; columns/x grow east, rows/y grow south. The origin is always northwest.
 - `scale:` (grid maps) gives the real size of one cell: `scale: 5ft`, `scale: 6mi`.
+- `detail:` (gridless maps) chooses the **render resolution** — how much canvas the map is drawn onto, and therefore how much detail survives label arbitration. `overview` (default) is readable taken in whole; `reference` doubles the canvas for a map meant to be studied at zoom, keeping fine names a smaller frame would shrink or drop. Font sizes are absolute, so the trade runs both ways: a reference map's text is proportionally smaller when the whole map is shown at once. Closed value set; inert on grid maps, whose size comes from the grid, and using it there warns ([ADR 0020](../decisions/0020-render-resolution-is-editorial.md)).
 - `extent:` (gridless maps) gives the map's world size: `extent: 900x600mi`.
 - Bare numbers in placements are cells (grid maps) or world units (gridless maps). Explicit units (`70mi`, `20ft`) are always legal and MUST match the map's unit dimension.
 - The optional header key `seed:` takes an integer that varies deterministic organic rendering (§8). Same document + same seed → same geometry, always.
@@ -44,7 +45,7 @@ On gridless maps, a point is `(x,y)` in the map's extent units from the northwes
 
 ## 7. Relational placement — the closed grammar
 
-Relational placement is legal **only** in the following forms, built from the closed keyword set `at · on · near · of · from · via · to · along · edge`. Anything else is a syntax error: no free prepositions, no new phrasings without a spec change.
+Relational placement is legal **only** in the following forms, built from the closed keyword set `at · on · near · of · from · via · to · join · along · edge`. Anything else is a syntax error: no free prepositions, no new phrasings without a spec change.
 
 | Form | Example |
 |---|---|
@@ -56,7 +57,15 @@ Relational placement is legal **only** in the following forms, built from the cl
 | `<compass> edge of <ref>` | `town "Dunmere" : south edge of "Thornwood"` |
 | `near <ref \| point>` | `near (720,240)` |
 | `from <endpoint> [via <points>] to <endpoint>` — paths | `river "The Vess" : from "The Serpent's Spine" at (720,240) to "Gull Bay"` |
+| `from <endpoint> [via <points>] join <ref>` — confluences | `river bruinen : from misty at (665,320) via (628,440) join mitheithel` |
 | `along [<compass> edge of] <ref>` — path shape hint, feature-following line, or a feature-following stretch of an `area` boundary / a border's stretch selector (spec 05 §2, ADRs 0012–0013). The optional face qualifier names WHICH line of an areal referent to follow (`along south edge of westspine`); a line-needing reference to a crestless area without a face is ambiguous and fails loud | `road "Coast Road" : from "Argenport" to "Merrow's Rest" along coast` · `realm khar "Khar" : area (600,80) along spine (620,470) (900,420)` |
+
+**`join <ref>`** ends a course on another watercourse's **finished curve**, at the nearest point to where it arrives. It is the first endpoint that resolves to a *derived* position rather than a named or literal one, and it is **live** like any anchor: moving the trunk moves the confluence, where hand-matched coordinates detach silently and say nothing. It takes the watercourse itself — `join <ref> at <point>` is an error, because finding the meeting point is the whole job.
+
+**Two watercourses whose courses cross without a declared meeting are a warning.** Water does not flow over water, and until the network was recorded nothing could say so: two rivers routed to adjacent mouths drew a visible X in silence, because no rule governed two linear features sharing space. A `join`, or one river beginning `from` the other, is the declaration that makes a meeting intentional; anything else that touches is reported with both names and the position. Roads are untouched, and deliberately so: at region scale a road meeting a river *implies* a crossing, and the spot is a **promotable location** — the mapmaker names a bridge there when it earns a name. Spec 06 §6 warns about the same geometry on a battlemap because at tactical scale a ford or bridge is mechanical (difficult terrain, a chokepoint), so it has to be declared rather than inferred. The difference is scale, not an oversight.
+
+`join` does not change what `to <ref>` means. Aspect adaptation (spec 03) resolves a line reference in a point slot to its **midpoint**, and it still does, for every archetype — so `to <river>` flows to the middle of that river and `join <river>` flows to where the two meet. Overloading `to` would have bought the same effect by making one archetype's adaptation rule different from the rest; the pair reads as deliberate instead ([#94](https://github.com/Nossimonov/Chartdown/issues/94)).
+
 
 - `<ref>` is a bare id word or quoted display name; resolution is defined by [03 — Identity, References, and Links](03-identity-and-links.md).
 - **Multiple relational placements constrain jointly**: `on coast 70mi north of argenport` means both hold. In particular, two `on` references to path entities place the entity at the **intersection of their bands** — the idiom for crossings (`ford : on redford on tollroad`), whose location is thereby derived rather than restated; see spec 06 §6. If the constraints are satisfiable in more than one place, the placement is ambiguous — a fail-loud error — and an `at <cell|point>` *chooses* among the candidates without redefining extent.
@@ -81,12 +90,54 @@ Shape tokens whose geometry the renderer finishes organically (deterministically
 
 > *Non-normative — finishing is not inventing.* A renderer smooths and textures the author's sketch; it never fabricates geography the sketch doesn't contain, because determinism and additive stability (§8) forbid improvisation. Sketch density is therefore authorial: a two-point path renders as a near-straight line however organic the finishing, so give a landmark river as many `via` points as its story deserves — the same budget you'd give a coastline.
 
+**Finishing may not depend on the rendered scale** *([ADR 0037](../decisions/0037-geometry-is-in-map-units-ink-is-in-canvas-units.md), [#203](https://github.com/Nossimonov/Chartdown/issues/203))*. A drawn shape is a pure function of its own declaration, and `extent:` is **not** part of that declaration — it states how much world the sheet covers, not what is on it. So the texture applied to an outline, and every threshold that governs it, MUST be expressed in map units or as a fraction of the shape itself, never as a fraction of the canvas. A renderer whose organic finishing carries a canvas constant draws the same document as a different shape on a wider sheet, and is **non-conforming**: measured on a 100mi map against the same document at 350mi, an island's drawn centroid moved 0.16mi and its bounding box grew 1.3%, which was enough to close a declared 0.1mi channel and make `check` report a welded island (05 §2) on a document that passes at the other extent. This binds coherence checks as well as geometry — a rule about whether two landmasses touch cannot have a different answer at a different `extent:`. The converse is equally normative and is why this is a split rather than a blanket rule: **ink is in canvas units.** Stroke widths, font sizes, marker radii and the legibility floor of 05 §2 are symbols whose job is legibility at the drawn size, and expressing them in map units would make them invisible on a large map and overwhelming on a small one.
+
+**Finishing may not decide an extent.** Every shape here declares its geometry and the renderer textures it; none of them may have its *dimensions* come out of the texture. `blob` was the exception and was wrong: it was fourteen points of jitter around a centre, so `size=` was a suggestion with about ten percent of slack in it, and the outline moved when the entity was named, when an unrelated `seed:` was added, and when two lines were swapped in the file (ADR 0025, [#173](https://github.com/Nossimonov/Chartdown/issues/173)). Where finishing perturbs a boundary the declared extent MUST survive it. **`seed:` therefore re-rolls only what an author declared no dimensions for** — the roughening of an `area`'s silhouette — and a document whose shapes are all extents renders identically under every seed.
+
 | Shape | Form | Meaning |
 |---|---|---|
-| `area` | `area <range \| cell/point list>` | polygon or block |
+| `area` | `area <range \| cell/point list>` | polygon or block. **Terrain outlines are organically finished** — the points are a silhouette the renderer splines and roughens, so a shaped wood reads hand-drawn rather than surveyed. `raw` opts back into literal edges (enclaves, surveyed parcels); water areas are literal already, because their coastlines carry their own finishing, and an outline with `along` spans stays literal because those segments ARE a feature's finished curve and re-splining would pull the boundary off it (ADR 0012, [#96](https://github.com/Nossimonov/Chartdown/issues/96)) |
 | `path` | `path <cell/point sequence> [width=N]` | polyline |
-| `blob` | `blob <point \| cell> size=<measure>` | organic mass around a center |
+| `blob` | `blob <point \| cell> size=<measure>` | **a declared extent, not an outline.** A round mass measuring exactly `size=` across, organically finished. `size=` is normative: the drawn shape MUST measure that across, so a `blob` is never quietly resized — this is the same contract 05 §4 states for a placed feature, and it used to be the opposite one. The finishing is **texture the renderer owns and nothing may reference**, and it MUST be a pure function of the word and the extent: not of the document `seed:`, not of the entity's id or name, not of its position, and not of its ordinal among siblings (ADR 0025, [#173](https://github.com/Nossimonov/Chartdown/issues/173)). An elongated mass is a `ridge`, an `area`, or a detached feature that takes its bearing from its host (05 §4) |
 | `ridge` | `ridge <point sequence> [width=<measure>]` | elongated organic mass along a spine; `width=` declares the mass's breadth — the belt, not the centerline, is the feature's footprint (a mountain range is terrain with dimensions, not a string of peaks). `ridge (…) area (…)` on one entity refines the extent while the crest survives for references — refinement is additive, never a swap (ADR 0013) |
+
+### A shape may be declared in a referent's frame
+
+`<shape> on <ref> at <points…>` reads the points as **offsets from the referent**, so the whole shape travels when the referent moves — spurs radiating off a peak, an outwork hugging a keep, a marsh that belongs to its lake:
+
+```chartdown
+peak erebor "Erebor" : (700,300)
+mountains westarm "Western Spur" : ridge on erebor at (-70,100) (-90,170) width=40mi
+mountains eastarm "Eastern Spur" : ridge on erebor at (75,100) (95,170) width=40mi
+```
+
+This is §7's local frame — *"a cell/range/edge after `at` is LOCAL to the referent; moving the structure moves its contents"* — reaching the one construct it had not: shapes took literal coordinates only, so a spur was hand-matched to its mountain's position and detached silently when the mountain moved.
+
+**The whole shape travels, not one end of it.** Anchoring only a shape's first point deforms it — the anchored end follows and the rest stays, which is worse than detaching cleanly, because the geometry silently changes rather than merely sitting in the wrong place. A shape that belongs to a feature needs a frame, not an anchor point.
+
+Offsets are Cartesian and therefore lose nothing against a bearing-and-range spelling: the two are interconvertible, so any spine one can describe the other can, and the choice is which reads better to write ([#142](https://github.com/Nossimonov/Chartdown/issues/142)).
+
+### Repeated placement
+
+`every <n> in <range>` places one entity per cell whose offset from the range's **north-west corner** is a multiple of `n` on both axes; `every <n>x<m>` steps columns and rows independently. The first cell is always placed, so `every 4 in A1..A9` gives A1, A5, A9 — what a reader counting bays expects.
+
+```chartdown
+pillar : every 4 in FH38..GF102      ; a colonnade, one line
+crates : every 3x2 in FF100..FK108
+```
+
+This is a **qualifier on a placement**, not a tenth relational form — §7's closed list is untouched. Spacing is authorial data, not renderer judgement: the repeat is arithmetic fixed by the document, so it expands to ordinary placements and §8.2's determinism holds trivially. Everything downstream treats the result as though the cells had been written out, including local frames — `on second-hall at every 4 in C4..AB60` puts the colonnade in the hall's own coordinates (§7), so moving the hall moves all of it, which hand-written addresses do not.
+
+A repeat expanding past **4096** cells is an error rather than a hang.
+
+`every <measure> along <ref>` spaces entities down a referent's course — lamp-rows down a corridor, mile-markers along a road. It takes a **measure**, not a count, because a course has length rather than a cell count:
+
+```chartdown
+lamp : every 40ft along kings-gallery light=30ft
+landmark : every 100mi along coast-road
+```
+
+On a grid map it walks the **cells the course covers**, not its vertices — `path B4 Z4` is two addresses spanning twenty-five cells. On a gridless map it walks arc length. Either way it expands to ordinary placements, so everything downstream behaves as though the cells had been written out.
 
 ## 10. Grammar sketch additions
 

@@ -1,0 +1,34 @@
+{
+  "name": "@chartdown/measure",
+  "version": "0.3.3",
+  "description": "Derive Chartdown feature declarations from georeferenced imagery — size=, reach=, taper= and via measured rather than remembered. Zero runtime dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "chartdown-measure": "dist/measure.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "chartdown",
+    "ttrpg",
+    "map",
+    "coastline",
+    "measurement",
+    "georeference"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nossimonov/Chartdown.git",
+    "directory": "packages/measure"
+  },
+  "homepage": "https://nossimonov.github.io/Chartdown/",
+  "bugs": "https://github.com/Nossimonov/Chartdown/issues",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

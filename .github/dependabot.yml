@@ -1,0 +1,30 @@
+# Dependency surveillance (ADR 0029).
+#
+# The audit job in CI catches an advisory once it is published against a
+# version we ship; this is the other half — routine updates, so we are not
+# discovering a two-year-old transitive dependency at the moment it becomes a
+# vulnerability. Weekly rather than daily: the point is that updates are
+# unremarkable, not that they are constant.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the dev toolchain, which is noise on its own and where an
+      # advisory is a chore rather than a vulnerability for a user.
+      dev-tooling:
+        dependency-type: development
+    commit-message:
+      prefix: deps
+
+  # The Action is published and pinned by third parties, so a stale runner
+  # image or checkout action is shipped surface too.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

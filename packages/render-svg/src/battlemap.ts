@@ -7,9 +7,10 @@
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
-import { GRID_LINE, hasBattlemapGlyph, INK, wordTint } from "./theme";
-import { colLetters, colToNumber, el, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
-import { collectWalls, SIDE_NAME } from "./walls";
+import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { coherenceLints } from "./lints";
+import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 interface Frame {
   cols: number;
@@ -48,6 +49,16 @@ export function renderBattlemap(
    * ALL structures because a shared wall is one wall (spec 06 §3): an opening
    * declared by either owner perforates it, so either owner's perimeter gaps.
    */
+  // Declared with the other render state: renderFreeText runs inside the
+  // entity loop below, before any later let would initialise.
+  // Emitter pools per field, as mask holes for the ambient wash (#106).
+  const fieldHoles = new Map<string, string[]>();
+  const noteHole = (field: string, shape: string): void => {
+    const list = fieldHoles.get(field) ?? [];
+    list.push(shape);
+    fieldHoles.set(field, list);
+  };
+  let noteCourseCount = 0;
   let openEdgeCache: Set<string> | null = null;
   const openingEdgeKeys = (): Set<string> => {
     if (openEdgeCache) return openEdgeCache;
@@ -151,6 +162,14 @@ export function renderBattlemap(
       renderStructure(e, layers.structures, titleEl, anchor);
       continue;
     }
+    // An opening with no parent structure (#113): the Doors of Durin are a
+    // hole in a mountainside, not a door in a built wall. Legal where the edge
+    // separates open floor from a declared impassable surface — the rock IS
+    // the barrier, so it needs no invented chamber to live in.
+    if (e.archetype === "opening") {
+      renderUnparentedOpening(e, titleEl, anchor);
+      continue;
+    }
     // Freestanding barriers (#62): wall/fence edge runs and pillar cells draw
     // here — they always blocked light (walls.ts); now they're visible too.
     if (e.archetype === "barrier") {
@@ -159,7 +178,10 @@ export function renderBattlemap(
     }
     // Range-only entities: zones for zone/token archetypes, gm triggers, and
     // elevated areas; a range-only FEATURE is a footprint (the high table).
-    const zoneLike = e.archetype === "zone" || (hasOnlyRange(e) && (e.archetype === "token" || e.gmOnly || elevation !== undefined));
+    // A staging zone is the `start` word (zone archetype) — not any token word
+    // that happens to carry a range (#121, ADR 0015). gm-only ranges and
+    // elevation areas keep their zone rendering.
+    const zoneLike = e.archetype === "zone" || (hasOnlyRange(e) && (e.gmOnly || elevation !== undefined));
     if (zoneLike) {
       renderZone(e, layers.zones, layers.roomLabels, titleEl, anchor, elevation);
       continue;
@@ -192,13 +214,34 @@ export function renderBattlemap(
 
   for (const pending of pendingCrossings) renderCrossing(pending);
 
+  // Coherence lints (#123): things a document can say that no rule forbids and
+  // no reader would mean. Warnings only, and reachable from `check` because a
+  // map is rendered there (#120) — a lint nobody runs is a lint nobody has.
+  coherenceLints(model, levelCtx?.level ?? model.doc.defaultLevel, diagnostics, levelCtx);
+
   // Reciprocal landings (spec 06 §8): connectors on other levels targeting
   // this one show their landing here automatically, unless an explicit
   // connector already occupies the cell.
   if (levelCtx) {
     for (const source of levelCtx.allEntities) {
       const to = pairOf(source.pairs, "to");
-      if (to !== levelCtx.level || source.level === levelCtx.level) continue;
+      if (to === undefined || source.level === levelCtx.level) continue;
+      // A `to=` RANGE lands on every level it names (#112), so one declaration
+      // is one stair with four landings rather than four stairs that nothing
+      // says are the same flight.
+      const lands = levelSpan(levelCtx.levels, to).includes(levelCtx.level);
+      // A `through=` level is occupied but NOT opened onto: the shaft passes
+      // through the rock there. Drawing a landing would invite the party onto
+      // a step that does not exist.
+      const throughValue = pairOf(source.pairs, "through");
+      const passes = throughValue !== undefined && levelSpan(levelCtx.levels, throughValue).includes(levelCtx.level);
+      if (passes) {
+        const atV = pairOf(source.pairs, "at");
+        const shaftAt = atV ? parseCell(atV) : source.placements.find((p): p is Address => p.kind === "address");
+        if (shaftAt) renderShaft(cellCenter(shaftAt), layers.features);
+        continue;
+      }
+      if (!lands) continue;
       const atValue = pairOf(source.pairs, "at");
       const landing = atValue ? parseCell(atValue) : source.placements.find((p): p is Address => p.kind === "address");
       if (!landing) continue;
@@ -233,10 +276,71 @@ export function renderBattlemap(
   // not be overpainted by the sibling structure's coincident wall line.
   body.push(
     ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
-    ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens, ...layers.labels,
+    ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens,
   );
+  // Ambient field wash (#106): the declared baseline is a fact about the place,
+  // so a `light: dark` map draws dark and its emitters read as pools in it.
+  // The wash sits above the map and BELOW labels — a dark sheet is still a
+  // sheet the GM has to read. Emitter pools are punched out with a mask, the
+  // same technique the land mask uses for water.
+  body.push(...ambientWash());
+  body.push(...layers.labels);
 
   // ---------- helpers ----------
+
+  /**
+   * The declared ambient for a field on this level, honouring the per-level
+   * qualifier: `light celebdil: daylight` beats `light: dark` on that panel.
+   */
+  function ambientOf(field: string): string | undefined {
+    const level = levelCtx?.level;
+    let general: string | undefined;
+    for (const h of model.doc.header) {
+      if (h.key !== field) continue;
+      if (h.qualifier === undefined) general = h.value;
+      else if (level !== undefined && h.qualifier === level) return h.value;
+    }
+    return general;
+  }
+
+  /**
+   * A hole in the ambient wash for one emitter. Occlusion follows the field's
+   * `occluded=` facet (spec 04 §5): `sight` (light's default) traces against
+   * sight blockers, `none` fills through matter — an antimagic zone or a
+   * radiation hazard is not stopped by a wall.
+   */
+  function emitterHole(at: XY, radius: number): string {
+    const occluded = model.facetOf("light", "occluded") ?? "sight";
+    if (occluded !== "none" && sightBlockers.length > 0) {
+      return el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill: "#000" });
+    }
+    return el("circle", { cx: at.x, cy: at.y, r: radius, fill: "#000" });
+  }
+
+  /** Full-frame wash for every declared ambient whose theme entry has a fill. */
+  function ambientWash(): string[] {
+    const out: string[] = [];
+    const fields = new Set(model.doc.header.filter((h) => model.archetypeOf(h.key) === "field").map((h) => h.key));
+    for (const field of fields) {
+      const value = ambientOf(field);
+      if (value === undefined) continue;
+      const fill = model.theme.prop(model.chainOf(field), "fill", { state: value });
+      // No theme entry for this condition: the renderer has nothing to say
+      // about it, and inventing a tone would be guessing (spec 04 §4).
+      if (!fill) continue;
+      const opacity = model.theme.prop(model.chainOf(field), "opacity", { state: value }) ?? "0.82";
+      const holes = fieldHoles.get(field) ?? [];
+      const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
+      out.push(
+        `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(frame.w)}" height="${fmt(frame.h)}">` +
+          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill: "#fff" }) +
+          holes.join("") +
+          `</mask></defs>` +
+          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill, opacity, mask: `url(#${id})` }),
+      );
+    }
+    return out;
+  }
 
   function cellsAlong(pts: XY[]): Set<string> {
     const cells = new Set<string>();
@@ -478,6 +582,55 @@ export function renderBattlemap(
   }
 
   /**
+   * A shaft passing through a level without opening onto it (#112): the
+   * footprint is drawn as an obstruction — a walled well, hatched — not floor
+   * and not a landing.
+   *
+   * This is the ground truth that was missing. The Endless Stair bores through
+   * six levels, and on every one of them those cells were indistinguishable
+   * from solid rock, so a party standing at that address was standing inside a
+   * stairwell the map called stone.
+   */
+  function renderShaft(c: XY, into: string[]): void {
+    const ink = model.theme.surface("ink", "fill", INK);
+    const half = CELL * 0.42;
+    into.push(
+      el("rect", {
+        x: c.x - half, y: c.y - half, width: half * 2, height: half * 2,
+        fill: "none", stroke: ink, "stroke-width": 1.6,
+      }),
+      el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
+      el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
+    );
+  }
+
+  /**
+   * The levels a `to=`/`through=` value covers (#112). A single name is a
+   * one-level span; `a..b` is every declared level between them inclusive, in
+   * the document's own physical order — so an author need not know which end
+   * they wrote first.
+   */
+  function levelSpan(levels: string[], value: string): string[] {
+    const [a, b] = value.split("..");
+    if (b === undefined) return levels.includes(a!) ? [a!] : [];
+    const i = levels.indexOf(a!);
+    const j = levels.indexOf(b!);
+    if (i === -1 || j === -1) return [];
+    return levels.slice(Math.min(i, j), Math.max(i, j) + 1);
+  }
+
+  /** The nearest landing in the span other than the level being drawn. */
+  function nextLandingIndex(levels: string[], span: string[], from: number): number {
+    let best = -1;
+    for (const name of span) {
+      const idx = levels.indexOf(name);
+      if (idx === -1 || idx === from) continue;
+      if (best === -1 || Math.abs(idx - from) < Math.abs(best - from)) best = idx;
+    }
+    return best;
+  }
+
+  /**
    * A level connector (spec 06 §8): themed via the word's chain with the
    * reserved up/down auto-state (`ladder.up : glyph=…`); default render is a
    * stair glyph. The direction/destination annotation is navigational and
@@ -494,8 +647,17 @@ export function renderBattlemap(
   ): void {
     if (!levelCtx) return;
     const currentIdx = levelCtx.levels.indexOf(levelCtx.level);
-    const targetIdx = levelCtx.levels.indexOf(to);
+    // With a level RANGE (#112) the destination shown is the next landing in
+    // the direction of travel, not the far end of the flight: standing on the
+    // Third Level of one long stair, what matters is that the next landing
+    // down is the First. Naming the bottom of the whole run would misreport
+    // the step the party is about to take.
+    const span = levelSpan(levelCtx.levels, to);
+    const targetIdx = span.length > 1
+      ? nextLandingIndex(levelCtx.levels, span, currentIdx)
+      : levelCtx.levels.indexOf(to);
     const up = targetIdx !== -1 && targetIdx < currentIdx;
+    const shown = levelCtx.levels[targetIdx] ?? to;
     const ink = model.theme.surface("ink", "fill", INK);
     const themed =
       model.theme.glyphFor(chain, c.x, c.y, { state: up ? "up" : "down" }) ?? model.theme.glyphFor(chain, c.x, c.y);
@@ -548,28 +710,70 @@ export function renderBattlemap(
   function renderTerrain(e: EntityNode, titleEl: string, anchor: string | undefined): void {
     const chain = model.chainOf(e.typeWord);
     const fill = model.theme.terrainFill(chain);
+    // Appearance zones on an AREA (spec 08 §2, #150): the boundary band in the
+    // edge style, the interior in core. A rect union bands per rect — an inset
+    // rect is the interior, and the base rect showing round it is the band.
+    const zones = model.theme.zones(chain, fill);
+    const bandRect = (r: { x: number; y: number; w: number; h: number }): string => {
+      if (!zones) return el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill });
+      const inset = Math.min(zones.width, r.w / 2, r.h / 2);
+      return (
+        el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: zones.edge }) +
+        el("rect", { x: r.x + inset, y: r.y + inset, width: r.w - 2 * inset, height: r.h - 2 * inset, fill: zones.core })
+      );
+    };
     const areaParts: string[] = [];
+    // One fall annotation per entity, not one per range in its footprint.
+    let fellAnnotated = false;
     const pathParts: string[] = [];
     for (const p of e.placements) {
       if (p.kind === "shape" && p.shape === "area") {
         for (const arg of p.args) {
           if (arg.kind === "range") {
             const r = rangeRect(arg);
-            areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill }));
+            areaParts.push(bandRect(r));
             if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
             if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
+            // An unfloored area falls to the level below (spec 06 §5); `to=`
+            // states where it actually lands when that is further down (#112).
+            // The most famous fall in fantasy literature was a GM note,
+            // because the geometry could not carry it.
+            const fallsTo = pairOf(e.pairs, "to");
+            if (fallsTo !== undefined && model.chainOf(e.typeWord).includes("air") && !fellAnnotated) {
+              fellAnnotated = true;
+              areaParts.push(
+                text(`▼ falls to ${fallsTo}`, {
+                  x: r.x + r.w / 2, y: r.y + r.h / 2,
+                  "font-size": 8, fill: model.theme.surface("ledge", "stroke", "#6b5d4a"),
+                  "text-anchor": "middle", "font-style": "italic", "font-family": "sans-serif",
+                }),
+              );
+            }
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
-            areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
+            areaParts.push(bandRect({ x: o.x, y: o.y, w: CELL, h: CELL }));
           }
         }
       } else if (p.kind === "shape" && p.shape === "path") {
         const addresses = p.args.filter((a): a is Address => a.kind === "address");
         const pts = addresses.map(cellCenter);
-        extendToFrame(pts, addresses, frame);
+        // Drawn to the edges of the terminal cells; RECORDED as the declared
+        // spine (#145) — see extendToCellEdge.
+        const drawn = extendToCellEdge(pts);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = model.theme.pathStroke(chain);
-        pathParts.push(el("polyline", { points: pointsAttr(pts), fill: "none", stroke: chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        const bandStroke = chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke;
+        // Zones on a path BAND (spec 08 §2, #150): the full width in the edge
+        // style, then a narrower centre strip in core — a metalled road with
+        // verges, a river with shallows.
+        const pathZones = model.theme.zones(chain, bandStroke);
+        if (pathZones) {
+          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.edge, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          const coreWidth = Math.max(width - 2 * pathZones.width, 1);
+          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        } else {
+          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+        }
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
@@ -632,6 +836,15 @@ export function renderBattlemap(
       const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
       return !openEdges.has(segKey(edgeSegment(address, pe.dir)));
     });
+    // Sides replaced by another barrier (#130) are drawn as THAT barrier, so
+    // they leave the structure's own perimeter run and merge among themselves
+    // — otherwise a cave-in would inherit the room's stroke and the line would
+    // say one thing while looking like another.
+    const replacedEdges = barrierSides(model, e);
+    const ownEdges = solidEdges.filter((pe) => {
+      const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+      return !replacedEdges.has(segKey(edgeSegment(address, pe.dir)));
+    });
     // A structure's perimeter is a theme subject like every other archetype
     // (#117): the room outline is the most visually defining thing on a
     // battlemap, and it was drawn in literal ink at a literal weight, so no
@@ -641,7 +854,26 @@ export function renderBattlemap(
     const wallCtx = open ? { state: "open" } : {};
     const wallStroke = model.theme.prop(structChain, "stroke", wallCtx) ?? INK;
     const wallWidth = Number(model.theme.prop(structChain, "width", wallCtx) ?? 3) || 3;
-    for (const run of mergeEdgeRuns(solidEdges)) {
+    // Each replaced barrier draws its own merged runs, themed by its own word.
+    for (const word of new Set(replacedEdges.values())) {
+      const mine = solidEdges.filter((pe) => {
+        const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+        return replacedEdges.get(segKey(edgeSegment(address, pe.dir))) === word;
+      });
+      const chain = model.chainOf(word);
+      const stroke = model.theme.prop(chain, "stroke", {}) ?? INK;
+      const width = Number(model.theme.prop(chain, "width", {}) ?? 3) || 3;
+      const dash = model.theme.prop(chain, "dash", {})?.replace(",", " ");
+      for (const run of mergeEdgeRuns(mine)) {
+        parts.push(
+          el("line", {
+            x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
+            stroke, "stroke-width": width, "stroke-dasharray": dash,
+          }),
+        );
+      }
+    }
+    for (const run of mergeEdgeRuns(ownEdges)) {
       const ruined = ruinedAll || ruinedSides.has(SIDE_NAME[run.dir]) || ruinedSides.has(run.dir);
       // `ruined` is a state, so a theme may restyle it — falling back to the
       // built-in collapsed dashes when it says nothing.
@@ -679,7 +911,19 @@ export function renderBattlemap(
         const windowLike = openingChain.includes("window") || openingChain.includes("arrow-slit");
         const stroke = model.theme.prop(openingChain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
         const width = Number(model.theme.prop(openingChain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
-        layers.openings.push(el("line", { ...seg, stroke, "stroke-width": width }));
+        // A DOOR'S STATE IS DRAWN HERE TOO (#206). This is the common path —
+        // an opening declared as a detail line under its structure — and it is
+        // the one the four `door` states were invisible on.
+        const ruinedOpening = d.flags.includes("ruined");
+        layers.openings.push(el("line", {
+          ...seg, stroke, "stroke-width": width,
+          "stroke-dasharray": ruinedOpening ? "4 4" : undefined,
+          opacity: ruinedOpening ? 0.6 : undefined,
+        }));
+        layers.openings.push(...openingStateMarks(
+          d, { a: { x: seg.x1, y: seg.y1 }, b: { x: seg.x2, y: seg.y2 } }, stroke, width,
+          model.theme.surface("paper", "fill", PAPER),
+        ));
       }
     }
     into.push(el("g", { id: anchor }, ...parts));
@@ -761,6 +1005,106 @@ export function renderBattlemap(
   }
 
   /**
+   * An opening perforating declared terrain, with no parent structure
+   * (spec 06 §3, #113). Fail-loud where the geometry doesn't support it:
+   * passable on both sides is a door standing in open air; impassable on both
+   * is a door inside solid rock. Neither is a passage through anything.
+   */
+  function renderUnparentedOpening(e: EntityNode, titleEl: string, anchor: string | undefined): void {
+    const rock = impassableCells(model);
+    // A barrier to perforate can be any of the three spec 06 §3 allows, and the
+    // error message promises all three: a structure's perimeter, a freestanding
+    // barrier, or (new in #113) a declared impassable surface. Checking only
+    // the last rejected two forms the language has always permitted.
+    const barrierEdges = new Set<string>();
+    for (const other of model.entities) {
+      if (other.archetype === "structure") {
+        const cells = structureCells(other);
+        for (const pe of perimeterEdges(cells)) {
+          const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
+          barrierEdges.add(segKey(edgeSegment(address, pe.dir)));
+        }
+      } else if (other.archetype === "barrier") {
+        for (const p of other.placements) {
+          if (p.kind === "edge") barrierEdges.add(segKey(edgeSegment(p.at, p.dir)));
+        }
+      }
+    }
+    const chain = model.chainOf(e.typeWord);
+    const windowLike = chain.includes("window") || chain.includes("arrow-slit");
+    const stroke = model.theme.prop(chain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
+    const width = Number(model.theme.prop(chain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
+    const parts: string[] = [titleEl];
+    for (const p of e.placements) {
+      if (p.kind !== "edge") continue;
+      const here = { col: colToNumber(p.at.col), row: p.at.row };
+      // Only the four cell edges separate two cells; a corner token addresses
+      // a point, which nothing can be a passage through.
+      const steps: Record<string, { dc: number; dr: number }> = {
+        n: { dc: 0, dr: -1 }, s: { dc: 0, dr: 1 }, e: { dc: 1, dr: 0 }, w: { dc: -1, dr: 0 },
+      };
+      const n = steps[p.dir];
+      if (!n) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `an opening takes a cell EDGE (n/e/s/w), not the corner ${p.at.col}${p.at.row}.${p.dir} (spec 02 §5)`,
+        });
+        continue;
+      }
+      const onBarrier = barrierEdges.has(segKey(edgeSegment(p.at, p.dir)));
+      const solidHere = rock.has(`${here.col}:${here.row}`);
+      const solidThere = rock.has(`${here.col + n.dc}:${here.row + n.dr}`);
+      if (!onBarrier && solidHere === solidThere) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: solidHere
+            ? `opening '${e.typeWord ?? ""}' at ${p.at.col}${p.at.row}.${p.dir} has solid ground on both sides — it passes through nothing (spec 06 §3)`
+            : `opening '${e.typeWord ?? ""}' at ${p.at.col}${p.at.row}.${p.dir} has no barrier to perforate — give it a parent structure, a freestanding wall, or a declared impassable surface (spec 06 §3)`,
+        });
+        continue;
+      }
+      const s = edgeSegment(p.at, p.dir);
+      // A DOOR'S STATE IS DRAWN (#206). `door` declares four — locked, barred,
+      // stuck, ruined — and every one of them rendered as an ordinary door, so
+      // the four most common facts a GM records about the most common opening
+      // in any dungeon were legal, checked, and invisible. A state that renders
+      // identically to its absence is the document saying something the map
+      // does not.
+      //
+      // `ruined` reuses the convention barriers already use for it — dashed and
+      // faded — so a reader learns one rule for the word rather than one per
+      // archetype. The other three are marks laid ON the opening, in its own
+      // ink, so they read at battle scale without a legend.
+      const ruinedDoor = e.flags.includes("ruined");
+      parts.push(el("line", {
+        x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, "stroke-width": width,
+        "stroke-dasharray": ruinedDoor ? "4 4" : undefined,
+        opacity: ruinedDoor ? 0.6 : undefined,
+      }));
+      parts.push(...openingStateMarks(e, s, stroke, width, model.theme.surface("paper", "fill", PAPER)));
+    }
+    if (parts.length > 1) layers.openings.push(el("g", { id: anchor }, ...parts));
+  }
+
+  /** The cell-centre course of a referenced path entity, for `along` captions. */
+  function courseOf(ref: { form: string; value: string }): XY[] | null {
+    const key = ref.value;
+    for (const other of model.entities) {
+      const matches = ref.form === "id" ? other.ids.includes(key) : other.name === key;
+      if (!matches) continue;
+      for (const p of other.placements) {
+        if (p.kind === "shape" && p.shape === "path") {
+          const addresses = p.args.filter((a): a is Address => a.kind === "address");
+          if (addresses.length > 1) return addresses.map(cellCenter);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Free text: the caption and nothing else (spec 07 §2, #104). `sprawl`
    * spreads it across its range, which is the only thing distinguishing it
    * from a bare range placement.
@@ -768,6 +1112,10 @@ export function renderBattlemap(
   function renderFreeText(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
     const label = e.texts[0] ?? e.name;
     if (!label) return;
+    // A caption takes the word's own `fill` (spec 08 §3), with the `ink`
+    // surface as the default. `note : fill=` reached nothing before (#150),
+    // and a caption you cannot colour disappears into the paper on a dark map.
+    const textFill = model.theme.prop(model.chainOf(e.typeWord), "fill") ?? model.theme.surface("ink", "fill", INK);
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
     const address = e.placements.find((p): p is Address => p.kind === "address");
     let at: XY | null = null;
@@ -780,13 +1128,25 @@ export function renderBattlemap(
       at = cellCenter(address);
     }
     if (!at) {
-      // Silent data loss is worse than either rendering or rejecting: an
-      // author got no signal that a line of their map did not survive.
-      // Which placements free text may take is #107's decision.
+      // `along <ref>` sets the caption ON the referenced course (spec 07 §2,
+      // #107) — the placement set is closed, so anything else is a parse error
+      // and this is the only remaining form.
+      const along = e.placements.find((p) => p.kind === "relational" && p.form === "along");
+      const course = along && along.kind === "relational" ? courseOf(along.ref) : null;
+      if (course && course.length > 1) {
+        const pid = `cdnote-${model.doc.docId}-${noteCourseCount++}`;
+        const d = `M${fmt(course[0]!.x)} ${fmt(course[0]!.y)}` + course.slice(1).map((pt) => `L${fmt(pt.x)} ${fmt(pt.y)}`).join("");
+        into.push(
+          `<defs><path id="${pid}" d="${d}"/></defs>` +
+            `<text font-size="9" fill="${textFill}" text-anchor="middle" font-family="sans-serif">` +
+            `<textPath href="#${pid}" startOffset="50%"><tspan dy="-4">${escapeText(label)}</tspan></textPath></text>`,
+        );
+        return;
+      }
       diagnostics.push({
         severity: "warning",
         line: e.line,
-        message: `free text "${label}" has no cell or range placement — this renderer draws nothing for it (spec 07 §2)`,
+        message: `free text "${label}" has no cell, range, or resolvable course — this renderer draws nothing for it (spec 07 §2)`,
       });
       return;
     }
@@ -799,7 +1159,7 @@ export function renderBattlemap(
       el("g", { id: anchor }, titleEl,
         text(label, {
           x: at.x, y: at.y, "font-size": size, "letter-spacing": spacing,
-          fill: INK, "text-anchor": "middle", "font-family": "sans-serif",
+          fill: textFill, "text-anchor": "middle", "font-family": "sans-serif",
         }),
       ),
     );
@@ -985,10 +1345,55 @@ export function renderBattlemap(
     });
   }
 
+  /**
+   * A feature line places one entity per cell it names — `torch : D8 H8 L8`
+   * is three torches, exactly as `pillar : D8 H8 L8` is three pillars.
+   *
+   * Only the FIRST address was drawn (#140). Barriers had always drawn every
+   * placement, so the two archetypes disagreed about what a cell list means,
+   * and the feature reading was the wrong one: a row of lamps down a gallery
+   * rendered as a single lamp at its head, silently, however many cells the
+   * author listed. `every … along` made it visible by generating such lists
+   * automatically, but the bug predates it and bites hand-written lines too.
+   *
+   * Only the first address takes the LABEL: the set is named once, not once
+   * per cell (spec 07 §1).
+   */
   function renderFeature(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined): void {
-    const address = e.placements.find((p): p is Address => p.kind === "address");
+    const addresses = e.placements.filter((p): p is Address => p.kind === "address");
+    if (addresses.length > 1) {
+      addresses.forEach((a, idx) => {
+        const one: EntityNode = { ...e, placements: [a], name: idx === 0 ? e.name : null };
+        renderFeature(one, into, labels, idx === 0 ? titleEl : "", idx === 0 ? anchor : undefined);
+      });
+      return;
+    }
+    const address = addresses[0];
     const range = e.placements.find((p): p is AddressRange => p.kind === "range");
-    if (!address && !range) return;
+    if (!address && !range) {
+      // A FEATURE'S FOOTPRINT IS CELLS, AND `area` IS REFUSED (#207). It used
+      // to fall out here in silence: `pit p : area D4..F6` rendered
+      // byte-identical to a document with no pit in it — no mark, no label, no
+      // diagnostic — which is the failure this phase spent its length removing,
+      // at the placement layer. An author who writes `area` having just written
+      // it for terrain three lines above gets a clean render with their
+      // oubliette missing, and no way to find out but to notice an absence.
+      //
+      // Refused rather than drawn, because §2 already gives the footprint as a
+      // RANGE and the two forms would then say the same thing two ways. On a
+      // REGION map an `area` on a feature is a declared outline (ADR 0026) and
+      // means something quite different — which is why this lives here, in the
+      // battlemap renderer, rather than in the parser.
+      const shape = e.placements.find((p) => p.kind === "shape");
+      if (shape) {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `'${e.typeWord ?? "feature"}' is placed with '${shape.kind === "shape" ? shape.shape : "a shape"}', and a feature's footprint on a battlemap is CELLS — give it a cell (\`F6\`) or a range (\`D4..F6\`). Drawn shapes are terrain's, not a feature's (spec 06 §2)`,
+        });
+      }
+      return;
+    }
 
     // A range placement is a feature's footprint (spec 06 §2): the high table
     // spans G3..I3 — dimensions are declared as placement, like everything else.
@@ -1002,6 +1407,7 @@ export function renderBattlemap(
       const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
       if (light) {
         const radius = measureToCells(light, model) * CELL;
+        noteHole("light", emitterHole(center, radius));
         footprintParts.push(
           sightBlockers.length > 0
             ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 })
@@ -1028,6 +1434,14 @@ export function renderBattlemap(
         // its flame, footprint stairs their treads.
         fallbackGlyph(e, chainR, center, Math.max(1, Math.min(r.w, r.h) / CELL) * 0.8, footprintParts);
       }
+      // DIFFICULT IS DRAWN ON A FEATURE TOO (#206). The hatch reached terrain
+      // and crossings and never features, so `pit : D4..F6 difficult` — a hole
+      // in the floor, which is the whole reason the word carries the state —
+      // rendered exactly like a pit you can walk over. Laid OVER the glyph, so
+      // a hatched footprint still reads as the thing it is.
+      if (e.flags.includes("difficult")) {
+        footprintParts.push(el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: "url(#hatch)", rx: 2 }));
+      }
       into.push(el("g", { id: anchor }, ...footprintParts));
       if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
         const lbl = labelTextFor(model, e) ?? e.name;
@@ -1049,6 +1463,7 @@ export function renderBattlemap(
     const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;
+      noteHole("light", emitterHole(c, radius));
       if (sightBlockers.length > 0) {
         const poly = visibilityPolygon(c, radius, sightBlockers);
         parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
@@ -1074,6 +1489,13 @@ export function renderBattlemap(
     if (!e.name && !hasBattlemapGlyph(chain) && !themedGlyph && !drewFallback && !titleEl && e.typeWord) {
       parts.unshift(svgTitle(e.typeWord));
     }
+    // A point-placed feature occupies its cell, so `difficult` hatches that
+    // cell (#206) — the same mark the terrain beside it uses, so the state
+    // reads the same wherever it is declared.
+    if (e.flags.includes("difficult")) {
+      const o = cellOrigin(address!);
+      parts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+    }
     into.push(el("g", { id: anchor }, ...parts));
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
       const lbl = labelTextFor(model, e) ?? e.name;
@@ -1087,20 +1509,111 @@ function hasOnlyRange(e: EntityNode): boolean {
 }
 
 /**
- * Paths whose terminal cells touch the map boundary extend to the frame edge,
- * so a road that runs off-map reads as continuing rather than stopping short.
+ * The mark that says which state an opening is in (#206).
+ *
+ * Laid ON the opening rather than beside it, in the opening's own ink and
+ * scaled to its own width, so it reads at battle scale and needs no legend:
+ *
+ * - **locked** — a keyhole: a dot PUNCHED through the leaf, in the paper's
+ *   own colour, because a keyhole is a hole. Drawn in the door's ink it is a
+ *   brown dot on a brown door and cannot be seen at all — which is how it
+ *   first shipped, and why this is checked by eye and not only by a diff.
+ * - **barred** — the bar: a line across the opening, set off to one side, which
+ *   is how a barred door is drawn and how it works.
+ * - **stuck** — the wedge that jammed it, at the midpoint.
+ *
+ * `ruined` is not here: it dashes and fades the opening itself, which is the
+ * convention barriers already use for that word.
  */
-function extendToFrame(pts: XY[], addresses: Address[], frame: Frame): void {
-  if (pts.length < 2 || addresses.length < 2) return;
-  const fix = (index: 0 | -1): void => {
-    const address = index === 0 ? addresses[0]! : addresses[addresses.length - 1]!;
-    const point = index === 0 ? pts[0]! : pts[pts.length - 1]!;
-    const col = colToNumber(address.col);
-    if (address.row === 1) point.y = MARGIN;
-    else if (address.row === frame.rows) point.y = MARGIN + frame.rows * CELL;
-    else if (col === 1) point.x = MARGIN;
-    else if (col === frame.cols) point.x = MARGIN + frame.cols * CELL;
+function openingStateMarks(
+  e: { flags: string[] }, s: { a: XY; b: XY }, stroke: string, width: number, paper: string,
+): string[] {
+  const dx = s.b.x - s.a.x;
+  const dy = s.b.y - s.a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  // Outward from the opening, on the side the mark sits.
+  const nx = -uy;
+  const ny = ux;
+  const mid = { x: (s.a.x + s.b.x) / 2, y: (s.a.y + s.b.y) / 2 };
+  const out: string[] = [];
+  if (e.flags.includes("locked")) {
+    out.push(el("circle", { cx: mid.x, cy: mid.y, r: Math.max(1.6, width * 0.32), fill: paper }));
+  }
+  if (e.flags.includes("barred")) {
+    const off = width * 0.9;
+    const reach = len * 0.42;
+    out.push(el("line", {
+      x1: mid.x - ux * reach + nx * off, y1: mid.y - uy * reach + ny * off,
+      x2: mid.x + ux * reach + nx * off, y2: mid.y + uy * reach + ny * off,
+      stroke, "stroke-width": Math.max(1.2, width * 0.4), "stroke-linecap": "round",
+    }));
+  }
+  if (e.flags.includes("stuck")) {
+    const h = width * 0.85;
+    const w = len * 0.16;
+    out.push(el("polygon", {
+      points: [
+        `${fmt(mid.x - ux * w)},${fmt(mid.y - uy * w)}`,
+        `${fmt(mid.x + ux * w)},${fmt(mid.y + uy * w)}`,
+        `${fmt(mid.x + nx * h)},${fmt(mid.y + ny * h)}`,
+      ].join(" "),
+      fill: stroke,
+    }));
+  }
+  return out;
+}
+
+/**
+ * A path's ends reach the edge of their own terminal cells (#145).
+ *
+ * A path is drawn through cell CENTRES, so its last vertex used to land in the
+ * middle of its final square and a road running to something — a gatehouse
+ * wall, a shoreline, the map's own edge — visibly stopped halfway through the
+ * square it was meant to reach. Fairwater Manor's King's Road was authored
+ * around it, ending a cell INSIDE the gatehouse so the two would meet, which
+ * put a road's band in a building's interior and said something the author
+ * never meant. The document was bent to fit the drawing.
+ *
+ * The rule is not "add half a cell" but a consequence of what a path already
+ * is: **a path occupies whole cells**, which is the model spec 06 §10's lints
+ * reason with ("a path is its band and a band is ground", #123/#147). So the
+ * drawn band spans its terminal cells rather than stopping at their middles,
+ * and a road ending at M13 covers M13.
+ *
+ * Along the direction of travel, so a diagonal run leaves through the corner
+ * rather than being clipped square. This SUBSUMES the frame case it replaces:
+ * a terminal cell on the boundary has its outer face ON the frame, so a road
+ * running off-map still reaches the edge — and one running ALONG the boundary
+ * now extends forward instead of being snapped sideways onto it.
+ *
+ * The DECLARED spine is left alone: `cells`, crossings and the lints keep
+ * reading the cell centres, because this is about where the ink stops and not
+ * about what the path covers. Extending those too would have the band's own
+ * footprint depend on its stroke width at the ends.
+ */
+function extendToCellEdge(pts: XY[]): XY[] {
+  if (pts.length < 2) return pts;
+  const out = pts.map((p) => ({ ...p }));
+  const reach = (end: XY, inward: XY): void => {
+    const dx = end.x - inward.x;
+    const dy = end.y - inward.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    // Where the ray from the cell's centre leaves the cell: the nearer face,
+    // which is the corner when the two components are equal.
+    const half = CELL / 2;
+    const t = Math.min(
+      Math.abs(ux) > 1e-9 ? half / Math.abs(ux) : Infinity,
+      Math.abs(uy) > 1e-9 ? half / Math.abs(uy) : Infinity,
+    );
+    end.x += ux * t;
+    end.y += uy * t;
   };
-  fix(0);
-  fix(-1);
+  reach(out[0]!, out[1]!);
+  reach(out[out.length - 1]!, out[out.length - 2]!);
+  return out;
 }

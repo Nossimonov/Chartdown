@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseXml } from "@rgrove/parse-xml";
 import { describe, expect, it } from "vitest";
 import { exportUvttSource, renderSource } from "./index";
+import { shrinkFloor } from "./labels";
 
 const examplesDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "examples");
 const example = (name: string): string => readFileSync(join(examplesDir, name, `${name}.cd`), "utf8");
@@ -14,10 +15,117 @@ describe("determinism (spec 02 §8.2)", () => {
     expect(renderSource(src).svg).toBe(renderSource(src).svg);
   });
 
-  it("a different seed changes organic geometry", () => {
-    const src = example("vessany");
+  it("a different seed changes an AREA's organic finishing", () => {
+    // `seed:` re-rolls the finishing of an outline the author DECLARED — the
+    // roughening of an `area`'s silhouette (spec 02 §9).
+    const src = `map: region\nextent: 400x400mi\n\n[terrain]\n` +
+      `forest w "The Weald" : area (100,100) (300,120) (280,300) (120,280)\n`;
     const reseeded = src.replace("map: region", "map: region\nseed: 99");
     expect(renderSource(reseeded).svg).not.toBe(renderSource(src).svg);
+  });
+
+  it("a different seed does NOT change a blob — its shape is declared, not rolled (#173)", () => {
+    // The complaint that started #173: an unrelated `seed:` header reshaped
+    // every blob on the map. A blob declares an EXTENT, and its finishing is a
+    // pure function of the word and the size, so there is nothing for a seed
+    // to re-roll. Vessany is all blobs and ridges, so its whole render is now
+    // seed-independent — which is the fix, not a gap in it.
+    const src = example("vessany");
+    const reseeded = src.replace("map: region", "map: region\nseed: 99");
+    expect(renderSource(reseeded).svg).toBe(renderSource(src).svg);
+  });
+});
+
+describe("a blob declares an EXTENT, not an outline (#173, ADR 0025)", () => {
+  const SCALE = 820 / 400; // canvas units per map mile at this extent
+  const DOC = (body: string, header = ""): string =>
+    `# Isles\nmap: region\nextent: 400x400mi\n${header}\n[terrain]\n${body}\n`;
+  const shapes = (svg: string): { at: string; form: string; w: number; h: number }[] =>
+    [...svg.matchAll(/<polygon points="([^"]+)"/g)].map((m) => {
+      const p = m[1]!.trim().split(/\s+/).map((q) => {
+        const [x, y] = q.split(",").map(Number) as [number, number];
+        return { x, y };
+      });
+      const cx = p.reduce((s, q) => s + q.x, 0) / p.length;
+      const cy = p.reduce((s, q) => s + q.y, 0) / p.length;
+      return {
+        at: `${cx.toFixed(0)},${cy.toFixed(0)}`,
+        // The outline relative to its own centre: same form = same shape,
+        // wherever it sits. Comparing absolute points would only ever say
+        // "these are in different places", which is not the question.
+        form: p.map((q) => `${(q.x - cx).toFixed(2)},${(q.y - cy).toFixed(2)}`).join(" "),
+        w: (Math.max(...p.map((q) => q.x)) - Math.min(...p.map((q) => q.x))) / SCALE,
+        h: (Math.max(...p.map((q) => q.y)) - Math.min(...p.map((q) => q.y))) / SCALE,
+      };
+    });
+  const only = (src: string): { at: string; form: string; w: number; h: number } => shapes(renderSource(src).svg)[0]!;
+
+  it("SIZE IS EXACT: the declared measure is what gets drawn", () => {
+    // Three `size=40mi` blobs measured 42.5, 42.0 and 41.6mi across before
+    // this. Spec 05 §4 already forbade that in terms — "it makes `size=` a lie
+    // … the number in the document would stop determining what is on the map"
+    // — so the language was carrying two opposite contracts on one pair.
+    for (const size of [40, 17, 123]) {
+      const drawn = only(DOC(`forest w : blob (200,200) size=${size}mi`));
+      expect(drawn.w, `size=${size}mi`).toBeCloseTo(size, 2);
+      expect(drawn.h, `size=${size}mi`).toBeCloseTo(size, 2);
+    }
+  });
+
+  it("PROMOTION IS GEOMETRY-STABLE: naming it does not reshape it", () => {
+    const anon = only(DOC(`island : blob (200,200) size=40mi`));
+    const named = only(DOC(`island midholm "Midholm" : blob (200,200) size=40mi`));
+    expect(named.form).toBe(anon.form);
+  });
+
+  it("DOCUMENT ORDER IS NOT GEOMETRY: reordering two lines changes nothing", () => {
+    // The sharpest of the original defects: swapping two lines swapped two
+    // islands' outlines, in different places on the map, with nothing else
+    // changed. Same-size siblings were distinguished by an ordinal.
+    const a = `island : blob (100,100) size=40mi`;
+    const b = `island : blob (300,300) size=40mi`;
+    const forward = shapes(renderSource(DOC(`${a}\n${b}`)).svg);
+    const reversed = shapes(renderSource(DOC(`${b}\n${a}`)).svg);
+    const byPlace = (list: typeof forward): string[] => list.map((s) => `${s.at} ${s.form}`).sort();
+    expect(byPlace(reversed)).toEqual(byPlace(forward));
+  });
+
+  it("POSITION IS NOT GEOMETRY: moving a blob slides the same shape", () => {
+    expect(only(DOC(`forest w : blob (300,120) size=40mi`)).form)
+      .toBe(only(DOC(`forest w : blob (200,200) size=40mi`)).form);
+  });
+
+  it("the word distinguishes it — a forest and an island are not the same shape", () => {
+    // Otherwise every mass on the map is one silhouette at different scales,
+    // which reads as a bug rather than as restraint.
+    expect(only(DOC(`forest w : blob (200,200) size=40mi`)).form)
+      .not.toBe(only(DOC(`island w : blob (200,200) size=40mi`)).form);
+  });
+
+  it("twins are the honest consequence of two identical declarations", () => {
+    // ADR 0023 already took this trade for detached features: the escape is to
+    // differ the size, and the alternative keys each had an edit that silently
+    // redrew a landform a campaign may already have named.
+    const pair = shapes(renderSource(DOC(
+      `island : blob (100,100) size=40mi\nisland : blob (300,300) size=40mi`,
+    )).svg);
+    expect(pair[0]!.form).toBe(pair[1]!.form);
+  });
+
+  it("a PLACED feature is held to the same contract (spec 05 §4)", () => {
+    // "drawn at its DECLARED size or reported — never quietly resized". The
+    // shared generator overshot it by a few percent in a direction nothing
+    // measured, on the one path whose spec text promises exactness.
+    const src = `# Isles\nmap: region\nextent: 400x400mi\n\n[water]\n` +
+      `coastline shore : from (300,0) via (300,200) to (300,400)\nsea "S" : west of shore\n` +
+      `island w "W" : near shore at (150,200) size=60mi reach=0.2\n`;
+    const g = /id="cd-isles-w">(.{0,40000}?)<\/g>/s.exec(renderSource(src).svg)!;
+    const p = /points="([^"]+)"/.exec(g[1]!)![1]!.trim().split(/\s+/)
+      .map((q) => { const [x, y] = q.split(",").map(Number) as [number, number]; return { x, y }; });
+    const long = (Math.max(...p.map((q) => q.y)) - Math.min(...p.map((q) => q.y))) / SCALE;
+    const short = (Math.max(...p.map((q) => q.x)) - Math.min(...p.map((q) => q.x))) / SCALE;
+    expect(long).toBeCloseTo(60, 2);        // size= is the long axis, exactly
+    expect(short).toBeCloseTo(60 * 0.2, 2); // reach= is the short one, exactly
   });
 });
 
@@ -88,6 +196,202 @@ describe("furniture and grid (spec 07 §4)", () => {
     const { svg } = renderSource(example("vessany"));
     expect(svg).toContain(">N</text>");
     expect(svg).toContain("mi</text>");
+  });
+});
+
+describe("a feature's footprint is cells, and a shape is refused (#207)", () => {
+  const bf = (l: string): string =>
+    ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[features]", l].join("\n");
+  const errs = (src: string): string[] =>
+    renderSource(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
+
+  it("refuses an area, where it used to draw nothing in silence", () => {
+    // `pit p : area D4..F6` rendered byte-identical to a document with no pit
+    // in it — no mark, no label, no diagnostic. An author who writes `area`
+    // having just written it for terrain three lines above had no way to find
+    // out but to notice an absence.
+    const reported = errs(bf('pit p "Oubliette" : area D4..F6'));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatch(/'pit' is placed with 'area'/);
+    // The message carries BOTH spellings that work, since the fix is one edit.
+    expect(reported[0]).toMatch(/F6/);
+    expect(reported[0]).toMatch(/D4\.\.F6/);
+  });
+
+  it("accepts the two forms that do draw", () => {
+    expect(errs(bf("pit p : F6"))).toEqual([]);
+    expect(errs(bf("pit p : D4..F6"))).toEqual([]);
+  });
+
+  it("catches a field too, which failed the same silent way", () => {
+    expect(errs(bf("light l : area D4..H8 light=20ft"))).toHaveLength(1);
+  });
+
+  it("leaves a REGION feature's declared outline alone", () => {
+    // On a region map an `area` on a feature is a declared outline (ADR 0026)
+    // and means something quite different — which is why the refusal lives in
+    // the battlemap renderer rather than in the parser.
+    const region = [
+      "map: region", "extent: 200x150mi", "[water]",
+      "coastline c : from (100,0) via (100,80) to (100,150)",
+      "sea s : west of c",
+      'island i "I" : near c at (80,70) area (0,-6) (5,0) (0,6) (-5,0)',
+    ].join("\n");
+    expect(errs(region)).toEqual([]);
+  });
+});
+
+describe("difficult and erupting are drawn (#206)", () => {
+  const bf = (l: string): string =>
+    ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[features]", l].join("\n");
+  const rg = (l: string): string => ["map: region", "extent: 200x150mi", "[terrain]", l].join("\n");
+  const hatches = (src: string): number => (renderSource(src).svg.match(/url\(#hatch\)/g) ?? []).length;
+
+  it("hatches a difficult FEATURE, which the hatch never reached", () => {
+    // It reached terrain and crossings only, so `pit : … difficult` — a hole in
+    // the floor, which is the entire reason the word carries the state — drew
+    // exactly like a pit you can walk over.
+    expect(hatches(bf("pit p : F6"))).toBe(0);
+    expect(hatches(bf("pit p : F6 difficult"))).toBe(1);
+    expect(hatches(bf("pit p : D4..F6"))).toBe(0);
+    expect(hatches(bf("pit p : D4..F6 difficult"))).toBe(1);
+  });
+
+  it("leaves a feature that declares no difficulty alone", () => {
+    expect(hatches(bf("table t : D4..F6"))).toBe(0);
+  });
+
+  it("gives an erupting volcano its plume", () => {
+    const rest = renderSource(rg('volcano v "V" : (100,75)')).svg;
+    expect(renderSource(rg('volcano v "V" : (100,75) erupting')).svg).not.toBe(rest);
+  });
+
+  it("gives a DORMANT one nothing, on purpose", () => {
+    // The written reason spec 05 §5 records: a dormant volcano IS the resting
+    // cone, so the state states explicitly what the silhouette already says.
+    // A second symbol would invent a distinction the world does not have. What
+    // must not happen — and did — is `erupting` reading as rest.
+    const rest = renderSource(rg('volcano v "V" : (100,75)')).svg;
+    expect(renderSource(rg('volcano v "V" : (100,75) dormant')).svg).toBe(rest);
+  });
+
+  it("leaves a plain peak alone, whatever state is written on it", () => {
+    // `erupting` belongs to `volcano`, and a peak that is not one gets no plume
+    // from a word it does not declare.
+    const plain = renderSource(rg('peak p "P" : (100,75)')).svg;
+    expect(renderSource(rg('peak p "P" : (100,75) erupting')).svg).toBe(plain);
+  });
+});
+
+describe("a door's state is drawn (#206)", () => {
+  // `door` declares four states and every one rendered as an ordinary door, so
+  // the four most common facts a GM records about the most common opening in
+  // any dungeon were legal, checked, and invisible. A state that renders
+  // identically to its absence is the document saying something the map does
+  // not — the silent-plausibility failure this phase spent its length removing.
+  const door = (state = ""): string =>
+    ["map: battlemap", "grid: square 12x12", "scale: 5ft", "[structures]",
+     'building b "B" : D4..H8', `  door : F8.s ${state}`.trimEnd()].join("\n");
+  const svgOf = (state = ""): string => renderSource(door(state)).svg;
+
+  it("draws each of the four differently from a plain door", () => {
+    const plain = svgOf();
+    for (const state of ["locked", "barred", "stuck", "ruined"]) {
+      expect(svgOf(state), state).not.toBe(plain);
+    }
+  });
+
+  it("draws each of the four differently from EACH OTHER", () => {
+    // The weaker claim — "not the same as plain" — is satisfied by four states
+    // that all draw the same mark, which would be the same failure one level in.
+    const rendered = ["locked", "barred", "stuck", "ruined"].map(svgOf);
+    expect(new Set(rendered).size).toBe(4);
+  });
+
+  it("punches the keyhole rather than inking it", () => {
+    // A dot in the door's OWN colour is a brown dot on a brown door and cannot
+    // be seen at all, which is how this first shipped. A keyhole is a hole, so
+    // it takes the paper's colour — and that is only catchable by eye, which is
+    // why it is pinned here.
+    expect(svgOf("locked")).toMatch(/<circle[^>]*fill="#f9f5ea"/);
+  });
+
+  it("bars across the leaf and wedges the jamb", () => {
+    expect(svgOf("barred")).toMatch(/<line[^>]*stroke-linecap="round"/);
+    expect(svgOf("stuck")).toMatch(/<polygon[^>]*fill="#a8763e"/);
+  });
+
+  it("fades and breaks a ruined one, as a ruined WALL already does", () => {
+    // One rule per word rather than one per archetype: a reader who has learnt
+    // what `ruined` looks like on a wall has learnt it on a door.
+    expect(svgOf("ruined")).toMatch(/stroke-dasharray="4 4"/);
+    expect(svgOf("ruined")).toMatch(/opacity="0\.6"/);
+  });
+
+  it("leaves an opening that declares no state alone", () => {
+    expect(svgOf()).not.toMatch(/<circle/);
+    expect(svgOf()).not.toMatch(/stroke-dasharray/);
+  });
+});
+
+describe("a path's ends reach the edge of their terminal cells (#145)", () => {
+  // A path is drawn through cell CENTRES, so its last vertex landed in the
+  // middle of its final square and a road running to a gatehouse wall stopped
+  // halfway through the square it was meant to reach. Fairwater Manor's
+  // King's Road was authored around it — ending a cell INSIDE the building so
+  // the two would meet — which put a road's band in a building's interior and
+  // said something the author never meant.
+  const road = (path: string, extra: string[] = []): string =>
+    ["map: battlemap", "grid: square 5ft", "extent: 14x14", "[terrain]",
+     `road r "Road" : ${path}`, ...extra].join("\n");
+  const spine = (src: string): { x: number; y: number }[] => {
+    const m = /id="cd-[a-z0-9-]*r"><polyline points="([^"]+)"/.exec(renderSource(src).svg);
+    return m![1]!.trim().split(/\s+/).map((q) => {
+      const [x, y] = q.split(",").map(Number) as [number, number];
+      return { x, y };
+    });
+  };
+
+  it("runs the full length of its terminal cells, not centre to centre", () => {
+    // H13 to H8 spans six cells; drawn centre to centre it covers five.
+    const pts = spine(road("path H13 H8"));
+    expect(pts).toHaveLength(2);
+    expect(Math.abs(pts[1]!.y - pts[0]!.y)).toBeCloseTo(6 * 32, 6);
+  });
+
+  it("meets a building's wall exactly, with the road declared OUTSIDE it", () => {
+    // The done-state: `path M20 M13` renders meeting the wall, so the document
+    // no longer has to run the road into the gatehouse to look right.
+    const pts = spine(road("path H13 H8", ["[structures]", 'building gate "G" : F5..J7', "  door : H7.s"]));
+    // The building occupies rows 5..7, so its south wall is the row 7/8 line.
+    const wall = 24 + 7 * 32;
+    expect(Math.min(pts[0]!.y, pts[1]!.y)).toBeCloseTo(wall, 6);
+  });
+
+  it("leaves a diagonal run through the corner, not clipped square", () => {
+    // The extension follows the direction of travel, so the ray leaves the
+    // cell by its nearer face — which is the corner when the run is 45°.
+    const pts = spine(road("path C3 G7"));
+    const dx = Math.abs(pts[1]!.x - pts[0]!.x);
+    const dy = Math.abs(pts[1]!.y - pts[0]!.y);
+    expect(dx).toBeCloseTo(dy, 6);
+    expect(dx).toBeCloseTo(5 * 32, 6); // four cells of travel plus a half at each end
+  });
+
+  it("still reaches the frame where a path runs off the map", () => {
+    // This subsumes the rule it replaced: a terminal cell on the boundary has
+    // its outer face ON the frame.
+    const pts = spine(road("path H14 H8"));
+    expect(Math.max(pts[0]!.y, pts[1]!.y)).toBeCloseTo(24 + 14 * 32, 6);
+  });
+
+  it("extends a path running ALONG the boundary forward, not sideways onto it", () => {
+    // The rule it replaced snapped a terminal point to the frame on whichever
+    // axis matched, so a road in the top row was pulled up onto the edge
+    // whatever direction it ran.
+    const pts = spine(road("path C1 H1"));
+    for (const p of pts) expect(p.y).toBeCloseTo(24 + 0.5 * 32, 6);
+    expect(Math.abs(pts[1]!.x - pts[0]!.x)).toBeCloseTo(6 * 32, 6);
   });
 });
 
@@ -381,8 +685,16 @@ describe("levels (spec 06 §8)", () => {
     expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
     // the sea is FULL water fill (not the faint zone tint)
     expect(svg).toMatch(/polygon[^/]*fill="#b9d3e6"/);
-    // the island rises above it as LAND: paper surface, coastline stroke
-    expect(svg).toMatch(/fill="#f9f5ea" stroke="#8fa8b8"/);
+    // The island rises above it as LAND: paper surface, coastline stroke.
+    // Two shapes rather than one since #165 — the fill is land wherever it
+    // lands, while the shore is drawn only where there is water to have a
+    // shore against, so only the stroke carries the union mask.
+    expect(svg).toMatch(/fill="#f9f5ea"/);
+    // The mask moved onto a wrapping group when a shore gained a side
+    // (#185): the stroke is now clipped twice — by #165's union and by the
+    // island's own footprint — and a mask attribute takes one value.
+    expect(svg).toMatch(/mask="url\(#cd-shore-[^"]*"><g mask="url\(#cd-inside-/);
+    expect(svg).toMatch(/fill="none" stroke="#8fa8b8"/);
     // realm tint paints beneath terrain: its dashed boundary appears before the forest fill
     const realmAt = svg.indexOf('stroke-dasharray="9 4 2 4"');
     const forestAt = svg.indexOf("#a9c79c");
@@ -728,8 +1040,10 @@ describe("one vocabulary chain, walked once (#101, #103, #105)", () => {
       "fence f1 : H6.n",
       "[terrain]",
       "road r1 : path A12 N12 width=2",
+      "[vocab]",
+      "watch : zone",
       "[tokens]",
-      "zone z1 \"Z\" : A6..B7",
+      "watch z1 \"Z\" : A6..B7",
     ].join("\n");
     const theme = [
       "[theme]",
@@ -739,7 +1053,7 @@ describe("one vocabulary chain, walked once (#101, #103, #105)", () => {
       "pillar : fill=#bb1111",
       "fence : stroke=#cc2222",
       "road : stroke=#ff5555",
-      "zone : fill=#654321",
+      "watch : fill=#654321",
     ].join("\n");
     const { svg } = renderSource(src, { theme });
     for (const value of ["#445566", "#778899", "#aabbcc", "#bb1111", "#cc2222", "#ff5555", "#654321"]) {
@@ -811,6 +1125,82 @@ describe("every drawn thing is a theme subject (#117, #119)", () => {
   });
 });
 
+describe("openings perforate declared terrain; passes= is enumerated (#113)", () => {
+  const mk = (opening: string): string =>
+    [
+      "map: battlemap", "grid: square 12x8", "scale: 10ft",
+      "[vocab]", "arch : opening sight=all",
+      "[terrain]", "earth : area A1..L8",
+      "[structures]", "passage hall : D3..H6",
+      "[features]", opening,
+    ].join("\n");
+
+  it("an opening in a rock face needs no parent structure", () => {
+    const { diagnostics } = renderSource(mk("gate great-gates : D4.w"), { mode: "gm" });
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("solid means the WINNING terrain declaration, not merely one that was made (#125)", () => {
+    const base = ["map: battlemap", "grid: square 12x8", "scale: 5ft", "[terrain]"];
+    // Overpainted: `earth` is declared, then grass wins those cells (spec 06
+    // §6). E4/D4 are walkable, so the gate perforates nothing.
+    const overpainted = [...base, "grass west : area A1..D8", "earth : area E1..L8", "grass east : area E1..H8",
+      "[features]", "gate g1 : E4.w"].join("\n");
+    // Same geometry, no redundant earth underneath.
+    const plain = [...base, "grass west : area A1..D8", "grass east : area E1..H8", "earth : area I1..L8",
+      "[features]", "gate g1 : E4.w"].join("\n");
+    for (const [label, src] of [["overpainted", overpainted], ["plain", plain]] as const) {
+      const err = renderSource(src, { mode: "gm" }).diagnostics.find((d) => d.severity === "error");
+      expect(err?.message, label).toMatch(/no barrier to perforate/);
+    }
+  });
+
+  it("an unparented opening may also sit on a wall or a perimeter, as it always could", () => {
+    // Regression: the first cut checked only `earth`, so it rejected two forms
+    // spec 06 §3 has always permitted — and the error message promised all three.
+    const src = [
+      "map: battlemap", "grid: square 12x8", "scale: 5ft",
+      "[structures]",
+      "wall palisade : E2.n F2.n G2.n",
+      "gate w1 : F2.n",
+      "building hall : B4..E7",
+      "gate h1 : E5.e",
+    ].join("\n");
+    expect(renderSource(src, { mode: "gm" }).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // …but an opening with no barrier anywhere near it still fails loud.
+    const lonely = "map: battlemap\ngrid: square 9x9\n[features]\ngate lonely : C4.e\n";
+    expect(renderSource(lonely, { mode: "gm" }).diagnostics.find((d) => d.severity === "error")?.message)
+      .toMatch(/no barrier to perforate/);
+  });
+
+  it("fails loud with nothing to pass through, or buried in stone", () => {
+    // Rooms carve the rock, so F4/F3 are both floor.
+    const inRoom = renderSource(mk("arch inner : F4.n"), { mode: "gm" });
+    expect(inRoom.diagnostics.find((d) => d.severity === "error")?.message).toMatch(/no barrier to perforate/);
+    const buried = renderSource(mk("door buried : B2.e"), { mode: "gm" });
+    expect(buried.diagnostics.find((d) => d.severity === "error")?.message).toMatch(/solid ground on both sides/);
+  });
+
+  it("passes= resolves through the chain, defaulting to open — an arch is not a shut door", () => {
+    // `gate` inherits door's passes=closed facet: a portal, closed.
+    const gate = exportUvttSource(mk("gate great-gates : D4.w"), { mode: "gm" }).uvtt as
+      | { portals: { closed: boolean }[] } | null;
+    expect(gate?.portals.map((p) => p.closed)).toEqual([true]);
+    // `arch : opening sight=all` leaves passes unset → open → no leaf, no portal.
+    // Before #113 the facet was never read and this exported as a CLOSED portal.
+    const arch = exportUvttSource(mk("arch a1 : D4.w"), { mode: "gm" }).uvtt as
+      | { portals: unknown[] } | null;
+    expect(arch?.portals).toEqual([]);
+  });
+
+  it("the rock boundary is an occluder, so a cave exports with line_of_sight", () => {
+    const uvtt = exportUvttSource(mk("gate great-gates : D4.w"), { mode: "gm" }).uvtt as
+      | { line_of_sight: unknown[] } | null;
+    // Without the earth boundary this was only the room's own 16 wall segments.
+    expect((uvtt?.line_of_sight.length ?? 0)).toBeGreaterThan(16);
+  });
+});
+
 describe("free text renders as text alone (spec 07 §2, #104)", () => {
   const NOTES = [
     "map: battlemap",
@@ -839,7 +1229,7 @@ describe("free text renders as text alone (spec 07 §2, #104)", () => {
     expect(svg).toMatch(/<text(?![^>]*letter-spacing)[^>]*>range footprint<\/text>/);
   });
 
-  it("a placement this renderer draws nothing for warns rather than vanishing", () => {
+  it("`along` sets the caption on the referenced course (#107, was a warning in 0.3.3)", () => {
     const src = [
       "map: battlemap",
       "grid: square 20x12",
@@ -849,9 +1239,20 @@ describe("free text renders as text alone (spec 07 §2, #104)", () => {
       "[labels]",
       'note "along the rill" : along r1',
     ].join("\n");
+    const { svg, diagnostics } = renderSource(src);
+    expect(diagnostics.filter((d) => d.severity !== "error").map((d) => d.message)).toEqual([]);
+    expect(svg).toContain("along the rill");
+    expect(svg).toMatch(/<textPath href="#cdnote-/);
+  });
+
+  it("a course that cannot be resolved still warns rather than vanishing", () => {
+    const src = [
+      "map: battlemap", "grid: square 20x12", "scale: 5ft",
+      "[features]", 'statue s1 "The Watcher" : C4',
+      "[labels]", 'note "beside a point" : along s1',
+    ].join("\n");
     const { diagnostics } = renderSource(src);
-    const warning = diagnostics.find((d) => d.severity === "warning" && d.message.includes("along the rill"));
-    expect(warning?.message).toMatch(/draws nothing/);
+    expect(diagnostics.find((d) => d.severity === "warning")?.message).toMatch(/draws nothing/);
   });
 });
 
@@ -909,4 +1310,549 @@ describe("snapshots", () => {
       expect(renderSource(example(name), { mode: "gm" }).svg).toMatchSnapshot();
     });
   }
+});
+
+/**
+ * The `sight=` half of #131. The reporter could not test this and said so:
+ * spec 06 §9 gives `sight=` no distinct UVTT surface, so all four values
+ * export identically. It IS observable in the render — `sight=all` makes the
+ * edge transparent to light — which is where the fallback has to be checked.
+ */
+describe("sight= recovers to the vocabulary default too (#131)", () => {
+  const src = (suffix: string): string =>
+    [
+      "map: battlemap", "grid: square 8x6", "scale: 5ft", "light: dark",
+      "[vocab]", "window2 : window",
+      "[structures]", "building b1 : B2..E5", `  window2 : E3.e${suffix}`,
+      "[features]", "torch t1 : C3 light=20ft",
+    ].join("\n");
+  const svg = (suffix: string): string => renderSource(src(suffix), {}).svg;
+
+  it("an out-of-set value renders as the inherited default, not as blocking", () => {
+    const base = svg(""); // window2 : window, so the default is sight=all
+    expect(svg(" sight=all"), "all").toBe(base);
+    expect(svg(" sight=bogus"), "bogus").toBe(base);
+    expect(svg(" sight=none"), "none").not.toBe(base); // the facet still works
+  });
+});
+
+/**
+ * #132: the legibility floor and the hierarchy floor are separate concerns and
+ * were conflated in `Math.max(8, fontSize - 3)`. Unit-tested rather than driven
+ * through a document: the constants only mean anything in relation to each
+ * other, and synthetic crowding cannot reliably force the shrink path (a tier
+ * claims by font size, so a hamlet under pressure is dropped by earlier
+ * claimants before it ever shrinks).
+ */
+describe("shrink floors are two floors, not one (#132)", () => {
+  const TIERS = { capital: 13, city: 11, town: 10, village: 9, hamlet: 8 };
+
+  it("every tier can shrink — a hamlet had ZERO headroom", () => {
+    // Old floor: max(8, 8 - 3) = 8, identical to base, so any crowding took a
+    // hamlet from full size straight to omission with no step in between.
+    for (const [tier, base] of Object.entries(TIERS)) {
+      expect(shrinkFloor(base), tier).toBeLessThan(base);
+    }
+  });
+
+  it("hierarchy is preserved: a bigger tier never floors below a smaller one", () => {
+    const floors = Object.values(TIERS).map((b) => shrinkFloor(b));
+    for (let i = 1; i < floors.length; i++) expect(floors[i - 1]!).toBeGreaterThanOrEqual(floors[i]!);
+    expect(shrinkFloor(TIERS.capital)).toBeGreaterThan(shrinkFloor(TIERS.hamlet));
+  });
+
+  it("the floor is proportional, so the old capital-vs-constant trap is gone", () => {
+    // A capital's floor was 10 and governed by `fontSize - 3`, so lowering the
+    // `8` — the fix #132 originally proposed — could not move it at all.
+    expect(shrinkFloor(13)).toBeLessThan(10);
+  });
+
+  it("floors are whole numbers — the fallback claims AT the floor", () => {
+    for (const base of Object.values(TIERS)) expect(shrinkFloor(base) % 1).toBe(0);
+  });
+
+  it("a wider canvas raises the legibility floor, but never above the base size", () => {
+    expect(shrinkFloor(18, 3000)).toBeGreaterThan(shrinkFloor(18, 400));
+    for (const base of Object.values(TIERS)) expect(shrinkFloor(base, 5000)).toBeLessThanOrEqual(base);
+  });
+});
+
+/**
+ * #133: a label with no adjacent slot may sit in open space with a leader line
+ * back to its marker, instead of being dropped (spec 07 §5 rule 3).
+ */
+describe("leader lines rescue labels that would be omitted (#133)", () => {
+  // One marker boxed in by long names on every side, with open space beyond.
+  const crowded = [
+    "map: region", "extent: 900x600mi", "[settlements]",
+    // The subject is the LOWEST tier so it claims last (priority is font size,
+    // spec 07 §5 rule 1) and genuinely faces a full neighbourhood.
+    'hamlet subject "Subjecttown" : (450,300)',
+    ...[[430,290],[470,290],[430,310],[470,310],[450,285],[450,320],[425,300],[475,300]]
+      .map(([x, y], i) => `capital "Averyverylongcompetitorname${i}" : (${x},${y})`),
+  ].join("\n");
+
+  it("the name is kept and connected rather than dropped", () => {
+    const { svg } = renderSource(crowded, {});
+    expect(svg).toContain(">Subjecttown<");
+    const leaders = svg.match(/<line [^>]*opacity="0\.55"/g) ?? [];
+    expect(leaders.length, "a leader should connect the displaced name").toBeGreaterThan(0);
+  });
+
+  it("the leader stays within its bound — names do not wander off", () => {
+    const { svg } = renderSource(crowded, {});
+    for (const m of svg.matchAll(/<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"[^>]*opacity="0\.55"/g)) {
+      const [, x1, y1, x2, y2] = m.map(Number);
+      // 45 is the bound, measured marker-to-label-anchor; the drawn line runs
+      // to the box edge, so allow the label's own half-width beyond it.
+      expect(Math.hypot(x1! - x2!, y1! - y2!)).toBeLessThan(120);
+    }
+  });
+
+  it("placement stays deterministic", () => {
+    expect(renderSource(crowded, {}).svg).toBe(renderSource(crowded, {}).svg);
+  });
+});
+
+describe("detail: reference enlarges the canvas (#139, ADR 0020)", () => {
+  const map = (hdr: string): string =>
+    ["# T", "map: region", "extent: 1750x1550mi", hdr, "[settlements]",
+     'capital hk "Highkeep" : (900,700)'].filter(Boolean).join("\n");
+  const widthOf = (svg: string): number => Number(svg.match(/viewBox="0 0 ([\d.]+)/)![1]);
+
+  it("overview is the default, so existing documents do not move", () => {
+    expect(widthOf(renderSource(map(""), {}).svg)).toBe(820);
+    expect(renderSource(map("detail: overview"), {}).svg).toBe(renderSource(map(""), {}).svg);
+  });
+
+  it("reference doubles the canvas, and the map scales with it", () => {
+    const ref = renderSource(map("detail: reference"), {}).svg;
+    expect(widthOf(ref)).toBe(1640);
+    // Same document, so the marker sits at the same FRACTION of the canvas.
+    // Compare CENTRES, not the rect's x: x is `cx - r` and the tier radius is
+    // an absolute size that deliberately does not scale with the canvas, so
+    // the corner drifts ~0.7% while the centre is exact.
+    const centre = (svg: string): number => {
+      const m = svg.match(/<rect x="([\d.]+)"[^>]*width="([\d.]+)"[^>]*transform="rotate\(45/)!;
+      return Number(m[1]) + Number(m[2]) / 2;
+    };
+    const ratio = centre(ref) / 1640 / (centre(renderSource(map(""), {}).svg) / 820);
+    expect(ratio).toBeCloseTo(1, 3);
+  });
+});
+
+
+/**
+ * #130: a barrier word in a structure detail replaces that side's perimeter
+ * with that barrier — the spelling authors already reach for, which used to
+ * draw an ordinary wall and take no styling.
+ */
+describe("a barrier word replaces a structure side (#130)", () => {
+  const hall = (details: string[]): string =>
+    ["map: battlemap", "grid: square 12x10", "scale: 5ft",
+     "[vocab]", "cave-in : wall", "choke : fence",
+     "[structures]", 'building hall "The Hall" : B2..H8', ...details].join("\n");
+  const losPoints = (src: string): number =>
+    (exportUvttSource(src, {}).uvtt!["line_of_sight"] as unknown[][]).reduce((n, p) => n + p.length, 0);
+
+  it("the side takes the barrier's own theme, not the structure's", () => {
+    const theme = ["kind: theme", "[theme]", "cave-in : stroke=#8a5a3a dash=3,3 width=4"].join("\n");
+    const svg = renderSource(hall(["  cave-in : east"]), { theme }).svg;
+    expect(svg).toMatch(/stroke="#8a5a3a"[^>]*stroke-width="4"/);
+  });
+
+  it("the FACET decides occlusion, not the word", () => {
+    // A `fence`-derived choke passes sight; a `wall`-derived cave-in does not.
+    // `sightOf`'s default is written for openings ("no leaf means sight
+    // passes"), which is exactly wrong for a barrier — a cave-in that stopped
+    // occluding would be silent wrongness of the worst kind.
+    expect(losPoints(hall(["  choke : north"]))).toBeLessThan(losPoints(hall(["  cave-in : north"])));
+    expect(losPoints(hall(["  cave-in : north"]))).toBe(losPoints(hall([])));
+  });
+
+  it("edge tokens select edges directly", () => {
+    expect(renderSource(hall(["  cave-in : C2.n D2.n"]), {}).svg).toBeTruthy();
+    expect(exportUvttSource(hall(["  cave-in : C2.n D2.n"]), {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("a side word selects every perimeter edge FACING that way", () => {
+    // An L-shaped hall's `east` is all of its east-facing edges, not one side
+    // of a bounding box — the same rule `ruined` follows on a cell union.
+    const ell = ["map: battlemap", "grid: square 14x12", "scale: 5ft",
+      "[vocab]", "cave-in : wall",
+      "[structures]", "building ell : B2..E8 F2..H4", "  cave-in : east"].join("\n");
+    expect(exportUvttSource(ell, {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(renderSource(ell, {}).svg).toBeTruthy();
+  });
+});
+
+
+describe("join lands on the trunk's finished curve (#94)", () => {
+  const src = (terminal: string): string =>
+    ["map: region", "extent: 900x800mi",
+     "[water]", "coastline coast : from (100,0) via (120,400) to (100,800)",
+     "[paths]",
+     "river trunk : from (625,215) via (605,360) (588,500) to coast",
+     `river trib : from (800,320) via (700,440) ${terminal}`].join("\n");
+  const courseOf = (svg: string, id: string): number[][] => {
+    const m = svg.match(new RegExp(`<g id="cd-[^"]*-${id}"><polyline points="([^"]+)"`));
+    if (!m?.[1]) throw new Error(`no rendered course for '${id}'`);
+    return m[1].trim().split(/\s+/).map((s) => s.split(",").map(Number));
+  };
+  const gapToTrunk = (svg: string): number => {
+    const trunk = courseOf(svg, "trunk");
+    const end = courseOf(svg, "trib").at(-1)!;
+    let best = Infinity;
+    for (let i = 1; i < trunk.length; i++) {
+      const a = trunk[i - 1]!, b = trunk[i]!;
+      const dx = b[0]! - a[0]!, dy = b[1]! - a[1]!;
+      const L = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((end[0]! - a[0]!) * dx + (end[1]! - a[1]!) * dy) / L));
+      best = Math.min(best, Math.hypot(a[0]! + dx * t - end[0]!, a[1]! + dy * t - end[1]!));
+    }
+    return best;
+  };
+
+  it("the tributary ends ON the trunk, not near it", () => {
+    expect(gapToTrunk(renderSource(src("join trunk"), {}).svg)).toBeLessThan(0.5);
+  });
+
+  it("the confluence is live — moving the trunk moves it", () => {
+    // The failure this replaces: coincident literal coordinates that detach
+    // silently when the trunk is edited.
+    const moved = src("join trunk").replace("via (605,360) (588,500)", "via (500,360) (480,500)");
+    expect(gapToTrunk(renderSource(moved, {}).svg)).toBeLessThan(0.5);
+    expect(renderSource(moved, {}).svg).not.toBe(renderSource(src("join trunk"), {}).svg);
+  });
+
+  it("'to <river>' still means the midpoint, so the pair reads deliberately", () => {
+    // Both land on the trunk — a midpoint is on the curve too — so what
+    // matters is WHERE. This tributary approaches the trunk's HEAD, far from
+    // its midpoint, which is the discrimination the first fixture lacked:
+    // there the two happened to coincide within 5px and proved nothing.
+    const high = (terminal: string): string =>
+      ["map: region", "extent: 900x800mi",
+       "[paths]",
+       "river trunk : from (600,100) via (600,400) to (600,700)",
+       `river trib : from (850,110) via (750,115) ${terminal}`].join("\n");
+    const endOf = (terminal: string): number[] => courseOf(renderSource(high(terminal), {}).svg, "trib").at(-1)!;
+    const j = endOf("join trunk");
+    const t = endOf("to trunk");
+    // join meets it where the tributary arrives (near y=115); to walks to the
+    // trunk's middle (near y=400).
+    expect(j[1]!).toBeLessThan(250);
+    expect(t[1]!).toBeGreaterThan(300);
+  });
+});
+
+
+/**
+ * #94, second half: two watercourses that cross without meeting are nonsense
+ * on the ground. Nothing governed this before — the battlemap crossing rule
+ * (spec 06 §6) is cell-based and does not reach region maps, so a visible X
+ * between two rivers drew in silence.
+ */
+describe("rivers that cross without meeting warn (#94)", () => {
+  const doc = (lines: string[]): string => ["map: region", "extent: 900x800mi", "[paths]", ...lines].join("\n");
+  const crossings = (src: string): string[] =>
+    renderSource(src, {}).diagnostics.filter((d) => /cross at/.test(d.message)).map((d) => d.message);
+
+  const A = 'river a "River A" : from (200,200) via (450,400) to (700,600)';
+
+  it("flags a genuine X", () => {
+    expect(crossings(doc([A, 'river b "River B" : from (700,200) via (450,400) to (200,600)']))).toHaveLength(1);
+    expect(crossings(doc([A, 'river b "River B" : from (700,200) via (450,400) to (200,600)']))[0])
+      .toMatch(/'River A' and 'River B' cross at \(\d+,\d+\) without meeting/);
+  });
+
+  it("a declared meeting is not a crossing — in either direction", () => {
+    // join: tributary ends on the trunk. from <river>: a distributary leaves
+    // it. Both are declared relationships, and firing on them would make the
+    // check useless on exactly the documents that use the feature correctly.
+    expect(crossings(doc([A, 'river b "River B" : from (700,200) via (500,300) join a']))).toEqual([]);
+    expect(crossings(doc([A, 'river b "River B" : from a via (500,300) to (700,200)']))).toEqual([]);
+  });
+
+  it("leaves roads alone — a road crossing a river is a ford, not an error", () => {
+    expect(crossings(doc([A, 'road r "The Road" : from (700,200) via (450,400) to (200,600)']))).toEqual([]);
+  });
+
+  it("says nothing when they do not cross", () => {
+    expect(crossings(doc(['river a "A" : from (200,200) to (200,600)', 'river b "B" : from (700,200) to (700,600)']))).toEqual([]);
+  });
+});
+
+
+describe("solitary peak and volcano (#95)", () => {
+  const doc = (lines: string[]): string =>
+    ["map: region", "extent: 1400x900mi", "[terrain]", ...lines].join("\n");
+  const silhouette = (svg: string, id: string): string | null => {
+    const m = svg.match(new RegExp(`<g id="cd-[^"]*${id}"[^>]*>.*?<path d="([^"]+)"`));
+    return m?.[1] ?? null;
+  };
+
+  it("a peak is a mountain silhouette at a point, not a settlement dot", () => {
+    // The whole complaint: `mountains … blob size=` drew a round region, and
+    // a bare point fell through to the settlement marker.
+    const svg = renderSource(doc(['peak erebor "Erebor" : (600,300)']), {}).svg;
+    const d = silhouette(svg, "erebor");
+    expect(d).toBeTruthy();
+    expect((d!.match(/L/g) ?? []).length + 1).toBe(3); // apex triangle
+    expect(svg).toContain("Erebor");
+  });
+
+  it("a volcano reads as one on the map, not only in its name", () => {
+    const svg = renderSource(doc(['volcano orodruin "Orodruin" : (900,600)']), {}).svg;
+    expect((silhouette(svg, "orodruin")!.match(/L/g) ?? []).length + 1).toBe(6); // truncated cone + crater
+  });
+
+  it("volcano derives from peak, so it inherits the point-scale behaviour", () => {
+    // Derivation, not a second implementation: a word deriving from `volcano`
+    // must still place as a peak (spec 04 §2, ADR 0016).
+    const svg = renderSource(doc(["[vocab]", "firemount : volcano", "[terrain]",
+      'firemount m "Mount Ash" : (700,400)'].join("\n").split("\n")), {}).svg;
+    expect(silhouette(svg, "m")).toBeTruthy();
+  });
+
+  it("states are declared, so a typo warns rather than rendering silently", () => {
+    expect(renderSource(doc(['volcano v "V" : (700,400) erupting']), {}).diagnostics
+      .filter((d) => d.severity === "warning")).toEqual([]);
+    expect(renderSource(doc(['volcano v "V" : (700,400) eruptng']), {}).diagnostics
+      .map((d) => d.message).join()).toMatch(/not a declared state/);
+  });
+});
+
+
+/**
+ * #142: a shape may be declared in a referent's frame, so it travels with it.
+ * Anchoring only the first point was measured and rejected — it drags one end
+ * and leaves the rest, deforming the shape instead of moving it.
+ */
+describe("a framed shape travels with its referent (#142)", () => {
+  const doc = (peakAt: string, spur: string): string =>
+    ["map: region", "extent: 1400x900mi", "[terrain]",
+     `peak erebor "Erebor" : ${peakAt}`,
+     `mountains arm "Spur" : ${spur} width=40mi`].join("\n");
+  const boxOf = (src: string): { x: number; y: number; w: number; h: number } => {
+    const m = renderSource(src, {}).svg.match(/<g id="cd-[^"]*arm"><polygon points="([^"]+)"/);
+    if (!m?.[1]) throw new Error("spur did not render");
+    const pts = m[1].trim().split(/\s+/).map((t) => t.split(",").map(Number));
+    const xs = pts.map((q) => q[0]!), ys = pts.map((q) => q[1]!);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+
+  const FRAMED = "ridge on erebor at (-70,100) (-90,170)";
+
+  it("moving the referent TRANSLATES the shape — size is unchanged", () => {
+    // The assertion is the bounding box, not a coordinate: a coordinate check
+    // passes for a deformed shape, which is exactly the bug this replaces.
+    const a = boxOf(doc("(700,300)", FRAMED));
+    const b = boxOf(doc("(900,300)", FRAMED));
+    expect(b.x).toBeGreaterThan(a.x);
+    expect(b.w).toBeCloseTo(a.w, 5);
+    expect(b.h).toBeCloseTo(a.h, 5);
+    expect(b.y).toBeCloseTo(a.y, 5);
+  });
+
+  it("an unframed shape still does not move — the old behaviour is untouched", () => {
+    const plain = "ridge (630,400) (610,470)";
+    expect(boxOf(doc("(700,300)", plain))).toEqual(boxOf(doc("(900,300)", plain)));
+  });
+
+  it("two spurs share one frame, so a massif moves as a unit", () => {
+    const two = ["map: region", "extent: 1400x900mi", "[terrain]",
+      'peak erebor "Erebor" : (700,300)',
+      'mountains arm "West" : ridge on erebor at (-70,100) (-90,170) width=40mi',
+      'mountains arm2 "East" : ridge on erebor at (75,100) (95,170) width=40mi'].join("\n");
+    const leftEdge = (src: string, id: string): number => {
+      const m = renderSource(src, {}).svg.match(new RegExp(`<g id="cd-[^"]*${id}"><polygon points="([0-9.]+),`));
+      if (!m?.[1]) throw new Error(`no polygon for ${id}`);
+      return Number(m[1]);
+    };
+    const moved = two.replace("(700,300)", "(900,300)");
+    // Both arms shift by the same amount: the massif is one rigid thing.
+    expect(leftEdge(moved, "arm") - leftEdge(two, "arm"))
+      .toBeCloseTo(leftEdge(moved, "arm2") - leftEdge(two, "arm2"), 5);
+  });
+});
+
+
+/**
+ * #96: spec 02 §9 has always promised the renderer finishes a sketch
+ * organically. Coastlines, blobs and ridge belts got it; `area` did not, so a
+ * shaped forest rendered as a straight-edged polygon and the only way to fake
+ * curves was thirty hand-placed points.
+ */
+describe("area terrain is organically finished (#96)", () => {
+  const doc = (line: string, extra: string[] = []): string =>
+    ["map: region", "extent: 1400x900mi", "seed: 7", ...extra, "[terrain]", line].join("\n");
+  const verts = (src: string, id: string): number => {
+    const m = renderSource(src, {}).svg.match(new RegExp(`<g id="cd-[^"]*${id}"[^>]*><polygon points="([^"]+)"`));
+    return m?.[1] ? m[1].trim().split(/\s+/).length : 0;
+  };
+  const WOOD = 'forest wood "Wood" : area (905,190) (975,180) (1045,235) (1070,360) (1050,470) (995,560)';
+
+  it("a shaped patch gains a finished outline instead of straight edges", () => {
+    expect(verts(doc(WOOD), "wood")).toBeGreaterThan(50);
+  });
+
+  it("`raw` opts back into literal edges", () => {
+    // Surveyed parcels and political enclaves want a hard boundary.
+    expect(verts(doc(`${WOOD} raw`), "wood")).toBe(6);
+  });
+
+  it("finishing is deterministic, and the seed governs it (spec 02 §8.2)", () => {
+    expect(renderSource(doc(WOOD), {}).svg).toBe(renderSource(doc(WOOD), {}).svg);
+    expect(renderSource(doc(WOOD), {}).svg).not.toBe(renderSource(doc(WOOD).replace("seed: 7", "seed: 8"), {}).svg);
+  });
+
+  it("an outline that FOLLOWS a feature stays literal", () => {
+    // `along` splices the feature's own finished curve (ADR 0012). Re-splining
+    // it would pull the boundary off the thing it is defined to follow, which
+    // is the one property that idiom exists to guarantee.
+    const src = ["map: region", "extent: 1400x900mi", "seed: 7",
+      "[paths]", "river spine : from (900,100) via (950,300) to (1000,600)",
+      "[terrain]", 'forest wood "Wood" : area (905,190) along spine (1050,470) (995,560)'].join("\n");
+    const svg = renderSource(src, {}).svg;
+    const m = svg.match(/<g id="cd-[^"]*wood"[^>]*><polygon points="([^"]+)"/);
+    if (!m?.[1]) throw new Error("the feature-following wood did not render");
+    const pts = m[1].trim().split(/\s+/);
+    // The spliced course dominates the vertex list; no organic resampling on top.
+    expect(renderSource(src, {}).svg).toBe(svg);
+    expect(pts.length).toBeGreaterThan(3);
+  });
+
+  it("`raw` is a reserved flag, not an undeclared state", () => {
+    expect(renderSource(doc(`${WOOD} raw`), {}).diagnostics
+      .map((d) => d.message).join()).not.toMatch(/not a declared state/);
+  });
+});
+
+
+/**
+ * #112: vertical things that span more than two levels. A connector was a link
+ * between two adjacent panels, so a stair through six levels was invisible on
+ * all six, a stair that stopped at four had to be declared four times, and the
+ * bottom of a fall lived in a GM note.
+ */
+describe("shafts span more than two levels (#112)", () => {
+  const doc = [
+    "map: battlemap", "grid: square 12x8", "scale: 10ft",
+    "levels: top mid low pit", "level: top",
+    "[features top]", 'stairs endless "The Endless Stair" : D4 to=pit through=mid..low',
+    "[features low]", 'stairs descent "The Great Descent" : H4 to=top..pit',
+  ].join("\n");
+  const onLevel = (level: string): { shafts: number; landings: number } => {
+    const svg = renderSource(doc, { level }).svg;
+    return {
+      shafts: (svg.match(/<rect [^>]*fill="none" stroke="[^"]*" stroke-width="1\.6"/g) ?? []).length,
+      landings: (svg.match(/[▲▼]/g) ?? []).length,
+    };
+  };
+
+  it("a pass-through level shows the shaft as an obstruction, and NO landing", () => {
+    // The ground truth that was missing: those cells read as solid rock, so a
+    // party stood inside a stairwell the map called stone.
+    expect(onLevel("mid").shafts).toBe(1);
+    expect(onLevel("low").shafts).toBe(1);
+    expect(onLevel("top").shafts).toBe(0);
+    expect(onLevel("pit").shafts).toBe(0);
+  });
+
+  it("a to= range lands on every level it names, from one declaration", () => {
+    for (const level of ["top", "mid", "low", "pit"]) {
+      expect(onLevel(level).landings, level).toBeGreaterThan(0);
+    }
+  });
+
+  it("the annotation names the NEXT landing, not the far end of the flight", () => {
+    // Standing on a long stair, what matters is the step about to be taken.
+    expect(renderSource(doc, { level: "mid" }).svg).toMatch(/[▲▼] (top|low)/);
+  });
+
+  it("an air area states where the fall lands", () => {
+    const chasm = ["map: battlemap", "grid: square 12x8", "scale: 10ft",
+      "levels: gates deep-one the-pit", "level: gates",
+      "[terrain gates]", 'air chasm "Chasm" : area E1..G8 drop to=the-pit'].join("\n");
+    expect(renderSource(chasm, { level: "gates" }).svg).toContain("falls to the-pit");
+  });
+
+  it("without to= the default is unchanged, so no existing document moves", () => {
+    const plain = ["map: battlemap", "grid: square 12x8", "scale: 10ft",
+      "levels: gates deep-one", "level: gates",
+      "[terrain gates]", 'air chasm "Chasm" : area E1..G8 drop'].join("\n");
+    expect(renderSource(plain, { level: "gates" }).svg).not.toContain("falls to");
+  });
+});
+
+
+/**
+ * #140: the repeat form that needs resolved geometry. Expanded in buildModel
+ * rather than in each renderer — the parser lacked a resolved REFERENCE, not
+ * pixel geometry, so once the reference is in hand the spacing is arithmetic.
+ */
+describe("every <measure> along <ref> (#140)", () => {
+  const gallery = (spacing: string): string =>
+    ["map: battlemap", "grid: square 30x8", "scale: 10ft",
+     "[terrain]", 'road gallery "Kings Gallery" : path B4 Z4',
+     "[features]", `lamp : every ${spacing} along gallery light=30ft`].join("\n");
+  const lamps = (spacing: string): number =>
+    (renderSource(gallery(spacing), {}).svg.match(/r="96"/g) ?? []).length;
+
+  it("spaces entities down the course, and the spacing governs how many", () => {
+    // The gallery spans 25 cells at 10ft.
+    expect(lamps("40ft")).toBe(7);
+    expect(lamps("80ft")).toBeLessThan(lamps("40ft"));
+  });
+
+  it("walks the CELLS of the course, not its vertices", () => {
+    // `path B4 Z4` is two addresses spanning twenty-five cells; striding the
+    // vertex list placed one lamp at the corner and called it a row.
+    expect(lamps("10ft")).toBeGreaterThan(10);
+  });
+
+  it("expands to ordinary placements — light, flags and pairs all apply", () => {
+    expect(renderSource(gallery("40ft"), {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+
+  it("an unfollowable reference fails loud rather than placing nothing", () => {
+    const orphan = ["map: battlemap", "grid: square 30x8", "scale: 10ft",
+      "[terrain]", "road gallery : path B4 Z4",
+      "[features]", "lamp : every 40ft along gallery"].join("\n").replace("along gallery", "along nowhere");
+    expect(renderSource(orphan, {}).diagnostics.map((d) => d.message).join()).toMatch(/no such feature to follow|unresolved reference/);
+  });
+
+  it("works on a gridless map too, by arc length", () => {
+    const region = ["map: region", "extent: 900x600mi",
+      "[paths]", 'road highway "Highway" : from (100,100) via (400,100) to (700,100)',
+      "[features]", "landmark : every 100mi along highway"].join("\n");
+    expect(renderSource(region, {}).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+});
+
+/**
+ * Found while implementing #140: a feature line with several cells drew ONE
+ * glyph. Barriers had always drawn every placement, so the two archetypes
+ * disagreed about what a cell list means — and the feature reading was wrong.
+ */
+describe("a feature line places one entity per cell (#140)", () => {
+  const mk = (line: string): string =>
+    ["map: battlemap", "grid: square 30x12", "scale: 5ft", "[features]", line].join("\n");
+  const els = (line: string): number =>
+    (renderSource(mk(line), {}).svg.match(/<(circle|rect|path|line|polygon)/g) ?? []).length;
+
+  it("six cells draw six torches, not one", () => {
+    expect(els("torch : D8 H8 L8 P8 T8 X8")).toBeGreaterThan(els("torch : D8"));
+  });
+
+  it("features and barriers now agree about what a cell list means", () => {
+    const featureGain = els("torch : D8 H8 L8") - els("torch : D8");
+    const barrierGain = els("pillar : D8 H8 L8") - els("pillar : D8");
+    expect(featureGain).toBeGreaterThan(0);
+    expect(barrierGain).toBeGreaterThan(0);
+  });
+
+  it("the set is named once, not once per cell (spec 07 §1)", () => {
+    expect((renderSource(mk('torch t "Lamp" : D8 H8 L8'), {}).svg.match(/>Lamp</g) ?? []).length).toBe(1);
+  });
 });

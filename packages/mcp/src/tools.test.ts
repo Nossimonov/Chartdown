@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runCheck, runRender, runUvtt } from "./tools";
+import { runCheck, runRender, runUvtt, runFrame } from "./tools";
 
 const VALID = [
   "# Test Map",
@@ -55,5 +55,34 @@ describe("MCP tool logic (issue #58)", () => {
     expect((uvtt["portals"] as unknown[]).length).toBe(1);
     const hex = runUvtt(["map: hexcrawl", "grid: hex 3x3 pointy odd-row", "[hexes]", "A1 sea"].join("\n"));
     expect(hex.isError).toBe(true);
+  });
+});
+
+describe("chartdown_frame (#174)", () => {
+  it("returns a clause ready to paste, and says what it measured", () => {
+    const r = runFrame("(38,60) (43,70) (41,80) (46,92) (45,104) (50,118)", "40,100");
+    expect(r.isError).toBeUndefined();
+    expect(r.text).toContain("at (40,100) area (-2,-40) (3,-30) (1,-20) (6,-8) (5,4) (10,18)");
+    expect(r.text).toContain("measures 12 x 58");
+  });
+
+  it("warns the caller off the one combination that is an error", () => {
+    // The tool exists to keep an assistant out of trouble; saying so in the
+    // result is cheaper than the round trip through a failed check.
+    expect(runFrame("(1,1) (2,5) (6,2)").text).toMatch(/Do NOT also give size=/);
+  });
+
+  it("says the anchor was derived when it had to invent one", () => {
+    expect(runFrame("(1,1) (2,5) (6,2)").text).toMatch(/derived from the shape's own centre/);
+  });
+
+  it("refuses an outline of fewer than three points, citing the spec", () => {
+    const r = runFrame("(1,1) (2,5)");
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/at least three points \(got 2\) — spec 05 §4/);
+  });
+
+  it("refuses input it could not read rather than silently dropping a vertex", () => {
+    expect(runFrame("(1,1) (2 5) (6,2)").isError).toBe(true);
   });
 });

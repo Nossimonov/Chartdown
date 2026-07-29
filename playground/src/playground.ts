@@ -5,11 +5,15 @@
  * the URL fragment, which never leaves the browser.
  */
 
-import { exportUvttSource, renderSource, type RenderMode } from "@chartdown/render-svg";
+import { exportUvttSource, locationOf, renderSource, type RenderMode } from "@chartdown/render-svg";
 import brenmark from "../../examples/brenmark/brenmark.cd";
 import tankard from "../../examples/gilded-tankard/gilded-tankard.cd";
 import manor from "../../examples/fairwater-manor/fairwater-manor.cd";
 import candyworld from "../../examples/gumdrop-vale/candyworld.theme.cd";
+import inkAndVellum from "../../examples/ink-and-vellum.theme.cd";
+
+/** A theme document that declares nothing — see the note in renderNow. */
+const EMPTY_OVERLAY = ["kind: theme", "", "[theme]", ""].join("\n");
 import gumdrop from "../../examples/gumdrop-vale/gumdrop-vale.cd";
 import redford from "../../examples/redford-crossing/redford-crossing.cd";
 import reach from "../../examples/sundered-reach/sundered-reach.cd";
@@ -33,6 +37,10 @@ const statusEl = $<HTMLSpanElement>("status");
 const exampleSelect = $<HTMLSelectElement>("example");
 const themeSelect = $<HTMLSelectElement>("theme");
 const levelsEl = $<HTMLSpanElement>("levels");
+const zoomInBtn = $<HTMLButtonElement>("zoom-in");
+const zoomOutBtn = $<HTMLButtonElement>("zoom-out");
+const zoomFitBtn = $<HTMLButtonElement>("zoom-fit");
+const zoomLevelEl = $<HTMLSpanElement>("zoom-level");
 
 let mode: RenderMode = "player";
 /** Selected level for multi-level maps; "all" = the stacked floor-plan sheet. */
@@ -69,7 +77,15 @@ function syncLevelButtons(levels: string[], defaultLevel: string): void {
 }
 
 function renderNow(): void {
-  const theme = themeSelect.value === "candyworld" ? candyworld : undefined;
+  // Ink and Vellum is the theme that TRAVELS, and it is written to be `use:`d
+  // rather than selected: keyed on standard-library words, it necessarily
+  // styles some a given map does not have. Passing it as an inherited layer
+  // under an empty selected one is exactly what a per-example overlay does
+  // (spec 08 §5), and it is what keeps #116's dead-declaration lint honest —
+  // selected directly, it correctly reports every line this map cannot use.
+  const theme = themeSelect.value === "candyworld" ? candyworld
+    : themeSelect.value === "vellum" ? [inkAndVellum, EMPTY_OVERLAY]
+    : undefined;
   const first = renderSource(editor.value, theme ? { mode, theme } : { mode });
   syncLevelButtons(first.document.levels, first.document.defaultLevel);
   const useLevel = first.document.levels.length > 0 && selectedLevel !== "all";
@@ -77,9 +93,15 @@ function renderNow(): void {
     ? renderSource(editor.value, { mode, level: selectedLevel, ...(theme ? { theme } : {}) })
     : first;
   preview.innerHTML = svg;
+  // Kept PRISTINE for export (#186). The viewer moves the `viewBox` to zoom,
+  // and `download` used to hand over whatever was in the DOM — so a reader who
+  // zoomed in to check a channel and then saved would have got the crop rather
+  // than the map.
+  lastSvg = svg;
+  adoptView();
   const errors = diagnostics.filter((d) => d.severity === "error").length;
   const warnings = diagnostics.length - errors;
-  diagnosticsEl.textContent = diagnostics.map((d) => `line ${d.line}: ${d.severity}: ${d.message}`).join("\n");
+  diagnosticsEl.textContent = diagnostics.map((d) => `${locationOf(d)}: ${d.severity}: ${d.message}`).join("\n");
   diagnosticsEl.hidden = diagnostics.length === 0;
   statusEl.textContent = errors > 0 ? `${errors} error${errors === 1 ? "" : "s"}${warnings ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : ""}` : warnings > 0 ? `${warnings} warning${warnings === 1 ? "" : "s"}` : "ok";
   statusEl.dataset["level"] = errors > 0 ? "error" : warnings > 0 ? "warning" : "ok";
@@ -89,6 +111,184 @@ let timer: number | undefined;
 function scheduleRender(): void {
   clearTimeout(timer);
   timer = window.setTimeout(renderNow, 250);
+}
+
+// ---------- pan and zoom (#186) ----------
+//
+// The preview fits the map to the pane, which is the right default and was
+// also the only thing available: `overflow:auto` never produced a scrollbar
+// because a fitted map never overflows. So a reader could see the whole map
+// and nothing else, and every feature whose correctness is a matter of scale —
+// a fjord's head, a channel between an island and its shore — was unreadable
+// at the one scale on offer.
+//
+// Done by moving the `viewBox` rather than by scaling the element, and that
+// distinction is the whole point. Measured for #186: `non-scaling-stroke` holds
+// its width in CSS pixels, so page zoom magnifies the geometry and the stroke
+// together and their ratio never moves. Narrowing the viewBox grows the
+// geometry while leaving stroke widths alone, so detail genuinely emerges —
+// which is the operation #185's legibility floor needs in order to converge on
+// the truth instead of merely asserting that it would.
+
+interface Rect { x: number; y: number; w: number; h: number }
+
+/** The map's own viewBox — what "fit" means for the document now loaded. */
+let homeView: Rect | null = null;
+/** What is on screen. Never wider than `homeView`, never off its edges. */
+let view: Rect | null = null;
+/** The markup as rendered, before any of this touched it. */
+let lastSvg = "";
+
+/** Closest a reader may get, as a multiple of the fitted width. */
+const MAX_ZOOM = 64;
+
+const svgEl = (): SVGSVGElement | null => preview.querySelector("svg");
+
+const readViewBox = (el: SVGSVGElement): Rect | null => {
+  const parts = (el.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [x, y, w, h] = parts as [number, number, number, number];
+  return w > 0 && h > 0 ? { x, y, w, h } : null;
+};
+
+/** Hold the view inside the map, so panning cannot wander off into nothing. */
+function clampView(): void {
+  if (!view || !homeView) return;
+  view.w = Math.min(view.w, homeView.w);
+  view.h = Math.min(view.h, homeView.h);
+  view.x = Math.min(Math.max(view.x, homeView.x), homeView.x + homeView.w - view.w);
+  view.y = Math.min(Math.max(view.y, homeView.y), homeView.y + homeView.h - view.h);
+}
+
+function applyView(): void {
+  const el = svgEl();
+  if (!el || !view || !homeView) return;
+  clampView();
+  el.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+  const factor = homeView.w / view.w;
+  zoomLevelEl.textContent = `${factor < 9.95 ? factor.toFixed(1) : Math.round(factor)}×`;
+  const fitted = factor <= 1.001;
+  preview.classList.toggle("zoomed", !fitted);
+  zoomOutBtn.disabled = fitted;
+  zoomFitBtn.disabled = fitted;
+  zoomInBtn.disabled = factor >= MAX_ZOOM - 0.001;
+}
+
+/**
+ * Re-attach the current view to a freshly rendered map.
+ *
+ * The position SURVIVES AN EDIT, which is the behaviour that makes this usable
+ * while authoring: the render is debounced on every keystroke, so resetting the
+ * view each time would throw a reader back to the whole map on every character
+ * typed — exactly while they are adjusting the number they zoomed in to check.
+ * A map of a different size is a different map, and refits.
+ */
+function adoptView(): void {
+  const el = svgEl();
+  if (!el) {
+    homeView = null;
+    view = null;
+    return;
+  }
+  const home = readViewBox(el);
+  if (!home) return;
+  const sameMap = homeView
+    && Math.abs(home.w - homeView.w) < 1e-6 && Math.abs(home.h - homeView.h) < 1e-6
+    && Math.abs(home.x - homeView.x) < 1e-6 && Math.abs(home.y - homeView.y) < 1e-6;
+  homeView = home;
+  if (!sameMap || !view) view = { ...home };
+  applyView();
+}
+
+/** Zoom about a point given in client coordinates, so the cursor stays put. */
+function zoomAt(clientX: number, clientY: number, factor: number): void {
+  const el = svgEl();
+  if (!el || !view || !homeView) return;
+  const box = el.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return;
+  const fx = Math.min(Math.max((clientX - box.left) / box.width, 0), 1);
+  const fy = Math.min(Math.max((clientY - box.top) / box.height, 0), 1);
+  const atX = view.x + fx * view.w;
+  const atY = view.y + fy * view.h;
+  const width = Math.min(Math.max(view.w / factor, homeView.w / MAX_ZOOM), homeView.w);
+  const scale = width / view.w;
+  view = { x: atX - fx * width, y: atY - fy * view.h * scale, w: width, h: view.h * scale };
+  applyView();
+}
+
+/** Zoom about the middle of the pane — what the buttons and keyboard use. */
+function zoomCentre(factor: number): void {
+  const el = svgEl();
+  if (!el) return;
+  const box = el.getBoundingClientRect();
+  zoomAt(box.left + box.width / 2, box.top + box.height / 2, factor);
+}
+
+function fitView(): void {
+  if (!homeView) return;
+  view = { ...homeView };
+  applyView();
+}
+
+function bindViewer(): void {
+  preview.addEventListener("wheel", (event) => {
+    if (!svgEl()) return;
+    event.preventDefault();
+    zoomAt(event.clientX, event.clientY, Math.exp(-event.deltaY * 0.0015));
+  }, { passive: false });
+
+  let dragging: { id: number; x: number; y: number } | null = null;
+  preview.addEventListener("pointerdown", (event) => {
+    const el = svgEl();
+    if (!el || !view || !homeView || view.w >= homeView.w) return;
+    dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    preview.setPointerCapture(event.pointerId);
+    preview.classList.add("dragging");
+  });
+  preview.addEventListener("pointermove", (event) => {
+    const el = svgEl();
+    if (!dragging || dragging.id !== event.pointerId || !el || !view) return;
+    const box = el.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return;
+    view.x -= ((event.clientX - dragging.x) / box.width) * view.w;
+    view.y -= ((event.clientY - dragging.y) / box.height) * view.h;
+    dragging.x = event.clientX;
+    dragging.y = event.clientY;
+    applyView();
+  });
+  const endDrag = (event: PointerEvent): void => {
+    if (!dragging || dragging.id !== event.pointerId) return;
+    dragging = null;
+    preview.classList.remove("dragging");
+  };
+  preview.addEventListener("pointerup", endDrag);
+  preview.addEventListener("pointercancel", endDrag);
+
+  // Reachable without a wheel or a mouse: the pane takes focus and answers the
+  // usual keys, so zoom is not gated on a pointing device.
+  preview.addEventListener("keydown", (event) => {
+    if (!view || !homeView) return;
+    const step = (dx: number, dy: number): void => {
+      view!.x += dx * view!.w * 0.15;
+      view!.y += dy * view!.h * 0.15;
+      applyView();
+    };
+    const keys: Record<string, () => void> = {
+      "+": () => zoomCentre(1.25), "=": () => zoomCentre(1.25),
+      "-": () => zoomCentre(1 / 1.25), "_": () => zoomCentre(1 / 1.25),
+      "0": fitView,
+      ArrowLeft: () => step(-1, 0), ArrowRight: () => step(1, 0),
+      ArrowUp: () => step(0, -1), ArrowDown: () => step(0, 1),
+    };
+    const act = keys[event.key];
+    if (!act) return;
+    event.preventDefault();
+    act();
+  });
+
+  zoomInBtn.addEventListener("click", () => zoomCentre(1.6));
+  zoomOutBtn.addEventListener("click", () => zoomCentre(1 / 1.6));
+  zoomFitBtn.addEventListener("click", fitView);
 }
 
 // ---------- serverless sharing: deflate → base64url → URL fragment ----------
@@ -138,9 +338,10 @@ function saveFile(name: string, contents: string, type: string): void {
 }
 
 function download(): void {
-  const svg = preview.querySelector("svg");
-  if (!svg) return;
-  saveFile("chartdown-map.svg", svg.outerHTML, "image/svg+xml");
+  // From the RENDER, not from the DOM: the viewer moves the `viewBox` to zoom,
+  // so scraping the element would save a reader's crop instead of their map.
+  if (!lastSvg) return;
+  saveFile("chartdown-map.svg", lastSvg, "image/svg+xml");
 }
 
 // ---------- UVTT export (spec 06 §9): one .dd2vtt per level, raster included ----------
@@ -241,13 +442,14 @@ async function init(): Promise<void> {
         document.querySelector<HTMLButtonElement>('[data-mode="player"]')?.setAttribute("aria-pressed", "false");
       }
       const t = hash.get("t");
-      if (t === "candyworld") themeSelect.value = t;
+      if (t === "candyworld" || t === "vellum") themeSelect.value = t;
     } catch {
       editor.value = manor;
     }
   } else {
     editor.value = manor;
   }
+  bindViewer();
   renderNow();
 }
 

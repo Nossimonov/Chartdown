@@ -124,7 +124,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
       const fill = fogged ? model.theme.surface("fog", "fill", FOG) : model.theme.terrainFill(model.chainOf(cell!.terrain));
       const parts: string[] = [];
       if (gmMode && cell?.gm) parts.push(svgTitle(cell.gm));
-      parts.push(el("polygon", { points: poly, fill, stroke: GRID_LINE, "stroke-width": 1 }));
+      parts.push(el("polygon", { points: poly, fill, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 1 }));
 
       if (!fogged && cell) {
         if (seen) {

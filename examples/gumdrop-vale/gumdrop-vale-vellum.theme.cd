@@ -1,0 +1,12 @@
+# Gumdrop Vale — Ink and Vellum
+; The travelling theme, plus the three words only this document knows.
+; `use:` makes the base an INHERITED layer, which is also what keeps #116's
+; dead-declaration lint honest here: a shared theme deliberately styles words
+; no single map uses, and spec 08 §6 exempts inherited layers for exactly that.
+kind: theme
+use: ../ink-and-vellum.theme.cd
+
+[theme]
+gumdrop-hills : fill=#d9caa5
+licorice-forest : fill=#8f8a72
+taffy-river : stroke=#5c7c85

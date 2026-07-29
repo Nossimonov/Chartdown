@@ -12,11 +12,12 @@ import type {
   LabelOverrideNode,
   Pair,
   Placement,
+  Point,
   Ref,
 } from "@chartdown/core";
 import { loadStdlib, slugify, VocabTable, type Diagnostic } from "@chartdown/core";
 import type { Theme } from "./theme";
-import { colLetters, colToNumber } from "./util";
+import { colLetters, colToNumber, measureToNumber } from "./util";
 
 export type RenderMode = "player" | "gm";
 
@@ -129,10 +130,22 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   const labelsMode: "names" | "keyed" | "none" =
     labelsHeader === "none" ? "none" : labelsHeader === "keyed" ? "keyed" : "names";
   const resolvedNotes = new Map<EntityNode, string>();
+  // `every <measure> along <ref>` (#140). The parser could not do this because
+  // it must resolve a REFERENCE, not because it needs pixel geometry — the
+  // referent's course is cells or points either way, so the spacing is
+  // arithmetic once the reference is in hand. Expanding here rather than in
+  // each renderer keeps one implementation and lets everything downstream —
+  // occlusion, UVTT export, flags, pairs — treat the result as ordinary
+  // placements, exactly as `every … in <range>` already does.
+  expandEveryAlong(entities, doc, diagnostics);
   if (doc.mapType === "battlemap") {
     resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
   }
-  const keys = labelsMode === "keyed" ? assignKeys(entities, hexLines, diagnostics) : new Map<object, number>();
+  // `key=` works outside document-wide keyed mode (#107): a published module
+  // is overwhelmingly "a map WITH a key" — ten numbered pins beside forty
+  // named rooms — not "a map in key mode", which renumbers every display name.
+  // In `names` mode only explicitly pinned entities take a number.
+  const keys = labelsMode === "none" ? new Map<object, number>() : assignKeys(entities, hexLines, diagnostics, labelsMode === "keyed");
   return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, resolvedNotes };
 }
 
@@ -145,6 +158,8 @@ function assignKeys(
   entities: EntityNode[],
   hexLines: HexLineNode[],
   diagnostics: Diagnostic[],
+  /** Keyed mode numbers EVERY name; names mode numbers only `key=` pins (#107). */
+  numberEverything: boolean,
 ): Map<object, number> {
   const keys = new Map<object, number>();
   const named: { node: EntityNode | HexLineNode; pin: number | null; line: number }[] = [];
@@ -171,6 +186,9 @@ function assignKeys(
     used.add(n.pin);
     keys.set(n.node, n.pin);
   }
+  // Only keyed mode fills the unpinned; in names mode a map keeps its names
+  // and just the pinned entities carry numbers.
+  if (!numberEverything) return keys;
   let next = 1;
   for (const n of named) {
     if (keys.has(n.node)) continue;
@@ -324,10 +342,11 @@ export function labelsOn(model: Model, e?: { typeWord?: string | null }): boolea
 /** What a label site draws for a named node: the name — or its key number in keyed mode (spec 07 §3). */
 export function labelTextFor(model: Model, node: { name: string | null }): string | null {
   if (!node.name) return null;
-  if (model.labelsMode === "keyed") {
-    const key = model.keys.get(node);
-    return key !== undefined ? String(key) : null;
-  }
+  // A number wins wherever one was assigned: every name in keyed mode, and
+  // only the explicitly pinned ones in names mode (#107).
+  const key = model.keys.get(node);
+  if (key !== undefined) return String(key);
+  if (model.labelsMode === "keyed") return null;
   return node.name;
 }
 
@@ -346,4 +365,105 @@ export function gmTitleFor(model: Model, e: EntityNode): string | null {
   const anchor = entityAnchor(e);
   if (anchor) parts.push(...(model.gmNotes.get(anchor) ?? []));
   return parts.length ? parts.join(" ") : null;
+}
+
+/**
+ * Expand `every <measure> along <ref>` into ordinary placements (#140).
+ *
+ * The referent's course is sampled at the requested spacing: cell addresses on
+ * a grid map, points on a gridless one. A course with fewer than two vertices
+ * has no direction to walk, and an unresolvable reference is reported rather
+ * than silently producing nothing — the whole point of the feature is that the
+ * author stops counting positions by hand, so a silent zero would be worse
+ * than the hand-written list it replaces.
+ */
+function expandEveryAlong(entities: EntityNode[], doc: DocumentNode, diagnostics: Diagnostic[]): void {
+  const scale = measureToNumber(doc.header.find((h) => h.key === "scale")?.value ?? "5") || 5;
+  const courseOf = (ref: Ref): { cells: Address[]; points: Point[] } | null => {
+    for (const other of entities) {
+      const matches = ref.form === "id" ? other.ids.includes(ref.value) : other.name === ref.value;
+      if (!matches) continue;
+      const cells: Address[] = [];
+      const points: Point[] = [];
+      for (const p of other.placements) {
+        if (p.kind === "shape") {
+          for (const arg of p.args) {
+            if (arg.kind === "address") cells.push(arg);
+            else if (arg.kind === "point") points.push(arg);
+          }
+        } else if (p.kind === "relational" && p.form === "from-to") {
+          if (p.from.at.kind === "point") points.push(p.from.at);
+          points.push(...p.via);
+          if (p.to.at.kind === "point") points.push(p.to.at);
+        }
+      }
+      return { cells, points };
+    }
+    return null;
+  };
+
+  for (const e of entities) {
+    const spec = e.placements.find(
+      (p): p is Extract<Placement, { kind: "relational"; form: "every-along" }> =>
+        p.kind === "relational" && p.form === "every-along",
+    );
+    if (!spec) continue;
+    const course = courseOf(spec.ref);
+    if (!course) {
+      diagnostics.push({ severity: "error", line: e.line, message: `'every ${spec.measure} along ${spec.ref.value}' — no such feature to follow (spec 02 §9)` });
+      continue;
+    }
+    const step = measureToNumber(spec.measure);
+    if (!(step > 0)) {
+      diagnostics.push({ severity: "error", line: e.line, message: `'every ${spec.measure} along ${spec.ref.value}' needs a positive spacing (spec 02 §9)` });
+      continue;
+    }
+    const others = e.placements.filter((p) => p !== spec);
+    if (course.cells.length > 1) {
+      // Grid map: walk the CELLS the course covers, not its vertices. A path
+      // is written as corners — `path B4 Z4` is two addresses spanning
+      // twenty-five cells — so striding the vertex list placed one lamp at the
+      // corner and called it a colonnade.
+      const chain: Address[] = [];
+      for (let i = 1; i < course.cells.length; i++) {
+        const a = course.cells[i - 1]!;
+        const b = course.cells[i]!;
+        const ac = colToNumber(a.col);
+        const bc = colToNumber(b.col);
+        const steps = Math.max(Math.abs(bc - ac), Math.abs(b.row - a.row));
+        for (let k = 0; k < steps; k++) {
+          chain.push({
+            kind: "address",
+            col: colLetters(ac + Math.round(((bc - ac) * k) / steps)),
+            row: a.row + Math.round(((b.row - a.row) * k) / steps),
+          });
+        }
+      }
+      chain.push(course.cells[course.cells.length - 1]!);
+      const stride = Math.max(1, Math.round(step / scale));
+      const picked: Address[] = [];
+      for (let i = 0; i < chain.length; i += stride) picked.push(chain[i]!);
+      e.placements = [...others, ...picked];
+    } else if (course.points.length > 1) {
+      // Gridless: walk the polyline by arc length in map units.
+      const picked: Point[] = [];
+      let carry = 0;
+      picked.push(course.points[0]!);
+      for (let i = 1; i < course.points.length; i++) {
+        const a = course.points[i - 1]!;
+        const b = course.points[i]!;
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        let travelled = step - carry;
+        while (travelled <= len) {
+          const t = travelled / len;
+          picked.push({ kind: "point", x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+          travelled += step;
+        }
+        carry = (carry + len) % step;
+      }
+      e.placements = [...others, ...picked];
+    } else {
+      diagnostics.push({ severity: "error", line: e.line, message: `'${spec.ref.value}' has no course to space along — it needs at least two points (spec 02 §9)` });
+    }
+  }
 }

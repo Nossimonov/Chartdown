@@ -1,11 +1,12 @@
 /**
- * Chartdown MCP server (issue #58): three tools over stdio so agents can
- * draft, validate, and visually verify plain-text TTRPG maps.
+ * Chartdown MCP server (issue #58): tools over stdio so agents can draft,
+ * validate, and visually verify plain-text TTRPG maps.
  *
  *   chartdown_spec   — the whole language in one file (the spec digest)
  *   chartdown_check  — fail-loud validation; diagnostics cite spec sections
  *   chartdown_render — deterministic SVG (player/GM, level, theme)
  *   chartdown_uvtt   — Universal VTT geometry export
+ *   chartdown_frame  — absolute trace to anchored outline (#174)
  *
  * Run: `npx @chartdown/mcp` (binary name chartdown-mcp).
  */
@@ -15,7 +16,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import digest from "../../../docs/spec/digest.md";
 import { rasterizePng } from "./raster";
-import { runCheck, runRender, runUvtt } from "./tools";
+import { runCheck, runFrame, runRender, runUvtt } from "./tools";
 
 const server = new McpServer({ name: "chartdown", version: "0.2.0" });
 
@@ -80,6 +81,20 @@ server.registerTool(
     },
   },
   ({ source, mode, level }) => textResult(runUvtt(source, { ...(mode ? { mode } : {}), ...(level !== undefined ? { level } : {}) })),
+);
+
+server.registerTool(
+  "chartdown_frame",
+  {
+    title: "Convert a traced outline into an anchored one",
+    description:
+      "Converts a list of ABSOLUTE points into the anchored form a detached feature's outline needs (spec 05 §4, ADR 0026): an anchor plus offsets from it, so moving the feature is one coordinate. Use this whenever you have traced a real coastline or island — the subtraction is easy to get subtly wrong, and a shape shifted by a constant renders as a perfectly plausible island in the wrong place, which nothing will report.",
+    inputSchema: {
+      points: z.string().describe("Absolute points, e.g. '(52,60) (55,70) (58,85)'. A leading 'area' is accepted."),
+      anchor: z.string().optional().describe("Optional anchor 'x,y'. Omitted, one is derived from the shape's centre."),
+    },
+  },
+  ({ points, anchor }) => textResult(runFrame(points, anchor)),
 );
 
 await server.connect(new StdioServerTransport());

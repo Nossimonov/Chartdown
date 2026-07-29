@@ -6,6 +6,7 @@
 import type {
   Address,
   AddressRange,
+  Control,
   Edge,
   EdgeDir,
   Endpoint,
@@ -39,6 +40,49 @@ export function parseAddress(text: string): Address | null {
   return m ? { kind: "address", col: m[1]!, row: Number(m[2]!) } : null;
 }
 
+/** Column letters to 1-based number and back: A=1, Z=26, AA=27 (spec 02 §1). */
+const colToNumber = (letters: string): number => {
+  let n = 0;
+  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+};
+const numberToCol = (n: number): string => {
+  let out = "";
+  let v = n;
+  while (v > 0) {
+    const r = (v - 1) % 26;
+    out = String.fromCharCode(65 + r) + out;
+    v = Math.floor((v - 1) / 26);
+  }
+  return out;
+};
+
+/**
+ * A repeat expands to ordinary cell placements at parse time (#114). Spacing
+ * is authorial data, not renderer judgement — the arithmetic is fixed by the
+ * document, so nothing downstream needs to know the line was written compactly
+ * and the determinism contract (spec 02 §8.2) holds trivially.
+ *
+ * Offsets are measured from the range's NW corner, so the first cell is always
+ * placed: `every 4 in A1..A9` gives A1, A5, A9, which is what a reader counting
+ * bays expects.
+ */
+const REPEAT_LIMIT = 4096;
+function expandRepeat(range: AddressRange, stepX: number, stepY: number): Address[] {
+  const c0 = Math.min(colToNumber(range.from.col), colToNumber(range.to.col));
+  const c1 = Math.max(colToNumber(range.from.col), colToNumber(range.to.col));
+  const r0 = Math.min(range.from.row, range.to.row);
+  const r1 = Math.max(range.from.row, range.to.row);
+  const out: Address[] = [];
+  for (let r = r0; r <= r1; r += stepY) {
+    for (let c = c0; c <= c1; c += stepX) {
+      out.push({ kind: "address", col: numberToCol(c), row: r });
+      if (out.length > REPEAT_LIMIT) return out;
+    }
+  }
+  return out;
+}
+
 export function parsePositional(text: string): Address | AddressRange | Point | PointRange | Edge | null {
   const range = RANGE_RE.exec(text);
   if (range) {
@@ -60,6 +104,22 @@ export function parsePositional(text: string): Address | AddressRange | Point | 
 export function parsePoint(text: string): Point | null {
   const m = POINT_RE.exec(text);
   return m ? { kind: "point", x: Number(m[1]!), y: Number(m[2]!) } : null;
+}
+
+/**
+ * A centerline control, optionally carrying the channel's width there (#190):
+ * `(52,72)@1.5mi`.
+ *
+ * `@` reads as "at" and binds to the point it follows, so a profile skims as
+ * one thing — `via (42,63)@2mi (52,72)@1.5mi` says where the channel goes and
+ * how wide it is there, in the order a person would say it.
+ */
+export function parseControl(text: string): Control | null {
+  const at = text.indexOf("@");
+  if (at < 0) return parsePoint(text);
+  const point = parsePoint(text.slice(0, at));
+  const width = text.slice(at + 1);
+  return point && MEASURE_RE.test(width) ? { ...point, width } : null;
 }
 
 export const isCompass = (word: string): boolean => COMPASS.has(word);
@@ -112,6 +172,56 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
     return undefined;
   };
 
+  /**
+   * `every <n>[x<m>] in <range>` after the keyword has been consumed (#114).
+   * Returns the expanded cells, or null having already reported why not — one
+   * implementation for both the bare form and the `on <ref> at every …` form,
+   * so the two can never drift into different diagnostics.
+   */
+  const takeRepeat = (): Address[] | null => {
+    const stepText = chunkText(peek());
+    const m = stepText ? /^(\d+)(?:x(\d+))?$/.exec(stepText) : null;
+    if (!m) {
+      diagnostics.push(error(line, "'every' takes a whole-number step: 'every 4 in <range>', or 'every 4x6 in <range>' for independent column and row steps (spec 02 §9)"));
+      return null;
+    }
+    const stepX = Number(m[1]);
+    const stepY = m[2] === undefined ? stepX : Number(m[2]);
+    i++;
+    if (stepX < 1 || stepY < 1) {
+      diagnostics.push(error(line, "'every' steps by at least 1 cell (spec 02 §9)"));
+      return null;
+    }
+    const kw = chunkText(peek());
+    if (kw !== "in") {
+      diagnostics.push(error(line, kw === "along"
+        ? "'every … along <ref>' spaces by a MEASURE, not a count — 'every 6ft along gallery' (spec 02 §9)"
+        : "'every <n>' is followed by 'in <range>' (spec 02 §9)"));
+      return null;
+    }
+    i++;
+    const rangeText = chunkText(peek());
+    const range = rangeText ? parsePositional(rangeText) : null;
+    if (!range || range.kind !== "range") {
+      // `every` over EDGES is deliberately refused rather than merely unparsed
+      // (#114 with #130). Repetition in edge space is what side words are for:
+      // `cave-in : east` names the whole run however long, and survives the
+      // structure moving, which a stepped edge list would not.
+      const edgeish = rangeText !== null && /^[A-Z]+\d+\.(ne|nw|se|sw|n|e|s|w)\.\./.test(rangeText);
+      diagnostics.push(error(line, edgeish
+        ? "'every' steps over CELLS, not edges — name the side instead ('cave-in : east' replaces that whole run, spec 06 §3), or list the edges (spec 02 §9)"
+        : "expected a cell range after 'in', e.g. 'every 4 in FH38..GF102' (spec 02 §9)"));
+      return null;
+    }
+    i++;
+    const cells = expandRepeat(range, stepX, stepY);
+    if (cells.length > REPEAT_LIMIT) {
+      diagnostics.push(error(line, `'every ${stepText} in ${rangeText}' expands past ${REPEAT_LIMIT} cells — narrow the range or widen the step (spec 02 §9)`));
+      return null;
+    }
+    return cells;
+  };
+
   const takeEndpoint = (): Endpoint | null => {
     const t = tokens[i];
     if (t?.kind === "chunk") {
@@ -158,6 +268,23 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
 
     if (SHAPES.has(c)) {
       i++;
+      // `ridge on <ref> at (…) (…)` (#142): the points that follow are offsets
+      // in the referent's frame, so the whole shape travels with it. Spec 02
+      // §7 already says exactly this for a structure's contents; a spur off a
+      // peak is the same relationship, and shapes were the one place the
+      // live-anchor promise did not reach.
+      let frame: Ref | undefined;
+      if (chunkText(peek()) === "on") {
+        i++;
+        const ref = takeRef("on");
+        if (!ref) continue;
+        if (chunkText(peek()) !== "at") {
+          diagnostics.push(error(line, `'${c} on ${ref.value}' needs 'at' and the offsets that follow it — '${c} on ${ref.value} at (-70,100) (-90,170)' (spec 02 §9)`));
+          continue;
+        }
+        i++;
+        frame = ref;
+      }
       const args: Placement[] = [];
       while (i < tokens.length) {
         const next = tokens[i]!;
@@ -176,7 +303,32 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
         args.push(pos);
         i++;
       }
-      result.placements.push({ kind: "shape", shape: c as ShapeKind, args });
+      result.placements.push(frame ? { kind: "shape", shape: c as ShapeKind, args, frame } : { kind: "shape", shape: c as ShapeKind, args });
+      continue;
+    }
+
+    // `every <n> in <range>` / `every <n>x<m> in <range>` (#114): a repeat
+    // QUALIFIER, not a tenth relational form — spec 02 §7's closed list is
+    // untouched. A dwarf-hall IS its colonnade, and writing one meant 56
+    // hand-computed addresses that said nothing about the regularity and
+    // silently broke the moment the hall moved.
+    if (c === "every") {
+      i++;
+      // `every <measure> along <ref>` (#140) needs geometry the parser does not
+      // have, so it survives as a placement for the renderer to expand. The
+      // `along` keyword is what disambiguates it from `every 4 in …`, since a
+      // bare integer is also a legal measure.
+      const stepText = chunkText(peek());
+      if (stepText !== null && isMeasure(stepText) && chunkText(peek(1)) === "along") {
+        i += 2;
+        const ref = takeRef("along");
+        if (!ref) continue;
+        result.placements.push({ kind: "relational", form: "every-along", measure: stepText, ref });
+        continue;
+      }
+      const cells = takeRepeat();
+      if (cells === null) continue;
+      result.placements.push(...cells);
       continue;
     }
 
@@ -203,6 +355,17 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       // crossing chooser of spec 06 §6 rides this same form).
       let point: Point | undefined;
       let at: Address | AddressRange | Edge | undefined;
+      if (chunkText(peek()) === "at" && chunkText(peek(1)) === "every") {
+        // `on <ref> at every <n> in <range>` — the repeat lands in the
+        // REFERENT's frame, which is the whole point of #114: a colonnade
+        // written in its hall's own coordinates moves when the hall moves,
+        // where fifty-six absolute addresses silently do not.
+        i += 2;
+        const cells = takeRepeat();
+        if (cells === null) continue;
+        for (const cell of cells) result.placements.push({ kind: "relational", form: "on", ref, at: cell });
+        continue;
+      }
       if (chunkText(peek()) === "at") {
         const after = chunkText(peek(1));
         const parsed = after ? parsePositional(after) : null;
@@ -214,8 +377,28 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
           i += 2;
         }
       }
+      // `on <ref> at <point> via <point>…` (#169): the feature's CENTERLINE.
+      // A bite is otherwise one straight run, and Hood Canal turns hard east
+      // at the Great Bend — one inlet with one mouth and one head, which is
+      // not the line-BRANCHING that spec 05 §4 stages. Only meaningful after
+      // an `at` point, since the centerline starts at the mouth.
+      const via: Control[] = [];
+      if (point && chunkText(peek()) === "via") {
+        i++;
+        for (;;) {
+          const text = chunkText(peek());
+          const next = text ? parseControl(text) : null;
+          if (!next) break;
+          via.push(next);
+          i++;
+        }
+        if (via.length === 0) {
+          diagnostics.push(error(line, `'via' on '${ref.value}' has no points — a centerline needs at least one (spec 05 §4)`));
+        }
+      }
       result.placements.push(
-        point ? { kind: "relational", form: "on", ref, point }
+        point && via.length > 0 ? { kind: "relational", form: "on", ref, point, via }
+        : point ? { kind: "relational", form: "on", ref, point }
         : at ? { kind: "relational", form: "on", ref, at }
         : { kind: "relational", form: "on", ref },
       );
@@ -260,13 +443,30 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
         }
         if (via.length === 0) diagnostics.push(error(line, "expected at least one point after 'via'"));
       }
-      if (chunkText(peek()) !== "to") {
-        diagnostics.push(error(line, "expected 'to' in from…to placement"));
+      // `join <ref>` is a terminal endpoint alongside `to` (#94): the river
+      // ends on the referenced course rather than at a place. `to <river>`
+      // stays what aspect adaptation says it is — the course's MIDPOINT —
+      // because overloading it would break that rule for one archetype; the
+      // two spellings now read as the deliberate pair they are.
+      const terminal = chunkText(peek());
+      if (terminal !== "to" && terminal !== "join") {
+        diagnostics.push(error(line, "expected 'to' or 'join' in from…to placement (spec 02 §7)"));
         continue;
       }
       i++;
       const to = takeEndpoint();
       if (!to) continue;
+      if (terminal === "join") {
+        if (to.at.kind !== "ref") {
+          diagnostics.push(error(line, "'join' takes the watercourse to end on, not a position — 'join mitheithel' (spec 02 §7)"));
+          continue;
+        }
+        if (to.point) {
+          diagnostics.push(error(line, "'join <ref>' finds the meeting point itself; drop the 'at <point>' (spec 02 §7)"));
+          continue;
+        }
+        to.join = true;
+      }
       result.placements.push({ kind: "relational", form: "from-to", from, via, to });
       continue;
     }

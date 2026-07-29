@@ -45,3 +45,21 @@ Each of these lands as one or more **syntax proposal issues** (see [CONTRIBUTING
 *Meet users where they already write.*
 
 Candidates, deliberately unscoped until Phase 2 ships: markdown-it/remark plugin, Obsidian plugin, VS Code preview, static-site integration, VTT export (Universal VTT), community themes. Each gets scoped by issues when we get there.
+
+## Phase 4 — Language depth (v0.4)
+
+*Deepen the language where authoring at scale proved it thin.*
+
+Phase 3 delivered the ecosystem surfaces that matter — Obsidian, the GitHub Action, the MCP server, the playground, UVTT export — and the remaining candidates (markdown-it/remark, VS Code preview, community themes) are deliberately parked rather than pursued. Roughly ninety percent of the ecosystem's value is shipped; the marginal tenth is worth less than the language work this phase carries, and the two long authoring exercises behind that judgment are the evidence.
+
+Two agent-authored maps at real scale — Christopher Tolkien's Middle-earth and a full-Moria eight-level mega-dungeon — produced twenty-odd bugs (fixed in 0.3.2 and 0.3.3) and nineteen accepted proposals. Their shape is the phase's shape: the region side was missing *expressiveness* (the language could not say what the map needed), and the battlemap side was missing *rigour* (the toolchain accepted maps that could not be navigated).
+
+The accepted work, in dependency order:
+
+1. **Foundations** — derivation carries word-keyed behaviour ([ADR 0016](decisions/0016-derivation-carries-word-keyed-behaviour.md)); a positive `kind:` discriminator for vocabulary and theme documents; openings in declared terrain, a normative `passes=` value set, and the statement that `earth` is impassable.
+2. **Vocabulary and semantics** — declared states with a warning on undeclared; opening states; free text's placement set and ungated `key=`; and the generalization of the vacant `light` archetype into **fields**, so a setting can declare radiation, silence, or antimagic in one line.
+3. **Authoring power** — river confluences (`join`), solitary `peak`/`volcano`, organically-finished terrain areas, repeated placement (`every`), multi-level shafts, and validated `detail=` seams.
+4. **The safety net** — six coherence lints and dead-declaration warnings, so a map that cannot be navigated says so.
+5. **Staged, with review** — staged revelation (secret groups, with the reveal set living on the render rather than in the document), and placed coast/river morphology, whose principle is recorded before its build: **detail is data, not noise**.
+
+**Exit criterion:** the two exercise maps re-author cleanly — every workaround their authors documented is expressible, and every defect their readers caught is either fixed or reported by the toolchain.

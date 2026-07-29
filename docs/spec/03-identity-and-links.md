@@ -48,9 +48,28 @@ Two reserved generic parameters (joining `hidden` and `gm=`, spec 01 §6), legal
 |---|---|---|
 | `link=` | Where this entity's description lives — a URL, relative path, or fragment in the embedding document. Supporting renderers make the entity clickable. | `capital highkeep "Highkeep" : (360,330) link="lore/highkeep.md"` |
 | `detail=` | This entity is detailed by another Chartdown document — the site-map → battlemap hand-off. | `bigtop "The Big Top" : … detail="maps/bigtop.cd"` |
+| `detail-at=` | The parent cell the sub-map's `A1` sits on — upgrades `detail=` from a pointer to a spatial relationship, so the seam is **checkable** ([#109](https://github.com/Nossimonov/Chartdown/issues/109)). | `chamber mazarbul : CP12..DF32 detail="mazarbul.cd" detail-at=CP12` |
 
 Paths resolve relative to the document. An entity may carry both. Renderers that don't support them MUST ignore them silently.
 
+
+**The seam is validated when both documents are available.** With `detail-at=` and both `scale:` values known, the covered parent region is derived, and two things fail loud: a magnification that is not a whole number (10ft→5ft is a window; 10ft→3ft is a different map), and a child grid too small to cover the parent footprint it claims. The exercise that raised this shipped a 42×28 child at 5ft against a footprint needing 44×42, and **both files checked clean** — the checker had nothing to compare.
+
+`detail=` **alone is unchanged** and remains a pointer, so no existing document moves. The checker never reads a file: sub-map sources are supplied by the caller exactly as `use:` libraries are, and an unsupplied sub-map reports that its seam went unchecked rather than passing in silence.
+
+**The child declares the other end.** `inset: <document> at <entity>` states which entity of which document this map is a window onto:
+
+```chartdown
+; mazarbul.cd
+map: battlemap
+grid: square 44x42
+scale: 5ft
+inset: khazad-dum.cd at mazarbul
+```
+
+A child document is therefore not self-contained, and that is a stated property rather than an accident — opening the sheet cold tells you where you are. It is sound because **a map is the sum of the files that make it up** ([ADR 0021](../decisions/0021-a-map-is-the-sum-of-its-files.md)): an inset is not a reusable component that several maps might include, it is a close-up at one unique point, and there is nothing to be gained by keeping it ignorant of where that is.
+
+**Both ends are validated against each other.** Where both documents are available, every way the pair can disagree is an error naming both files: a parent with no `detail=` pointing back, a parent with no `detail-at=` to agree about, a named entity that does not exist, or a scale or coverage mismatch. The relationship being declared twice is what makes it checkable; two declarations that could drift silently would be worse than one.
 ## 5. `[gm]` lines are attachments
 
 Within a `[gm]` section:

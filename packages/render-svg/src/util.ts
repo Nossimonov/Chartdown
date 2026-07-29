@@ -5,10 +5,21 @@ export interface XY {
   y: number;
 }
 
+/**
+ * The finest distance the renderer can express, in rendered units.
+ *
+ * `fmt` prints two decimals, so two vertices closer together than this are the
+ * same vertex as far as the output is concerned. Exported because geometry that
+ * samples a curve needs the same number: emitting vertices below the quantum
+ * costs points, and their positions are then dominated by arithmetic noise
+ * rather than by shape — which measures as a corner that nothing can draw.
+ */
+export const QUANTUM = 0.01;
+
 /** Fixed-precision formatting keeps output byte-identical across runs. */
 export const fmt = (n: number): string => {
-  const rounded = Math.round(n * 100) / 100;
-  return Object.is(rounded, -0) ? "0" : String(rounded);
+  const rounded = Math.round(n / QUANTUM) * QUANTUM;
+  return Object.is(rounded, -0) ? "0" : String(Number(rounded.toFixed(2)));
 };
 
 export const esc = (text: string): string =>
@@ -37,7 +48,32 @@ export const text = (content: string, attrs: Attrs): string =>
     .map(([k, v]) => ` ${k}="${typeof v === "number" ? fmt(v) : esc(String(v))}"`)
     .join("")}>${esc(content)}</text>`;
 
-export const pointsAttr = (pts: XY[]): string => pts.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(" ");
+/**
+ * A point list for a `polyline`/`polygon`, with CONSECUTIVE DUPLICATES DROPPED
+ * AT THE PRINTED PRECISION (#176).
+ *
+ * Two vertices closer together than `fmt` can express print as the same pair of
+ * numbers, and the segment between them is then zero-length. That is invisible
+ * — it draws nothing — but it is not harmless: a zero-length segment has no
+ * direction, so anything measuring the drawn curve reads an arbitrary angle
+ * there. It is why a coastline whose geometry turns 29° was measured turning
+ * 155.9°, and why a shape that had already passed the renderer's own 135° fold
+ * check appeared to violate it. The check was right and the output was lying.
+ *
+ * Deduped HERE, once, rather than in each shape that might produce a near-pair:
+ * the criterion is a property of the output format rather than of any geometry,
+ * so `fmt`'s own answer is the exact test and no tolerance has to be guessed.
+ * Every earlier attempt guessed one in world units and was finer than the two
+ * decimal places actually printed.
+ */
+export const pointsAttr = (pts: XY[]): string => {
+  const out: string[] = [];
+  for (const p of pts) {
+    const at = `${fmt(p.x)},${fmt(p.y)}`;
+    if (at !== out[out.length - 1]) out.push(at);
+  }
+  return out.join(" ");
+};
 
 /** mulberry32 — small, fast, deterministic. */
 export function rng(seed: number): () => number {
@@ -75,34 +111,16 @@ export function hashSeed(...nums: number[]): number {
 }
 
 /**
- * Catmull-Rom spline through the declared points — the TRUE curve: a pure
- * function of the input, no noise (spec 02 §9: finishing is not inventing;
- * authors control wiggle with via points). `closed` splines a ring.
+ * The connecting curve through declared controls — CENTRIPETAL (#189).
+ *
+ * Re-exported from core rather than defined here (#192): the shape a `via`
+ * list means is not a rendering choice, and a measuring tool that has to know
+ * whether its own output can be drawn must spline it exactly as the renderer
+ * will. Two copies of this is how the measurement comes to check a line the
+ * renderer never draws.
  */
-export function catmullRom(pts: XY[], samples = 8, closed = false): XY[] {
-  if (pts.length < 3) return pts.slice();
-  const P = (i: number): XY =>
-    closed ? pts[((i % pts.length) + pts.length) % pts.length]! : pts[Math.max(0, Math.min(pts.length - 1, i))]!;
-  const out: XY[] = [];
-  const segs = closed ? pts.length : pts.length - 1;
-  for (let i = 0; i < segs; i++) {
-    const p0 = P(i - 1);
-    const p1 = P(i);
-    const p2 = P(i + 1);
-    const p3 = P(i + 2);
-    for (let s = 0; s < samples; s++) {
-      const t = s / samples;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      out.push({
-        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
-      });
-    }
-  }
-  if (!closed) out.push(pts[pts.length - 1]!);
-  return out;
-}
+import { catmullRom } from "@chartdown/core";
+export { catmullRom };
 
 /** Organic finishing: midpoint-displacement jitter of a polyline (two rounds). */
 export function meander(points: XY[], amount: number, random: () => number): XY[] {
@@ -127,15 +145,87 @@ export function meander(points: XY[], amount: number, random: () => number): XY[
   return current;
 }
 
-/** Organic blob: radial jitter around a center. */
-export function blob(center: XY, radius: number, random: () => number, segments = 14): XY[] {
-  const pts: XY[] = [];
+/**
+ * How far the finishing may pull the boundary in from the declared extent.
+ * Texture, not silhouette (#96): enough to read as drawn rather than plotted,
+ * never enough to make the shape a different shape.
+ */
+const INSET = 0.38;
+
+/**
+ * A mass of DECLARED EXTENT: an outline whose long axis measures exactly
+ * `size`, centred on `center`, turned by `angle`, with its short axis
+ * `size × shortRatio`.
+ *
+ * A BLOB DECLARES AN EXTENT, NOT AN OUTLINE (#173, ADR 0025). The shape this
+ * replaces was fourteen points of radial jitter keyed on the document seed, the
+ * entity's identity and its ordinal among same-size siblings, which meant
+ * naming a blob reshaped it, swapping two lines in the file swapped two
+ * islands' outlines, and three `size=40mi` blobs measured 42.5, 42.0 and
+ * 41.6mi across. Spec 05 §4 already forbids that last one in terms — "it makes
+ * `size=` a lie … the number in the document would stop determining what is on
+ * the map" — so the language was carrying two opposite contracts on one pair.
+ *
+ * Here the extent is exact by construction: the boundary is perturbed INWARD
+ * only, and the result is normalised so its long axis is precisely `size`. The
+ * perturbation is texture the renderer owns and nothing may reference — the
+ * same standing `area` outlines already have under spec 02 §9 — and it is a
+ * pure function of the arguments, so it carries no seed, no ordinal and no
+ * identity.
+ */
+export function organicMass(
+  center: XY, size: number, shortRatio: number, angle: number,
+  random: () => number, segments = 14,
+): XY[] {
+  // Generated ROUND and then fitted to the declared extent, rather than
+  // generated elongated. The texture is then the same character whatever
+  // `reach=` says, so stretching an island does not also re-texture it.
+  const raw: XY[] = [];
   for (let i = 0; i < segments; i++) {
-    const angle = (i / segments) * Math.PI * 2;
-    const r = radius * (0.78 + random() * 0.4);
-    pts.push({ x: center.x + Math.cos(angle) * r, y: center.y + Math.sin(angle) * r });
+    const a = (i / segments) * Math.PI * 2;
+    const r = 1 - INSET * random();
+    raw.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
   }
-  return pts;
+  // Smoothed BEFORE fitting, because a spline may overshoot its controls —
+  // measuring the extent of the drawn curve is the only way `size=` is exact
+  // in the thing a reader actually sees.
+  const smooth = catmullRom(raw, 5, true);
+  const xs = smooth.map((p) => p.x);
+  const ys = smooth.map((p) => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  // BOTH axes are fitted, not just the long one. Fitting only the long axis
+  // left `reach=1` — which the spec calls a circle — measurably oval, because
+  // an inward-only perturbation shrinks the two axes by different amounts.
+  const kx = x1 > x0 ? size / (x1 - x0) : 1;
+  const ky = y1 > y0 ? (size * shortRatio) / (y1 - y0) : 1;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return smooth.map((p) => {
+    const x = (p.x - cx) * kx;
+    const y = (p.y - cy) * ky;
+    return { x: center.x + x * cos - y * sin, y: center.y + x * sin + y * cos };
+  });
+}
+
+/**
+ * Is this point inside this polygon? The standard crossing count.
+ *
+ * Here rather than beside its first caller because duplicating a predicate is
+ * how two callers come to disagree about what "inside" means — the region
+ * renderer's water checks and the channel floor (#185) must answer it the same
+ * way, or a symbol is drawn through land one of them thinks is sea.
+ */
+export function pip(pt: XY, poly: XY[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
 }
 
 export function nearestOnPolyline(pts: XY[], target: XY): XY {

@@ -63,3 +63,15 @@ Against Sarah's checklist (use-cases §1): grid+scale ✓ · semantic terrain fr
 - ~~Are `[gm]` entries attachments or redefinitions?~~ — **resolved by [spec 03](../../docs/spec/03-identity-and-links.md) §5** (via [#15](https://github.com/Nossimonov/Chartdown/issues/15)): attachments (placements forbidden); a non-resolving subject without a placement is an error, so typos can't declare phantom entities. The `[structures]`/`[features]` subjects were restructured (`building tollhouse "Ruined Toll House"`, `crates loot`) so this file's attachments resolve against explicit ids.
 - ~~Non-rectangular structures~~ — **resolved by [spec 06](../../docs/spec/06-battlemap-primitives.md) §3** (via [#18](https://github.com/Nossimonov/Chartdown/issues/18)): footprints are rect ranges or cell unions, so L/T/U shapes are in scope; only diagonal/curved walls are deferred, with saw-tooth cells + renderer smoothing as the interim (syntax conveys cells; movement follows them).
 - ~~Comment character~~ — **resolved by [spec 01](../../docs/spec/01-document-model.md) §3**: `;`. ~~Token allegiance~~ — **resolved by [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) §4 and [spec 06](../../docs/spec/06-battlemap-primitives.md) §4**: `side=<word>`, themed to colors.
+
+## With the alternative theme
+
+[`redford-crossing-vellum.theme.cd`](redford-crossing-vellum.theme.cd) renders this map in **ink and vellum** — sepia on aged paper, hatched rather than flat:
+
+```sh
+chartdown render redford-crossing.cd --theme redford-crossing-vellum.theme.cd
+```
+
+It is a three-line overlay on [the travelling theme](../ink-and-vellum.theme.cd), which is keyed entirely on standard-library words and restyles all seven examples without knowing any of them. `use:` is not decoration here: it makes the base an **inherited** layer, which is what spec 08 §6 exempts from the dead-declaration lint — a shared theme deliberately styles words no single map uses, and selected directly it reports every one of them (69 on Brenmark). The overlay carries a finding rather than a flourish: **`ford` reads no theme property at all** — `stroke`, `fill`, `width` and `glyph` are every one inert, because a crossing is drawn as a restyled band with its colours fixed at the draw site. The map named for its ford cannot theme it ([#208](https://github.com/Nossimonov/Chartdown/issues/208)).
+
+No themed SVG is committed; the theme is live in [the playground](https://nossimonov.github.io/Chartdown/) under the Theme selector.

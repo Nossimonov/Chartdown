@@ -7,3 +7,15 @@ Already forced out of the renderer: polygon seas and island landmasses (#76 — 
 Round nine refined the repeat rule — the split sea name now measures the stretch actually built over (island and point geometry crossing the span) and fills each real clear stretch, instead of splitting at fixed fractions that still crowded the archipelago — and realm names sidestep within their territory (up to a third of it each way) before settling on anything, so Ghor Vakh's name no longer lands on the Vakh Teeth.
 
 Round eight (the density round) forced the spec 07 §5 dense-map conduct: priority claiming (point labels first — their proximity IS their meaning), shrink-before-migrate, omit-before-overwrite, and repeat-rather-than-cross (the Sundered Sea names itself once per side of the archipelago instead of scrawling through it). Along the way it caught four placement bugs: phantom claim boxes from rejected curve-label attempts, SVG's default `text-anchor=start` shifting "centered" labels off-canvas (the clipped Deepwatch), diagonal labels slipping through the gaps between coarse collision boxes (the Broken Spine × Understone Way cross), and vertically-lifted boxes misplacing diagonal ridge names. One honest casualty: the Understone Way's name is omitted — its whole corridor is contested, and an unlabeled road beats text on text.
+
+## With the alternative theme
+
+[`sundered-reach-vellum.theme.cd`](sundered-reach-vellum.theme.cd) renders this map in **ink and vellum** — sepia on aged paper, hatched rather than flat:
+
+```sh
+chartdown render sundered-reach.cd --theme sundered-reach-vellum.theme.cd
+```
+
+It is a three-line overlay on [the travelling theme](../ink-and-vellum.theme.cd), which is keyed entirely on standard-library words and restyles all seven examples without knowing any of them. `use:` is not decoration here: it makes the base an **inherited** layer, which is what spec 08 §6 exempts from the dead-declaration lint — a shared theme deliberately styles words no single map uses, and selected directly it reports every one of them (69 on Brenmark). Its islands are the subject, so the overlay gives them more ink than the travelling theme sets.
+
+No themed SVG is committed; the theme is live in [the playground](https://nossimonov.github.io/Chartdown/) under the Theme selector.
