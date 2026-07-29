@@ -1,4 +1,7 @@
-# Publishes all four @chartdown packages when a version tag (v0.x.y) is pushed.
+# Publishes every published @chartdown package when a version tag (v0.x.y) is
+# pushed. The list below is derived from the workspace rather than typed twice:
+# `measure` shipped in 0.4 and was missing from a hardcoded list, so it did not
+# publish and its version was never checked against the tag (#219).
 # Auth is npm OIDC trusted publishing (issue #37): each package on npmjs.com
 # names this workflow file as its trusted publisher — no tokens, no OTP, and
 # provenance attestations come for free. The tag must equal every package
@@ -31,7 +34,7 @@ jobs:
       - name: Tag must match every package version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          for p in core render-svg cli browser mcp; do
+          for p in $(node -e "const fs=require('fs');console.log(fs.readdirSync('packages').filter(d=>!JSON.parse(fs.readFileSync('packages/'+d+'/package.json','utf8').replace(/^﻿/,'')).private).join(' '))"); do
             V=$(node -p "require('./packages/$p/package.json').version")
             if [ "$V" != "$TAG" ]; then
               echo "packages/$p is $V but the tag says $TAG" >&2
@@ -45,7 +48,11 @@ jobs:
             echo "CHANGELOG.md has no '## [$TAG]' section — a version number users can't decode is noise" >&2
             exit 1
           fi
-      - run: npm publish -w @chartdown/core -w @chartdown/render-svg -w @chartdown/cli -w @chartdown/browser -w @chartdown/mcp
+      - name: Publish every non-private workspace package
+        run: |
+          ARGS=$(node -e "const fs=require('fs');console.log(fs.readdirSync('packages').filter(d=>!JSON.parse(fs.readFileSync('packages/'+d+'/package.json','utf8').replace(/^﻿/,'')).private).map(d=>'-w @chartdown/'+d).join(' '))")
+          echo "publishing: $ARGS"
+          npm publish $ARGS
       - name: GitHub Release from the changelog section
         env:
           GH_TOKEN: ${{ github.token }}
