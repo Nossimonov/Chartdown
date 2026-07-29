@@ -16,7 +16,7 @@ import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, t
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
   catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
-  nearestOnPolyline, organicMass, pip, pointsAttr, rng, subPolylineBetween, svgTitle, text, type XY,
+  nearestOnPolyline, organicMass, pip, pointsAttr, QUANTUM, rng, subPolylineBetween, svgTitle, text, type XY,
 } from "./util";
 import { CHANNEL_FLOOR, narrowChannels } from "./channel";
 
@@ -2701,9 +2701,39 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
  * at the scale of a large patch and a small one does not dissolve. Then the
  * whole ring is splined. Seeded by identity, so the same document renders the
  * same wood every time (spec 02 §8.2).
+ *
+ * EVERY NUMBER HERE IS RELATIVE TO THE SHAPE, and that is the fix for #203
+ * rather than a tidying. The two constants this used to carry — skip an edge
+ * under 8 units, cap the nudge at 16 — were in RENDERED units, which are a
+ * fraction of the canvas rather than a distance, so the same declaration drew a
+ * different shape at a different `extent:`. Measured on the Puget Sound map, an
+ * island's drawn centroid moved 0.16mi between a 100mi and a 350mi extent and
+ * its bounding box grew 1.3%, which was enough to close a 0.1mi channel and
+ * make `check` report a welded island on a document that passed at the other
+ * extent. Spec 05 §4 and ADR 0023 both forbid that; neither anticipated
+ * `extent:` as an input to a shape.
+ *
+ * They are not re-expressed in MILES either, which was the first proposal. The
+ * committed examples run from a 12mi survey to a 1600mi continent, where the
+ * old gate works out at 0.12mi and 15.61mi — a 133x spread that no single
+ * distance can serve. A fraction of the shape's own extent works at every
+ * scale, and it is the model `organicMass` already uses for the same job
+ * (ADR 0025: texture is "a pure function of the arguments").
+ *
+ * The one absolute floor left is `QUANTUM`, and it is legitimate because below
+ * the output's own precision the geometry cannot be expressed at all (#176).
  */
 function organicOutline(pts: XY[], seed: number): XY[] {
   const random = rng(seed);
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  // The shape's own diagonal — what "large" and "small" mean for this outline.
+  const extent = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  // Texture may not become silhouette: past this the author's own outline stops
+  // governing the shape. It almost never binds — an edge has to run beyond two
+  // thirds of the whole shape's diagonal to reach it — which is the point, and
+  // is why the old 16-unit cap could sit there for so long looking harmless.
+  const cap = extent * 0.15;
   const out: XY[] = [];
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i]!;
@@ -2712,13 +2742,17 @@ function organicOutline(pts: XY[], seed: number): XY[] {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
-    if (len < 8) continue;
+    // Degenerate only. Any edge the output can express gets its texture, and an
+    // edge too short for the texture to be SEEN still gets it — sub-pixel
+    // wiggle costs two vertices and nothing else, where skipping it moves the
+    // land.
+    if (len < QUANTUM) continue;
     const nx = -dy / len;
     const ny = dx / len;
     // Two intermediate points per edge: enough to read as ragged, few enough
     // that the author's silhouette still governs the shape.
     for (const t of [0.34, 0.68]) {
-      const amp = (random() - 0.5) * Math.min(len * 0.22, 16);
+      const amp = (random() - 0.5) * Math.min(len * 0.22, cap);
       out.push({ x: a.x + dx * t + nx * amp, y: a.y + dy * t + ny * amp });
     }
   }
@@ -2828,7 +2862,14 @@ function surroundedByWater(poly: XY[], waters: XY[][]): Contact {
   const xs = poly.map((p) => p.x);
   const ys = poly.map((p) => p.y);
   const diag = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-  const step = Math.max(0.5, diag * 0.01);
+  // A FRACTION OF THE ISLAND, floored only at what the output can express
+  // (#203). This used to floor at 0.5 RENDERED units, which is 0.061mi on a
+  // 100mi map and 0.214mi on a 350mi one — so the probe stepped three and a
+  // half times further off the shore at the wider extent, and this check gave
+  // a different answer about the same island on the same document. A rule
+  // about whether two landmasses touch cannot depend on how big the picture
+  // is printed.
+  const step = Math.max(QUANTUM, diag * 0.01);
   const dry: XY[] = [];
   let wet = 0;
   let total = 0;

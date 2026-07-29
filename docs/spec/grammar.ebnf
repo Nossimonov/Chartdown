@@ -194,6 +194,9 @@ surface-word   = "paper" | "grid" | "fog" | "ink" | "light" | "ledge"
                     there is deliberately NO pair for the LEGIBILITY FLOOR
                     (spec 05 §2, ADR 0035), which draws a sub-floor channel as
                     a symbol: a floor a theme could lower is not a floor;
+                    ink is in CANVAS units and geometry is in MAP units
+                    (spec 02 §9, ADR 0037): these pairs are ink, so they scale
+                    with extent: on purpose, while no shape may;
                     glyph= and asset= values may be comma-separated variant pools,
                     chosen by deterministic position hash *)
 glyph-line     = word , ":" , string , EOL ;          (* SVG path data, 24x24 box centered on origin *)
