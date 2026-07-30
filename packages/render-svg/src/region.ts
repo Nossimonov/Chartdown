@@ -2177,9 +2177,12 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       );
       // Fallback-chain terminal (spec 04 §4): a marker with no meaningful
       // glyph anywhere along its chain carries its word as the label.
+      //
+      // No `note` arm here (#227): free text returns above and `continue`s, so
+      // nothing with `note` in its chain reaches this branch. A mutation test
+      // proved the arm dead against the whole suite and every example.
       const label =
         (e.name !== null ? (labelTextFor(model, e) ?? e.name) : null) ??
-        (e.typeWord === "note" ? e.texts[0] ?? null : null) ??
         (hasTierGlyph(chain) ? null : e.typeWord);
       if (label && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model, e)) {
         const pt = r.point;
