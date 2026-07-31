@@ -5,7 +5,7 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, type Cell } from "./grid";
+import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
@@ -59,6 +59,7 @@ export function renderBattlemap(
     fieldHoles.set(field, list);
   };
   let noteCourseCount = 0;
+  let terrainCourseCount = 0;
   let openEdgeCache: Set<string> | null = null;
   const openingEdgeKeys = (): Set<string> => {
     if (openEdgeCache) return openEdgeCache;
@@ -111,6 +112,16 @@ export function renderBattlemap(
     anchor: string | undefined;
   }
   const pendingHalfPlanes: PendingHalfPlane[] = [];
+
+  // Terrain display names (spec 06 §7, #232). Deferred so spec 07 §5's claim
+  // order can hold across the whole section rather than following whatever
+  // order the document happens to declare a wood and a river in.
+  interface PendingTerrainLabel {
+    e: EntityNode;
+    /** The drawn course, for a line feature; absent for an area. */
+    course: XY[] | null;
+  }
+  const pendingTerrainLabels: PendingTerrainLabel[] = [];
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
@@ -230,6 +241,13 @@ export function renderBattlemap(
 
   for (const pending of pendingHalfPlanes) renderHalfPlane(pending);
   for (const pending of pendingCrossings) renderCrossing(pending);
+  // Spec 07 §5's claim order, on a battlemap: a line feature's name reads as
+  // that feature's name BECAUSE it lies along the feature, and set aside it
+  // becomes a caption pointing at nothing. A name with room to roam — a wood,
+  // a marsh — gives way instead, so courses are placed first and each placed
+  // label joins the obstructions the next one dodges.
+  for (const t of pendingTerrainLabels) if (t.course) renderCourseLabel(t);
+  for (const t of pendingTerrainLabels) if (!t.course) renderAreaLabel(t);
 
   // Coherence lints (#123): things a document can say that no rule forbids and
   // no reader would mean. Warnings only, and reachable from `check` because a
@@ -792,10 +810,18 @@ export function renderBattlemap(
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         }
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
+        // A DISPLAY NAME is visible text at battle scale (spec 06 §7): the
+        // tooltip rule covers the fallback WORD of an unnamed entity, not a
+        // name the author wrote. Registered on the DRAWN course, since §7
+        // anchors the label on the course as rendered.
+        pendingTerrainLabels.push({ e, course: drawn });
       } else if (p.kind === "relational" && p.form === "side-of") {
         pendingHalfPlanes.push({
           e, compass: p.compass, ref: p.ref, slot: layers.areas.push("") - 1, titleEl, anchor,
         });
+        // A derived extent is ground like any other, so it labels like any
+        // other — over the cells it resolved to, not the ones it declared.
+        if (!pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
@@ -806,6 +832,7 @@ export function renderBattlemap(
         areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
       }
     }
+    if (areaParts.length > 0 && !pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
     if (areaParts.length > 0) layers.areas.push(el("g", { id: pathParts.length === 0 ? anchor : undefined }, titleEl, ...areaParts));
     if (pathParts.length > 0) layers.paths.push(el("g", { id: anchor }, titleEl, ...pathParts));
   }
@@ -841,6 +868,111 @@ export function renderBattlemap(
     const parts = [el("polygon", { points: pointsAttr(poly), fill: model.theme.terrainFill(chain), opacity: 0.85 })];
     if (p.e.flags.includes("difficult")) parts.push(el("polygon", { points: pointsAttr(poly), fill: "url(#hatch)" }));
     layers.areas[p.slot] = el("g", { id: p.anchor }, p.titleEl, ...parts);
+  }
+
+  /** The text a terrain entity labels itself with, or null if it labels none. */
+  function terrainLabelText(e: EntityNode): string | null {
+    if (!e.name || e.flags.includes("nolabel") || !labelsOn(model)) return null;
+    return labelTextFor(model, e) ?? e.name;
+  }
+
+  /** A point a fraction of the way along a polyline, by arc length. */
+  function alongCourse(course: XY[], t: number): XY {
+    const segs: number[] = [];
+    let total = 0;
+    for (let i = 0; i < course.length - 1; i++) {
+      const d = Math.hypot(course[i + 1]!.x - course[i]!.x, course[i + 1]!.y - course[i]!.y);
+      segs.push(d);
+      total += d;
+    }
+    let want = total * t;
+    for (let i = 0; i < segs.length; i++) {
+      if (want > segs[i]!) { want -= segs[i]!; continue; }
+      const f = segs[i]! === 0 ? 0 : want / segs[i]!;
+      return {
+        x: course[i]!.x + (course[i + 1]!.x - course[i]!.x) * f,
+        y: course[i]!.y + (course[i + 1]!.y - course[i]!.y) * f,
+      };
+    }
+    return course[course.length - 1]!;
+  }
+
+  /**
+   * A line feature's name, ON its course (spec 06 §7, #232).
+   *
+   * Anchored at the **arc-length midpoint of the drawn course**, never at an
+   * endpoint — a name at the end of a river reads as labelling the place the
+   * river stops. Where the midpoint is crowded the label SLIDES ALONG the
+   * course to the nearest clear point rather than stepping off it: a name
+   * pushed off a road reads as labelling the ground beside it.
+   */
+  function renderCourseLabel(t: PendingTerrainLabel): void {
+    const label = terrainLabelText(t.e);
+    if (label === null || !t.course || t.course.length < 2) return;
+    const course = t.course;
+    const w = label.length * 9 * 0.58;
+    // Text on a path RIDES the path, so a name on a north-south road is drawn
+    // turned on its side. Measured as a horizontal box the way every other
+    // label is, it reports no collision where the ink plainly collides — a
+    // river's name and a road's name met exactly over the ford they cross at,
+    // each having found the midpoint clear. The footprint follows the course's
+    // own direction at the point the label would sit.
+    const footprint = (frac: number): { x: number; y: number; w: number; h: number } => {
+      const at = alongCourse(course, frac);
+      const a = alongCourse(course, Math.max(0, frac - 0.02));
+      const b = alongCourse(course, Math.min(1, frac + 0.02));
+      return Math.abs(b.x - a.x) >= Math.abs(b.y - a.y)
+        ? { x: at.x - w / 2, y: at.y - 9, w, h: 10 }
+        : { x: at.x - 10, y: at.y - w / 2, w: 10, h: w };
+    };
+    const clash = (frac: number): number => {
+      const box = footprint(frac);
+      let overlap = 0;
+      for (const o of labelObstructions) {
+        const ox = Math.max(0, Math.min(box.x + box.w, o.x + o.w) - Math.max(box.x, o.x));
+        const oy = Math.max(0, Math.min(box.y + box.h, o.y + o.h) - Math.max(box.y, o.y));
+        overlap += ox * oy;
+      }
+      return overlap;
+    };
+    // Outward from the middle, so the nearest clear point wins and the name
+    // stays as close to mid-course as the map allows (spec 06 §7).
+    const offsets = [50, 42, 58, 34, 66, 26, 74, 18, 82];
+    let best = offsets[0]!;
+    let bestClash = Infinity;
+    for (const o of offsets) {
+      const c = clash(o / 100);
+      if (c < bestClash) { bestClash = c; best = o; }
+      if (c === 0) break;
+    }
+    labelObstructions.push(footprint(best / 100));
+    const pid = `cdterrain-${model.doc.docId}-${terrainCourseCount++}`;
+    const d = `M${fmt(course[0]!.x)} ${fmt(course[0]!.y)}` +
+      course.slice(1).map((p) => `L${fmt(p.x)} ${fmt(p.y)}`).join("");
+    layers.roomLabels.push(
+      `<defs><path id="${pid}" d="${d}"/></defs>` +
+        `<text font-size="9" fill="${INK}" opacity="0.85" text-anchor="middle" font-family="sans-serif"` +
+        `${model.labelsMode === "keyed" ? ' font-weight="bold"' : ""}>` +
+        `<textPath href="#${pid}" startOffset="${best}%"><tspan dy="-3">${escapeText(label)}</tspan></textPath></text>`,
+    );
+  }
+
+  /** An area's name, within its own footprint — including a derived one. */
+  function renderAreaLabel(t: PendingTerrainLabel): void {
+    const label = terrainLabelText(t.e);
+    if (label === null) return;
+    const cells = surfaceCells(t.e, halfPlaneContext(model.doc, model.entities));
+    if (cells.size === 0) return;
+    const at = placeRoomLabel(label, cells);
+    const w = label.length * 10 * 0.58;
+    labelObstructions.push({ x: at.x - w / 2, y: at.y - 8, w, h: 10 });
+    layers.roomLabels.push(
+      text(label, {
+        x: at.x, y: at.y, "font-size": 10, fill: INK,
+        "font-weight": model.labelsMode === "keyed" ? "bold" : undefined,
+        opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
+      }),
+    );
   }
 
   function renderStructure(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
