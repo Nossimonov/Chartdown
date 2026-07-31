@@ -47,3 +47,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0035](0035-a-channel-too-narrow-to-see-is-drawn-as-a-symbol.md) | A channel too narrow to see is drawn as a symbol, at a floor in viewport units | Accepted |
 | [0036](0036-a-measurement-reports-what-it-removed.md) | A measurement reports what it consumed, not only what it produced | Accepted |
 | [0037](0037-geometry-is-in-map-units-ink-is-in-canvas-units.md) | Geometry is in map units, ink is in canvas units; a shape may not depend on `extent:` | Accepted |
+| [0038](0038-a-placement-form-means-the-same-thing-on-every-map-kind.md) | A placement form means the same thing on every map kind: the half-plane places battlemap terrain, ink to the centerline and cells by their centres | Accepted |

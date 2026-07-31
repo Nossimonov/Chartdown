@@ -125,6 +125,12 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
 
 relational     = ( "at" , ( point | address | range | edge ) )
                | ( [ measure ] , compass , "of" , ref )
+                 (* the HALF-PLANE: terrain on the far side of ref's course.
+                    Means the SAME THING on every map kind — spec 05 §2 for a
+                    region, spec 06 §6 for a battlemap, where it resolves in
+                    cell space: ink to ref's CENTERLINE, a cell covered when
+                    its CENTRE lies strictly beyond the course, ties to ref.
+                    ADR 0038 reversed the battlemap prohibition, #231. *)
                | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] ,
                    [ "via" , control , { control } ] )
                  (* "via" after an "at" point declares a PLACED FEATURE's

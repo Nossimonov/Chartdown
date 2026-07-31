@@ -160,7 +160,20 @@ ford : on redford on tollroad difficult
 - **Explicit cells remain legal** for crossings with nothing to derive from (a ford over area-shaped water); when two `on` references resolve to paths, the derived region is authoritative.
 - **Implied-crossing warning**: a water-path × road band overlap not claimed by any crossing produces a renderer warning naming both entities and the cell — the render would otherwise imply a bridge nobody declared.
 - **Implied-crossing warning**: a water-path × road overlap not covered by any crossing's cells produces a renderer warning naming both entities and the cell — the render would otherwise imply a bridge nobody declared.
-- **Layering**: within `[terrain]`, area terrain renders beneath path bands, and paths beneath crossings; declaration order breaks ties within a kind. Consequently, a declared terrain cell grazed by a river's band reads as its bank (mud shows through at the water's edge). *Extent is always declared, never derived*: a "fill to the river" mechanic was considered and rejected — geometric fill would make tactical cells depend on renderer finishing, and cell-space fill would make one entity's extent silently track another's edits. Authors declare the bank cells they mean.
+- **Layering**: within `[terrain]`, area terrain renders beneath path bands, and paths beneath crossings; declaration order breaks ties within a kind. Consequently, a terrain cell grazed by a river's band reads as its bank (mud shows through at the water's edge).
+- **An extent may be stated relationally** *([#231](https://github.com/Nossimonov/Chartdown/issues/231), [ADR 0038](../decisions/0038-a-placement-form-means-the-same-thing-on-every-map-kind.md))*. `forest dark-wood "Dark Wood" : north of babbling-brook` places terrain on the far side of another entity's course, and means on a grid what the same form has always meant on a region map (spec 05 §2). **A placement form means the same thing on every map kind**, which is why this is stated here rather than restricted: a language with a closed grammar cannot also have productions that change meaning with the header.
+
+  This *reverses* a rule earlier editions of this section stated — "extent is always declared, never derived", rejecting a "fill to the river" mechanic — on the grounds that the split it created between map kinds was the larger defect. The objection it was protecting against is real and is answered by making the dependency **legible** rather than forbidding it: `north of babbling-brook` says in the line what four hand-tiled ranges cannot, which is that this wood ends at that water.
+
+  **Ink and coverage are separate questions**, as they already are for a path band (`#145`, below):
+
+  - The **ink** stops at the reference's **centerline**. The fill renders beneath the band, so a fill stopping at the near cell boundary would leave a hairline of paper down the reference's whole length — a `width=1` band covers 85% of its cell, so 7.5% of the cell would show on each side.
+  - A cell is **covered** when its **centre** lies strictly beyond the course, which is this section's existing centre-reading rule and not a new convention.
+  - **Ties go to the reference.** A cell whose centre lies *on* the course belongs to the watercourse, not to the wood.
+
+  A relational extent is a pure function of the referenced entity's declared course, so it is deterministic (spec 02 §8.2). It is **not** exempt from §10's coherence lints: where such an extent crosses a structure's wall, `terrain-crosses-wall` reports it exactly as a declared one, and that report is what makes a derived extent auditable when the reference is later edited.
+
+  **This does not reach §5's level surfaces.** `earth`, `air`, `roof` and `terrace` state where a level's ground *is*, and their extent stays **declared, never derived** — a floor that resolved from a watercourse would make what a party can stand on depend on an edit elsewhere, and it is the blanket `earth : area A1..T20` that §10's whole-footprint exemption is built around. §3's `open` flag is likewise unaffected. The rule reversed here is this section's own, about terrain extent, and nothing wider.
 
 ## 7. Label conduct
 
