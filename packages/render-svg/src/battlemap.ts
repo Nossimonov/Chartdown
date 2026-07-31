@@ -96,6 +96,22 @@ export function renderBattlemap(
   // Crossings render after the full pass so the paths they restyle are known.
   const pendingCrossings: PendingCrossing[] = [];
 
+  // A relational extent (spec 06 §6, ADR 0038) references another entity's
+  // course, which may be declared further down the document — declaration
+  // order is not significant — so it resolves after the full pass, like a
+  // crossing. It still claims its place in `layers.areas` NOW: within a kind,
+  // declaration order breaks ties (§6 layering), and a fill appended at the
+  // end would paint over terrain the author wrote after it.
+  interface PendingHalfPlane {
+    e: EntityNode;
+    compass: string;
+    ref: { form: string; value: string };
+    slot: number;
+    titleEl: string;
+    anchor: string | undefined;
+  }
+  const pendingHalfPlanes: PendingHalfPlane[] = [];
+
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
   // Shared with the UVTT exporter via walls.ts — one wall geometry, two views.
@@ -212,6 +228,7 @@ export function renderBattlemap(
     }
   }
 
+  for (const pending of pendingHalfPlanes) renderHalfPlane(pending);
   for (const pending of pendingCrossings) renderCrossing(pending);
 
   // Coherence lints (#123): things a document can say that no rule forbids and
@@ -775,6 +792,10 @@ export function renderBattlemap(
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         }
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
+      } else if (p.kind === "relational" && p.form === "side-of") {
+        pendingHalfPlanes.push({
+          e, compass: p.compass, ref: p.ref, slot: layers.areas.push("") - 1, titleEl, anchor,
+        });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
@@ -787,6 +808,39 @@ export function renderBattlemap(
     }
     if (areaParts.length > 0) layers.areas.push(el("g", { id: pathParts.length === 0 ? anchor : undefined }, titleEl, ...areaParts));
     if (pathParts.length > 0) layers.paths.push(el("g", { id: anchor }, titleEl, ...pathParts));
+  }
+
+  /**
+   * A relational extent: terrain on the far side of another entity's course
+   * (spec 06 §6, ADR 0038).
+   *
+   * THE INK STOPS AT THE REFERENCE'S CENTERLINE, and the cells stop half a
+   * cell short of it — the two answers are deliberately different, as they
+   * already are for a path's band (#145). The fill renders beneath that band,
+   * so a fill stopping where its cells stop would leave a hairline of paper
+   * down the whole reference: a `width=1` band inks 85% of its cell, so 2.4px
+   * of a 32px cell shows on each side. Filling to the centerline puts terrain
+   * under that margin instead, which is the bank §6 already describes.
+   */
+  function renderHalfPlane(p: PendingHalfPlane): void {
+    const host = pathRecords.find((r) =>
+      p.ref.form === "id" ? r.e.ids.includes(p.ref.value) : r.e.name === p.ref.value);
+    if (!host || host.pts.length < 2) {
+      diagnostics.push({
+        severity: "warning",
+        line: p.e.line,
+        message: `'${p.e.typeWord ?? "terrain"}' is placed ${p.compass} of '${p.ref.value}', which declares no course to take a side of — reference a path, or give the cells (spec 06 §6)`,
+      });
+      return;
+    }
+    const chain = model.chainOf(p.e.typeWord);
+    // The DRAWN course, so the fill meets the band it hides under all the way
+    // into the terminal cells (#145) rather than stopping at their centres.
+    const poly = halfPlaneArea(p.compass, extendToCellEdge(host.pts), frame);
+    if (poly.length < 3) return;
+    const parts = [el("polygon", { points: pointsAttr(poly), fill: model.theme.terrainFill(chain), opacity: 0.85 })];
+    if (p.e.flags.includes("difficult")) parts.push(el("polygon", { points: pointsAttr(poly), fill: "url(#hatch)" }));
+    layers.areas[p.slot] = el("g", { id: p.anchor }, p.titleEl, ...parts);
   }
 
   function renderStructure(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
@@ -1593,6 +1647,43 @@ function openingStateMarks(
  * about what the path covers. Extending those too would have the band's own
  * footprint depend on its stroke width at the ends.
  */
+/**
+ * The polygon a half-plane inks: the course itself, its ends run out to the
+ * frame, closed along the compass side.
+ *
+ * The ends extend because a half-plane covers the FULL map beyond its frontier
+ * — the same reading spec 05 §2 gives it on a region map, where a frostline
+ * drawn across the middle still freezes the corners. A course that stops short
+ * of the edge is a course, not a shorter claim.
+ */
+function halfPlaneArea(compass: string, course: XY[], frame: { cols: number; rows: number }): XY[] {
+  // Bounded by the GRID, not the canvas: the margin is the coordinate gutter,
+  // and terrain drawn into it is terrain on no cell — an ink/coverage
+  // disagreement in the one direction the cell rule cannot answer for.
+  const left = MARGIN;
+  const top = MARGIN;
+  const right = MARGIN + frame.cols * CELL;
+  const bottom = MARGIN + frame.rows * CELL;
+  const clampX = (x: number): number => Math.min(Math.max(x, left), right);
+  const clampY = (y: number): number => Math.min(Math.max(y, top), bottom);
+  const inside = course.map((p) => ({ x: clampX(p.x), y: clampY(p.y) }));
+  const c = compass.toLowerCase();
+  const first = inside[0]!;
+  const last = inside[inside.length - 1]!;
+  if ((c.includes("n") || c.includes("s")) && !c.includes("e") && !c.includes("w")) {
+    const edgeY = c.includes("n") ? top : bottom;
+    const ltr = first.x <= last.x;
+    const x0 = ltr ? left : right;
+    const x1 = ltr ? right : left;
+    return [{ x: x0, y: first.y }, ...inside, { x: x1, y: last.y }, { x: x1, y: edgeY }, { x: x0, y: edgeY }];
+  }
+  const edgeX = c.includes("w") ? left : right;
+  const ttb = first.y <= last.y;
+  const y0 = ttb ? top : bottom;
+  const y1 = ttb ? bottom : top;
+  return [{ x: first.x, y: y0 }, ...inside, { x: last.x, y: y1 }, { x: edgeX, y: y1 }, { x: edgeX, y: y0 }];
+}
+
 function extendToCellEdge(pts: XY[]): XY[] {
   if (pts.length < 2) return pts;
   const out = pts.map((p) => ({ ...p }));
