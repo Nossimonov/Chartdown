@@ -13,7 +13,7 @@
 
 import { facetAccepts, type Address, type Pair, type Placement } from "@chartdown/core";
 import { colLetters, type Segment } from "./util";
-import { edgeSegment, perimeterEdges, segKey, structureCells, surfaceCells, type Cell, type EdgeFacing } from "./grid";
+import { edgeSegment, halfPlaneContext, perimeterEdges, segKey, structureCells, surfaceCells, type Cell, type EdgeFacing } from "./grid";
 import { pairOf, type Model } from "./model";
 
 export const SIDE_NAME: Record<EdgeFacing, string> = { n: "north", s: "south", w: "west", e: "east" };
@@ -213,12 +213,13 @@ export function impassableCells(model: Model): Map<string, Cell> {
   // `terrain` here made a great highway occlude like bedrock, and made every
   // door opening onto it a door onto solid rock.
   const winner = new Map<string, { cell: Cell; impassable: boolean }>();
+  const hp = halfPlaneContext(model.doc, model.entities);
   for (const e of model.entities) {
     if (e.archetype !== "terrain" && e.archetype !== "path") continue;
     const impassable = model.chainOf(e.typeWord).includes("earth");
     // `earth : area A1..Z20` is a SHAPE placement whose args carry the cells;
     // a `path` shape carries only its corners and covers its band.
-    for (const [key, cell] of surfaceCells(e)) winner.set(key, { cell, impassable });
+    for (const [key, cell] of surfaceCells(e, hp)) winner.set(key, { cell, impassable });
   }
   const cells = new Map<string, Cell>();
   for (const [key, w] of winner) if (w.impassable) cells.set(key, w.cell);
