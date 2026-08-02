@@ -15,7 +15,7 @@ const exampleFiles: { name: string; path: string }[] = readdirSync(examplesDir, 
   .map((entry) => ({ name: entry.name, path: join(examplesDir, entry.name, `${entry.name}.cd`) }));
 
 describe("example corpus", () => {
-  it("finds the seven examples", () => {
+  it("finds the eight examples", () => {
     expect(exampleFiles.map((f) => f.name).sort()).toEqual([
       "brenmark",
       "gilded-tankard",
@@ -23,6 +23,7 @@ describe("example corpus", () => {
       "gumdrop-vale",
       "redford-crossing",
       "sundered-reach",
+      "undercellar",
       "vessany",
     ].sort());
   });

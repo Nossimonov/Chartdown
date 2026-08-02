@@ -1,0 +1,35 @@
+; A cellar written in terms of itself: the water is placed by what it runs
+; between, not by the cells it happens to cross (spec 02 §7, #238).
+
+# The Undercellar
+
+map: battlemap
+grid: square 18x12
+scale: 5ft
+numbers: on
+
+[terrain]
+
+pond fountain "The Fountain" : D2
+pond sinkhole "The Sink-hole" : D11
+; A course between two anchors. Move either pond and the runnel follows —
+; written as a `path` it would keep its old cells and say nothing.
+stream runnel "The Runnel" : from fountain to sinkhole
+; `join` meets the trunk where the seep arrives, not at its midpoint.
+pond spring "The Weeping Spring" : L4
+stream seep "The Seep" : from spring join runnel
+
+[structures]
+
+building cellar "The Undercellar" : F5..N9
+  door : F7.w
+  door : N7.e
+
+[features]
+
+barrel casks : G6..H6
+stairs up : M8 facing=e
+
+[tokens]
+
+start party : A6..B7
