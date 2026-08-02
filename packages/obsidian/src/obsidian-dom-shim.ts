@@ -29,6 +29,12 @@ if (typeof HTMLElement !== "undefined") {
   proto["empty"] ??= function (this: HTMLElement): void {
     this.replaceChildren();
   };
+  proto["addClass"] ??= function (this: HTMLElement, ...classes: string[]): void {
+    this.classList.add(...classes);
+  };
+  proto["setText"] ??= function (this: HTMLElement, text: string): void {
+    this.textContent = text;
+  };
 }
 
 export {};
