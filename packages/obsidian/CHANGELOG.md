@@ -2,6 +2,18 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [Unreleased]
+
+### `.cd` files open to their map
+
+Keep a map as its own file, not only as a fence inside a note. Opening a `.cd` file shows the rendered map with the same toolbar you get in a note — GM/player toggle, SVG and UVTT export, the copy/paste source round trip — and a **Source** button swaps to the text, editable in place.
+
+Exports take the file's own name, so `sunless-hollow.cd` writes `sunless-hollow.svg` beside the source it came from.
+
+Before this the plugin registered only the markdown code-block processor, so it handled a fence inside a note and nothing else: no view claimed the extension, and a `.cd` file in a vault could not be opened at all.
+
+**While the plugin is enabled it claims the `.cd` extension for the vault.** Disable it and those files go back to being unopenable, since nothing else knows what they are.
+
 ## [0.2.1] — 2026-07-29
 
 **Nothing about the plugin changes.** `main.js` is byte-identical to 0.2.0's — same renderer, same behaviour, same maps. If you are on 0.2.0 there is nothing here for you.

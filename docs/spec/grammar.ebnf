@@ -123,7 +123,14 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                     vertices makes the boundary follow the feature's curve
                     between their projections — spec 05 §2, ADR 0012 *)
 
+                 (* ON A GRID, spec 06 §6 lists which of these forms resolve
+                    and which are REPORTED. A form that states a relation but
+                    no square — near, <measure> <compass> of, <compass> edge
+                    of, a bare "on", a lone along — is ambiguous under §7 and
+                    fails loud; it is never silently dropped (#239). *)
 relational     = ( "at" , ( point | address | range | edge ) )
+                 (* "at" is OPTIONAL on grids (spec 02 §7), so `at F6` and
+                    `F6` are one placement and cannot differ. *)
                | ( [ measure ] , compass , "of" , ref )
                  (* the HALF-PLANE: terrain on the far side of ref's course.
                     Means the SAME THING on every map kind — spec 05 §2 for a

@@ -947,13 +947,23 @@ export function renderBattlemap(
     }
     labelObstructions.push(footprint(best / 100));
     const pid = `cdterrain-${model.doc.docId}-${terrainCourseCount++}`;
-    const d = `M${fmt(course[0]!.x)} ${fmt(course[0]!.y)}` +
-      course.slice(1).map((p) => `L${fmt(p.x)} ${fmt(p.y)}`).join("");
+    // TEXT ON A PATH RUNS THE PATH'S WAY, so a course declared east-to-west
+    // draws its name mirrored — upside down and reading backwards. The
+    // author's declaration order is not a statement about typography: a seep
+    // running from its spring down to the runnel is written spring-first
+    // because that is where it starts, not because the name should be
+    // reversed. Where the course runs leftward the label rides a reversed
+    // copy, and the offset flips with it so it still lands mid-course.
+    const leftward = course[course.length - 1]!.x < course[0]!.x;
+    const lettered = leftward ? [...course].reverse() : course;
+    const offset = leftward ? 100 - best : best;
+    const d = `M${fmt(lettered[0]!.x)} ${fmt(lettered[0]!.y)}` +
+      lettered.slice(1).map((p) => `L${fmt(p.x)} ${fmt(p.y)}`).join("");
     layers.roomLabels.push(
       `<defs><path id="${pid}" d="${d}"/></defs>` +
         `<text font-size="9" fill="${INK}" opacity="0.85" text-anchor="middle" font-family="sans-serif"` +
         `${model.labelsMode === "keyed" ? ' font-weight="bold"' : ""}>` +
-        `<textPath href="#${pid}" startOffset="${best}%"><tspan dy="-3">${escapeText(label)}</tspan></textPath></text>`,
+        `<textPath href="#${pid}" startOffset="${offset}%"><tspan dy="-3">${escapeText(label)}</tspan></textPath></text>`,
     );
   }
 

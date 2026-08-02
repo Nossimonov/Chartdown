@@ -17,6 +17,7 @@ import type {
 } from "@chartdown/core";
 import { loadStdlib, slugify, VocabTable, type Diagnostic } from "@chartdown/core";
 import type { Theme } from "./theme";
+import { resolveGridPlacements } from "./gridplacement";
 import { colLetters, colToNumber, measureToNumber } from "./util";
 
 export type RenderMode = "player" | "gm";
@@ -140,6 +141,11 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   expandEveryAlong(entities, doc, diagnostics);
   if (doc.mapType === "battlemap") {
     resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
+    // The rest of spec 02 §7's forms (#239): `at <cell>` is the bare cell,
+    // `from … to …` draws a course, and anything a grid cannot site is
+    // REPORTED. Six of the nine forms used to render byte-identically to
+    // their own absence — the failure #207 already ruled on.
+    resolveGridPlacements(entities, chainOf, diagnostics);
   }
   // `key=` works outside document-wide keyed mode (#107): a published module
   // is overwhelmingly "a map WITH a key" — ten numbered pins beside forty
