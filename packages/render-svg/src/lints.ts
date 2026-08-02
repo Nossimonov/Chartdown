@@ -323,6 +323,13 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       // and let it pass when every one of them carries an opening. The manor's
       // King's Road runs into the gatehouse at M12.s, which is a door.
       const crossings = new Set<string>();
+      // WHERE it crosses, not merely THAT it does (#234). The edges are
+      // computed here anyway, to check them against the openings; reporting
+      // none of them left several crossings arriving as identical lines at
+      // one line number, with nothing to tell them apart. Under a relational
+      // extent (ADR 0038) the cause can be an edit to an entity the reported
+      // line does not even mention, so the report has to carry the geometry.
+      const at: string[] = [];
       for (const [key, c] of cells) {
         if (!tc.has(key)) continue;
         const sides: [string, Cell][] = [
@@ -333,13 +340,22 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
           const nk = cellKey(n);
           if (cells.has(nk) || !tc.has(nk)) continue; // interior edge, or the band stops here
           crossings.add(segKey(edgeSegment({ kind: "address", col: colLetters(c.col), row: c.row }, dir as never)));
+          at.push(`${colLetters(c.col)}${c.row}.${dir}`);
         }
       }
       if (crossings.size > 0 && [...crossings].every((k) => openingSegs.has(k))) continue;
+      // Name the structure the way its author would recognise it, and say
+      // where — capped, because a long band can cross a great many edges and
+      // a message nobody finishes reading is the problem this fixes.
+      const where = at.slice(0, 3).join(", ") + (at.length > 3 ? `, and ${at.length - 3} more` : "");
+      // Its LINE as well as its name: this warning is reported against the
+      // terrain, and the structure it names is declared somewhere else, so a
+      // reader who jumps to the reported line finds the wrong entity.
+      const structureName = `${s.name ?? s.ids[0] ?? s.typeWord ?? "a structure"}' (line ${s.line})`;
       diagnostics.push({
         severity: "warning",
         line: t.line,
-        message: `'${t.typeWord ?? "terrain"}' runs both inside and outside a structure's footprint, crossing its wall where there is no opening — terrain that stays wholly inside a room (a pool, a dais) is fine, as is terrain that crosses at a door (spec 06 §6)`,
+        message: `'${t.typeWord ?? "terrain"}' runs both inside and outside '${structureName}, crossing its wall${at.length > 0 ? ` at ${where}` : ""} where there is no opening — terrain that stays wholly inside a room (a pool, a dais) is fine, as is terrain that crosses at a door (spec 06 §6)`,
       });
       break;
     }

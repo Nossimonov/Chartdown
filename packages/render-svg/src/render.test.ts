@@ -414,7 +414,12 @@ describe("crossings and layering (spec 06 §6)", () => {
     const src = [...base, "ford : on r1 on r2 difficult"].join("\n");
     const { svg, diagnostics } = renderSource(src);
     expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
-    expect(svg.indexOf("#c3a878")).toBeLessThan(svg.indexOf("#c2d4dc")); // road stroke before ford band
+    // The ford's band takes the fill the THEME declares for `ford` (#208).
+    // It used to be a literal at the draw site, so `ford : fill=` reached
+    // nothing — including the built-in theme's own declaration, which had
+    // been dead since it was written.
+    expect(svg.indexOf("#c3a878")).toBeLessThan(svg.indexOf("#cfd4b8")); // road stroke before ford band
+    expect(svg).not.toContain("#c2d4dc"); // the old hardcoded band
     expect(svg).toContain("clip-path");
   });
 
@@ -422,6 +427,36 @@ describe("crossings and layering (spec 06 §6)", () => {
     const src = [...base, "ford : E5 difficult"].join("\n");
     const { diagnostics } = renderSource(src);
     expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+  });
+
+  // #208: the three crossing colours were literals at the draw site, so a
+  // theme could not restyle the one feature on the map whose whole job is to
+  // be noticed — and the BUILT-IN theme's own `ford : fill=` had been dead
+  // since it was written.
+  const themeDoc = (line: string): string => ["kind: theme", "", "[theme]", line].join("\n");
+
+  it("a crossing takes its colours from the theme", () => {
+    const src = [...base, "ford : on r1 on r2"].join("\n");
+    const { svg } = renderSource(src, { theme: themeDoc("ford : fill=#8b5a2b") });
+    expect(svg).toContain("#8b5a2b");
+  });
+
+  it("a bridge takes both its deck and its rail from the theme", () => {
+    const { svg } = renderSource([...base, "bridge : on r1 on r2"].join("\n"), {
+      theme: themeDoc("bridge : fill=#402d18 stroke=#1a1109"),
+    });
+    expect(svg).toContain("#402d18");
+    expect(svg).toContain("#1a1109");
+  });
+
+  it("the lookup stops at the crossing word, not its archetype", () => {
+    // Read down the whole chain it reaches `feature`, whose generic tint is
+    // not a ford — that would repaint every existing ford for a theme that
+    // never mentioned one.
+    const { svg } = renderSource([...base, "ford : on r1 on r2"].join("\n"), {
+      theme: themeDoc("feature : fill=#ff00ff"),
+    });
+    expect(svg).not.toContain("#ff00ff");
   });
 
   it("a bridge also satisfies the crossing rule", () => {
