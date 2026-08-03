@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -530,11 +530,37 @@ export function renderBattlemap(
           points: pointsAttr(hostRec.pts), fill: "none", stroke, "stroke-width": width,
           "stroke-linecap": "butt", "stroke-linejoin": "round", "clip-path": `url(#${clipId})`,
         });
+      // A CROSSING IS THEMABLE LIKE ANYTHING ELSE (#208). These three colours
+      // were literals at the draw site, so `ford : fill=…` and a theme's
+      // `bridge : stroke=…` both reached nothing — the one feature on the map
+      // whose whole job is to be noticed was the one a theme could not restyle.
+      // Resolution goes through the CHAIN, so a derived word (`plank : bridge`,
+      // `stepping-stones : ford`) inherits its base's styling per ADR 0016.
+      //
+      // The lookup stops AT the crossing word. Read down the whole chain it
+      // reaches `feature`, whose generic tint is not a ford — measured, that
+      // repainted every existing ford from the water colour to #cfd4b8, which
+      // is a default change nobody asked for rather than the themability this
+      // is about. Slicing keeps derivation working (`stepping-stones : ford`
+      // still inherits `ford`'s styling, ADR 0016) while a word's archetype
+      // default stays out of it.
+      const stop = chain.findIndex((w) => w === "ford" || w === "bridge");
+      const xingChain = stop >= 0 ? chain.slice(0, stop + 1) : chain;
+      const themedFill = model.theme.prop(xingChain, "fill");
+      const themedStroke = model.theme.prop(xingChain, "stroke");
       if (isBridge) {
-        scope.push(band("#6b4a26", hostRec.width + 6));
-        scope.push(band("#a8763e", hostRec.width));
+        // The deck's outline, then its planking. A theme naming only one gets
+        // the other from the pair it belongs to rather than a clashing default.
+        // Derive the rail from a themed deck ONLY when the theme gave a deck
+        // and no rail. Deriving unconditionally recoloured every existing
+        // bridge — measured on fairwater-manor, #6b4a26 became #865e32 for a
+        // document that names no theme at all, which is a default change
+        // masquerading as a themability fix.
+        scope.push(band(themedStroke ?? (themedFill ? shade(themedFill) : "#6b4a26"), hostRec.width + 6));
+        scope.push(band(themedFill ?? "#a8763e", hostRec.width));
       } else {
-        scope.push(band("#c2d4dc", hostRec.width));
+        // A ford is water you can cross: its fill is the water showing through.
+        scope.push(band(themedFill ?? "#c2d4dc", hostRec.width));
         if (e.flags.includes("difficult")) scope.push(band("url(#hatch)", hostRec.width));
       }
       // With multiple crossings and an `at` chooser, restrict to the chosen one.

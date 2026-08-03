@@ -17,7 +17,7 @@ import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
   catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
   nearestOnPolyline, organicMass, pip, pointsAttr, QUANTUM, rng, subPolylineBetween, svgTitle, text, type XY,
-} from "./util";
+  shade,} from "./util";
 import { CHANNEL_FLOOR, narrowChannels } from "./channel";
 
 interface Resolved {
@@ -2986,13 +2986,6 @@ function centroid(pts: XY[]): XY {
     y += p.y;
   }
   return { x: x / pts.length, y: y / pts.length };
-}
-
-function shade(hex: string): string {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
-  const n = parseInt(hex.slice(1), 16);
-  const dim = (v: number): number => Math.max(0, Math.round(v * 0.8));
-  return `#${(((dim((n >> 16) & 255)) << 16) | ((dim((n >> 8) & 255)) << 8) | dim(n & 255)).toString(16).padStart(6, "0")}`;
 }
 
 /** A glyph path in its 24×24 unit box, placed and scaled (spec 08 §4). */
