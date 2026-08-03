@@ -2,7 +2,21 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
-## [Unreleased]
+## [0.3.0] — 2026-08-02
+
+### Your notes will start showing warnings
+
+They always existed; this plugin was throwing them away. Only errors reached a note, so the whole of Chartdown's coherence checking was invisible here — a river running through a wall with no door, a room nothing can reach, a structure standing on nothing. Every other way of running Chartdown reported them; a note rendered the map and looked finished.
+
+Warnings now appear beneath the map in their own colour. An error means the map is wrong; a warning means it may not be what you meant.
+
+**If a map you have had for months suddenly shows a warning, nothing changed about your map.** The check was always failing and you were never told.
+
+### A fence can import a file beside it
+
+`use: ./my-vocabulary.cd` now resolves against your vault, so a shared vocabulary can live in its own file instead of being repeated in every note — and a `.cd` file opened as a file does the same. `inset:` parents resolve too.
+
+A path that does not resolve says so rather than rendering quietly without it.
 
 ### `.cd` files open to their map
 
