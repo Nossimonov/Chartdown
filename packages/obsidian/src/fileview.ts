@@ -25,11 +25,15 @@ export interface FileViewDeps {
   mode(): RenderMode;
   /** Block side effects, scoped to the folder this file lives in. */
   io(folder: string): BlockIO;
+  /** The files this document references, read from the vault (#246). */
+  imports(source: string, folder: string): Promise<{ libraries: Record<string, string>; documents: Record<string, string> }>;
 }
 
 export class ChartdownFileView extends TextFileView {
   private deps: FileViewDeps;
   private pane: FilePane | null = null;
+  /** Bumped per mount, so a slow vault read cannot redraw a stale document. */
+  private generation = 0;
 
   constructor(leaf: WorkspaceLeaf, deps: FileViewDeps) {
     super(leaf);
@@ -72,6 +76,15 @@ export class ChartdownFileView extends TextFileView {
     const path = this.file?.path ?? "";
     const slash = path.lastIndexOf("/");
     const folder = slash >= 0 ? path.slice(0, slash + 1) : "";
+    // Draw immediately, then redraw once the referenced files are in hand
+    // (#246). A `TextFileView` redraws synchronously and a vault read does
+    // not, so the alternative is a blank leaf while the disk is consulted.
+    const mine = ++this.generation;
+    void this.deps.imports(this.data, folder).then((imports) => {
+      if (mine !== this.generation) return; // a newer mount has taken over
+      if (Object.keys(imports.libraries).length === 0 && Object.keys(imports.documents).length === 0) return;
+      this.pane?.setImports(imports);
+    });
     this.pane = mountChartdownFile(this.contentEl, {
       initialSource: this.data,
       initialMode: this.deps.mode(),

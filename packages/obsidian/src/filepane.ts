@@ -23,6 +23,8 @@ export interface FilePaneOptions {
   baseName: string;
   folderLabel: string;
   io: BlockIO;
+  /** Sources of the files this document references (#246), already read. */
+  imports?: { libraries: Record<string, string>; documents: Record<string, string> };
   /** Called whenever the source changes, so the host can request a save. */
   onChange(source: string): void;
 }
@@ -36,10 +38,13 @@ export interface FilePane {
   editing(): boolean;
   /** Show the map, or the source. */
   toggle(): void;
+  /** Supply referenced files that arrived after mounting, and redraw (#246). */
+  setImports(imports: { libraries: Record<string, string>; documents: Record<string, string> }): void;
 }
 
 export function mountChartdownFile(host: HTMLElement, opts: FilePaneOptions): FilePane {
   let source = opts.initialSource;
+  let imports = opts.imports;
   let editing = false;
   let editor: HTMLTextAreaElement | null = null;
 
@@ -69,6 +74,7 @@ export function mountChartdownFile(host: HTMLElement, opts: FilePaneOptions): Fi
     editor = null;
     mountChartdownBlock(source, body, {
       initialMode: opts.initialMode,
+      ...(imports ? { imports } : {}),
       baseName: opts.baseName,
       folderLabel: opts.folderLabel,
       io: {
@@ -101,5 +107,11 @@ export function mountChartdownFile(host: HTMLElement, opts: FilePaneOptions): Fi
     },
     editing: (): boolean => editing,
     toggle: (): void => toggle.click(),
+    setImports: (next): void => {
+      imports = next;
+      // An edit in flight outranks a late arrival: redrawing the map while
+      // the source pane is open would throw away what is being typed.
+      if (!editing) draw();
+    },
   };
 }

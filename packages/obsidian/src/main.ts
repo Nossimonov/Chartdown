@@ -9,6 +9,7 @@ import { Notice, Plugin, PluginSettingTab, Setting, TFile, type App, type Settin
 import { parse } from "@chartdown/core";
 import { mountChartdownBlock, type BlockIO } from "./block";
 import { ChartdownFileView, CHARTDOWN_VIEW_TYPE } from "./fileview";
+import { resolveImports, resolveVaultPath, type VaultReader } from "./imports";
 import type { RenderMode } from "./render";
 
 interface ChartdownSettings {
@@ -75,13 +76,19 @@ export default class ChartdownPlugin extends Plugin {
     this.registerView(CHARTDOWN_VIEW_TYPE, (leaf) => new ChartdownFileView(leaf, {
       mode: () => this.settings.mode,
       io: (folder) => this.blockIo(folder),
+      imports: (source, folder) => resolveImports(source, folder, this.vaultReader()),
     }));
     this.registerExtensions(["cd"], CHARTDOWN_VIEW_TYPE);
 
-    this.registerMarkdownCodeBlockProcessor("chartdown", (source, el, ctx) => {
+    this.registerMarkdownCodeBlockProcessor("chartdown", async (source, el, ctx) => {
       const slash = ctx.sourcePath.lastIndexOf("/");
       const folder = slash >= 0 ? ctx.sourcePath.slice(0, slash + 1) : "";
+      // Read what the document references BEFORE rendering (#246). The
+      // processor may return a promise, which is what makes this possible
+      // here; the file view has to load and redraw instead.
+      const imports = await resolveImports(source, folder, this.vaultReader());
       mountChartdownBlock(source, el, {
+        imports,
         initialMode: this.settings.mode,
         baseName: parse(source).document.docId,
         folderLabel: folder,
@@ -106,6 +113,25 @@ export default class ChartdownPlugin extends Plugin {
       });
     });
     this.addSettingTab(new ChartdownSettingTab(this.app, this));
+  }
+
+  /**
+   * Vault-side path resolution for `use:` and `inset:` (#246). Kept behind the
+   * same injected-side-effect shape as everything else here, so the resolution
+   * itself tests without Obsidian.
+   */
+  private vaultReader(): VaultReader {
+    return {
+      read: async (folder, relative) => {
+        const path = resolveVaultPath(folder, relative);
+        try {
+          if (!(await this.app.vault.adapter.exists(path))) return null;
+          return await this.app.vault.adapter.read(path);
+        } catch {
+          return null; // unreadable is indistinguishable from absent, and warns the same way
+        }
+      },
+    };
   }
 
   /**
