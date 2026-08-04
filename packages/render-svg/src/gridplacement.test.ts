@@ -153,3 +153,91 @@ describe("what the refusals do not catch", () => {
     expect(diagnostics.some((d) => /not applied on a battlemap/.test(d.message))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The same class, one grid short (#248). A hexcrawl's placement loops branch
+ * on address/range with no trailing else, exactly as the battlemap's did, so a
+ * realm placed `near duchy` drew nothing and said nothing. Swept here as a set
+ * for the same reason: this has now been found on three surfaces, each time by
+ * sweeping rather than by anyone reporting the individual form.
+ */
+const HEX = [
+  "map: hexcrawl",
+  "grid: hex 8x6 pointy odd-row",
+  "scale: 6mi",
+  "",
+  "[hexes]",
+  "C2..C4 forest",
+  "E1..E2 hills",
+  "",
+  "[routes]",
+  'river bren "The Bren" : F1 E2 D3 C4',
+  "",
+  "[regions]",
+  'realm duchy "Duchy of Bren" : C2..C4',
+];
+
+const hex = (line: string) => renderSource([...HEX, line].join("\n"));
+const hexBaseline = (): string => renderSource(HEX.join("\n")).svg;
+
+describe("a hexcrawl answers every relational form too (#248)", () => {
+  const REFUSED = [
+    ["near", 'realm r "R" : near duchy'],
+    ["<compass> of", 'realm r "R" : north of bren'],
+    ["<compass> edge of", 'realm r "R" : north edge of duchy'],
+    ["<measure> <compass> of", 'realm r "R" : 12mi north of bren'],
+    ["along", 'realm r "R" : along bren'],
+    ["on", 'realm r "R" : on bren'],
+    ["from … to …", 'realm r "R" : from duchy to bren'],
+  ] as const;
+
+  for (const [form, line] of REFUSED) {
+    it(`${form} — reported, not dropped`, () => {
+      const r = hex(line);
+      const errors = r.diagnostics.filter((d) => d.severity === "error");
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.map((d) => d.message).join(" ")).toMatch(/spec 02 §7/);
+    });
+  }
+
+  it("`at <hex>` resolves, and is the bare spelling exactly", () => {
+    // §7 makes `at` optional ON GRIDS, and a hexcrawl is one — so the two
+    // spellings cannot differ. This needs no per-form decision, which is why
+    // it is the one form resolved here.
+    expect(hex('realm r "R" : at E1').svg).toBe(hex('realm r "R" : E1').svg);
+  });
+
+  it("no form renders byte-identically to its own absence in silence", () => {
+    const base = hexBaseline();
+    for (const [form, line] of [...REFUSED, ["at", 'realm r "R" : at E1'] as const]) {
+      const r = hex(line);
+      const vanished = r.svg === base;
+      const spoke = r.diagnostics.some((d) => d.severity === "error" || d.severity === "warning");
+      expect(vanished && !spoke, `${form} vanished without a word`).toBe(false);
+    }
+  });
+
+  it("says hex, not cell — and offers spellings this map kind has", () => {
+    // A hexcrawl has no structures to place against, so `on <structure> at
+    // <cell>` would send an author after a form this document cannot use.
+    const msg = hex('realm r "R" : near duchy').diagnostics.find((d) => d.severity === "error")!.message;
+    expect(msg).toContain("hex");
+    expect(msg).not.toContain("cell");
+    expect(msg).not.toContain("<structure>");
+  });
+
+  it("names the form as the author wrote it", () => {
+    const msg = hex('realm r "R" : north of bren').diagnostics.find((d) => d.severity === "error")!.message;
+    expect(msg).toContain("north of bren");
+    expect(msg).not.toContain("side-of"); // the internal form name
+  });
+
+  it("leaves the corpus alone — every example still parses clean", () => {
+    // brenmark is the hexcrawl in examples/; it uses only concrete placements,
+    // and a rule that refused those would be worse than the silence.
+    const { diagnostics } = renderSource(HEX.join("\n"));
+    expect(diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+  });
+});

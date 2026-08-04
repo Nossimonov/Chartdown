@@ -31,8 +31,15 @@
 import type { Address, Diagnostic, EntityNode, Placement, Ref, Shape } from "@chartdown/core";
 import { colToNumber } from "./util";
 
-/** Forms this module leaves alone because something downstream resolves them. */
-const HANDLED_ELSEWHERE = new Set(["side-of", "every-along"]);
+/**
+ * Forms this module leaves alone because something downstream resolves them —
+ * which depends on the grid. `side-of` is a battlemap's relational extent
+ * (#231); on a hexcrawl nothing answers it, and leaving it in the exempt set
+ * is how `realm : north of bren` went on being silent after the rest were
+ * caught. `every-along` is expanded for every map kind before this runs.
+ */
+const handledElsewhere = (kind: "battlemap" | "hexcrawl"): Set<string> =>
+  kind === "battlemap" ? new Set(["side-of", "every-along"]) : new Set(["every-along"]);
 
 const colLetters = (n: number): string => {
   let s = "";
@@ -105,6 +112,8 @@ const formText = (p: Extract<Placement, { kind: "relational" }>): string => {
     case "edge-of": return `${p.compass} edge of ${p.ref.value}`;
     case "along": return `along ${p.ref.value}`;
     case "at": return "at (…)";
+    case "side-of": return `${p.compass} of ${p.ref.value}`;
+    case "on": return `on ${p.ref.value}`;
     case "from-to": return "from … to …";
     default: return p.form;
   }
@@ -119,6 +128,15 @@ export function resolveGridPlacements(
   entities: EntityNode[],
   chainOf: (word: string | null) => string[],
   diagnostics: Diagnostic[],
+  /**
+   * Which grid this is. Both answer `at <address>` identically — §7 makes
+   * `at` optional ON GRIDS and a hexcrawl is one — and both refuse what
+   * states a relation without stating a square. They differ in what they
+   * RESOLVE beyond that: a battlemap draws a course between anchors (#238),
+   * where what `from … to …` means across hexes is an open question nobody
+   * has answered (#248). Refusing is the honest answer until someone does.
+   */
+  kind: "battlemap" | "hexcrawl" = "battlemap",
 ): void {
   const byId = new Map<string, EntityNode>();
   const byName = new Map<string, EntityNode>();
@@ -127,6 +145,18 @@ export function resolveGridPlacements(
     if (e.name && !byName.has(e.name)) byName.set(e.name, e);
   }
 
+  // A battlemap has cells; a hexcrawl has hexes. Saying "cell" to someone
+  // looking at a hex map is a small thing that reads as a tool talking about
+  // a different document than the one in front of them.
+  const exempt = handledElsewhere(kind);
+  const cellWord = kind === "hexcrawl" ? "hex" : "cell";
+  // What to write instead, in the spellings THIS map kind actually has: a
+  // hexcrawl has no structures to place against, so offering `on <structure>
+  // at <cell>` there sends an author looking for a form the grammar will not
+  // give them on this document.
+  const instead = kind === "hexcrawl"
+    ? "give the hex you mean (`C3`, or a range `C2..C4`)"
+    : "give the cell you mean (`F6`, `D4..F6`, or `on <structure> at <cell>`)";
   entities.forEach((e, index) => {
     // Free text carries its own closed placement set (spec 07 §2) and its own
     // renderer, including `along <ref>`, which rides the referenced course.
@@ -147,7 +177,7 @@ export function resolveGridPlacements(
     const placements: Placement[] = [];
 
     for (const p of e.placements) {
-      if (p.kind !== "relational" || HANDLED_ELSEWHERE.has(p.form)) {
+      if (p.kind !== "relational" || exempt.has(p.form)) {
         placements.push(p);
         continue;
       }
@@ -160,7 +190,7 @@ export function resolveGridPlacements(
           diagnostics.push({
             severity: "error",
             line: e.line,
-            message: `'${e.typeWord ?? "this"}' is placed at a gridless point on a battlemap — give it a cell (\`F6\`) or a range (\`D4..F6\`) (spec 02 §7)`,
+            message: `'${e.typeWord ?? "this"}' is placed at a gridless point on a ${kind} — ${instead} (spec 02 §7)`,
           });
           continue;
         }
@@ -169,8 +199,8 @@ export function resolveGridPlacements(
         continue;
       }
 
-      // A course between anchors (#238, ADR 0038).
-      if (p.form === "from-to") {
+      // A course between anchors (#238, ADR 0038) — battlemaps only.
+      if (p.form === "from-to" && kind === "battlemap") {
         const ends: { col: number; row: number }[] = [];
         let failed = false;
         const resolveEnd = (at: Ref | { kind: "point" }, join: boolean, previous: { col: number; row: number } | null): void => {
@@ -212,14 +242,16 @@ export function resolveGridPlacements(
       // against a structure is #34's local frame — both resolved elsewhere.
       // A lone one against anything else states no cell.
       if (p.form === "on") {
-        if (isCrossing || p.at !== undefined) {
+        // A crossing derives from two bands intersecting, which is spec 06 §6
+        // and therefore a battlemap idiom; a hexcrawl has no such machinery.
+        if ((isCrossing && kind === "battlemap") || p.at !== undefined) {
           placements.push(p);
           continue;
         }
         diagnostics.push({
           severity: "error",
           line: e.line,
-          message: `'on ${p.ref.value}' names no cell on a battlemap — say where on it: \`on ${p.ref.value} at <cell>\` (spec 02 §7, #34)`,
+          message: `'on ${p.ref.value}' names no ${cellWord} on a ${kind} — say where on it: \`on ${p.ref.value} at <${cellWord}>\` (spec 02 §7, #34)`,
         });
         changed = true;
         continue;
@@ -230,7 +262,7 @@ export function resolveGridPlacements(
         diagnostics.push({
           severity: "warning",
           line: e.line,
-          message: `'along ${p.ref.value}' is not applied on a battlemap — the course runs straight between its anchors; place the cells with \`path\` to make it follow (spec 02 §7)`,
+          message: `'along ${p.ref.value}' is not applied on a ${kind} — the course runs straight between its anchors; place the cells with \`path\` to make it follow (spec 02 §7)`,
         });
         changed = true;
         continue;
@@ -242,7 +274,7 @@ export function resolveGridPlacements(
       diagnostics.push({
         severity: "error",
         line: e.line,
-        message: `'${formText(p)}' names no cell on a battlemap — this placement is satisfiable in more than one place, so give the cell you mean (\`F6\`, \`D4..F6\`, or \`on <structure> at <cell>\`) (spec 02 §7)`,
+        message: `'${formText(p)}' names no ${cellWord} on a ${kind} — this placement is satisfiable in more than one place, so ${instead} (spec 02 §7)`,
       });
       changed = true;
     }

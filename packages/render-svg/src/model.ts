@@ -145,7 +145,16 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
     // `from … to …` draws a course, and anything a grid cannot site is
     // REPORTED. Six of the nine forms used to render byte-identically to
     // their own absence — the failure #207 already ruled on.
-    resolveGridPlacements(entities, chainOf, diagnostics);
+    resolveGridPlacements(entities, chainOf, diagnostics, "battlemap");
+  }
+  if (doc.mapType === "hexcrawl") {
+    // The same class, one grid short (#248). A hexcrawl's placement loops
+    // branch on address/range with no trailing else, exactly as the
+    // battlemap's did, so a realm placed `near duchy` drew nothing and said
+    // nothing. It answers `at <hex>` — §7 makes `at` optional on grids and
+    // this is one — and refuses the rest; what the other forms should MEAN
+    // across hexes is per-form design, not something to guess here.
+    resolveGridPlacements(entities, chainOf, diagnostics, "hexcrawl");
   }
   // `key=` works outside document-wide keyed mode (#107): a published module
   // is overwhelmingly "a map WITH a key" — ten numbered pins beside forty
