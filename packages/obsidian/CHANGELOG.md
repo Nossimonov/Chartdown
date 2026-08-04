@@ -2,6 +2,14 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [0.3.1] — 2026-08-04
+
+**Nothing about the plugin changes.** The bundle is byte-identical to 0.3.0's apart from one stylesheet fix; if you are on 0.3.0 there is nothing here for you.
+
+It exists because the community-store scan caches its result per version, and 0.3.0's scan failed on two things that had nothing to do with the plugin's behaviour: this repository's lockfile had fallen behind the `@chartdown` pins the release rewrites, so the scan could not install and reported every import as untyped — and `styles.css` carried a stray closing brace, which browsers recover from and a linter rightly does not.
+
+Both are fixed, and the release workflow now updates the lockfile alongside the pins so the pair cannot drift again.
+
 ## [0.3.0] — 2026-08-02
 
 ### Your notes will start showing warnings

@@ -1,6 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // The suite reads styles.css from disk (#255), which needs node types.
+    // Safe because the field was never what kept node APIs out of the shipped
+    // plugin: esbuild is, at `platform=browser` — verified by importing
+    // node:fs into reachable source, which fails the build with
+    // "Could not resolve node:fs" rather than typechecking quietly.
+    "types": ["node"],
     "paths": {
       "@chartdown/core": ["../core/src/index"],
       "@chartdown/render-svg": ["../render-svg/src/index"]
