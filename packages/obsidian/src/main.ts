@@ -7,7 +7,9 @@
 
 import { Notice, Plugin, PluginSettingTab, Setting, TFile, type App, type SettingDefinitionItem } from "obsidian";
 import { parse } from "@chartdown/core";
-import { mountChartdownBlock } from "./block";
+import { mountChartdownBlock, type BlockIO } from "./block";
+import { ChartdownFileView, CHARTDOWN_VIEW_TYPE } from "./fileview";
+import { resolveImports, resolveVaultPath, type VaultReader } from "./imports";
 import type { RenderMode } from "./render";
 
 interface ChartdownSettings {
@@ -67,25 +69,31 @@ export default class ChartdownPlugin extends Plugin {
     const raw: unknown = await this.loadData();
     const mode = raw !== null && typeof raw === "object" ? (raw as { mode?: unknown }).mode : undefined;
     this.settings = { mode: mode === "gm" ? "gm" : "player" };
-    this.registerMarkdownCodeBlockProcessor("chartdown", (source, el, ctx) => {
+    // A `.cd` file opens to its map (#237). The plugin claimed no extension
+    // before this, so the language's own file type could not be opened in the
+    // one place a GM keeps their campaign. Registering the view claims `.cd`
+    // for the vault while the plugin is enabled.
+    this.registerView(CHARTDOWN_VIEW_TYPE, (leaf) => new ChartdownFileView(leaf, {
+      mode: () => this.settings.mode,
+      io: (folder) => this.blockIo(folder),
+      imports: (source, folder) => resolveImports(source, folder, this.vaultReader()),
+    }));
+    this.registerExtensions(["cd"], CHARTDOWN_VIEW_TYPE);
+
+    this.registerMarkdownCodeBlockProcessor("chartdown", async (source, el, ctx) => {
       const slash = ctx.sourcePath.lastIndexOf("/");
       const folder = slash >= 0 ? ctx.sourcePath.slice(0, slash + 1) : "";
+      // Read what the document references BEFORE rendering (#246). The
+      // processor may return a promise, which is what makes this possible
+      // here; the file view has to load and redraw instead.
+      const imports = await resolveImports(source, folder, this.vaultReader());
       mountChartdownBlock(source, el, {
+        imports,
         initialMode: this.settings.mode,
         baseName: parse(source).document.docId,
         folderLabel: folder,
         io: {
-          writeFile: async (name, contents) => {
-            await this.app.vault.adapter.write(folder + name, contents);
-          },
-          notify: (message) => {
-            new Notice(message, 8000);
-          },
-          copy: async (text) => {
-            await navigator.clipboard.writeText(text);
-          },
-          readClipboard: async () => navigator.clipboard.readText(),
-          clipboardHasText,
+          ...this.blockIo(folder),
           replaceSource: async (newSource) => {
             // The processor's section info maps this block back to its fence
             // lines; replace strictly BETWEEN the markers so the fence itself
@@ -101,16 +109,57 @@ export default class ChartdownPlugin extends Plugin {
               return [...lines.slice(0, info.lineStart + 1), ...newSource.split("\n"), ...lines.slice(info.lineEnd)].join("\n");
             });
           },
-          reveal: (name) => {
-            // Desktop API; opens the system file explorer with the file
-            // selected — the "get it out as a file" affordance.
-            (this.app as unknown as { showInFolder?: (path: string) => void }).showInFolder?.(folder + name);
-          },
-          rasterize,
         },
       });
     });
     this.addSettingTab(new ChartdownSettingTab(this.app, this));
+  }
+
+  /**
+   * Vault-side path resolution for `use:` and `inset:` (#246). Kept behind the
+   * same injected-side-effect shape as everything else here, so the resolution
+   * itself tests without Obsidian.
+   */
+  private vaultReader(): VaultReader {
+    return {
+      read: async (folder, relative) => {
+        const path = resolveVaultPath(folder, relative);
+        try {
+          if (!(await this.app.vault.adapter.exists(path))) return null;
+          return await this.app.vault.adapter.read(path);
+        } catch {
+          return null; // unreadable is indistinguishable from absent, and warns the same way
+        }
+      },
+    };
+  }
+
+  /**
+   * Everything a mounted map may do to the vault, minus `replaceSource` —
+   * the one side effect that genuinely differs, since a fence edits between
+   * its own markers while a `.cd` file IS the block. Shared so the two
+   * mounting points cannot drift into offering different affordances.
+   */
+  private blockIo(folder: string): BlockIO {
+    return {
+      writeFile: async (name, contents) => {
+        await this.app.vault.adapter.write(folder + name, contents);
+      },
+      notify: (message) => {
+        new Notice(message, 8000);
+      },
+      copy: async (text) => {
+        await navigator.clipboard.writeText(text);
+      },
+      readClipboard: async () => navigator.clipboard.readText(),
+      clipboardHasText,
+      reveal: (name) => {
+        // Desktop API; opens the system file explorer with the file
+        // selected — the "get it out as a file" affordance.
+        (this.app as unknown as { showInFolder?: (path: string) => void }).showInFolder?.(folder + name);
+      },
+      rasterize,
+    };
   }
 
   async saveSettings(): Promise<void> {

@@ -5,10 +5,10 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, type Cell } from "./grid";
+import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -59,6 +59,7 @@ export function renderBattlemap(
     fieldHoles.set(field, list);
   };
   let noteCourseCount = 0;
+  let terrainCourseCount = 0;
   let openEdgeCache: Set<string> | null = null;
   const openingEdgeKeys = (): Set<string> => {
     if (openEdgeCache) return openEdgeCache;
@@ -95,6 +96,32 @@ export function renderBattlemap(
   }
   // Crossings render after the full pass so the paths they restyle are known.
   const pendingCrossings: PendingCrossing[] = [];
+
+  // A relational extent (spec 06 §6, ADR 0038) references another entity's
+  // course, which may be declared further down the document — declaration
+  // order is not significant — so it resolves after the full pass, like a
+  // crossing. It still claims its place in `layers.areas` NOW: within a kind,
+  // declaration order breaks ties (§6 layering), and a fill appended at the
+  // end would paint over terrain the author wrote after it.
+  interface PendingHalfPlane {
+    e: EntityNode;
+    compass: string;
+    ref: { form: string; value: string };
+    slot: number;
+    titleEl: string;
+    anchor: string | undefined;
+  }
+  const pendingHalfPlanes: PendingHalfPlane[] = [];
+
+  // Terrain display names (spec 06 §7, #232). Deferred so spec 07 §5's claim
+  // order can hold across the whole section rather than following whatever
+  // order the document happens to declare a wood and a river in.
+  interface PendingTerrainLabel {
+    e: EntityNode;
+    /** The drawn course, for a line feature; absent for an area. */
+    course: XY[] | null;
+  }
+  const pendingTerrainLabels: PendingTerrainLabel[] = [];
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
@@ -212,7 +239,15 @@ export function renderBattlemap(
     }
   }
 
+  for (const pending of pendingHalfPlanes) renderHalfPlane(pending);
   for (const pending of pendingCrossings) renderCrossing(pending);
+  // Spec 07 §5's claim order, on a battlemap: a line feature's name reads as
+  // that feature's name BECAUSE it lies along the feature, and set aside it
+  // becomes a caption pointing at nothing. A name with room to roam — a wood,
+  // a marsh — gives way instead, so courses are placed first and each placed
+  // label joins the obstructions the next one dodges.
+  for (const t of pendingTerrainLabels) if (t.course) renderCourseLabel(t);
+  for (const t of pendingTerrainLabels) if (!t.course) renderAreaLabel(t);
 
   // Coherence lints (#123): things a document can say that no rule forbids and
   // no reader would mean. Warnings only, and reachable from `check` because a
@@ -495,11 +530,37 @@ export function renderBattlemap(
           points: pointsAttr(hostRec.pts), fill: "none", stroke, "stroke-width": width,
           "stroke-linecap": "butt", "stroke-linejoin": "round", "clip-path": `url(#${clipId})`,
         });
+      // A CROSSING IS THEMABLE LIKE ANYTHING ELSE (#208). These three colours
+      // were literals at the draw site, so `ford : fill=…` and a theme's
+      // `bridge : stroke=…` both reached nothing — the one feature on the map
+      // whose whole job is to be noticed was the one a theme could not restyle.
+      // Resolution goes through the CHAIN, so a derived word (`plank : bridge`,
+      // `stepping-stones : ford`) inherits its base's styling per ADR 0016.
+      //
+      // The lookup stops AT the crossing word. Read down the whole chain it
+      // reaches `feature`, whose generic tint is not a ford — measured, that
+      // repainted every existing ford from the water colour to #cfd4b8, which
+      // is a default change nobody asked for rather than the themability this
+      // is about. Slicing keeps derivation working (`stepping-stones : ford`
+      // still inherits `ford`'s styling, ADR 0016) while a word's archetype
+      // default stays out of it.
+      const stop = chain.findIndex((w) => w === "ford" || w === "bridge");
+      const xingChain = stop >= 0 ? chain.slice(0, stop + 1) : chain;
+      const themedFill = model.theme.prop(xingChain, "fill");
+      const themedStroke = model.theme.prop(xingChain, "stroke");
       if (isBridge) {
-        scope.push(band("#6b4a26", hostRec.width + 6));
-        scope.push(band("#a8763e", hostRec.width));
+        // The deck's outline, then its planking. A theme naming only one gets
+        // the other from the pair it belongs to rather than a clashing default.
+        // Derive the rail from a themed deck ONLY when the theme gave a deck
+        // and no rail. Deriving unconditionally recoloured every existing
+        // bridge — measured on fairwater-manor, #6b4a26 became #865e32 for a
+        // document that names no theme at all, which is a default change
+        // masquerading as a themability fix.
+        scope.push(band(themedStroke ?? (themedFill ? shade(themedFill) : "#6b4a26"), hostRec.width + 6));
+        scope.push(band(themedFill ?? "#a8763e", hostRec.width));
       } else {
-        scope.push(band("#c2d4dc", hostRec.width));
+        // A ford is water you can cross: its fill is the water showing through.
+        scope.push(band(themedFill ?? "#c2d4dc", hostRec.width));
         if (e.flags.includes("difficult")) scope.push(band("url(#hatch)", hostRec.width));
       }
       // With multiple crossings and an `at` chooser, restrict to the chosen one.
@@ -775,6 +836,18 @@ export function renderBattlemap(
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         }
         pathRecords.push({ e, cells: cellsAlong(pts), isWater: chain.includes("river"), isRoad: chain.includes("road"), pts, width });
+        // A DISPLAY NAME is visible text at battle scale (spec 06 §7): the
+        // tooltip rule covers the fallback WORD of an unnamed entity, not a
+        // name the author wrote. Registered on the DRAWN course, since §7
+        // anchors the label on the course as rendered.
+        pendingTerrainLabels.push({ e, course: drawn });
+      } else if (p.kind === "relational" && p.form === "side-of") {
+        pendingHalfPlanes.push({
+          e, compass: p.compass, ref: p.ref, slot: layers.areas.push("") - 1, titleEl, anchor,
+        });
+        // A derived extent is ground like any other, so it labels like any
+        // other — over the cells it resolved to, not the ones it declared.
+        if (!pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
       } else if (p.kind === "range") {
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
@@ -785,8 +858,157 @@ export function renderBattlemap(
         areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
       }
     }
+    if (areaParts.length > 0 && !pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
     if (areaParts.length > 0) layers.areas.push(el("g", { id: pathParts.length === 0 ? anchor : undefined }, titleEl, ...areaParts));
     if (pathParts.length > 0) layers.paths.push(el("g", { id: anchor }, titleEl, ...pathParts));
+  }
+
+  /**
+   * A relational extent: terrain on the far side of another entity's course
+   * (spec 06 §6, ADR 0038).
+   *
+   * THE INK STOPS AT THE REFERENCE'S CENTERLINE, and the cells stop half a
+   * cell short of it — the two answers are deliberately different, as they
+   * already are for a path's band (#145). The fill renders beneath that band,
+   * so a fill stopping where its cells stop would leave a hairline of paper
+   * down the whole reference: a `width=1` band inks 85% of its cell, so 2.4px
+   * of a 32px cell shows on each side. Filling to the centerline puts terrain
+   * under that margin instead, which is the bank §6 already describes.
+   */
+  function renderHalfPlane(p: PendingHalfPlane): void {
+    const host = pathRecords.find((r) =>
+      p.ref.form === "id" ? r.e.ids.includes(p.ref.value) : r.e.name === p.ref.value);
+    if (!host || host.pts.length < 2) {
+      diagnostics.push({
+        severity: "warning",
+        line: p.e.line,
+        message: `'${p.e.typeWord ?? "terrain"}' is placed ${p.compass} of '${p.ref.value}', which declares no course to take a side of — reference a path, or give the cells (spec 06 §6)`,
+      });
+      return;
+    }
+    const chain = model.chainOf(p.e.typeWord);
+    // The DRAWN course, so the fill meets the band it hides under all the way
+    // into the terminal cells (#145) rather than stopping at their centres.
+    const poly = halfPlaneArea(p.compass, extendToCellEdge(host.pts), frame);
+    if (poly.length < 3) return;
+    const parts = [el("polygon", { points: pointsAttr(poly), fill: model.theme.terrainFill(chain), opacity: 0.85 })];
+    if (p.e.flags.includes("difficult")) parts.push(el("polygon", { points: pointsAttr(poly), fill: "url(#hatch)" }));
+    layers.areas[p.slot] = el("g", { id: p.anchor }, p.titleEl, ...parts);
+  }
+
+  /** The text a terrain entity labels itself with, or null if it labels none. */
+  function terrainLabelText(e: EntityNode): string | null {
+    if (!e.name || e.flags.includes("nolabel") || !labelsOn(model)) return null;
+    return labelTextFor(model, e) ?? e.name;
+  }
+
+  /** A point a fraction of the way along a polyline, by arc length. */
+  function alongCourse(course: XY[], t: number): XY {
+    const segs: number[] = [];
+    let total = 0;
+    for (let i = 0; i < course.length - 1; i++) {
+      const d = Math.hypot(course[i + 1]!.x - course[i]!.x, course[i + 1]!.y - course[i]!.y);
+      segs.push(d);
+      total += d;
+    }
+    let want = total * t;
+    for (let i = 0; i < segs.length; i++) {
+      if (want > segs[i]!) { want -= segs[i]!; continue; }
+      const f = segs[i]! === 0 ? 0 : want / segs[i]!;
+      return {
+        x: course[i]!.x + (course[i + 1]!.x - course[i]!.x) * f,
+        y: course[i]!.y + (course[i + 1]!.y - course[i]!.y) * f,
+      };
+    }
+    return course[course.length - 1]!;
+  }
+
+  /**
+   * A line feature's name, ON its course (spec 06 §7, #232).
+   *
+   * Anchored at the **arc-length midpoint of the drawn course**, never at an
+   * endpoint — a name at the end of a river reads as labelling the place the
+   * river stops. Where the midpoint is crowded the label SLIDES ALONG the
+   * course to the nearest clear point rather than stepping off it: a name
+   * pushed off a road reads as labelling the ground beside it.
+   */
+  function renderCourseLabel(t: PendingTerrainLabel): void {
+    const label = terrainLabelText(t.e);
+    if (label === null || !t.course || t.course.length < 2) return;
+    const course = t.course;
+    const w = label.length * 9 * 0.58;
+    // Text on a path RIDES the path, so a name on a north-south road is drawn
+    // turned on its side. Measured as a horizontal box the way every other
+    // label is, it reports no collision where the ink plainly collides — a
+    // river's name and a road's name met exactly over the ford they cross at,
+    // each having found the midpoint clear. The footprint follows the course's
+    // own direction at the point the label would sit.
+    const footprint = (frac: number): { x: number; y: number; w: number; h: number } => {
+      const at = alongCourse(course, frac);
+      const a = alongCourse(course, Math.max(0, frac - 0.02));
+      const b = alongCourse(course, Math.min(1, frac + 0.02));
+      return Math.abs(b.x - a.x) >= Math.abs(b.y - a.y)
+        ? { x: at.x - w / 2, y: at.y - 9, w, h: 10 }
+        : { x: at.x - 10, y: at.y - w / 2, w: 10, h: w };
+    };
+    const clash = (frac: number): number => {
+      const box = footprint(frac);
+      let overlap = 0;
+      for (const o of labelObstructions) {
+        const ox = Math.max(0, Math.min(box.x + box.w, o.x + o.w) - Math.max(box.x, o.x));
+        const oy = Math.max(0, Math.min(box.y + box.h, o.y + o.h) - Math.max(box.y, o.y));
+        overlap += ox * oy;
+      }
+      return overlap;
+    };
+    // Outward from the middle, so the nearest clear point wins and the name
+    // stays as close to mid-course as the map allows (spec 06 §7).
+    const offsets = [50, 42, 58, 34, 66, 26, 74, 18, 82];
+    let best = offsets[0]!;
+    let bestClash = Infinity;
+    for (const o of offsets) {
+      const c = clash(o / 100);
+      if (c < bestClash) { bestClash = c; best = o; }
+      if (c === 0) break;
+    }
+    labelObstructions.push(footprint(best / 100));
+    const pid = `cdterrain-${model.doc.docId}-${terrainCourseCount++}`;
+    // TEXT ON A PATH RUNS THE PATH'S WAY, so a course declared east-to-west
+    // draws its name mirrored — upside down and reading backwards. The
+    // author's declaration order is not a statement about typography: a seep
+    // running from its spring down to the runnel is written spring-first
+    // because that is where it starts, not because the name should be
+    // reversed. Where the course runs leftward the label rides a reversed
+    // copy, and the offset flips with it so it still lands mid-course.
+    const leftward = course[course.length - 1]!.x < course[0]!.x;
+    const lettered = leftward ? [...course].reverse() : course;
+    const offset = leftward ? 100 - best : best;
+    const d = `M${fmt(lettered[0]!.x)} ${fmt(lettered[0]!.y)}` +
+      lettered.slice(1).map((p) => `L${fmt(p.x)} ${fmt(p.y)}`).join("");
+    layers.roomLabels.push(
+      `<defs><path id="${pid}" d="${d}"/></defs>` +
+        `<text font-size="9" fill="${INK}" opacity="0.85" text-anchor="middle" font-family="sans-serif"` +
+        `${model.labelsMode === "keyed" ? ' font-weight="bold"' : ""}>` +
+        `<textPath href="#${pid}" startOffset="${offset}%"><tspan dy="-3">${escapeText(label)}</tspan></textPath></text>`,
+    );
+  }
+
+  /** An area's name, within its own footprint — including a derived one. */
+  function renderAreaLabel(t: PendingTerrainLabel): void {
+    const label = terrainLabelText(t.e);
+    if (label === null) return;
+    const cells = surfaceCells(t.e, halfPlaneContext(model.doc, model.entities));
+    if (cells.size === 0) return;
+    const at = placeRoomLabel(label, cells);
+    const w = label.length * 10 * 0.58;
+    labelObstructions.push({ x: at.x - w / 2, y: at.y - 8, w, h: 10 });
+    layers.roomLabels.push(
+      text(label, {
+        x: at.x, y: at.y, "font-size": 10, fill: INK,
+        "font-weight": model.labelsMode === "keyed" ? "bold" : undefined,
+        opacity: 0.8, "text-anchor": "middle", "font-family": "sans-serif",
+      }),
+    );
   }
 
   function renderStructure(e: EntityNode, into: string[], titleEl: string, anchor: string | undefined): void {
@@ -1593,6 +1815,43 @@ function openingStateMarks(
  * about what the path covers. Extending those too would have the band's own
  * footprint depend on its stroke width at the ends.
  */
+/**
+ * The polygon a half-plane inks: the course itself, its ends run out to the
+ * frame, closed along the compass side.
+ *
+ * The ends extend because a half-plane covers the FULL map beyond its frontier
+ * — the same reading spec 05 §2 gives it on a region map, where a frostline
+ * drawn across the middle still freezes the corners. A course that stops short
+ * of the edge is a course, not a shorter claim.
+ */
+function halfPlaneArea(compass: string, course: XY[], frame: { cols: number; rows: number }): XY[] {
+  // Bounded by the GRID, not the canvas: the margin is the coordinate gutter,
+  // and terrain drawn into it is terrain on no cell — an ink/coverage
+  // disagreement in the one direction the cell rule cannot answer for.
+  const left = MARGIN;
+  const top = MARGIN;
+  const right = MARGIN + frame.cols * CELL;
+  const bottom = MARGIN + frame.rows * CELL;
+  const clampX = (x: number): number => Math.min(Math.max(x, left), right);
+  const clampY = (y: number): number => Math.min(Math.max(y, top), bottom);
+  const inside = course.map((p) => ({ x: clampX(p.x), y: clampY(p.y) }));
+  const c = compass.toLowerCase();
+  const first = inside[0]!;
+  const last = inside[inside.length - 1]!;
+  if ((c.includes("n") || c.includes("s")) && !c.includes("e") && !c.includes("w")) {
+    const edgeY = c.includes("n") ? top : bottom;
+    const ltr = first.x <= last.x;
+    const x0 = ltr ? left : right;
+    const x1 = ltr ? right : left;
+    return [{ x: x0, y: first.y }, ...inside, { x: x1, y: last.y }, { x: x1, y: edgeY }, { x: x0, y: edgeY }];
+  }
+  const edgeX = c.includes("w") ? left : right;
+  const ttb = first.y <= last.y;
+  const y0 = ttb ? top : bottom;
+  const y1 = ttb ? bottom : top;
+  return [{ x: first.x, y: y0 }, ...inside, { x: last.x, y: y1 }, { x: edgeX, y: y1 }, { x: edgeX, y: y0 }];
+}
+
 function extendToCellEdge(pts: XY[]): XY[] {
   if (pts.length < 2) return pts;
   const out = pts.map((p) => ({ ...p }));

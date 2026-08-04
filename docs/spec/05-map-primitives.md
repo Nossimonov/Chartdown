@@ -132,6 +132,12 @@ A border whose realm reference resolves to nothing, or whose named realms never 
 
 Known sections: `[hexes]`, `[routes]`, `[regions]`, plus universals.
 
+**Which of spec 02 §7's relational forms a hexcrawl answers** *([#248](https://github.com/Nossimonov/Chartdown/issues/248))*. §7 is normative for every map kind, and a hexcrawl is a **grid** — so `at <hex>` is the bare address, since §7 makes `at` optional on grids and two spellings of one placement cannot differ.
+
+**Every other relational form is reported, never dropped.** Each states a relation without stating a hex, and §7 already rules on that: a placement satisfiable in more than one place is "ambiguous — a fail-loud error — and an `at <cell|point>` *chooses*". The refusal names the form and offers the spellings this map kind has.
+
+What a hexcrawl should *resolve* beyond `at` — what `north of <ref>` or `from … to …` mean across hexes — is deliberately unanswered here, and is a proposal apiece, as the same questions were for the battlemap (spec 06 §6). What is settled is that none of them may render as though the line were never written: a realm placed `near duchy` drew nothing and said nothing, which is the failure spec 06 §6 ruled on for `area` on a feature.
+
 **The ledger line** (the sanctioned shorthand of spec 01 §7 / spec 02 §4):
 
 ```

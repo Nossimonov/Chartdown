@@ -129,6 +129,43 @@ describe("6 — terrain-crosses-wall", () => {
     expect(has(map(`[terrain]\nriver : path A5 T5\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s`), BAND)).toBe(true);
   });
 
+  // #234: the warning used to name neither the structure it crossed nor where.
+  // Several crossings arrived as byte-identical lines at one line number, and
+  // ADR 0038 leans on this warning being actionable — it is the audit path for
+  // a relational extent when someone edits the reference.
+  it("names the structure, its line, and where the terrain leaves it", () => {
+    const msg = warnings(map(
+      `[terrain]
+river : path A5 T5
+
+[structures]
+building hall "The Long Hall" : C3..F6
+  door : D6.s`,
+    )).find((m) => m.includes(BAND))!;
+    expect(msg).toContain("The Long Hall");
+    expect(msg).toMatch(/line \d+/);
+    expect(msg).toMatch(/[A-Z]\d+\.[nsew]/);
+  });
+
+  it("two structures crossed by one terrain produce DISTINGUISHABLE messages", () => {
+    // The property that makes the report usable at all: previously these were
+    // identical strings, so a reader could not tell which building was which.
+    const msgs = warnings(map(
+      `[terrain]
+river : path A5 T5
+
+[structures]
+building a "North Barn" : C3..F6
+  door : D6.s
+building b "South Barn" : J3..M6
+  door : K6.s`,
+    )).filter((m) => m.includes(BAND));
+    expect(msgs.length).toBe(2);
+    expect(msgs[0]).not.toBe(msgs[1]);
+    expect(msgs.join(" ")).toContain("North Barn");
+    expect(msgs.join(" ")).toContain("South Barn");
+  });
+
   it("is silent when the whole footprint is covered — a flooded room", () => {
     expect(has(map(`[terrain]\nwater : area C3..F6\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s`), BAND)).toBe(false);
   });

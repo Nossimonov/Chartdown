@@ -354,3 +354,19 @@ export function visibilityPolygon(center: XY, radius: number, blockers: Segment[
   }
   return pts;
 }
+
+/**
+ * A darker sibling of a colour, for the edge of the thing that colour fills —
+ * a coastline against its sea, a bridge's rail against its deck.
+ *
+ * Shared rather than copied: it was private to the region renderer until the
+ * battlemap needed it for a themed crossing (#208), and two implementations of
+ * "one shade darker" is exactly the drift this package keeps warning about.
+ * A non-hex value (a CSS name, a gradient url) passes through untouched.
+ */
+export function shade(hex: string): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const dim = (v: number): number => Math.max(0, Math.round(v * 0.8));
+  return `#${(((dim((n >> 16) & 255)) << 16) | ((dim((n >> 8) & 255)) << 8) | dim(n & 255)).toString(16).padStart(6, "0")}`;
+}

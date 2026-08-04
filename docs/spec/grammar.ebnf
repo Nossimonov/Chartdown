@@ -1,5 +1,5 @@
 (* ===================================================================
-   Chartdown consolidated grammar — spec v0.4 (sections 01–08)
+   Chartdown consolidated grammar — spec v0.5 (sections 01–08)
    Status: informative consolidation; the prose spec sections are
    normative and win on any conflict. Maintained per issue #12:
    every spec change updates this file in the same commit.
@@ -123,8 +123,21 @@ shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                     vertices makes the boundary follow the feature's curve
                     between their projections — spec 05 §2, ADR 0012 *)
 
+                 (* ON A GRID, spec 06 §6 lists which of these forms resolve
+                    and which are REPORTED. A form that states a relation but
+                    no square — near, <measure> <compass> of, <compass> edge
+                    of, a bare "on", a lone along — is ambiguous under §7 and
+                    fails loud; it is never silently dropped (#239). *)
 relational     = ( "at" , ( point | address | range | edge ) )
+                 (* "at" is OPTIONAL on grids (spec 02 §7), so `at F6` and
+                    `F6` are one placement and cannot differ. *)
                | ( [ measure ] , compass , "of" , ref )
+                 (* the HALF-PLANE: terrain on the far side of ref's course.
+                    Means the SAME THING on every map kind — spec 05 §2 for a
+                    region, spec 06 §6 for a battlemap, where it resolves in
+                    cell space: ink to ref's CENTERLINE, a cell covered when
+                    its CENTRE lies strictly beyond the course, ties to ref.
+                    ADR 0038 reversed the battlemap prohibition, #231. *)
                | ( "on" , ref , [ "at" , ( point | address | range | edge ) ] ,
                    [ "via" , control , { control } ] )
                  (* "via" after an "at" point declares a PLACED FEATURE's

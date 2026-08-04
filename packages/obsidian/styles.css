@@ -30,3 +30,54 @@
   border-left: 2px solid var(--text-error);
   background: var(--background-secondary);
 }
+}
+
+/* The `.cd` file view (Chartdown#237). The map is the default face of the
+   file; the source pane is a toggle away and fills the leaf, because editing
+   a map source in a letterbox is worse than not editing it here at all. */
+.chartdown-file-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--size-4-3);
+  overflow: auto;
+}
+
+.chartdown-file-toolbar {
+  display: flex;
+  gap: var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+}
+
+.chartdown-file-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.chartdown-file-source {
+  width: 100%;
+  height: 100%;
+  min-height: 20em;
+  resize: none;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+/* An error means the map is wrong; a warning means it may not be what you
+   meant (#245). The box was error-red throughout, which is the wrong volume
+   for a lint telling you a room has no door — so the frame takes the colour
+   of the worst line in it, and each line takes its own. */
+.chartdown-diagnostics-warning {
+  color: var(--text-warning);
+  border-left-color: var(--text-warning);
+}
+
+.chartdown-diagnostic-warning {
+  color: var(--text-warning);
+}
+
+.chartdown-diagnostic-error {
+  color: var(--text-error);
+}

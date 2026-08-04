@@ -15,7 +15,7 @@
 
 import type { Address, EntityNode } from "@chartdown/core";
 import { colLetters, type Segment } from "./util";
-import { cellKey, edgeSegment, perimeterEdges, segKey, structureCells, surfaceCells, type Cell } from "./grid";
+import { cellKey, edgeSegment, halfPlaneContext, perimeterEdges, segKey, structureCells, surfaceCells, type Cell, type HalfPlaneContext } from "./grid";
 import { impassableCells } from "./walls";
 import type { Model } from "./model";
 
@@ -40,11 +40,11 @@ interface Lint {
  * bands, so a road is what a cell has on it; reading only `terrain` here made
  * a door onto a street a door onto whatever the street was painted over.
  */
-function surfaceByCell(entities: EntityNode[], level: string): Map<string, string> {
+function surfaceByCell(entities: EntityNode[], level: string, hp?: HalfPlaneContext): Map<string, string> {
   const winner = new Map<string, string>();
   for (const e of entities) {
     if (e.level !== level || !laysSurface(e)) continue;
-    for (const key of surfaceCells(e).keys()) winner.set(key, e.typeWord ?? "");
+    for (const key of surfaceCells(e, hp).keys()) winner.set(key, e.typeWord ?? "");
   }
   return winner;
 }
@@ -82,7 +82,11 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   const all = ctx?.allEntities ?? model.entities;
   const on = <T extends { level: string }>(xs: T[]): T[] => xs.filter((x) => x.level === level);
   const structures = on(model.entities.filter((e) => e.archetype === "structure"));
-  const surface = surfaceByCell(all, level);
+  // A relational extent is ground like any other, so the lints resolve it too
+  // (spec 06 §6, ADR 0038) — it is deliberately NOT exempt, and that report is
+  // what makes a derived extent auditable when its reference is edited.
+  const hp = halfPlaneContext(model.doc, all);
+  const surface = surfaceByCell(all, level, hp);
   const rock = impassableCells(model);
 
   /** The level physically beneath this one, or null at the bottom of the stack. */
@@ -249,7 +253,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
     if (!landing) continue;
     const key = cellKey({ col: colNum(landing.col), row: landing.row });
     if (roomsOn(to).has(key)) continue; // it lands in a room, which is a floor
-    const word = surfaceByCell(all, to).get(key);
+    const word = surfaceByCell(all, to, hp).get(key);
     if (word === undefined) continue;
     const chain = model.chainOf(word);
     if (chain.includes("terrace") || (!chain.includes("air") && !chain.includes("earth"))) continue;
@@ -302,7 +306,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
     if (cells.size === 0) continue;
     for (const t of on(model.entities)) {
       if (t.archetype !== "terrain" && t.archetype !== "path") continue;
-      const tc = surfaceCells(t);
+      const tc = surfaceCells(t, hp);
       if (tc.size === 0) continue;
       const inside = [...tc.keys()].filter((k) => cells.has(k)).length;
       if (inside === 0) continue; // never enters
@@ -319,6 +323,13 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       // and let it pass when every one of them carries an opening. The manor's
       // King's Road runs into the gatehouse at M12.s, which is a door.
       const crossings = new Set<string>();
+      // WHERE it crosses, not merely THAT it does (#234). The edges are
+      // computed here anyway, to check them against the openings; reporting
+      // none of them left several crossings arriving as identical lines at
+      // one line number, with nothing to tell them apart. Under a relational
+      // extent (ADR 0038) the cause can be an edit to an entity the reported
+      // line does not even mention, so the report has to carry the geometry.
+      const at: string[] = [];
       for (const [key, c] of cells) {
         if (!tc.has(key)) continue;
         const sides: [string, Cell][] = [
@@ -329,13 +340,22 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
           const nk = cellKey(n);
           if (cells.has(nk) || !tc.has(nk)) continue; // interior edge, or the band stops here
           crossings.add(segKey(edgeSegment({ kind: "address", col: colLetters(c.col), row: c.row }, dir as never)));
+          at.push(`${colLetters(c.col)}${c.row}.${dir}`);
         }
       }
       if (crossings.size > 0 && [...crossings].every((k) => openingSegs.has(k))) continue;
+      // Name the structure the way its author would recognise it, and say
+      // where — capped, because a long band can cross a great many edges and
+      // a message nobody finishes reading is the problem this fixes.
+      const where = at.slice(0, 3).join(", ") + (at.length > 3 ? `, and ${at.length - 3} more` : "");
+      // Its LINE as well as its name: this warning is reported against the
+      // terrain, and the structure it names is declared somewhere else, so a
+      // reader who jumps to the reported line finds the wrong entity.
+      const structureName = `${s.name ?? s.ids[0] ?? s.typeWord ?? "a structure"}' (line ${s.line})`;
       diagnostics.push({
         severity: "warning",
         line: t.line,
-        message: `'${t.typeWord ?? "terrain"}' runs both inside and outside a structure's footprint, crossing its wall where there is no opening — terrain that stays wholly inside a room (a pool, a dais) is fine, as is terrain that crosses at a door (spec 06 §6)`,
+        message: `'${t.typeWord ?? "terrain"}' runs both inside and outside '${structureName}, crossing its wall${at.length > 0 ? ` at ${where}` : ""} where there is no opening — terrain that stays wholly inside a room (a pool, a dais) is fine, as is terrain that crosses at a door (spec 06 §6)`,
       });
       break;
     }

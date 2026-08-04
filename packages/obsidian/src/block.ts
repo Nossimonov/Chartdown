@@ -34,6 +34,8 @@ export interface BlockIO {
 
 export interface BlockOptions {
   initialMode: RenderMode;
+  /** Sources of the files this document references (#246), already read. */
+  imports?: { libraries: Record<string, string>; documents: Record<string, string> };
   /** File base for exports, normally the map's doc id. */
   baseName: string;
   /** Vault-relative folder exports land in ("" = vault root) — notices say where. */
@@ -105,7 +107,7 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
 
   const rerender = (): void => {
     mapHost.empty();
-    renderChartdownBlock(source, mapHost, mode);
+    renderChartdownBlock(source, mapHost, mode, opts.imports);
     modeBtn.textContent = mode === "gm" ? "GM view" : "Player view";
     modeBtn.setAttribute("aria-pressed", String(mode === "gm"));
   };
@@ -117,7 +119,7 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
 
   svgBtn.addEventListener("click", () => {
     void (async () => {
-      const { svg } = renderSource(source, { mode });
+      const { svg } = renderSource(source, { mode, ...opts.imports });
       const name = `${opts.baseName}${mode === "gm" ? "-gm" : ""}.svg`;
       await opts.io.writeFile(name, svg);
       opts.io.notify(`Chartdown: exported ${opts.folderLabel}${name} (a real file in your vault folder)`);

@@ -6805,6 +6805,409 @@ exports[`example corpus > sundered-reach > AST snapshot is stable 1`] = `
 }
 `;
 
+exports[`example corpus > undercellar > AST snapshot is stable 1`] = `
+{
+  "defaultLevel": "",
+  "docId": "the-undercellar",
+  "grid": {
+    "cols": 18,
+    "kind": "square",
+    "rows": 12,
+  },
+  "header": [
+    {
+      "key": "map",
+      "line": 6,
+      "value": "battlemap",
+    },
+    {
+      "key": "grid",
+      "line": 7,
+      "value": "square 18x12",
+    },
+    {
+      "key": "scale",
+      "line": 8,
+      "value": "5ft",
+    },
+    {
+      "key": "numbers",
+      "line": 9,
+      "value": "on",
+    },
+  ],
+  "importedVocab": [],
+  "kind": "document",
+  "levels": [],
+  "mapType": "battlemap",
+  "sections": [
+    {
+      "entries": [
+        {
+          "archetype": "terrain",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "fountain",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 13,
+          "name": "The Fountain",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 2,
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "pond",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "sinkhole",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 14,
+          "name": "The Sink-hole",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "D",
+              "kind": "address",
+              "row": 11,
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "pond",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "runnel",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 17,
+          "name": "The Runnel",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "fountain",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "sinkhole",
+                },
+              },
+              "via": [],
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "stream",
+        },
+        {
+          "archetype": "terrain",
+          "archetypeSource": "inferred-section",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "spring",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 19,
+          "name": "The Weeping Spring",
+          "pairs": [],
+          "placements": [
+            {
+              "col": "L",
+              "kind": "address",
+              "row": 4,
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "pond",
+        },
+        {
+          "archetype": "path",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "seep",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 20,
+          "name": "The Seep",
+          "pairs": [],
+          "placements": [
+            {
+              "form": "from-to",
+              "from": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "spring",
+                },
+              },
+              "kind": "relational",
+              "to": {
+                "at": {
+                  "form": "id",
+                  "kind": "ref",
+                  "value": "runnel",
+                },
+                "join": true,
+              },
+              "via": [],
+            },
+          ],
+          "section": "terrain",
+          "texts": [],
+          "typeWord": "stream",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 11,
+      "name": "terrain",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "structure",
+          "archetypeSource": "vocab",
+          "details": [
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 25,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "F",
+                    "kind": "address",
+                    "row": 7,
+                  },
+                  "dir": "w",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+            {
+              "flags": [],
+              "ids": [],
+              "kind": "detail",
+              "line": 26,
+              "name": null,
+              "pairs": [],
+              "placements": [
+                {
+                  "at": {
+                    "col": "N",
+                    "kind": "address",
+                    "row": 7,
+                  },
+                  "dir": "e",
+                  "kind": "edge",
+                },
+              ],
+              "texts": [],
+              "typeWord": "door",
+            },
+          ],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "cellar",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 24,
+          "name": "The Undercellar",
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "F",
+                "kind": "address",
+                "row": 5,
+              },
+              "kind": "range",
+              "to": {
+                "col": "N",
+                "kind": "address",
+                "row": 9,
+              },
+            },
+          ],
+          "section": "structures",
+          "texts": [],
+          "typeWord": "building",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 22,
+      "name": "structures",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "casks",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 30,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "G",
+                "kind": "address",
+                "row": 6,
+              },
+              "kind": "range",
+              "to": {
+                "col": "H",
+                "kind": "address",
+                "row": 6,
+              },
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "barrel",
+        },
+        {
+          "archetype": "feature",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "up",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 31,
+          "name": null,
+          "pairs": [
+            {
+              "key": "facing",
+              "value": "e",
+            },
+          ],
+          "placements": [
+            {
+              "col": "M",
+              "kind": "address",
+              "row": 8,
+            },
+          ],
+          "section": "features",
+          "texts": [],
+          "typeWord": "stairs",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 28,
+      "name": "features",
+    },
+    {
+      "entries": [
+        {
+          "archetype": "zone",
+          "archetypeSource": "vocab",
+          "details": [],
+          "flags": [],
+          "gmOnly": false,
+          "ids": [
+            "party",
+          ],
+          "kind": "entity",
+          "level": "",
+          "line": 35,
+          "name": null,
+          "pairs": [],
+          "placements": [
+            {
+              "from": {
+                "col": "A",
+                "kind": "address",
+                "row": 6,
+              },
+              "kind": "range",
+              "to": {
+                "col": "B",
+                "kind": "address",
+                "row": 7,
+              },
+            },
+          ],
+          "section": "tokens",
+          "texts": [],
+          "typeWord": "start",
+        },
+      ],
+      "kind": "section",
+      "known": true,
+      "level": null,
+      "line": 33,
+      "name": "tokens",
+    },
+  ],
+  "title": "The Undercellar",
+}
+`;
+
 exports[`example corpus > vessany > AST snapshot is stable 1`] = `
 {
   "defaultLevel": "",
