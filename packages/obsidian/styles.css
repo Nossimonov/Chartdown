@@ -30,7 +30,6 @@
   border-left: 2px solid var(--text-error);
   background: var(--background-secondary);
 }
-}
 
 /* The `.cd` file view (Chartdown#237). The map is the default face of the
    file; the source pane is a toggle away and fills the leaf, because editing
@@ -69,6 +68,11 @@
    meant (#245). The box was error-red throughout, which is the wrong volume
    for a lint telling you a room has no door — so the frame takes the colour
    of the worst line in it, and each line takes its own. */
+.chartdown-diagnostics-error {
+  color: var(--text-error);
+  border-left-color: var(--text-error);
+}
+
 .chartdown-diagnostics-warning {
   color: var(--text-warning);
   border-left-color: var(--text-warning);
