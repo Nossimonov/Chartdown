@@ -69,9 +69,20 @@ export const DEFAULT_THEME_SOURCE: string = [
   "light : fill=#ffd98a",
   // Ambient conditions for the shipped field (#106): a value with no entry
   // draws no wash at all, so a renderer never invents a tone it was not told.
+  //
+  // `daylight` had no entry and drew one anyway (#263) — the base `light`
+  // fill above answered the lookup, since it exists for EMITTER pools, and
+  // the missing opacity fell through to a default written for darkness. So
+  // the brightest condition a map could declare rendered at 0.82, heavier
+  // than `dim` or `moonlight`, and a campfire's pool became the brightest
+  // thing on a sunlit map because the pool is a hole cut in that wash.
+  //
+  // The three darkening states form a ladder; daylight joins it from the
+  // other end, as a warm cast on the paper rather than a filter over it.
   "light.dark : fill=#10131a opacity=0.86",
   "light.dim : fill=#1b2029 opacity=0.55",
   "light.moonlight : fill=#1d2740 opacity=0.45",
+  "light.daylight : fill=#ffd98a opacity=0.20",
   "ledge : stroke=#6b5d4a",
   "building : fill=#efe9da",
   "building.open : fill=#e3ddc2 ; unroofed interiors read as outdoor ground (spec 06 par.3)",
