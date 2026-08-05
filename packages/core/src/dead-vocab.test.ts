@@ -47,6 +47,37 @@ describe("a word declared and never spent", () => {
     const src = `# Dead vocab\n\nmap: battlemap\ngrid: square 12x10\nscale: 5ft\nlight: dim\n\n[vocab]\nlight : field states=dim,dark\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s\n`;
     expect(dead(src)).toEqual([]);
   });
+
+  it("is silent for a field word spent by an EMITTER (#268)", () => {
+    // The other half of the case above, and the affordance the archetype exists
+    // for. Only the ambient was credited, so a field used exactly as spec 04 §5
+    // says to use it was reported dead — and the advice was unfollowable, since
+    // the only way to stop carrying the word was to delete the declaration that
+    // makes the emitter mean anything.
+    expect(dead(map(`[vocab]\nsilence : field\n\n[features]\nbell b1 : D4 silence=30ft`))).toEqual([]);
+  });
+
+  it("is silent for a DERIVED field spent by an emitter", () => {
+    // Derivation carries the archetype (spec 04 §2), so `hush` is a field and
+    // its name is a parameter too.
+    expect(dead(map(`[vocab]\nsilence : field\nhush : silence\n\n[features]\nchime c1 : E4 silence=5ft hush=10ft`))).toEqual([]);
+  });
+
+  it("still warns on a field declared and never emitted or set", () => {
+    expect(dead(map(`[vocab]\nsilence : field\n\n[features]\nbell b1 : D4`)).join())
+      .toMatch(/'silence' is declared here and never used/);
+  });
+
+  it("does not credit a pair key that merely collides with a declared word", () => {
+    // Restricted to fields on purpose: `size=` is a reserved parameter on every
+    // token, and a document declaring the word `size` has not thereby used it.
+    expect(dead(map(`[vocab]\nsize : feature\n\n[tokens]\ngoblin g1 : D4 size=2`)).join())
+      .toMatch(/'size' is declared here and never used/);
+  });
+
+  it("counts an emitter on a structure DETAIL line", () => {
+    expect(dead(map(`[vocab]\nsilence : field\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s silence=5ft`))).toEqual([]);
+  });
 });
 
 describe("scope (ADR 0022)", () => {

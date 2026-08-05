@@ -4,6 +4,10 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Fixed
+
+- **An emitter spends the field word it names** (#268). `reportDeadVocab` collected spent words from header keys and values, derivation bases and type words, but never from entity **pair keys** — so a field used exactly as spec 04 §5 says to use it was reported dead: `[vocab] silence : field` with `bell b1 : D4 silence=30ft` warned that `silence` "is declared here and never used", when the declaration is precisely what gives the pair meaning. The advice was unfollowable too, since the only way to stop carrying the word was to delete the declaration the emitter depends on. The comment above the header loop shows the case was half-considered: it credits `light: dim`, the ambient baseline, and missed the emitter — the affordance the `field` archetype exists for. The shipped `light` never exposed it, being a stdlib word where only a document's own `[vocab]` is checked ([ADR 0022](docs/decisions/0022-a-declaration-is-a-promise.md)). Credit is restricted to keys naming a declared **field**, resolved through the derivation chain so a derived field counts, and so a document declaring a word that merely collides with a reserved parameter (`[vocab] size : feature`) is not held to be using it by every line carrying `size=`. A genuine dead declaration — the `mountian : terrain` typo the check exists for — still warns.
+
 ## [0.5.0] — 2026-08-02
 
 Three of these came from one reader's afternoon with the language — a friend of the maintainer who wrote a battlemap, named its terrain, and reported what it did instead. Between them they moved a spec rule that had been decided against on purpose.
