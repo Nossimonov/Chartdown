@@ -61,6 +61,10 @@ detail-line    = INDENT , line ;                     (* structure details only �
 subject        = [ type-word ] , { id-word } , [ string ] ;
                  (* sections may permit omitting the type word (spec 01 §4);
                     identity/uniqueness rules: spec 03 §1 *)
+type-word      = word - archetype ;
+                 (* an archetype name is GRAMMAR, legal only on the right-hand
+                    side of a vocab-line: writing one here is an ERROR naming
+                    the fix (spec 04 §1, ADR 0039, #266) *)
 predicate      = { token } ;
 token          = placement | word | string | pair ;
 pair           = key , "=" , ( word | string | measure | level-span ) ;
@@ -195,14 +199,18 @@ hex-ledger-line = ( address | range ) , terrain-word , { content-word } ,
 
 (* ---- vocabulary, [vocab] sections and use: libraries — spec 04 ---- *)
 
-vocab-line     = word , ":" , ( archetype | word ) , { pair | word } , EOL ;
+vocab-line     = type-word , ":" , ( archetype | word ) , { pair | word } , EOL ;
                  (* second form = derivation from another word, with overrides;
-                    cycles are errors; shadowing order: stdlib < use: < document *)
+                    cycles are errors; shadowing order: stdlib < use: < document.
+                    the DEFINED word is a type-word, so a document may not
+                    shadow an archetype name (ADR 0039, #266) *)
 archetype      = "terrain" | "path" | "feature" | "structure" | "barrier"
                | "opening" | "token" | "zone" | "field" ;
                  (* closed; extensible by spec sections only.
                     unknown words never fail: archetype inferred from
-                    shape token, else section, else feature — spec 04 §3 *)
+                    shape token, else section, else feature — spec 04 §3.
+                    the nine names themselves are the exception: reserved in
+                    the type-word position, refused rather than inferred *)
 
 (* ---- themes, [theme]/[glyphs] sections — spec 08 ----
    theme documents contain only these sections; no map: header required. *)

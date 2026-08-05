@@ -25,7 +25,7 @@ import type {
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize, type RawLine, type Token } from "./lex";
 import { isCompass, parseAddress, parsePositional, parsePredicate } from "./placements";
-import { ARCHETYPE_FACETS, checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
+import { ARCHETYPE_FACETS, checkFacetValues, checkTypeWordNotArchetype, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
@@ -623,11 +623,20 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   let section: SectionNode | null = null;
   let skippingUnknown = false;
   let lastEntity: EntityNode | null = null;
+  /**
+   * Did the last entity LINE exist and get refused? Its details then have a
+   * parent that was reported, not a missing one, and saying "detail line has no
+   * parent entity" underneath a refusal reports one cause twice — so they are
+   * dropped silently. A stray indent with no entity line above it at all still
+   * reports, which is why this resets per section rather than tracking null.
+   */
+  let lastEntityRefused = false;
 
   const finishSection = () => {
     if (section) document.sections.push(section);
     section = null;
     lastEntity = null;
+    lastEntityRefused = false;
   };
 
   for (; i < lines.length; i++) {
@@ -680,6 +689,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
         if (tokens.some((t) => t.kind === "colon")) {
           // Grouped form (spec 02 §4): an ordinary entity line.
           lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
+          lastEntityRefused = lastEntity === null;
         } else {
           parseHexLedgerLine(raw, tokens, section, symbols, diagnostics);
         }
@@ -687,11 +697,12 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       }
       default: {
         if (raw.indent > 0) {
-          parseDetailLine(raw, lastEntity, vocab, diagnostics);
+          if (!lastEntityRefused) parseDetailLine(raw, lastEntity, vocab, diagnostics);
           break;
         }
         const tokens = tokenize(raw.text, raw.line, diagnostics);
         lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
+        lastEntityRefused = lastEntity === null;
         break;
       }
     }
@@ -716,6 +727,10 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return null;
     const subject = parseSubject(split.subject, raw.line, diags);
+    // Dropped rather than inferred (ADR 0039): letting the line through means
+    // rendering something the document did not ask for, which is the whole
+    // finding of #266.
+    if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return null;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
 
     // Order-bounded reference validation happens against the table BEFORE this entity registers.
@@ -842,6 +857,9 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return;
     const subject = parseSubject(split.subject, raw.line, diags);
+    // The detail slot is where #266 did its worst: `opening : at A1.w` drew a
+    // WALL, the exact inverse of the line.
+    if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
     // A BARRIER word in a detail slot REPLACES that side's perimeter with that
     // barrier (#130): `cave-in : east` is the spelling authors already reach

@@ -92,6 +92,46 @@ export const ARCHETYPE_FACETS: Record<string, readonly string[]> = {
   field: ["occluded"],
 };
 
+/**
+ * A word to suggest for each archetype, so the error below names a fix the
+ * author can paste rather than a shape they have to instantiate. None is a
+ * standard-library word — the suggestion has to be free to define.
+ */
+const ARCHETYPE_EXAMPLE: Record<string, string> = {
+  terrain: "heath", path: "causeway", feature: "obelisk",
+  structure: "granary", barrier: "railing", opening: "arch",
+  token: "goblin", zone: "muster", field: "radiation",
+};
+
+/**
+ * An archetype name is GRAMMAR, not a type word (spec 04 §1, ADR 0039, #266):
+ * the nine are legal only on the right-hand side of a vocabulary binding, and
+ * reserved everywhere a type word goes — entity lines, structure details, and
+ * a `[vocab]` entry's own left-hand side.
+ *
+ * They used to resolve to `null` — an archetype name is never an ENTRY, only
+ * ever the target of one — so the word fell through to spec 04 §3's inference
+ * as though it were undefined. In a structure detail that inverted the line:
+ * `opening : at A1.w` drew a WALL where the document asked for a hole in one,
+ * and `check` said nothing. Reports and returns true when `word` is one, so
+ * the caller can drop the line instead of drawing the wrong thing.
+ */
+export function checkTypeWordNotArchetype(
+  word: string | null,
+  line: number,
+  diagnostics: Diagnostic[],
+): boolean {
+  if (word === null || !ARCHETYPES.has(word)) return false;
+  const example = ARCHETYPE_EXAMPLE[word] ?? "my-word";
+  diagnostics.push(
+    error(
+      line,
+      `'${word}' is an archetype, not a type word — declare a word for it ('[vocab] ${example} : ${word}') and use that (spec 04 §2)`,
+    ),
+  );
+  return true;
+}
+
 /** The shipped standard library — normative content of specs 05 §1 and 06 §2. */
 export const STDLIB_SOURCE = `# Chartdown Standard Library
 
@@ -374,6 +414,9 @@ export function parseVocabLine(
     diagnostics.push(error(line, "malformed [vocab] line — expected 'word : archetype-or-word'"));
     return null;
   }
+  // The DEFINED word is a type word (ADR 0039): a document that could shadow an
+  // archetype name would reintroduce #266 and take the diagnostic with it.
+  if (checkTypeWordNotArchetype(first.text, line, diagnostics)) return null;
   const pairs: Pair[] = [];
   const flags: string[] = [];
   for (const t of tokens.slice(3)) {
