@@ -4,6 +4,12 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `[labels]` override moves the label on every map kind** (#252). An author-placed override was parsed, resolved against its entity, and validated fail-loud — a typo'd subject is a hard error — and then **discarded** by the battlemap and hexcrawl renderers. Every signal an author got said the line had taken effect, which inverts spec 07 §5's one absolute: *"author-placed `[labels]` overrides are never omitted."* `labelOverrides` was read twice in `region.ts` and **zero times** in the other two. All four hints now work in cell and hex space: `at`, a compass word, `sprawl`, and `along`. A hexcrawl went further and implemented no part of `[labels]` at all, so it could not carry free text either, though spec 07 §2 calls the section universal — it can now, and a hint a hexcrawl cannot site is reported rather than dropped.
+- **A display name may hug the colon** (#251). `forest "Dark Wood": blob …` was rejected as having no predicate, and the error named the whole line rather than the missing space. The header-style split refuses any chunk containing a quote — right for `gm="a: b"`, wrong here — so the chunk fell through to the string branch, whose trailing-quote strip cannot match a chunk ending in a colon: the name became `Dark Wood":` and no colon token was emitted. An attached colon is legal everywhere else in the language, and this bit hardest in `[labels]`, where an override's subject **is** a bare quoted name, so `"The Black Altar": at …` was the natural thing to type and the exact shape that failed.
+
+
 ## [0.5.0] — 2026-08-02
 
 Three of these came from one reader's afternoon with the language — a friend of the maintainer who wrote a battlemap, named its terrain, and reported what it did instead. Between them they moved a spec rule that had been decided against on purpose.

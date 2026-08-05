@@ -79,7 +79,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     w = frame.w;
     h = frame.h;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
-    renderHexcrawl(model, body);
+    renderHexcrawl(model, body, diagnostics);
   } else {
     const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
     const unitsW = Number(extent?.[1] ?? 800);
