@@ -4,7 +4,7 @@
  * states), routes through hex centers, and derived region boundaries.
  */
 
-import type { Address, AddressRange, EntityNode, HexLineNode } from "@chartdown/core";
+import type { Address, AddressRange, Diagnostic, EntityNode, HexLineNode } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { LabelPlacer } from "./labels";
 import { gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
@@ -44,7 +44,19 @@ function shifted(row: number, parity: string): boolean {
   return idx;
 }
 
-export function renderHexcrawl(model: Model, body: string[]): void {
+/** Compass words to a unit offset in hex space, y down as the canvas runs. */
+const HEX_COMPASS: Record<string, XY> = {
+  n: { x: 0, y: -1 }, north: { x: 0, y: -1 },
+  s: { x: 0, y: 1 }, south: { x: 0, y: 1 },
+  e: { x: 1, y: 0 }, east: { x: 1, y: 0 },
+  w: { x: -1, y: 0 }, west: { x: -1, y: 0 },
+  ne: { x: 0.5, y: -1 }, northeast: { x: 0.5, y: -1 },
+  nw: { x: -0.5, y: -1 }, northwest: { x: -0.5, y: -1 },
+  se: { x: 0.5, y: 1 }, southeast: { x: 0.5, y: 1 },
+  sw: { x: -0.5, y: 1 }, southwest: { x: -0.5, y: 1 },
+};
+
+export function renderHexcrawl(model: Model, body: string[], diagnostics: Diagnostic[] = []): void {
   const grid = model.doc.grid;
   const parity = grid?.parity ?? "odd-row";
   const cols = grid?.cols ?? 8;
@@ -78,6 +90,10 @@ export function renderHexcrawl(model: Model, body: string[]): void {
     }
     return out;
   };
+  // Names an author has placed by hand (#252); their default position is
+  // skipped, or the label renders twice.
+  const overridden = new Set(model.labelOverrides.filter((o) => o.target.form === "name").map((o) => o.target.value));
+
   for (const line of model.hexLines) {
     for (const addr of line.addresses) {
       for (const { col, row } of expand(addr)) {
@@ -135,7 +151,7 @@ export function renderHexcrawl(model: Model, body: string[]): void {
             placer.block(at.x - 5, at.y - 5, 10, 10);
             contentLayer.push(glyph(word, at));
           });
-          if (cell.name && labelsOn(model)) {
+          if (cell.name && labelsOn(model) && !overridden.has(cell.name)) {
             const lbl = labelTextFor(model, cell) ?? cell.name;
             const anchorId = `cd-${model.doc.docId}-${slugify(cell.name)}`;
             const y = placer.place(c.x, c.y + R * 0.62, lbl, 7.5, "middle");
@@ -248,6 +264,81 @@ export function renderHexcrawl(model: Model, body: string[]): void {
         );
       }
     }
+  }
+
+  // `[labels]` — a UNIVERSAL section (spec 07 §2), and this renderer
+  // implemented no part of it (#252): a hexcrawl could not carry a caption at
+  // all, and an author-placed override was resolved, validated fail-loud, and
+  // then discarded — which inverts spec 07 §5's one absolute, that author
+  // overrides are never omitted.
+  //
+  // Hints are read in hex space: `at <hex>` is the hex's centre, a compass
+  // word offsets from it, and `sprawl` spans the range's two hexes. `along`
+  // needs a route's drawn course, which is not kept after the route layer is
+  // built, so it is REPORTED rather than silently ignored — the distinction
+  // this whole class of bug is about.
+  const hexAt = (a: Address): XY => center(colToNumber(a.col), a.row);
+  const captionFor = (e: EntityNode): string | null => e.texts[0] ?? e.name;
+  for (const e of model.entities) {
+    if (!model.chainOf(e.typeWord).includes("note")) continue;
+    const caption = captionFor(e);
+    if (!caption) continue;
+    const addr = e.placements.find((p): p is Address => p.kind === "address");
+    const range = e.placements.find((p): p is AddressRange => p.kind === "range");
+    const at = addr ? hexAt(addr) : range ? { x: (hexAt(range.from).x + hexAt(range.to).x) / 2, y: (hexAt(range.from).y + hexAt(range.to).y) / 2 } : null;
+    if (!at) {
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `free text "${caption}" has no hex placement — this renderer draws nothing for it (spec 07 §2)`,
+      });
+      continue;
+    }
+    labelLayer.push(text(caption, {
+      x: at.x, y: at.y, "font-size": 9, fill: INK, opacity: 0.85,
+      "text-anchor": "middle", "font-family": "sans-serif",
+    }));
+  }
+
+  for (const o of model.labelOverrides) {
+    // A hexcrawl's names live on its LEDGER LINES (spec 05 §3), not only on
+    // entities — `C3 forest ruin "Old Tower"` is a hex line. Searching
+    // entities alone found nothing and dropped the override silently, which
+    // is the very failure this is fixing, one level down.
+    const entity = model.entities.find((e) =>
+      o.target.form === "id" ? e.ids.includes(o.target.value) : e.name === o.target.value);
+    const hexLine = entity ? null : model.hexLines.find((h) => h.name === o.target.value);
+    if (!entity && !hexLine) continue; // an unresolved reference is the parser's error
+    const label = entity ? (entity.name ?? entity.ids[0]) : hexLine!.name;
+    if (!label) continue;
+    const own = entity
+      ? entity.placements.find((p): p is Address => p.kind === "address")
+      : hexLine!.addresses.find((a): a is Address => a.kind === "address");
+    const base = own ? hexAt(own) : null;
+    const hint = o.hint;
+    let at: XY | null = null;
+    if (hint.kind === "at" && hint.target.kind === "address") at = hexAt(hint.target);
+    else if (hint.kind === "side" && base) {
+      const d = HEX_COMPASS[hint.compass.toLowerCase()] ?? { x: 0, y: -1 };
+      at = { x: base.x + d.x * hexW * 0.8, y: base.y + d.y * R * 1.1 };
+    } else if (hint.kind === "sprawl" && hint.range.kind === "range") {
+      const a = hexAt(hint.range.from);
+      const b = hexAt(hint.range.to);
+      at = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+    if (!at) {
+      diagnostics.push({
+        severity: "error",
+        line: o.line,
+        message: `this label hint names no hex — a hexcrawl places a label at a hex (\`at C3\`), on a side of one, or sprawled across a range (spec 07 §2)`,
+      });
+      continue;
+    }
+    labelLayer.push(text(label, {
+      x: at.x, y: at.y + 3, "font-size": 9, fill: INK,
+      "font-weight": model.labelsMode === "keyed" ? "bold" : undefined,
+      "text-anchor": "middle", "font-family": "sans-serif",
+    }));
   }
 
   body.push(...hexLayer, ...routeLayer, ...regionLayer, ...contentLayer, ...labelLayer);

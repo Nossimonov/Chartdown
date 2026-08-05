@@ -4,7 +4,7 @@
  * emergent-elevation ledges, and the GM/player split.
  */
 
-import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
+import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
@@ -122,6 +122,30 @@ export function renderBattlemap(
     course: XY[] | null;
   }
   const pendingTerrainLabels: PendingTerrainLabel[] = [];
+
+  /** Compass words to a unit offset, y down as the canvas runs. */
+  const COMPASS_OFFSET: Record<string, XY> = {
+    n: { x: 0, y: -1 }, north: { x: 0, y: -1 },
+    s: { x: 0, y: 1 }, south: { x: 0, y: 1 },
+    e: { x: 1, y: 0 }, east: { x: 1, y: 0 },
+    w: { x: -1, y: 0 }, west: { x: -1, y: 0 },
+    ne: { x: 1, y: -1 }, northeast: { x: 1, y: -1 },
+    nw: { x: -1, y: -1 }, northwest: { x: -1, y: -1 },
+    se: { x: 1, y: 1 }, southeast: { x: 1, y: 1 },
+    sw: { x: -1, y: 1 }, southwest: { x: -1, y: 1 },
+  };
+
+  /**
+   * `[labels]` overrides, keyed by the entity they name (#252). Resolved once
+   * here rather than searched per label site: a reference is by id or by
+   * display name (spec 03 §2), and the renderer should not re-decide that.
+   */
+  const overrideHints = new Map<EntityNode, LabelHint>();
+  for (const o of model.labelOverrides) {
+    const target = model.entities.find((e) =>
+      o.target.form === "id" ? e.ids.includes(o.target.value) : e.name === o.target.value);
+    if (target) overrideHints.set(target, o.hint);
+  }
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
@@ -896,6 +920,75 @@ export function renderBattlemap(
     layers.areas[p.slot] = el("g", { id: p.anchor }, p.titleEl, ...parts);
   }
 
+  /**
+   * An author-placed `[labels]` override, applied (#252).
+   *
+   * Spec 07 §5 states one absolute — "author-placed `[labels]` overrides are
+   * never omitted" — and this renderer read none of them. The override was
+   * parsed, resolved against the entity, and validated fail-loud (a typo'd
+   * subject is a hard error here), so an author had positive evidence their
+   * line was good, and the label rendered at its default position anyway.
+   *
+   * `at` returns a point in cell space; `side` offsets from wherever the
+   * caller would have put it, so each site keeps its own idea of "beside";
+   * `sprawl` letter-spaces across the declared range, as free text does; and
+   * `along` rides the referenced course, reusing the machinery notes use.
+   *
+   * Returns true when it has emitted the label, so the caller skips its own.
+   */
+  function emitOverride(e: EntityNode, label: string, at: XY, into: string[]): boolean {
+    const hint = overrideHints.get(e);
+    if (!hint) return false;
+    const base = { "font-size": 10, fill: INK, "font-family": "sans-serif" } as const;
+    if (hint.kind === "at") {
+      if (hint.target.kind === "point") {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `'${label}' is placed at a gridless point on a battlemap — give the cell you mean (\`F6\`) (spec 07 §2)`,
+        });
+        return false;
+      }
+      const c = cellCenter(hint.target);
+      into.push(text(label, { ...base, x: c.x, y: c.y + 4, "text-anchor": "middle" }));
+      return true;
+    }
+    if (hint.kind === "side") {
+      const d = COMPASS_OFFSET[hint.compass.toLowerCase()] ?? { x: 0, y: -1 };
+      const gap = CELL * 0.75;
+      into.push(text(label, {
+        ...base,
+        x: at.x + d.x * gap,
+        y: at.y + d.y * gap + 4,
+        "text-anchor": d.x > 0 ? "start" : d.x < 0 ? "end" : "middle",
+      }));
+      return true;
+    }
+    if (hint.kind === "sprawl") {
+      if (hint.range.kind !== "range") return false;
+      const r = rangeRect(hint.range);
+      const size = 10;
+      const spacing = Math.max(0, (r.w - label.length * size * 0.58) / Math.max(1, label.length - 1));
+      into.push(text(label, {
+        ...base, x: r.x + r.w / 2, y: r.y + r.h / 2 + 4, "letter-spacing": spacing, "text-anchor": "middle",
+      }));
+      return true;
+    }
+    // `along <ref>` — the same textPath a caption uses (spec 07 §2).
+    const course = courseOf(hint.ref);
+    if (!course || course.length < 2) return false;
+    const pid = `cdoverride-${model.doc.docId}-${terrainCourseCount++}`;
+    const leftward = course[course.length - 1]!.x < course[0]!.x;
+    const ride = leftward ? [...course].reverse() : course;
+    const d = `M${fmt(ride[0]!.x)} ${fmt(ride[0]!.y)}` + ride.slice(1).map((q) => `L${fmt(q.x)} ${fmt(q.y)}`).join("");
+    into.push(
+      `<defs><path id="${pid}" d="${d}"/></defs>` +
+        `<text font-size="10" fill="${INK}" text-anchor="middle" font-family="sans-serif">` +
+        `<textPath href="#${pid}" startOffset="50%"><tspan dy="-3">${escapeText(label)}</tspan></textPath></text>`,
+    );
+    return true;
+  }
+
   /** The text a terrain entity labels itself with, or null if it labels none. */
   function terrainLabelText(e: EntityNode): string | null {
     if (!e.name || e.flags.includes("nolabel") || !labelsOn(model)) return null;
@@ -936,6 +1029,8 @@ export function renderBattlemap(
     const label = terrainLabelText(t.e);
     if (label === null || !t.course || t.course.length < 2) return;
     const course = t.course;
+    // An override outranks the arc-length rule: the author said where.
+    if (emitOverride(t.e, label, alongCourse(t.course, 0.5), layers.roomLabels)) return;
     const w = label.length * 9 * 0.58;
     // Text on a path RIDES the path, so a name on a north-south road is drawn
     // turned on its side. Measured as a horizontal box the way every other
@@ -1000,6 +1095,7 @@ export function renderBattlemap(
     const cells = surfaceCells(t.e, halfPlaneContext(model.doc, model.entities));
     if (cells.size === 0) return;
     const at = placeRoomLabel(label, cells);
+    if (emitOverride(t.e, label, at, layers.roomLabels)) return;
     const w = label.length * 10 * 0.58;
     labelObstructions.push({ x: at.x - w / 2, y: at.y - 8, w, h: 10 });
     layers.roomLabels.push(
@@ -1158,6 +1254,7 @@ export function renderBattlemap(
       const lbl = labelTextFor(model, e);
       if (lbl !== null) {
         const at = placeRoomLabel(lbl, cells);
+        if (emitOverride(e, lbl, at, layers.roomLabels)) return;
         layers.roomLabels.push(
           text(lbl, {
             x: at.x, y: at.y, "font-size": 10, fill: INK,
@@ -1409,6 +1506,8 @@ export function renderBattlemap(
     );
     const label = e.name ?? e.ids[0] ?? e.typeWord;
     if (label && !e.flags.includes("nolabel") && labelsOn(model)) {
+      const zoneAt = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      if (!emitOverride(e, label, zoneAt, labels))
       labels.push(text(elevation ? `${label} (${elevation})` : label, { x: r.x + r.w / 2, y: r.y + 12, "font-size": 9, fill: stroke, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
@@ -1562,6 +1661,7 @@ export function renderBattlemap(
         ),
       );
       if (!e.flags.includes("nolabel") && labelsOn(model)) {
+        if (!emitOverride(e, label, center, labels))
         labels.push(text(label, { x: center.x, y: center.y + radius + 10, "font-size": 9, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
     });
@@ -1667,6 +1767,7 @@ export function renderBattlemap(
       into.push(el("g", { id: anchor }, ...footprintParts));
       if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
         const lbl = labelTextFor(model, e) ?? e.name;
+        if (!emitOverride(e, lbl, center, labels))
         labels.push(text(lbl, { x: center.x, y: r.y + r.h + 10, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       return;
@@ -1721,6 +1822,7 @@ export function renderBattlemap(
     into.push(el("g", { id: anchor }, ...parts));
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
       const lbl = labelTextFor(model, e) ?? e.name;
+      if (!emitOverride(e, lbl, c, labels))
       labels.push(text(lbl, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
