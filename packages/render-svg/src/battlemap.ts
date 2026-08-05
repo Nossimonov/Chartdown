@@ -387,7 +387,21 @@ export function renderBattlemap(
       // No theme entry for this condition: the renderer has nothing to say
       // about it, and inventing a tone would be guessing (spec 04 §4).
       if (!fill) continue;
-      const opacity = model.theme.prop(model.chainOf(field), "opacity", { state: value }) ?? "0.82";
+      // A DECLARED TONE WITH NO DECLARED WEIGHT IS REPORTED (#263). The
+      // fallback below is what let `daylight` render at a darkness value
+      // without anything saying so, and the same hole waits for the next word
+      // added to a field's closed set. Named rather than guessed at, in the
+      // spirit of the dead-declaration warnings (#116, ADR 0022) — the wash
+      // still draws, so a theme is not silently disabled by the report.
+      const declared = model.theme.prop(model.chainOf(field), "opacity", { state: value });
+      if (declared === undefined) {
+        diagnostics.push({
+          severity: "warning",
+          line: 1,
+          message: `'${field}: ${value}' gives a colour but no opacity, so it is drawn at the default weight — declare \`${field}.${value} : opacity=\` to say how heavy it should be (spec 08 §2)`,
+        });
+      }
+      const opacity = declared ?? "0.82";
       const holes = fieldHoles.get(field) ?? [];
       const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
       out.push(
