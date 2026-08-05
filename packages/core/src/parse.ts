@@ -25,7 +25,7 @@ import type {
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize, type RawLine, type Token } from "./lex";
 import { isCompass, parseAddress, parsePositional, parsePredicate } from "./placements";
-import { checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
+import { ARCHETYPE_FACETS, checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
@@ -202,10 +202,17 @@ function checkPairKeys(
   diagnostics: Diagnostic[],
 ): void {
   if (typeWord === null || pairs.length === 0) return;
-  if (vocabTable.archetypeOf(typeWord) === null) return;
+  const archetype = vocabTable.archetypeOf(typeWord);
+  if (archetype === null) return;
   if (vocabTable.chain(typeWord).includes("border")) return;
   const facets = vocabTable.facetKeysOf(typeWord);
   const fields = vocabTable.fieldWords();
+  // The facets the ARCHETYPE gives, which spec 04 §2 grants whether or not the
+  // word states a default (#267). A word bound straight to an archetype has
+  // nothing above it in the chain, so declared facets alone left it with none —
+  // and `hatch : opening` could not take the `sight=` that is what an opening
+  // is for.
+  for (const key of ARCHETYPE_FACETS[archetype] ?? []) facets.add(key);
   // WHAT THE ARCHETYPE CAN CONSUME, not only what the word happens to declare.
   // `reach=` and `taper=` belong to placed morphology as such (spec 05 §4), and
   // the stdlib declares them only where it has a non-default to state — so

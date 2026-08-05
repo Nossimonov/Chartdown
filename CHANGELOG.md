@@ -4,6 +4,10 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Fixed
+
+- **An archetype's facets now reach a word that states no default** (#267). Spec 04 §2 grants a word "a facet its **archetype** gives it whether or not the word states a default", and only the `morph=` half of that clause was implemented — consumable keys came from *declared* facets alone. A word bound straight to an archetype has nothing above it in the chain to inherit from, so `[vocab] hatch : opening` followed by `hatch : at A1.w sight=all` warned that `sight=` was not a parameter `hatch` could use, citing the very section that grants it, and dropped the pair. The standard library hid it — `door` and `window` declare `passes=`/`sight=` themselves — but not on its own barriers: `pillar : barrier` declares neither facet and could take neither, and `fence : barrier sight=all` could not take `passes=`. Spec 04 §1's table is now encoded as `ARCHETYPE_FACETS` and unioned into the consumable set, so `passes=`/`sight=` reach barriers and openings, `occluded=` reaches fields, and the rest of the table lands where §1 puts it. The check is otherwise unchanged: a key no word, archetype or field can consume still warns.
+
 ## [0.5.0] — 2026-08-02
 
 Three of these came from one reader's afternoon with the language — a friend of the maintainer who wrote a battlemap, named its terrain, and reported what it did instead. Between them they moved a spec rule that had been decided against on purpose.
