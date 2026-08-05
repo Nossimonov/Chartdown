@@ -1078,7 +1078,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const A = resolveEnd(p.from);
             const B = resolveEnd(p.to);
             if (A.p && B.p) {
-              const via = p.via.map(toXY);
+              // A region map has no grid, so a `via <cell>` (#258) names
+              // nothing here. Refused rather than approximated: a cell means a
+              // square of a grid this document does not have.
+              const gridControls = p.via.filter((c) => c.kind === "address");
+              if (gridControls.length > 0) {
+                diagnostics.push({
+                  severity: "error",
+                  line: e.line,
+                  message: `'via' names a cell on a region map, which has no grid — give a point \`(x,y)\` in the document's extent units (spec 02 §7)`,
+                });
+              }
+              const via = p.via.filter((c): c is Point => c.kind === "point").map(toXY);
               const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
               const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
               out.polyline = finishCourse(e, [a, ...via, b]);

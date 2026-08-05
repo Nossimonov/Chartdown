@@ -408,7 +408,11 @@ function expandEveryAlong(entities: EntityNode[], doc: DocumentNode, diagnostics
           }
         } else if (p.kind === "relational" && p.form === "from-to") {
           if (p.from.at.kind === "point") points.push(p.from.at);
-          points.push(...p.via);
+          // `via` may now carry either (#258), and this walk keeps them apart.
+          for (const control of p.via) {
+            if (control.kind === "point") points.push(control);
+            else cells.push(control);
+          }
           if (p.to.at.kind === "point") points.push(p.to.at);
         }
       }
