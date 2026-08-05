@@ -5,7 +5,7 @@
  * the URL fragment, which never leaves the browser.
  */
 
-import { exportUvttSource, locationOf, renderSource, type RenderMode } from "@chartdown/render-svg";
+import { clamp, exportUvttSource, panBy, formatViewBox, isFitted, locationOf, MAX_ZOOM, parseViewBox, renderSource, sameMap, zoomAbout, zoomFactor, type Rect, type RenderMode } from "@chartdown/render-svg";
 import brenmark from "../../examples/brenmark/brenmark.cd";
 import tankard from "../../examples/gilded-tankard/gilded-tankard.cd";
 import manor from "../../examples/fairwater-manor/fairwater-manor.cd";
@@ -130,8 +130,6 @@ function scheduleRender(): void {
 // which is the operation #185's legibility floor needs in order to converge on
 // the truth instead of merely asserting that it would.
 
-interface Rect { x: number; y: number; w: number; h: number }
-
 /** The map's own viewBox — what "fit" means for the document now loaded. */
 let homeView: Rect | null = null;
 /** What is on screen. Never wider than `homeView`, never off its edges. */
@@ -139,35 +137,16 @@ let view: Rect | null = null;
 /** The markup as rendered, before any of this touched it. */
 let lastSvg = "";
 
-/** Closest a reader may get, as a multiple of the fitted width. */
-const MAX_ZOOM = 64;
-
 const svgEl = (): SVGSVGElement | null => preview.querySelector("svg");
-
-const readViewBox = (el: SVGSVGElement): Rect | null => {
-  const parts = (el.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
-  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
-  const [x, y, w, h] = parts as [number, number, number, number];
-  return w > 0 && h > 0 ? { x, y, w, h } : null;
-};
-
-/** Hold the view inside the map, so panning cannot wander off into nothing. */
-function clampView(): void {
-  if (!view || !homeView) return;
-  view.w = Math.min(view.w, homeView.w);
-  view.h = Math.min(view.h, homeView.h);
-  view.x = Math.min(Math.max(view.x, homeView.x), homeView.x + homeView.w - view.w);
-  view.y = Math.min(Math.max(view.y, homeView.y), homeView.y + homeView.h - view.h);
-}
 
 function applyView(): void {
   const el = svgEl();
   if (!el || !view || !homeView) return;
-  clampView();
-  el.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
-  const factor = homeView.w / view.w;
+  view = clamp(view, homeView);
+  el.setAttribute("viewBox", formatViewBox(view));
+  const factor = zoomFactor(view, homeView);
   zoomLevelEl.textContent = `${factor < 9.95 ? factor.toFixed(1) : Math.round(factor)}×`;
-  const fitted = factor <= 1.001;
+  const fitted = isFitted(view, homeView);
   preview.classList.toggle("zoomed", !fitted);
   zoomOutBtn.disabled = fitted;
   zoomFitBtn.disabled = fitted;
@@ -190,13 +169,11 @@ function adoptView(): void {
     view = null;
     return;
   }
-  const home = readViewBox(el);
+  const home = parseViewBox(el.getAttribute("viewBox"));
   if (!home) return;
-  const sameMap = homeView
-    && Math.abs(home.w - homeView.w) < 1e-6 && Math.abs(home.h - homeView.h) < 1e-6
-    && Math.abs(home.x - homeView.x) < 1e-6 && Math.abs(home.y - homeView.y) < 1e-6;
+  const carry = sameMap(home, homeView) && view !== null;
   homeView = home;
-  if (!sameMap || !view) view = { ...home };
+  if (!carry) view = { ...home };
   applyView();
 }
 
@@ -206,13 +183,9 @@ function zoomAt(clientX: number, clientY: number, factor: number): void {
   if (!el || !view || !homeView) return;
   const box = el.getBoundingClientRect();
   if (box.width <= 0 || box.height <= 0) return;
-  const fx = Math.min(Math.max((clientX - box.left) / box.width, 0), 1);
-  const fy = Math.min(Math.max((clientY - box.top) / box.height, 0), 1);
-  const atX = view.x + fx * view.w;
-  const atY = view.y + fy * view.h;
-  const width = Math.min(Math.max(view.w / factor, homeView.w / MAX_ZOOM), homeView.w);
-  const scale = width / view.w;
-  view = { x: atX - fx * width, y: atY - fy * view.h * scale, w: width, h: view.h * scale };
+  // The arithmetic is shared with the Obsidian plugin (#186) — two
+  // implementations of "what does closer mean" would be two answers.
+  view = zoomAbout(view, homeView, (clientX - box.left) / box.width, (clientY - box.top) / box.height, factor);
   applyView();
 }
 
@@ -250,8 +223,8 @@ function bindViewer(): void {
     if (!dragging || dragging.id !== event.pointerId || !el || !view) return;
     const box = el.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return;
-    view.x -= ((event.clientX - dragging.x) / box.width) * view.w;
-    view.y -= ((event.clientY - dragging.y) / box.height) * view.h;
+    if (!homeView) return;
+    view = panBy(view, homeView, (event.clientX - dragging.x) / box.width, (event.clientY - dragging.y) / box.height);
     dragging.x = event.clientX;
     dragging.y = event.clientY;
     applyView();

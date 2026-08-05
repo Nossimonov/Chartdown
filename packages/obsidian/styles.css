@@ -85,3 +85,13 @@
 .chartdown-diagnostic-error {
   color: var(--text-error);
 }
+
+/* A zoomed map is draggable (#186); a fitted one has nowhere to go, so it
+   keeps the ordinary cursor rather than promising a pan it cannot perform. */
+.chartdown-zoomed svg {
+  cursor: grab;
+}
+
+.chartdown-zoomed svg:active {
+  cursor: grabbing;
+}

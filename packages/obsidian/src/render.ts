@@ -5,6 +5,7 @@
  */
 
 import { locationOf, renderSource } from "@chartdown/render-svg";
+import { makeZoomable, type Viewer } from "./zoomable";
 
 export type RenderMode = "player" | "gm";
 
@@ -13,7 +14,7 @@ export function renderChartdownBlock(
   el: HTMLElement,
   mode: RenderMode,
   imports?: { libraries: Record<string, string>; documents: Record<string, string> },
-): void {
+): Viewer | null {
   const { svg, diagnostics } = renderSource(source, { mode, ...imports });
 
   const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
@@ -23,6 +24,11 @@ export function renderChartdownBlock(
   node.removeAttribute("height");
   node.classList.add("chartdown-map");
   el.appendChild(node);
+  // A map you can get closer to (#186). The SVG carries the fidelity either
+  // way; without this there was no way to reach it, because inline SVG does
+  // not get Obsidian's image zoom and the map is drawn once at the note's
+  // column width.
+  const viewer = makeZoomable(el);
 
   // WARNINGS REACH THE READER TOO (#245). Filtering to errors here made the
   // whole of spec 06 §10 invisible in the one surface a GM actually reads
@@ -47,4 +53,5 @@ export function renderChartdownBlock(
       });
     }
   }
+  return viewer;
 }
