@@ -112,7 +112,13 @@ export type Relational =
   | { kind: "relational"; form: "on"; ref: Ref; point?: Point; at?: Address | AddressRange | Edge; via?: Control[] }
   | { kind: "relational"; form: "edge-of"; compass: string; ref: Ref }
   | { kind: "relational"; form: "near"; target: Ref | Point }
-  | { kind: "relational"; form: "from-to"; from: Endpoint; via: Point[]; to: Endpoint }
+  /**
+   * `via` controls a course's SHAPE. It takes a world point or — on a grid — a
+   * CELL (#258): a map whose every other position is written `D8` had no way
+   * to say "go through here" but a world-unit pair, which is in units the
+   * document never uses and which a grid renderer cannot site anyway.
+   */
+  | { kind: "relational"; form: "from-to"; from: Endpoint; via: (Point | Address)[]; to: Endpoint }
   | { kind: "relational"; form: "along"; ref: Ref; face?: string }
   /**
    * `every <measure> along <ref>` (#140): entities spaced down the referent's
