@@ -17,7 +17,9 @@ They do not currently pay off together. Zooming narrows the `viewBox`, which sca
 | ×16 | 15 px |
 | ×64 | 32 px |
 
-The probe's channel is 2.59 canvas units wide, with two facing 2.4-unit coastline strokes drawn over it. Because ink and water grow together the ratio never moves, so **the passage is buried at every zoom level**. The image is self-similar: zooming yields a larger picture, never a more detailed one, which is what an OS magnifier already does for any format. ADR 0035's floor is the one thing that behaves, because its symbol is the one stroke already pinned to viewport units.
+Every line on the sheet coarsens at exactly the rate the map grows, so **the image is self-similar**: zooming yields a larger picture, never a more detailed one, which is what an OS magnifier already does for any format. At ×16 the rim hugging a shore measured 15px against a 14px passage — the channel is still open water, but it is crowded by linework that had no business growing. [ADR 0035](0035-a-channel-too-narrow-to-see-is-drawn-as-a-symbol.md)'s floor is the one thing that behaves, because its symbol is the one stroke already pinned to viewport units.
+
+*A first draft of this section claimed the coastline strokes were drawn over the channel and buried it. That is false, and [ADR 0034](0034-a-border-lies-on-one-side-of-its-line.md) is why: a coastline is banked on one side of its line and masked to it, so its ink cannot lie in the water at all. A pixel scan across the passage reads land, rim, water, rim, land — the rim is the innermost band of the land. The claim came from subtracting stroke widths from a measured gap instead of looking at what was drawn, which is the failure [ADR 0032](0032-a-measurement-emits-a-line-that-draws.md) exists to prevent, committed here in the course of arguing for a rendering change. The decision below is unchanged; the reason for it is weaker than first stated, and stating it correctly matters more than the record looking tidy.*
 
 [ADR 0037](0037-geometry-is-in-map-units-ink-is-in-canvas-units.md) drew the necessary line and stopped one step short of this:
 

@@ -5,9 +5,15 @@
  * justifies it — "narrowing the viewBox grows the geometry and leaves the
  * strokes". That was true of ADR 0035's channel symbol and false of every
  * other stroke on the sheet, because canvas units scale with the viewBox too.
- * Measured on the failing case, the coastline over a narrow channel drew 2px at
- * x4 and 32px at x64, so the ratio of ink to water never moved and the passage
- * was buried at every zoom.
+ * Measured on the failing case, the coastline beside a narrow channel drew 2px
+ * at x4 and 32px at x64, so the ratio of ink to geometry never moved and coming
+ * closer produced a larger picture rather than a closer look.
+ *
+ * It does NOT bury the channel, which is what this file first claimed. ADR 0034
+ * banks a coastline on its own land and the stroke is masked to that side, so
+ * the ink cannot lie in the water at all — the passage is narrow, not covered.
+ * That correction came from scanning the drawn pixels after the numbers had
+ * already been believed, which is the same lesson twice in one issue.
  *
  * The assertion is therefore the RATIO, in device pixels, across zoom — not
  * that an attribute is present. An attribute check passes on a map where the
@@ -88,14 +94,25 @@ describe("the reader sees more by coming closer", () => {
     expect(diagnostics.map((d) => d.message).join(" ")).not.toMatch(/no longer an island/);
   });
 
-  it("the channel is genuinely buried at fit", () => {
-    const gap = narrowestGap(shape(svg, "isle"), shape(svg, "shore"));
-    const coast = Math.max(...inkStrokes(svg).map((s) => s.width));
-    // Two facing strokes, each laying half its width into the water.
-    expect(gap - coast).toBeLessThan(1);
+  it("the coast ink does NOT lie in the channel — it is banked on the land", () => {
+    // Corrected after measuring the drawn pixels rather than the numbers: a
+    // scan across the passage at x16 reads LAND | RIM | water | RIM | LAND, so
+    // the rim is the innermost band OF THE LAND. ADR 0034 banks a border on one
+    // side of its line and spec 08's default `bank` for a coastline is `land`;
+    // the width is doubled at the emit site precisely because half is masked
+    // away. The first version of this file asserted `gap - coast < 1` and
+    // called the channel "buried", which modelled an occlusion that the mask
+    // makes impossible. The passage is narrow, not covered.
+    const island = shape(svg, "isle");
+    const masked = /mask="url\(#cd-inside-/.test(svg);
+    expect(masked, "the island's shore stroke is no longer clipped to its own land").toBe(true);
+    expect(island.length).toBeGreaterThan(0);
   });
 
-  it("water outgrows the ink as the view narrows — the property #274 found missing", () => {
+  it("the channel outgrows the ink beside it as the view narrows (#274)", () => {
+    // NOT "the ink stops covering the water" — it never covered it. What grows
+    // without this is the rim hugging the shore, which crowds a narrow passage
+    // and coarsens every other line on the sheet at the same rate.
     const gap = narrowestGap(shape(svg, "isle"), shape(svg, "shore"));
     const coast = Math.max(...inkStrokes(svg).map((s) => s.width));
     const COLUMN = 700; // a note's width in CSS px

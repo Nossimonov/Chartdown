@@ -14,8 +14,9 @@
  *
  * Narrowing the viewBox is necessary but was not sufficient, and this comment
  * used to claim otherwise (#274). Canvas units scale with the viewBox too, so
- * the map's linework grew along with the land and a channel stayed buried at
- * every zoom: ×4 drew the coastline 2px, ×64 drew it 32px. Ink is therefore
+ * the map's linework grew along with the land — ×4 drew the coastline 2px, ×64
+ * drew it 32px — and every line coarsened at the same rate the map grew, which
+ * crowds a narrow passage even though a banked coastline never covers one. Ink is therefore
  * pinned to the width it had when fitted (ADR 0040) — the renderer marks which
  * strokes are conventions rather than measurements, and `--cd-fit` below is
  * this surface's half of that bargain. Without it a zoom is a magnifier.
