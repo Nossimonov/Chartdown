@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placemen
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -248,11 +248,11 @@ export function renderBattlemap(
   const f = frame;
   for (let c = 0; c <= f.cols; c++) {
     const x = MARGIN + c * CELL;
-    layers.grid.push(el("line", { x1: x, y1: MARGIN, x2: x, y2: MARGIN + f.rows * CELL, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 0.6 }));
+    layers.grid.push(el("line", { x1: x, y1: MARGIN, x2: x, y2: MARGIN + f.rows * CELL, stroke: model.theme.surface("grid", "stroke", GRID_LINE), ...inkStroke(0.6)}));
   }
   for (let r = 0; r <= f.rows; r++) {
     const y = MARGIN + r * CELL;
-    layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 0.6 }));
+    layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: model.theme.surface("grid", "stroke", GRID_LINE), ...inkStroke(0.6)}));
   }
   if (model.header.get("numbers") === "on") {
     for (let c = 1; c <= f.cols; c++) {
@@ -666,16 +666,16 @@ export function renderBattlemap(
   function dropEdge(r: { x: number; y: number; w: number; h: number }): string {
     const ink = model.theme.surface("ledge", "stroke", "#6b5d4a");
     const parts: string[] = [
-      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, "stroke-width": 2, class: "drop" }),
+      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, ...inkStroke(2), class: "drop" }),
     ];
     const tick = 4;
     for (let x = r.x + 5; x < r.x + r.w; x += 9) {
-      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, "stroke-width": 1.2 }));
-      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, "stroke-width": 1.2 }));
+      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, ...inkStroke(1.2)}));
+      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, ...inkStroke(1.2)}));
     }
     for (let y = r.y + 5; y < r.y + r.h; y += 9) {
-      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, "stroke-width": 1.2 }));
-      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, "stroke-width": 1.2 }));
+      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
+      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
     }
     return el("g", {}, ...parts);
   }
@@ -696,10 +696,10 @@ export function renderBattlemap(
     into.push(
       el("rect", {
         x: c.x - half, y: c.y - half, width: half * 2, height: half * 2,
-        fill: "none", stroke: ink, "stroke-width": 1.6,
+        fill: "none", stroke: ink, ...inkStroke(1.6),
       }),
-      el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
-      el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
+      el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, ...inkStroke(1)}),
+      el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, ...inkStroke(1)}),
     );
   }
 
@@ -769,7 +769,7 @@ export function renderBattlemap(
       for (let i = 0; i < 3; i++) {
         const half = 10 - i * 3;
         const y = c.y + (up ? 6 - i * 6 : -6 + i * 6);
-        parts.push(el("line", { x1: c.x - half, y1: y, x2: c.x + half, y2: y, stroke: ink, "stroke-width": 2.2 }));
+        parts.push(el("line", { x1: c.x - half, y1: y, x2: c.x + half, y2: y, stroke: ink, ...inkStroke(2.2)}));
       }
     }
     parts.push(
@@ -1200,7 +1200,7 @@ export function renderBattlemap(
         parts.push(
           el("line", {
             x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
-            stroke, "stroke-width": width, "stroke-dasharray": dash,
+            stroke, ...inkStroke(width), "stroke-dasharray": dash,
           }),
         );
       }
@@ -1215,7 +1215,7 @@ export function renderBattlemap(
         el("line", {
           x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
           stroke: ruinedStroke ?? wallStroke,
-          "stroke-width": wallWidth,
+          ...inkStroke(wallWidth),
           "stroke-dasharray": ruined ? (ruinedDash ?? "5 6") : (model.theme.prop(structChain, "dash", wallCtx)?.replace(",", " ")),
           opacity: ruined ? 0.7 : 1,
         }),
@@ -1237,7 +1237,7 @@ export function renderBattlemap(
         // own ink at the wall's own weight — invisible, on top of the wall.
         const openingChain = model.chainOf(d.typeWord);
         if (model.archetypeOf(d.typeWord) !== "opening") {
-          parts.push(el("line", { ...seg, stroke: model.theme.prop(openingChain, "stroke") ?? INK, "stroke-width": 3 }));
+          parts.push(el("line", { ...seg, stroke: model.theme.prop(openingChain, "stroke") ?? INK, ...inkStroke(3)}));
           continue;
         }
         const windowLike = openingChain.includes("window") || openingChain.includes("arrow-slit");
@@ -1248,7 +1248,7 @@ export function renderBattlemap(
         // the one the four `door` states were invisible on.
         const ruinedOpening = d.flags.includes("ruined");
         layers.openings.push(el("line", {
-          ...seg, stroke, "stroke-width": width,
+          ...seg, stroke, ...inkStroke(width),
           "stroke-dasharray": ruinedOpening ? "4 4" : undefined,
           opacity: ruinedOpening ? 0.6 : undefined,
         }));
@@ -1412,7 +1412,7 @@ export function renderBattlemap(
       // ink, so they read at battle scale without a legend.
       const ruinedDoor = e.flags.includes("ruined");
       parts.push(el("line", {
-        x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, "stroke-width": width,
+        x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, ...inkStroke(width),
         "stroke-dasharray": ruinedDoor ? "4 4" : undefined,
         opacity: ruinedDoor ? 0.6 : undefined,
       }));
@@ -1515,7 +1515,7 @@ export function renderBattlemap(
           fill: themed ?? (gmZone ? "#b5504a" : elevation ? "#efe6d2" : "#4a9a6a"),
           opacity: elevation ? 0.7 : 0.12,
         }),
-        el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke, "stroke-width": elevation ? 3.5 : 1.5, "stroke-dasharray": elevation ? undefined : "6 4" }),
+        el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke, ...inkStroke(elevation ? 3.5 : 1.5), "stroke-dasharray": elevation ? undefined : "6 4" }),
       ),
     );
     const label = e.name ?? e.ids[0] ?? e.typeWord;
@@ -1549,7 +1549,7 @@ export function renderBattlemap(
           el("line", {
             x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y,
             stroke: themedStroke ?? (isFence ? "#8a7a5c" : INK),
-            "stroke-width": Number(themedWidth ?? (isFence ? 2 : 3)) || (isFence ? 2 : 3),
+            ...inkStroke(Number(themedWidth ?? (isFence ? 2 : 3)) || (isFence ? 2 : 3)),
             "stroke-dasharray": ruined && !isFence ? "5 6" : (themedDash ?? (isFence ? "3 3" : undefined)),
             opacity: ruined ? 0.7 : 1,
             "stroke-linecap": "square",
@@ -1564,7 +1564,7 @@ export function renderBattlemap(
           parts.push(themedGlyphPath(glyph, chain, c));
         } else {
           const fill = model.theme.prop(chain, "fill") ?? "#5a5244";
-          parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
+          parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, ...inkStroke(1)}));
         }
       }
     }
@@ -1606,11 +1606,11 @@ export function renderBattlemap(
     const has = (w: string): boolean => chain.includes(w);
     if (has("campfire") || has("torch") || has("brazier") || has("lantern")) {
       // Sized to be seen (#66): the ember plus a flame lick above it.
-      parts.push(el("circle", { cx: c.x, cy: c.y + 1.5 * scale, r: 6 * scale, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
+      parts.push(el("circle", { cx: c.x, cy: c.y + 1.5 * scale, r: 6 * scale, fill: "#d9822b", stroke: "#a8541e", ...inkStroke(1.5)}));
       parts.push(
         el("path", {
           d: `M${fmt(c.x - 3 * scale)} ${fmt(c.y - 3 * scale)} Q${fmt(c.x - 1 * scale)} ${fmt(c.y - 9 * scale)} ${fmt(c.x + 1 * scale)} ${fmt(c.y - 5 * scale)} Q${fmt(c.x + 2.5 * scale)} ${fmt(c.y - 8 * scale)} ${fmt(c.x + 3.5 * scale)} ${fmt(c.y - 3.5 * scale)}`,
-          fill: "none", stroke: "#a8541e", "stroke-width": 1.5, "stroke-linecap": "round",
+          fill: "none", stroke: "#a8541e", ...inkStroke(1.5), "stroke-linecap": "round",
         }),
       );
       return true;
@@ -1621,7 +1621,7 @@ export function renderBattlemap(
       parts.push(
         el("rect", {
           x: c.x - CELL * 0.45 * scale, y: c.y - CELL * 0.28 * scale, width: CELL * 0.9 * scale, height: CELL * 0.56 * scale,
-          fill: "#a8763e", stroke: INK, "stroke-width": 1.5,
+          fill: "#a8763e", stroke: INK, ...inkStroke(1.5),
           "stroke-dasharray": e.flags.includes("overturned") ? "4 3" : undefined,
           transform: rot ? `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` : undefined,
         }),
@@ -1636,12 +1636,12 @@ export function renderBattlemap(
       const stair: string[] = [];
       for (const [i, w] of [4, 7, 10].entries()) {
         const y = c.y + (i - 1) * 6 * scale;
-        stair.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, "stroke-width": 2.2 }));
+        stair.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, ...inkStroke(2.2)}));
       }
       stair.push(
         el("path", {
           d: `M${fmt(c.x - 3 * scale)} ${fmt(c.y - 9 * scale)} L${fmt(c.x)} ${fmt(c.y - 13 * scale)} L${fmt(c.x + 3 * scale)} ${fmt(c.y - 9 * scale)}`,
-          fill: "none", stroke: INK, "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round",
+          fill: "none", stroke: INK, ...inkStroke(1.8), "stroke-linecap": "round", "stroke-linejoin": "round",
         }),
       );
       parts.push(rot === 0 ? stair.join("") : el("g", { transform: `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` }, ...stair));
@@ -1669,7 +1669,7 @@ export function renderBattlemap(
           el("circle", {
             cx: center.x, cy: center.y, r: radius, fill, opacity: 0.9,
             stroke: e.flags.includes("hidden") ? "#fff" : "#3d3629",
-            "stroke-width": 1.5,
+            ...inkStroke(1.5),
             "stroke-dasharray": e.flags.includes("hidden") ? "3 3" : undefined,
           }),
         ),
@@ -1756,7 +1756,7 @@ export function renderBattlemap(
         ? (model.theme.prop(chainR, "fill") ?? wordTint(chainR[chainR.length - 1] ?? ""))
         : "#8f8474";
       footprintParts.push(
-        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: slabFill, stroke: INK, "stroke-width": 1.2, rx: 2 }),
+        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: slabFill, stroke: INK, ...inkStroke(1.2), rx: 2 }),
       );
       const themed = themed0;
       if (themed) {
@@ -1819,7 +1819,7 @@ export function renderBattlemap(
       // Glyphless words tint deterministically (#71): theme fill wins, else
       // the word-hash — table and barrel stop being the same grey square.
       const fill = model.theme.prop(chain, "fill") ?? wordTint(chain[chain.length - 1] ?? "");
-      parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
+      parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, ...inkStroke(1)}));
     }
     // Label conduct (spec 06 §7): at battlemap scale, fallback word-labels are
     // tooltips — visible text is reserved for display names, tokens, and zones.
@@ -1885,7 +1885,7 @@ function openingStateMarks(
     out.push(el("line", {
       x1: mid.x - ux * reach + nx * off, y1: mid.y - uy * reach + ny * off,
       x2: mid.x + ux * reach + nx * off, y2: mid.y + uy * reach + ny * off,
-      stroke, "stroke-width": Math.max(1.2, width * 0.4), "stroke-linecap": "round",
+      stroke, ...inkStroke(Math.max(1.2, width * 0.4)), "stroke-linecap": "round",
     }));
   }
   if (e.flags.includes("stuck")) {

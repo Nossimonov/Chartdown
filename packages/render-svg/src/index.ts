@@ -283,3 +283,8 @@ export type { RenderMode } from "./model";
 export { locationOf } from "@chartdown/core";
 export { readProvenance, stampProvenance, type Provenance } from "./provenance";
 export { exportUvtt, exportUvttSource, type UvttOptions, type UvttResult, type UvttSourceResult } from "./uvtt";
+
+export {
+  clamp, formatViewBox, isFitted, MAX_ZOOM, panBy, parseViewBox, sameMap, zoomAbout, zoomFactor,
+  type Rect,
+} from "./viewbox";
