@@ -144,6 +144,11 @@ function applyView(): void {
   if (!el || !view || !homeView) return;
   view = clamp(view, homeView);
   el.setAttribute("viewBox", formatViewBox(view));
+  // Ink pins to the width it had when fitted (ADR 0040), so coming closer
+  // shows geometry rather than a bigger picture. The renderer marks which
+  // strokes are conventions; this is the scale the stylesheet multiplies by.
+  const shown = el.getBoundingClientRect().width;
+  if (shown > 0) preview.style.setProperty("--cd-fit", String(shown / homeView.w));
   const factor = zoomFactor(view, homeView);
   zoomLevelEl.textContent = `${factor < 9.95 ? factor.toFixed(1) : Math.round(factor)}×`;
   const fitted = isFitted(view, homeView);

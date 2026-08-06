@@ -7,7 +7,7 @@
 import type { EntityNode } from "@chartdown/core";
 import type { Model } from "./model";
 import { INK, tierFor, hasTierGlyph, wordTint } from "./theme";
-import { el, fmt, text } from "./util";
+import { el, fmt, text , inkStroke} from "./util";
 
 type SampleKind = "fill" | "stroke" | "barrier" | "glyph" | "tier";
 
@@ -69,7 +69,7 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
   const perCol = Math.ceil(rows.length / cols);
   const keyBandH = keyRows.length > 0 ? keyPerCol * ROW_H : 0;
   const parts: string[] = [
-    el("line", { x1: PAD, y1: 0.5, x2: width - PAD, y2: 0.5, stroke: "#c9c2b0", "stroke-width": 1 }),
+    el("line", { x1: PAD, y1: 0.5, x2: width - PAD, y2: 0.5, stroke: "#c9c2b0", ...inkStroke(1)}),
   ];
 
   keyRows.forEach((row, i) => {
@@ -87,11 +87,11 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
     const chain = model.chainOf(row.word);
     switch (row.kind) {
       case "fill":
-        parts.push(el("rect", { x, y: y - 5, width: 14, height: 10, fill: model.theme.terrainFill(chain), stroke: "#b5ad99", "stroke-width": 0.5 }));
+        parts.push(el("rect", { x, y: y - 5, width: 14, height: 10, fill: model.theme.terrainFill(chain), stroke: "#b5ad99", ...inkStroke(0.5)}));
         break;
       case "stroke": {
         const s = model.theme.pathStroke(chain);
-        parts.push(el("line", { x1: x, y1: y, x2: x + 14, y2: y, stroke: s.stroke, "stroke-width": 3, "stroke-dasharray": s.dash }));
+        parts.push(el("line", { x1: x, y1: y, x2: x + 14, y2: y, stroke: s.stroke, ...inkStroke(3), "stroke-dasharray": s.dash }));
         break;
       }
       case "barrier": {
@@ -99,7 +99,7 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
         parts.push(
           el("line", {
             x1: x, y1: y, x2: x + 14, y2: y,
-            stroke: fence ? "#8a7a5c" : INK, "stroke-width": fence ? 2 : 3,
+            stroke: fence ? "#8a7a5c" : INK, ...inkStroke(fence ? 2 : 3),
             "stroke-dasharray": fence ? "3 3" : undefined, "stroke-linecap": "square",
           }),
         );
@@ -118,17 +118,17 @@ export function buildLegend(model: Model, width: number): { svg: string; height:
           );
         } else if (["campfire", "torch", "brazier", "lantern"].some((w) => chain.includes(w))) {
           // Miniature of the battlemap fallback (kept visually in sync by the legend tests)
-          parts.push(el("circle", { cx: x + 7, cy: y, r: 4, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1 }));
+          parts.push(el("circle", { cx: x + 7, cy: y, r: 4, fill: "#d9822b", stroke: "#a8541e", ...inkStroke(1)}));
         } else if (chain.includes("stairs") || chain.includes("ramp")) {
           for (const [i, w] of [5, 3.5, 2].entries()) {
             const ty = y + (i - 1) * 3;
-            parts.push(el("line", { x1: x + 7 - w, y1: ty, x2: x + 7 + w, y2: ty, stroke: INK, "stroke-width": 1.4 }));
+            parts.push(el("line", { x1: x + 7 - w, y1: ty, x2: x + 7 + w, y2: ty, stroke: INK, ...inkStroke(1.4)}));
           }
         } else {
           // Same deterministic tint the map square gets (#71) — the legend
           // row and the piece it names can be matched by color alone.
           const fill = model.theme.prop(chain, "fill") ?? wordTint(chain[chain.length - 1] ?? "");
-          parts.push(el("rect", { x: x + 2, y: y - 5, width: 10, height: 10, fill, stroke: INK, "stroke-width": 1 }));
+          parts.push(el("rect", { x: x + 2, y: y - 5, width: 10, height: 10, fill, stroke: INK, ...inkStroke(1)}));
         }
         break;
       }

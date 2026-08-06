@@ -9,12 +9,20 @@
  * image zoom, so nothing else was going to provide this.
  *
  * Zooming moves the **`viewBox`**; it does not scale the element. Measured for
- * #186: `non-scaling-stroke` holds its width in CSS pixels, so scaling the
- * element magnifies geometry and stroke together and their ratio never moves.
- * Narrowing the viewBox grows the geometry and leaves the strokes, so detail
- * genuinely emerges. The arithmetic is shared with the playground
- * (`@chartdown/render-svg`'s `viewbox`), because two implementations of it
- * would be two answers to the same question.
+ * #186: scaling the element magnifies geometry and stroke together and their
+ * ratio never moves, so nothing is revealed by it.
+ *
+ * Narrowing the viewBox is necessary but was not sufficient, and this comment
+ * used to claim otherwise (#274). Canvas units scale with the viewBox too, so
+ * the map's linework grew along with the land and a channel stayed buried at
+ * every zoom: ×4 drew the coastline 2px, ×64 drew it 32px. Ink is therefore
+ * pinned to the width it had when fitted (ADR 0040) — the renderer marks which
+ * strokes are conventions rather than measurements, and `--cd-fit` below is
+ * this surface's half of that bargain. Without it a zoom is a magnifier.
+ *
+ * The arithmetic is shared with the playground (`@chartdown/render-svg`'s
+ * `viewbox`), because two implementations of it would be two answers to the
+ * same question.
  */
 
 import { clamp, formatViewBox, isFitted, panBy, parseViewBox, sameMap, zoomAbout, zoomFactor, type Rect } from "@chartdown/render-svg";
@@ -43,11 +51,25 @@ export function makeZoomable(host: HTMLElement, onChange?: (factor: number) => v
 
   const svg = (): SVGSVGElement | null => host.querySelector("svg");
 
+  /**
+   * The scale the map had when it was FITTED, in CSS pixels per canvas unit
+   * (ADR 0040). Ink pins to the width it has at fit rather than to its authored
+   * number, so it neither grows with the land nor steps at the moment a reader
+   * leaves the fitted view. Depends on the element's width as well as the view,
+   * so it is recomputed on resize — a stale value is ink of the wrong weight.
+   */
+  const setFitScale = (el: SVGSVGElement): void => {
+    if (!home) return;
+    const width = el.getBoundingClientRect().width;
+    if (width > 0) host.style.setProperty("--cd-fit", String(width / home.w));
+  };
+
   const apply = (): void => {
     const el = svg();
     if (!el || !view || !home) return;
     view = clamp(view, home);
     el.setAttribute("viewBox", formatViewBox(view));
+    setFitScale(el);
     host.toggleClass?.("chartdown-zoomed", !isFitted(view, home));
     if (!host.toggleClass) host.classList.toggle("chartdown-zoomed", !isFitted(view, home));
     onChange?.(zoomFactor(view, home));
@@ -112,6 +134,16 @@ export function makeZoomable(host: HTMLElement, onChange?: (factor: number) => v
   };
   host.addEventListener("pointerup", endDrag);
   host.addEventListener("pointercancel", endDrag);
+
+  // A note column changes width when the sidebar opens or the window moves, and
+  // the fitted scale is a function of that width. Guarded because happy-dom has
+  // no ResizeObserver and the tests do not need one.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => {
+      const el = svg();
+      if (el) setFitScale(el);
+    }).observe(host);
+  }
 
   adopt();
 

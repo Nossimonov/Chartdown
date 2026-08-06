@@ -37,6 +37,35 @@ export function el(name: string, attrs: Attrs, ...children: string[]): string {
 }
 
 /**
+ * A stroke whose width is a DRAWING CONVENTION rather than a map distance
+ * (ADR 0040, #274).
+ *
+ * Spread into an element's attributes in place of a bare `stroke-width`:
+ *
+ * ```ts
+ * el("polygon", { points, fill: "none", stroke, ...inkStroke(2.4) })
+ * ```
+ *
+ * The width is emitted twice on purpose — once as the attribute, which is what
+ * a static or printed SVG uses and is unchanged by any of this, and once as a
+ * custom property, which is the only way a stylesheet can do arithmetic with a
+ * number the renderer chose. A viewer offering zoom multiplies it by the scale
+ * the map had when fitted (`--cd-fit`) so the ink holds that width at every
+ * zoom instead of growing with the land — which is what lets a reader see past
+ * it to the geometry underneath.
+ *
+ * **Only for ink.** A course declared `width=20ft` is drawn twenty feet wide,
+ * and its stroke IS the measurement; marking it would make the map contradict
+ * its own scale as the reader zooms. Leaving a stroke unmarked costs a feature,
+ * marking a measured one costs a fact, so the default is to say nothing.
+ */
+export const inkStroke = (width: number): Attrs => ({
+  "stroke-width": width,
+  class: "cd-ink",
+  style: `--cd-w:${fmt(width)}`,
+});
+
+/**
  * <title> content is user text (display names, gm= notes) — escape it here so
  * el()'s children-are-markup contract can stay intact (#79).
  */

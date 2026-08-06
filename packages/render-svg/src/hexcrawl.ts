@@ -9,7 +9,7 @@ import { slugify } from "@chartdown/core";
 import { LabelPlacer } from "./labels";
 import { gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { FOG, GRID_LINE, INK, tierOf } from "./theme";
-import { colToNumber, el, fmt, pointsAttr, svgTitle, text, type XY } from "./util";
+import { colToNumber, el, fmt, pointsAttr, svgTitle, text, type XY , inkStroke} from "./util";
 
 const R = 24;
 const MARGIN = 30;
@@ -140,7 +140,7 @@ export function renderHexcrawl(model: Model, body: string[], diagnostics: Diagno
       const fill = fogged ? model.theme.surface("fog", "fill", FOG) : model.theme.terrainFill(model.chainOf(cell!.terrain));
       const parts: string[] = [];
       if (gmMode && cell?.gm) parts.push(svgTitle(cell.gm));
-      parts.push(el("polygon", { points: poly, fill, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 1 }));
+      parts.push(el("polygon", { points: poly, fill, stroke: model.theme.surface("grid", "stroke", GRID_LINE), ...inkStroke(1)}));
 
       if (!fogged && cell) {
         if (seen) {
@@ -202,7 +202,7 @@ export function renderHexcrawl(model: Model, body: string[], diagnostics: Diagno
       routeLayer.push(
         el("g", { id: e.name ? `cd-${model.doc.docId}-${slugify(e.name)}` : undefined },
           title ? svgTitle(title) : "",
-          el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stroke.stroke, "stroke-width": chain.includes("river") ? 4 : 3, "stroke-dasharray": stroke.dash ?? (chain.includes("road") ? "8 4" : undefined), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.85 }),
+          el("polyline", { points: pointsAttr(pts), fill: "none", stroke: stroke.stroke, ...inkStroke(chain.includes("river") ? 4 : 3), "stroke-dasharray": stroke.dash ?? (chain.includes("road") ? "8 4" : undefined), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.85 }),
         ),
       );
       if (e.name && labelsOn(model)) {
@@ -238,7 +238,7 @@ export function renderHexcrawl(model: Model, body: string[], diagnostics: Diagno
           if (!set.has(keyOf(col + d.x, row + d.y))) {
             const a = cs[k]!;
             const b = cs[(k + 1) % 6]!;
-            edges.push(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "#7a5aa0", "stroke-width": 2.5, opacity: 0.75 }));
+            edges.push(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "#7a5aa0", ...inkStroke(2.5), opacity: 0.75 }));
           }
         });
       }
@@ -366,15 +366,15 @@ function glyph(word: string, at: XY): string {
     case "dungeon":
       return el("rect", { x: at.x - 4, y: at.y - 4, width: 8, height: 8, fill: INK });
     case "ruin":
-      return el("rect", { x: at.x - 4, y: at.y - 4, width: 8, height: 8, fill: "none", stroke: INK, "stroke-width": 1.2, "stroke-dasharray": "2 2" });
+      return el("rect", { x: at.x - 4, y: at.y - 4, width: 8, height: 8, fill: "none", stroke: INK, ...inkStroke(1.2), "stroke-dasharray": "2 2" });
     case "keep":
     case "castle":
     case "tower":
       return el("polygon", { points: `${fmt(at.x - 4)},${fmt(at.y + 4)} ${fmt(at.x + 4)},${fmt(at.y + 4)} ${fmt(at.x)},${fmt(at.y - 5)}`, fill: INK });
     case "lair":
-      return el("polygon", { points: `${fmt(at.x - 4)},${fmt(at.y + 4)} ${fmt(at.x + 4)},${fmt(at.y + 4)} ${fmt(at.x)},${fmt(at.y - 5)}`, fill: "none", stroke: INK, "stroke-width": 1.2 });
+      return el("polygon", { points: `${fmt(at.x - 4)},${fmt(at.y + 4)} ${fmt(at.x + 4)},${fmt(at.y + 4)} ${fmt(at.x)},${fmt(at.y - 5)}`, fill: "none", stroke: INK, ...inkStroke(1.2)});
     default:
-      return el("circle", { cx: at.x, cy: at.y, r: tier.r, fill: INK, stroke: "#fff", "stroke-width": 0.8 });
+      return el("circle", { cx: at.x, cy: at.y, r: tier.r, fill: INK, stroke: "#fff", ...inkStroke(0.8)});
   }
 }
 

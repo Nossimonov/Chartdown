@@ -95,3 +95,16 @@
 .chartdown-zoomed svg:active {
   cursor: grabbing;
 }
+
+/* Ink holds the width it had when the map was fitted (ADR 0040, #274).
+   Without this the linework grows with the land and a reader who zooms gets a
+   larger picture rather than a closer look — the coastline over a narrow
+   channel measured 2px at x4 and 32px at x64, so the channel stayed buried at
+   every zoom. --cd-w is the authored width, emitted by the renderer beside the
+   stroke-width attribute; --cd-fit is the fitted scale, set by the viewer.
+   Only while zoomed: a fitted map is left exactly as it renders anywhere else,
+   including when it is exported or printed. */
+.chartdown-zoomed .cd-ink {
+  vector-effect: non-scaling-stroke;
+  stroke-width: calc(var(--cd-w) * var(--cd-fit, 1));
+}
