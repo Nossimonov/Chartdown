@@ -57,6 +57,10 @@
     #preview.zoomed svg { cursor: grab; }
     #preview.dragging svg { cursor: grabbing; }
     #preview.zoomed { touch-action: none; }
+    /* Ink holds its fitted width while zoomed (ADR 0040, #274) — otherwise the
+       linework grows with the land and zoom is a magnifier. --cd-w is emitted
+       by the renderer beside stroke-width; --cd-fit is set in applyView(). */
+    #preview.zoomed .cd-ink { vector-effect: non-scaling-stroke; stroke-width: calc(var(--cd-w) * var(--cd-fit, 1)); }
     #zoom-level {
       font-family: ui-monospace, Consolas, monospace; font-size: 12px;
       color: var(--muted); min-width: 3.4em; text-align: right;

@@ -431,17 +431,22 @@ export function parsePredicate(tokens: Token[], line: number, diagnostics: Diagn
       i++;
       const from = takeEndpoint();
       if (!from) continue;
-      const via: Point[] = [];
+      // `via` takes a world point OR a cell (#258). A grid map writes every
+      // other position as `D8`, and had no way to shape a course but a
+      // world-unit pair — in units the document never uses, and which the
+      // grid renderer could not site in any case.
+      const via: (Point | Address)[] = [];
       if (chunkText(peek()) === "via") {
         i++;
         while (i < tokens.length) {
           const pt = chunkText(peek());
-          const point = pt ? parsePoint(pt) : null;
-          if (!point) break;
-          via.push(point);
+          if (!pt) break;
+          const control = parsePoint(pt) ?? parseAddress(pt);
+          if (!control) break;
+          via.push(control);
           i++;
         }
-        if (via.length === 0) diagnostics.push(error(line, "expected at least one point after 'via'"));
+        if (via.length === 0) diagnostics.push(error(line, "expected at least one point or cell after 'via' (spec 02 §7)"));
       }
       // `join <ref>` is a terminal endpoint alongside `to` (#94): the river
       // ends on the referenced course rather than at a place. `to <river>`

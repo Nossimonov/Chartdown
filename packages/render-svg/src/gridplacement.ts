@@ -208,7 +208,7 @@ export function resolveGridPlacements(
             diagnostics.push({
               severity: "error",
               line: e.line,
-              message: `'${e.typeWord ?? "this"}' runs from or to a gridless point on a battlemap — name an entity, or draw it with \`path\` (spec 02 §7)`,
+              message: `'${e.typeWord ?? "this"}' runs from or to a gridless point on a ${kind} — name an entity, or draw it with \`path\` (spec 02 §7)`,
             });
             failed = true;
             return;
@@ -227,12 +227,54 @@ export function resolveGridPlacements(
           }
           ends.push(cell);
         };
+        // An endpoint's `at <point>` refinement — `from spine at (720,240)` —
+        // is the other half of what used to vanish (#259). Whether `endpoint`
+        // should admit a CELL is deliberately a separate question (#238's
+        // deferred sub-question, which #258 is careful not to fold in), so
+        // this reports rather than inventing a spelling.
+        for (const [side, ep] of [["from", p.from], ["to", p.to]] as const) {
+          if (ep.point) {
+            diagnostics.push({
+              severity: "error",
+              line: e.line,
+              message: `'${e.typeWord ?? "this"}' refines its '${side}' anchor with a gridless point, which a ${kind} cannot site — name the ${cellWord} with a \`via\` control, or draw the course with \`path\` (spec 02 §7)`,
+            });
+          }
+        }
         resolveEnd(p.from.at, false, null);
         resolveEnd(p.to.at, p.to.join === true, ends[0] ?? null);
         if (failed || ends.length < 2) continue;
-        // `via` carries world points, which a grid cannot site; the endpoints
-        // are what the author named, so the run between them is the course.
-        const shape: Shape = { kind: "shape", shape: "path", args: ends.map((c) => addr(c.col, c.row)) };
+        // THE PAYLOAD IS PART OF THE COURSE (#259). An earlier version used
+        // the two endpoints and dropped everything else — `via` controls and
+        // each endpoint's `at` — with a code comment where a diagnostic
+        // belonged. The map then drew a straight line the document had not
+        // asked for, byte-identical whatever shape was written, which is
+        // #239's failure one level down: the placement resolves and its
+        // payload vanishes.
+        //
+        // A `via <cell>` is a control the grid can site (#258), so it joins
+        // the course between the anchors. A world point cannot be sited here
+        // and is REPORTED — not rounded to a cell, because cell size follows
+        // `scale:`, so the same `(60,40)` would name a different square after
+        // a `scale:` edit and the number in the document would stop being the
+        // shape on the map.
+        const controls: { col: number; row: number }[] = [];
+        for (const control of p.via) {
+          if (control.kind === "address") {
+            controls.push({ col: colToNumber(control.col), row: control.row });
+            continue;
+          }
+          diagnostics.push({
+            severity: "error",
+            line: e.line,
+            message: `'${e.typeWord ?? "this"}' shapes its course with a gridless point — on a ${kind} a \`via\` control is a ${cellWord} (\`via D8\`) (spec 02 §7)`,
+          });
+        }
+        const shape: Shape = {
+          kind: "shape",
+          shape: "path",
+          args: [ends[0]!, ...controls, ends[1]!].map((c) => addr(c.col, c.row)),
+        };
         placements.push(shape);
         changed = true;
         continue;

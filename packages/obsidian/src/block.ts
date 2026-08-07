@@ -77,6 +77,12 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
   const wrapper = el.createDiv({ cls: "chartdown-block" });
   const toolbar = wrapper.createDiv({ cls: "chartdown-toolbar" });
   const modeBtn = toolbar.createEl("button", { cls: "chartdown-mode-toggle" });
+  // Zoom controls (#186). A wheel with ctrl/⌘ zooms too, but a toolbar button
+  // is the affordance that says the map CAN be zoomed — a reader who does not
+  // know to try the gesture would never find out.
+  const zoomInBtn = toolbar.createEl("button", { text: "+", attr: { title: "Zoom in (ctrl/⌘ + scroll)" } });
+  const zoomOutBtn = toolbar.createEl("button", { text: "−", attr: { title: "Zoom out" } });
+  const zoomFitBtn = toolbar.createEl("button", { text: "Fit", attr: { title: "Show the whole map" } });
   const svgBtn = toolbar.createEl("button", { text: "Export SVG" });
   const uvttBtn = toolbar.createEl("button", { text: "Export UVTT" });
   const copyBtn = toolbar.createEl("button", {
@@ -103,11 +109,24 @@ export function mountChartdownBlock(source: string, el: HTMLElement, opts: Block
   };
   toolbar.addEventListener("mouseenter", syncPasteState);
   toolbar.addEventListener("focusin", syncPasteState);
+  zoomInBtn.addEventListener("click", () => { viewer?.zoom(1.6); syncZoom(); });
+  zoomOutBtn.addEventListener("click", () => { viewer?.zoom(1 / 1.6); syncZoom(); });
+  zoomFitBtn.addEventListener("click", () => { viewer?.fit(); syncZoom(); });
+
   syncPasteState();
 
+  let viewer: ReturnType<typeof renderChartdownBlock> = null;
+  const syncZoom = (): void => {
+    const at = viewer?.factor() ?? 1;
+    // Fitted means there is nowhere to go: saying so beats a button that
+    // silently does nothing.
+    zoomOutBtn.disabled = at <= 1.001;
+    zoomFitBtn.disabled = at <= 1.001;
+  };
   const rerender = (): void => {
     mapHost.empty();
-    renderChartdownBlock(source, mapHost, mode, opts.imports);
+    viewer = renderChartdownBlock(source, mapHost, mode, opts.imports);
+    syncZoom();
     modeBtn.textContent = mode === "gm" ? "GM view" : "Player view";
     modeBtn.setAttribute("aria-pressed", String(mode === "gm"));
   };
