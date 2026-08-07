@@ -17,6 +17,7 @@ const EMPTY_OVERLAY = ["kind: theme", "", "[theme]", ""].join("\n");
 import gumdrop from "../../examples/gumdrop-vale/gumdrop-vale.cd";
 import redford from "../../examples/redford-crossing/redford-crossing.cd";
 import reach from "../../examples/sundered-reach/sundered-reach.cd";
+import undercellar from "../../examples/undercellar/undercellar.cd";
 import vessany from "../../examples/vessany/vessany.cd";
 
 const EXAMPLES: Record<string, string> = {
@@ -27,6 +28,7 @@ const EXAMPLES: Record<string, string> = {
   "The Brenmark (hexcrawl)": brenmark,
   "Vessany (region)": vessany,
   "Gumdrop Vale (region + custom vocab)": gumdrop,
+  "The Undercellar (relational placement)": undercellar,
 };
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;

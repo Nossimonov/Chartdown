@@ -1,6 +1,13 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
+    // The example-picker guard reads examples/ from disk (#278), which needs
+    // node types. Safe because this field was never what kept node APIs out of
+    // the shipped bundle: esbuild is, at its default browser platform —
+    // verified by importing node:fs into reachable source, which fails the
+    // build with "Could not resolve node:fs" rather than typechecking quietly.
+    // The same reasoning, and the same verification, as packages/obsidian.
+    "types": ["node"],
     "paths": {
       "@chartdown/core": ["../packages/core/src/index"],
       "@chartdown/render-svg": ["../packages/render-svg/src/index"]
