@@ -58,6 +58,41 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
   let w = 860;
   let h = 620;
 
+  // AN AMBIENT BASELINE IS A BATTLEMAP CONCERN (#287, spec 04 §5).
+  //
+  // `light: dark` on a region or hexcrawl rendered exactly as its own absence
+  // and said nothing — the failure #206 rules on. The answer is not to wash
+  // those map kinds: at region and hexcrawl zoom the reader is above the
+  // weather, and a sheet that presumed otherwise would be unreadable for the
+  // scale it is drawn at. Visibility is a tactical question, which is why it
+  // lives where the tactical layer is, and it is the same reasoning #206
+  // records for `difficult` on a region map — "difficulty is tactical; a
+  // region map has no tactical layer".
+  //
+  // So the reason is written down, and #206 is satisfied by writing it. But
+  // unlike `difficult`, which says nothing at all, this WARNS: an author who
+  // declares an ambient is picturing a dark map, and silence would let them
+  // keep picturing it. The line still parses and the map still renders —
+  // nothing about the document is wrong, only unanswerable at this scale.
+  //
+  // What DOES work here is the regional override (`light "The Sunwell" :
+  // blob … daylight`), which says a part of the map is lit differently rather
+  // than the whole sheet — so the message names it.
+  if (doc.mapType !== "battlemap") {
+    for (const h of doc.header) {
+      if (model.archetypeOf(h.key) !== "field") continue;
+      diagnostics.push({
+        severity: "warning",
+        line: 1,
+        message:
+          `'${h.key}: ${h.value}' sets an ambient baseline, which a ${doc.mapType} map does not draw — `
+          + `at this scale a reader is above the weather, and visibility is a tactical question (spec 04 §5). `
+          + `To say that part of the map is lit differently, place it: `
+          + `'${h.key} "The Sunwell" : blob at (x,y) size=… ${h.value}'`,
+      });
+    }
+  }
+
   if (doc.mapType === "battlemap") {
     const frame = battlemapFrame(model);
     const levels = doc.levels.length > 0 ? doc.levels : [doc.defaultLevel];
