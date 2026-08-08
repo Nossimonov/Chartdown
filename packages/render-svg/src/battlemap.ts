@@ -111,6 +111,21 @@ export function renderBattlemap(
     width: number;
   }
   const pathRecords: PathRecord[] = [];
+  /**
+   * EVERY BANK GOES DOWN BEFORE ANY WATER (ADR 0044, #315).
+   *
+   * A themed course draws a wide edge band and then a narrower core. Emitting
+   * both per entity meant each course laid its bank across the water of every
+   * course drawn before it, so a confluence came out as a lattice of banks over
+   * the water — and WHICH cuts survived depended on the order the lines
+   * happened to sit in the document, which made line order a drawing decision.
+   *
+   * Cores are collected here and emitted after every entity's band, so no bank
+   * can land on any water whatever order the courses are written in. They leave
+   * their entity's group to do it: the group keeps the id and the title, which
+   * is what anchors and tooltips read, and a core carries neither.
+   */
+  const pathCores: string[] = [];
   const crossingCells = new Set<string>();
   interface PendingCrossing {
     e: EntityNode;
@@ -370,6 +385,9 @@ export function renderBattlemap(
 
   // Openings render above ALL structure walls: a door on a shared wall must
   // not be overpainted by the sibling structure's coincident wall line.
+  // The deferred cores, after every course's band and before anything that
+  // draws over water (crossings, the grid, structures) — ADR 0044.
+  layers.paths.push(...pathCores);
   body.push(
     ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
     ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens,
@@ -907,7 +925,7 @@ export function renderBattlemap(
         const pts = addresses.map(cellCenter);
         // Drawn to the edges of the terminal cells; RECORDED as the declared
         // spine (#145) — see extendToCellEdge.
-        const drawn = extendToCellEdge(pts);
+        const drawn = extendToCellEdge(pts, p.joinsAtEnd === true);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = model.theme.pathStroke(chain);
         const bandStroke = chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke;
@@ -918,7 +936,7 @@ export function renderBattlemap(
         if (pathZones) {
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.edge, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
           const coreWidth = Math.max(width - 2 * pathZones.width, 1);
-          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          pathCores.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         } else {
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         }
@@ -2067,7 +2085,16 @@ function halfPlaneArea(compass: string, course: XY[], frame: { cols: number; row
   return [{ x: first.x, y: y0 }, ...inside, { x: last.x, y: y1 }, { x: edgeX, y: y1 }, { x: edgeX, y: y0 }];
 }
 
-function extendToCellEdge(pts: XY[]): XY[] {
+/**
+ * Push each end of a course out to its terminal cell's face, so the course
+ * fills the cell it ends in (#145) rather than stopping at the middle of it.
+ *
+ * `joinsAtEnd` holds the LAST point back (ADR 0044, #314): a course that meets
+ * another does not terminate in a cell of its own, and extending it there sends
+ * it through the trunk and out the far side. The first point is unaffected —
+ * `from` is always a free end.
+ */
+function extendToCellEdge(pts: XY[], joinsAtEnd = false): XY[] {
   if (pts.length < 2) return pts;
   const out = pts.map((p) => ({ ...p }));
   const reach = (end: XY, inward: XY): void => {
@@ -2088,6 +2115,6 @@ function extendToCellEdge(pts: XY[]): XY[] {
     end.y += uy * t;
   };
   reach(out[0]!, out[1]!);
-  reach(out[out.length - 1]!, out[out.length - 2]!);
+  if (!joinsAtEnd) reach(out[out.length - 1]!, out[out.length - 2]!);
   return out;
 }
