@@ -1419,7 +1419,31 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     const anchor = anchorAttr(model, e);
     const title = gmTitleFor(model, e);
     const titleEl = title ? svgTitle(title) : "";
-    const wordFill = theme.terrainFill(chain);
+    /**
+     * A FIELD'S REGIONAL OVERRIDE DRAWS ITS STATE (#305, spec 04 §5).
+     *
+     * Spec 04 §5 promises each affordance takes its fill "from the theme's
+     * `<field>` / `<field>.<state>` entry", and the state half was never
+     * asked for: every region entity resolved through `terrainFill(chain)`
+     * with no context, so `light "X" : blob … dark` and the same line saying
+     * `daylight` emitted the identical polygon — the base `light` fill, fully
+     * opaque, with the theme's declared weights (0.86 and 0.20) reaching
+     * nothing. A lightless patch and a sunlit one were one mark.
+     *
+     * Scoped to FIELDS. The same lookup serves every region entity, and
+     * widening it would change how any state on any word draws — a bigger
+     * question than this, and one #206 is the place for. Fields are where the
+     * promise is written and where #287 now sends authors: with an ambient
+     * baseline documented as a battlemap concern, the regional override is the
+     * only way to say a part of a region is lit differently.
+     */
+    const fieldState = model.archetypeOf(e.typeWord) === "field"
+      ? e.flags.find((f) => model.statesOf(e.typeWord).has(f))
+      : undefined;
+    const stateCtx = fieldState ? { state: fieldState } : {};
+    const wordFill = theme.terrainFill(chain, stateCtx);
+    /** The weight the theme declared for this state, if it declared one. */
+    const stateOpacity = fieldState ? theme.prop(chain, "opacity", stateCtx) : undefined;
 
     if (chain.includes("border")) {
       borderDecls.push(e);
@@ -1740,9 +1764,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         // the followed features own their lines (the coast draws the coast,
         // the frostline draws its dotted frontier). A solid outline here
         // painted over the dotted line it was supposed to reveal.
-        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill }));
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, opacity: stateOpacity }));
       } else {
-        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, stroke: shade(wordFill), "stroke-width": 1 }));
+        areaParts.push(el("polygon", { points: pointsAttr(r.polygon), fill: wordFill, stroke: shade(wordFill), "stroke-width": 1, opacity: stateOpacity }));
       }
       const glyphName = theme.prop(chain, "glyph");
       if (glyphName) {
