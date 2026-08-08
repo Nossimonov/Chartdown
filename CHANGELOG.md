@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-08
+
 ### Changed
 
 - **BREAKING — the hex ledger form is checked like the grouped form** ([#277](https://github.com/Nossimonov/Chartdown/issues/277), [#280](https://github.com/Nossimonov/Chartdown/issues/280)). `grammar.ebnf` calls them two spellings of one thing — *"grouped alternative: ordinary line form"* — and every check added since was taught to one of them, so three ledger blind spots were found one at a time. Swept against the entity path, four checks differed and three were missing outright: a **bare archetype word** was refused as a type word on an entity line and silently drawn as generic terrain on a ledger (`C2..C4 terrain`), an **unknown `key=`** went unreported where `taepr=0.3` warns everywhere else, and an **out-of-set facet value** went unchecked. All three now run on both spellings, on the terrain word and on every content word. An **edge or corner in the address slot** used to fall through to the terrain slot and report as a malformed line, naming neither the token nor the fix; it now names itself and the hex to write instead — and suppresses the malformed catch-all, so one mistake is reported once. The fourth difference is **deliberate and written down**: a bare word after the terrain word is a CONTENT word by grammar, where the same word on an entity line is a flag, so there is no flag to check against `states=` and an unknown content word stays legal (spec 04 §3). Breaking under [ADR 0041](docs/decisions/0041-breaking-means-a-clean-document-stops-checking-clean.md): ledger lines that checked clean now error. `brenmark` is untouched.
@@ -242,7 +244,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Nossimonov/Chartdown/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Nossimonov/Chartdown/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Nossimonov/Chartdown/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/Nossimonov/Chartdown/compare/v0.3.2...v0.3.3
