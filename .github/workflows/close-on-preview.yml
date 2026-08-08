@@ -1,0 +1,82 @@
+# Honours a PR's `Closes #n` on the branch this project actually merges to.
+#
+# GitHub acts on closing keywords only when a PR reaches the DEFAULT branch.
+# Every PR here targets `preview`, so the keyword has never fired: 0.6.0 shipped
+# with twenty issues fixed, released and published while still showing open, and
+# closing them afterwards by hand took three attempts (#310).
+#
+# Closing happens on merge to `preview` rather than at release, because that is
+# when the fix becomes real and testable — it is also when the staging
+# playground starts serving it. The comment says where the fix is and that the
+# release is still to come, so a closed issue never claims more than it should.
+#
+# The parsing lives in closing-refs.mjs, which has its own tests. A regex over
+# prose that decides whether somebody's issue closes is not something to bury
+# in a YAML expression where nothing can exercise it.
+name: Close issues on merge to preview
+
+on:
+  push:
+    branches: [preview]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Close the issues the merged PR named
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # A push to preview is normally a PR merge; a direct push has no PR
+          # and simply has nothing to do.
+          PR=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty')
+          if [ -z "$PR" ]; then
+            echo "No pull request associated with $SHA — nothing to close."
+            exit 0
+          fi
+
+          gh pr view "$PR" --repo "$REPO" --json body --jq '.body // ""' > body.txt
+          node closing-refs.mjs --stdin < body.txt > refs.txt || true
+
+          if [ ! -s refs.txt ]; then
+            echo "PR #$PR names no issues to close."
+            exit 0
+          fi
+
+          echo "PR #$PR closes: $(tr '\n' ' ' < refs.txt)"
+          FAILED=0
+          while read -r N; do
+            [ -z "$N" ] && continue
+            # Already-closed issues are left alone, so a re-run is harmless and
+            # a reopened issue is not slammed shut behind whoever reopened it.
+            STATE=$(gh issue view "$N" --repo "$REPO" --json state --jq '.state' 2>/dev/null || echo "MISSING")
+            if [ "$STATE" != "OPEN" ]; then
+              echo "  #$N is $STATE — leaving it"
+              continue
+            fi
+            if gh issue close "$N" --repo "$REPO" --comment \
+              "Fixed on \`preview\` by #$PR, and it ships in the next release. Closed by the merge rather than by hand: a \`Closes\` keyword only fires on the default branch, and this project merges to \`preview\` (#310)."; then
+              echo "  closed #$N"
+            else
+              echo "  ::error::failed to close #$N"
+              FAILED=1
+            fi
+          done < refs.txt
+
+          # A close that failed must fail the run. The whole point is that
+          # nobody has to notice this did not happen.
+          exit $FAILED
