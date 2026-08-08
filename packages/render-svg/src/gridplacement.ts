@@ -274,6 +274,10 @@ export function resolveGridPlacements(
           kind: "shape",
           shape: "path",
           args: [ends[0]!, ...controls, ends[1]!].map((c) => addr(c.col, c.row)),
+          // Carried because the rewrite loses it otherwise: a `join` becomes an
+          // ordinary `path` here, and the drawing code cannot tell a meeting
+          // point from a free end (ADR 0044).
+          ...(p.to.join === true ? { joinsAtEnd: true } : {}),
         };
         placements.push(shape);
         changed = true;

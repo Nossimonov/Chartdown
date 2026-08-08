@@ -54,3 +54,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0041](0041-breaking-means-a-clean-document-stops-checking-clean.md) | Breaking means a clean document stops checking clean; breaking work rides `preview` | Accepted |
 | [0042](0042-a-field-is-drawn-on-the-map-field-of-its-own-panel.md) | Everything a field draws is clipped to the map field of its own panel | Accepted |
 | [0043](0043-an-address-form-a-slot-cannot-consume-is-refused.md) | An address form a slot cannot consume is refused, never quietly reinterpreted | Accepted |
+| [0044](0044-where-courses-meet-they-merge.md) | Where courses meet, they merge: a joining end stops in the water, and no bank is drawn over water | Accepted |

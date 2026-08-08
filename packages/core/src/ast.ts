@@ -71,6 +71,22 @@ export interface Shape {
    * conclusion spec 02 §7 reached for structure contents.
    */
   frame?: Ref;
+  /**
+   * The course's last point MEETS ANOTHER COURSE rather than terminating in a
+   * cell of its own (ADR 0044, #314).
+   *
+   * A grid course is drawn from cell centres and then extended to its terminal
+   * cells' faces, so a stream running into a pond reaches the pond instead of
+   * stopping half a cell short (#145). A joining end has no terminal cell of
+   * its own — the cell belongs to the trunk — so extending it pushes the
+   * course out the far side, and it was doing exactly that: 16 units past a
+   * trunk whose centreline sat at 136.
+   *
+   * Set by the resolver, which is the only place that still knows the
+   * placement said `join`; by drawing time the relation has been rewritten to
+   * a plain `path`.
+   */
+  joinsAtEnd?: boolean;
 }
 
 /** A reference to another entity: bare word = id lookup, quoted = display-name lookup (spec 03 §2). */
