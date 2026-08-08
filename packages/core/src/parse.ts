@@ -383,7 +383,7 @@ function parseGrid(value: string, line: number, diagnostics: Diagnostic[]): Grid
  * to offer more words than any one map spends, so silence is its normal
  * condition — the same reason a shared theme is exempt on the theme side.
  */
-function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): void {
+function reportDeadVocab(document: DocumentNode, vocabTable: VocabTable, diagnostics: Diagnostic[]): void {
   if (document.mapType === "") return; // a vocabulary document's words ARE its product
   const spent = new Set<string>();
   // Header keys AND values: a `field` word is spent by `light: dim`, and
@@ -392,6 +392,23 @@ function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): voi
     spent.add(h.key);
     for (const word of h.value.split(/[\s,]+/)) if (word) spent.add(word);
   }
+  /**
+   * A pair key spends the word it names when that word is a declared FIELD
+   * (#268): spec 04 §5 makes the emitter namespace a function of the
+   * vocabulary, so `silence : field` is what gives `bell : D4 silence=30ft`
+   * its meaning — the declaration is what the pair depends on, which is the
+   * opposite of unused. The header loop above already covered the ambient
+   * baseline (`silence: heavy`) and this covers the emitter, the affordance
+   * the archetype exists for.
+   *
+   * Restricted to fields rather than crediting every pair key, so a document
+   * declaring a word that happens to collide with a facet or a reserved
+   * parameter — `[vocab] size : feature` — is not held to be using it by any
+   * line carrying `size=`.
+   */
+  const spendIfField = (key: string): void => {
+    if (vocabTable.archetypeOf(key) === "field") spent.add(key);
+  };
   const declared: VocabEntryNode[] = [];
   for (const section of document.sections) {
     for (const entry of section.entries) {
@@ -402,7 +419,11 @@ function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): voi
       }
       if (entry.kind !== "entity") continue;
       if (entry.typeWord) spent.add(entry.typeWord);
-      for (const d of entry.details) if (d.typeWord) spent.add(d.typeWord);
+      for (const p of entry.pairs) spendIfField(p.key);
+      for (const d of entry.details) {
+        if (d.typeWord) spent.add(d.typeWord);
+        for (const p of d.pairs) spendIfField(p.key);
+      }
       // Flags are open vocabulary (states), but a word declared as a state's
       // home is spent by carrying it — `volcano : peak states=erupting` is
       // spent by `volcano ... erupting`, which the typeWord above covers.
@@ -678,7 +699,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   finishSection();
 
   reportUnknownHeaderKeys();
-  reportDeadVocab(document, diagnostics);
+  reportDeadVocab(document, vocab, diagnostics);
   return { document, diagnostics };
 
   // ---------- line parsers ----------

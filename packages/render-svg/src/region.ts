@@ -15,7 +15,7 @@ import { ASPECT, deformCurve, type Morph, type PlacedFeature } from "./morpholog
 import { anchorAttr, entityAnchor, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { hasTierGlyph, INK, tierFor, wordTint } from "./theme";
 import {
-  catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, measureToNumber,
+  catmullRom, COMPASS_VECTORS, el, esc, fmt, hashSeed, hashString, inkStroke, measureToNumber,
   nearestOnPolyline, organicMass, pip, pointsAttr, QUANTUM, rng, subPolylineBetween, svgTitle, text, type XY,
   shade,} from "./util";
 import { CHANNEL_FLOOR, narrowChannels } from "./channel";
@@ -1078,7 +1078,18 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const A = resolveEnd(p.from);
             const B = resolveEnd(p.to);
             if (A.p && B.p) {
-              const via = p.via.map(toXY);
+              // A region map has no grid, so a `via <cell>` (#258) names
+              // nothing here. Refused rather than approximated: a cell means a
+              // square of a grid this document does not have.
+              const gridControls = p.via.filter((c) => c.kind === "address");
+              if (gridControls.length > 0) {
+                diagnostics.push({
+                  severity: "error",
+                  line: e.line,
+                  message: `'via' names a cell on a region map, which has no grid — give a point \`(x,y)\` in the document's extent units (spec 02 §7)`,
+                });
+              }
+              const via = p.via.filter((c): c is Point => c.kind === "point").map(toXY);
               const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
               const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
               out.polyline = finishCourse(e, [a, ...via, b]);
@@ -1563,7 +1574,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         waterPolys.push({ poly: shore, name: e.name ?? undefined, fill: waterFill });
         (isLake ? layers.areas : layers.water).push(
           el("g", { id: anchor }, titleEl,
-            el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, "stroke-width": isLake ? 1.2 : undefined, "stroke-linejoin": "round" }),
+            el("polygon", { points: pointsAttr(shore), fill: waterFill, stroke: isLake ? shade(waterFill) : undefined, ...(isLake ? inkStroke(1.2) : {}), "stroke-linejoin": "round" }),
           ),
         );
         if (e.name && !e.flags.includes("nolabel") && !overridden(e) && labelsOn(model)) {
@@ -1698,7 +1709,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
               el("g", islandBank === "both" ? {} : { mask: `url(#${insideMaskId(islandIndex)})` },
                 el("polygon", {
                   points: pointsAttr(r.polygon), fill: "none", stroke: coast.stroke,
-                  "stroke-width": islandBank === "both" ? 1.2 : 2.4, "stroke-linejoin": "round",
+                  ...inkStroke(islandBank === "both" ? 1.2 : 2.4), "stroke-linejoin": "round",
                 }))),
           ),
         );
@@ -1840,7 +1851,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           lineParts.push(
             el("polyline", {
               points: pointsAttr(r.polyline), fill: "none", stroke: edgeStroke,
-              "stroke-width": inkW + 2 * edgeW, "stroke-linejoin": "round", "stroke-linecap": "round",
+              ...inkStroke(inkW + 2 * edgeW), "stroke-linejoin": "round", "stroke-linecap": "round",
             }),
           );
         }
@@ -1850,7 +1861,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         lineParts.push(
           el("polyline", {
             points: pointsAttr(r.polyline), fill: "none", stroke: coreStroke,
-            "stroke-width": inkW, "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
+            ...inkStroke(inkW), "stroke-dasharray": stroke.dash, "stroke-linejoin": "round", "stroke-linecap": "round",
           }),
         );
         // A coastline stops where an island has merged with it (#165). The
@@ -2115,7 +2126,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
                 d: chain.includes("volcano")
                   ? `M${fmt(x - s)} ${fmt(y + s * 0.7)}L${fmt(x - s * 0.42)} ${fmt(y - s * 0.55)}L${fmt(x - s * 0.16)} ${fmt(y - s * 0.28)}L${fmt(x + s * 0.16)} ${fmt(y - s * 0.28)}L${fmt(x + s * 0.42)} ${fmt(y - s * 0.55)}L${fmt(x + s)} ${fmt(y + s * 0.7)}Z`
                   : `M${fmt(x - s)} ${fmt(y + s * 0.7)}L${fmt(x)} ${fmt(y - s)}L${fmt(x + s)} ${fmt(y + s * 0.7)}Z`,
-                fill, stroke: shade(fill), "stroke-width": 1.2, "stroke-linejoin": "round",
+                fill, stroke: shade(fill), ...inkStroke(1.2), "stroke-linejoin": "round",
               }),
         ),
       );
@@ -2504,7 +2515,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // Same visual language as stated seams (owner: ONE grammar for
           // borders) — the atlas dash-dot, just lighter and bandless.
           layers.realms.push(
-            el("polyline", { points: pointsAttr(pts), fill: "none", stroke: shade(info.fill), "stroke-width": 1.2, "stroke-dasharray": "9 4 2 4", "stroke-opacity": 0.55, "stroke-linejoin": "round" }),
+            el("polyline", { points: pointsAttr(pts), fill: "none", stroke: shade(info.fill), ...inkStroke(1.2), "stroke-dasharray": "9 4 2 4", "stroke-opacity": 0.55, "stroke-linejoin": "round" }),
           );
         }
         i = j + 1;
