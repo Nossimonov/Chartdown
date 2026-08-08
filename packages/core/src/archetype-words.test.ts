@@ -14,6 +14,9 @@ import { ARCHETYPES } from "./vocab";
 const errors = (src: string): string[] =>
   parse(src).diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
 
+/** Errors AND warnings: most of what a refused parent used to swallow was a warning. */
+const diagnostics = (src: string): string[] => parse(src).diagnostics.map((d) => d.message);
+
 const battlemap = (body: string): string => `map: battlemap
 grid: square 30x20
 
@@ -74,6 +77,72 @@ structure "Hall" : F4..H6
   it("still reports a detail line with no entity line above it at all", () => {
     expect(errors(battlemap(`[structures]\n  door : A1.w`)))
       .toEqual(["detail line has no parent entity"]);
+  });
+});
+
+/**
+ * Suppressing the cascade must not suppress the DOCUMENT. A refused parent
+ * hides exactly one message — "detail line has no parent entity" — because that
+ * one is a consequence of the refusal. Everything a detail line says about its
+ * own text is independent of its parent, and hiding it costs the author a
+ * second round trip: fix the parent, run again, learn about the child.
+ */
+describe("a refused parent hides its own cascade and nothing else", () => {
+  // Same detail line under a refused parent and a good one. The refused
+  // document must report everything the good one does, plus the parent's error.
+  const refused = (detail: string): string[] =>
+    diagnostics(battlemap(`[structures]\nstructure "Hall" : C3..F6\n  ${detail}`));
+  const good = (detail: string): string[] =>
+    diagnostics(battlemap(`[structures]\nhall "Hall" : C3..F6\n  ${detail}`));
+
+  it.each([
+    ["an out-of-set facet value", "door : C3.s sight=bogus"],
+    ["an undeclared state", "door : C3.s wobbly"],
+    ["a pair key the word cannot use", "door : C3.s zorp=3"],
+    ["a missing colon", "door C3.s"],
+    ["a second archetype word", "opening : C3.s"],
+  ])("reports %s beneath a refused parent", (_label, detail) => {
+    const control = good(detail);
+    expect(control.length, "the control must actually diagnose something").toBeGreaterThan(0);
+    // The parent's own error, then everything the good parent reported.
+    expect(refused(detail)).toEqual([
+      expect.stringMatching(/'structure' is an archetype/),
+      ...control,
+    ]);
+  });
+
+  it("suppresses the cascade for a refusal that is not about archetypes", () => {
+    // `parseEntityLine` returns null from two places. A missing colon on the
+    // entity line is the other one, and its details were silenced too.
+    expect(diagnostics(battlemap(`[structures]\nhall "Hall" C3..F6\n  door : C3.s wobbly`))).toEqual([
+      "expected 'subject : predicate'",
+      expect.stringMatching(/'wobbly' is not a declared state/),
+    ]);
+  });
+
+  it("does not register an orphaned detail's id", () => {
+    // The refused parent's ids never reached the symbol table; the child's must
+    // not either, or a later reference resolves to something that never renders.
+    const doc = (parent: string): string => battlemap(`[structures]
+${parent} : C3..F6
+  door d1 : C3.s
+
+[labels]
+d1 : at C3`);
+    expect(diagnostics(doc(`structure "Hall"`))).toEqual([
+      expect.stringMatching(/'structure' is an archetype/),
+      "unresolved reference 'd1' — no earlier entity has this id",
+    ]);
+    // The control: beneath a parent that stands, the id registers as always.
+    expect(diagnostics(doc(`hall "Hall"`))).toEqual([]);
+  });
+
+  it("stops suppressing at the next entity line", () => {
+    expect(diagnostics(battlemap(`[structures]
+structure "Hall" : C3..F6
+  door : C3.s wobbly
+hall2 "Hall Two" : H3..K6
+  door : H3.s wobbly`))).toHaveLength(3);
   });
 });
 

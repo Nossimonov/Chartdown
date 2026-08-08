@@ -626,9 +626,12 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   /**
    * Did the last entity LINE exist and get refused? Its details then have a
    * parent that was reported, not a missing one, and saying "detail line has no
-   * parent entity" underneath a refusal reports one cause twice — so they are
-   * dropped silently. A stray indent with no entity line above it at all still
-   * reports, which is why this resets per section rather than tracking null.
+   * parent entity" underneath a refusal reports one cause twice. That ONE
+   * message is suppressed — nothing else is: a detail line's own errors are
+   * facts about its own text, and hiding them makes the author fix the parent
+   * only to be told about the child on the next run. A stray indent with no
+   * entity line above it at all still reports, which is why this resets per
+   * section rather than tracking null.
    */
   let lastEntityRefused = false;
 
@@ -697,7 +700,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       }
       default: {
         if (raw.indent > 0) {
-          if (!lastEntityRefused) parseDetailLine(raw, lastEntity, vocab, diagnostics);
+          parseDetailLine(raw, lastEntity, lastEntityRefused, vocab, diagnostics);
           break;
         }
         const tokens = tokenize(raw.text, raw.line, diagnostics);
@@ -844,12 +847,21 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     return entity;
   }
 
-  function parseDetailLine(raw: RawLine, parent: EntityNode | null, vocabTable: VocabTable, diags: Diagnostic[]): void {
-    if (!parent) {
+  /**
+   * A detail line is validated for what it says about ITSELF, and only then
+   * attached. The two are separate questions: `refused` means the parent line
+   * existed and was reported, so the missing parent is old news — but nothing
+   * below this point consults the parent until the attachment at the end, and
+   * every check between is a fact about this line's own text.
+   */
+  function parseDetailLine(raw: RawLine, parent: EntityNode | null, refused: boolean, vocabTable: VocabTable, diags: Diagnostic[]): void {
+    if (!parent && !refused) {
       diagnostics.push(error(raw.line, "detail line has no parent entity"));
       return;
     }
-    if (parent.archetype !== "structure") {
+    // Unanswerable for a refused parent — the line that would have said which
+    // archetype it is never resolved — so it is asked only when there is one.
+    if (parent && parent.archetype !== "structure") {
       diags.push(error(raw.line, "detail lines are only defined beneath structure entities (spec 06 §3)"));
       return;
     }
@@ -904,6 +916,11 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       texts: predicate.texts,
       line: raw.line,
     };
+    // Validated, but there is nothing to hang it on. The ids go unregistered
+    // deliberately: the refused parent's own ids never reached the table
+    // either, and registering the child would let a later `via` or `[labels]`
+    // reference resolve to something that will never render.
+    if (!parent) return;
     if (subject.ids.length > 0) symbols.add(subject.ids, subject.name, raw.line, diags);
     parent.details.push(detail);
   }
