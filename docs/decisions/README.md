@@ -52,3 +52,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0039](0039-an-archetype-name-is-grammar-not-a-type-word.md) | An archetype name is grammar, not a type word: using one as a type word is an error | Accepted |
 | [0040](0040-ink-holds-its-device-width-while-zoomed.md) | Ink holds its device width while zoomed; a measured stroke scales | Accepted |
 | [0041](0041-breaking-means-a-clean-document-stops-checking-clean.md) | Breaking means a clean document stops checking clean; breaking work rides `preview` | Accepted |
+| [0042](0042-a-field-is-drawn-on-the-map-field-of-its-own-panel.md) | Everything a field draws is clipped to the map field of its own panel | Accepted |
