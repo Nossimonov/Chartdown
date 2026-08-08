@@ -2,6 +2,31 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [0.4.0] — 2026-08-08
+
+### You can get closer to a map
+
+Ctrl/⌘ + scroll over a map zooms about the cursor; drag to pan; the toolbar gains **+ / − / Fit**. A bare scroll still scrolls the note past the map, rather than trapping it.
+
+This is the first release where zooming is worth doing. Narrowing the view used to magnify the linework along with the land, so a closer look gave you a bigger picture and nothing else — the coastline over a narrow channel drew 2px at ×4 and 32px at ×64. The ink now holds the width it had when the map was fitted, so the geometry grows and the drawing stays crisp. Your position survives a re-render, so editing a `.cd` file does not throw you back to the whole map while you are checking a number you zoomed in for.
+
+### A secret door stays secret
+
+`hidden` was honoured on an ordinary line and **dropped on a structure detail**, so this drew the door on the players' map:
+
+```chartdown
+building cellar : A1..B2
+  door : at B2.s hidden
+```
+
+Written one indentation further out it was withheld correctly. Nothing reported the difference. If you keep secrets in a note you hand to your table, this is the release to be on.
+
+### The renderer underneath is Chartdown 0.6.0
+
+The plugin versions on its own lane, and this jump to 0.4.0 marks the minor version behind it. Most of what you will notice comes from there: an ambient `light:` no longer washes over the map's own title and coordinates, a lamp on one level no longer lights the floor above it, and a theme's `ink : fill=` now reaches the title, compass, scale bar and coordinate letters instead of stopping at the map.
+
+Chartdown 0.6.0 also refuses four things it used to accept in silence — a bare archetype word, a structure detail the slot cannot take, an address form nothing consumes, and an unchecked hex ledger line. **A document that rendered before may now report an error in your note.** In every case the map you were getting was not the map you asked for; the [Chartdown 0.6.0 notes](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md) say what each one was.
+
 ## [0.3.1] — 2026-08-04
 
 **Nothing about the plugin changes.** The bundle is byte-identical to 0.3.0's apart from one stylesheet fix; if you are on 0.3.0 there is nothing here for you.
