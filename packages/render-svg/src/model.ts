@@ -55,6 +55,8 @@ export interface Model {
   archetypeOf(word: string | null): string | null;
   /** Vocab facet default for a word (chain-walked); entity pairs override it. */
   facetOf(word: string | null, key: string): string | undefined;
+  /** Declared states for a word, unioned along its derivation chain (spec 04 §2). */
+  statesOf(word: string | null): Set<string>;
   /**
    * For entities placed relatively (spec 02 §7, #34): the resolved absolute
    * address, surfaced so the DM-facing frame stays absolute (tooltips).
@@ -141,6 +143,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   const archetypeOf = (word: string | null): string | null => (word ? vocab.archetypeOf(word) : null);
   const facetOf = (word: string | null, key: string): string | undefined =>
     word ? vocab.facetOf(word, key) : undefined;
+  const statesOf = (word: string | null): Set<string> => (word ? vocab.statesOf(word) : new Set<string>());
 
   const labelsHeader = header.get("labels");
   const labelsMode: "names" | "keyed" | "none" =
@@ -176,7 +179,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   // named rooms — not "a map in key mode", which renumbers every display name.
   // In `names` mode only explicitly pinned entities take a number.
   const keys = labelsMode === "none" ? new Map<object, number>() : assignKeys(entities, hexLines, diagnostics, labelsMode === "keyed");
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, resolvedNotes };
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, statesOf, resolvedNotes };
 }
 
 /**

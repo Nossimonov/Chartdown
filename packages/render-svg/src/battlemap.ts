@@ -1257,9 +1257,57 @@ export function renderBattlemap(
         }),
       );
     }
+    // SPEC 06 §3 IS A CLOSED SET, AND BOTH HALVES OF IT WERE UNENFORCED.
+    // A structure detail's subject is a wall state, an opening, or a barrier
+    // word; its predicate is side words or edge tokens. Anything else used to
+    // be swallowed instead of refused: a cell predicate hit the `continue`
+    // below and rendered byte-identically to its own absence, doors included
+    // (#293), and a subject outside the three drew a line in the wall's own
+    // ink at the wall's own weight — invisible, on top of the wall it sat on
+    // (#294, the else-branch #103 left live). A barrier subject fared worse
+    // still: it drew there AND on its own themed run, so a `fence` edge came
+    // out twice at two different weights.
+    //
+    // What the author almost always means by a detail the slot cannot take is
+    // a thing standing IN the room, which is an entity of its own — so the
+    // messages name that spelling rather than only refusing.
+    const detailParent = e.ids[0] ?? e.name ?? e.typeWord ?? "the structure";
+    const wallStates = model.statesOf(e.typeWord);
     for (const d of e.details) {
+      const subject = d.typeWord;
+      const archetype = model.archetypeOf(subject);
+      // `ruined` and its kin resolve to no archetype — they are states of the
+      // structure's own word, which is why this asks the parent rather than
+      // matching a literal (the trap #103 named).
+      const isWallState = subject !== null && archetype === null && wallStates.has(subject);
+      if (subject !== null && archetype !== "opening" && archetype !== "barrier" && !isWallState) {
+        diagnostics.push({
+          severity: "error",
+          line: d.line,
+          message:
+            `'${subject}' is not an opening, a wall state, or a barrier, so it cannot be a detail of `
+            + `'${detailParent}' — those three are what an indented line under a structure may say `
+            + `(spec 06 §3). For something standing in the room, give it its own line: `
+            + `'${subject} : on ${detailParent} at A1'`,
+        });
+        continue;
+      }
       for (const p of d.placements) {
-        if (p.kind !== "edge") continue;
+        if (p.kind !== "edge") {
+          // An opening wants an EDGE — telling its author to move the door
+          // out of the room would be answering a question they did not ask.
+          const fix = archetype === "opening"
+            ? `name the edge it sits on: '${subject} : at A1.n'`
+            : `give it its own line: '${subject ?? "it"} : on ${detailParent} at A1'`;
+          diagnostics.push({
+            severity: "error",
+            line: d.line,
+            message:
+              `'${subject ?? "this detail"}' is placed on a cell, but a structure detail addresses a `
+              + `WALL — side words ('north east') or edge tokens ('A1.n') (spec 06 §3). ${fix}`,
+          });
+          continue;
+        }
         const o = cellOrigin(p.at);
         const seg =
           p.dir === "n" ? { x1: o.x, y1: o.y, x2: o.x + CELL, y2: o.y }
@@ -1272,10 +1320,12 @@ export function renderBattlemap(
         // every derived opening to an else-branch that drew it in the wall's
         // own ink at the wall's own weight — invisible, on top of the wall.
         const openingChain = model.chainOf(d.typeWord);
-        if (model.archetypeOf(d.typeWord) !== "opening") {
-          parts.push(el("line", { ...seg, stroke: model.theme.prop(openingChain, "stroke") ?? INK, ...inkStroke(3)}));
-          continue;
-        }
+        // A barrier and a wall state are drawn by their own paths above — the
+        // barrier as its own themed run, the state on the perimeter it marks.
+        // Drawing them here as well is what doubled a `fence` edge at two
+        // different weights; the subject check above has already refused
+        // everything that belongs to neither path.
+        if (model.archetypeOf(d.typeWord) !== "opening") continue;
         const windowLike = openingChain.includes("window") || openingChain.includes("arrow-slit");
         const stroke = model.theme.prop(openingChain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
         const width = Number(model.theme.prop(openingChain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
