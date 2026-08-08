@@ -28,6 +28,32 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5
       - run: npm ci
+      # THE AUDIT GATE RUNS ON THE PATH THAT PUBLISHES (#253, ADR 0029).
+      # CI's `audit` job triggers on push-to-branch and pull_request, and a tag
+      # push is neither — so the one moment code leaves for a registry was the
+      # one moment nothing looked. On the morning of the 0.5.0 tag three
+      # advisories landed against shipped transitives of @chartdown/mcp, one of
+      # them a high-severity SSRF, and they were caught only because an
+      # unrelated PR went red. A few hours later and v0.5.0 would have
+      # published them with every check in this file green.
+      #
+      # Same threshold as CI, deliberately: a gate that is softer on the way
+      # out than on the way in is not a gate. It runs before build and test so
+      # a vulnerable tree fails in seconds rather than after the suite.
+      #
+      # NO OVERRIDE FLAG, ALSO DELIBERATELY. An advisory with no fix available
+      # would otherwise hold a release indefinitely, and the escape hatch for
+      # that is a pull request — pin the dependency, or document the exception
+      # where a human can see it — rather than an input someone can set while
+      # trying to ship. The exception stays visible in git instead of in a run
+      # nobody reads afterwards.
+      - name: Audit shipped dependencies before anything is published
+        run: |
+          if ! npm audit --omit=dev --audit-level=moderate; then
+            echo "::error::A shipped dependency has a known advisory, so this release stops here (ADR 0029, #253)." >&2
+            echo "Fix it with 'npm audit fix', pin the transitive, or open a PR documenting why it cannot be fixed." >&2
+            exit 1
+          fi
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
