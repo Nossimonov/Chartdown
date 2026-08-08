@@ -25,7 +25,7 @@ import type {
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize, type RawLine, type Token } from "./lex";
 import { isCompass, parseAddress, parsePositional, parsePredicate } from "./placements";
-import { ARCHETYPE_FACETS, checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
+import { ARCHETYPE_FACETS, checkFacetValues, checkTypeWordNotArchetype, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
@@ -623,11 +623,23 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   let section: SectionNode | null = null;
   let skippingUnknown = false;
   let lastEntity: EntityNode | null = null;
+  /**
+   * Did the last entity LINE exist and get refused? Its details then have a
+   * parent that was reported, not a missing one, and saying "detail line has no
+   * parent entity" underneath a refusal reports one cause twice. That ONE
+   * message is suppressed — nothing else is: a detail line's own errors are
+   * facts about its own text, and hiding them makes the author fix the parent
+   * only to be told about the child on the next run. A stray indent with no
+   * entity line above it at all still reports, which is why this resets per
+   * section rather than tracking null.
+   */
+  let lastEntityRefused = false;
 
   const finishSection = () => {
     if (section) document.sections.push(section);
     section = null;
     lastEntity = null;
+    lastEntityRefused = false;
   };
 
   for (; i < lines.length; i++) {
@@ -680,6 +692,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
         if (tokens.some((t) => t.kind === "colon")) {
           // Grouped form (spec 02 §4): an ordinary entity line.
           lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
+          lastEntityRefused = lastEntity === null;
         } else {
           parseHexLedgerLine(raw, tokens, section, symbols, diagnostics);
         }
@@ -687,11 +700,12 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       }
       default: {
         if (raw.indent > 0) {
-          parseDetailLine(raw, lastEntity, vocab, diagnostics);
+          parseDetailLine(raw, lastEntity, lastEntityRefused, vocab, diagnostics);
           break;
         }
         const tokens = tokenize(raw.text, raw.line, diagnostics);
         lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
+        lastEntityRefused = lastEntity === null;
         break;
       }
     }
@@ -716,6 +730,10 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return null;
     const subject = parseSubject(split.subject, raw.line, diags);
+    // Dropped rather than inferred (ADR 0039): letting the line through means
+    // rendering something the document did not ask for, which is the whole
+    // finding of #266.
+    if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return null;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
 
     // Order-bounded reference validation happens against the table BEFORE this entity registers.
@@ -829,12 +847,21 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     return entity;
   }
 
-  function parseDetailLine(raw: RawLine, parent: EntityNode | null, vocabTable: VocabTable, diags: Diagnostic[]): void {
-    if (!parent) {
+  /**
+   * A detail line is validated for what it says about ITSELF, and only then
+   * attached. The two are separate questions: `refused` means the parent line
+   * existed and was reported, so the missing parent is old news — but nothing
+   * below this point consults the parent until the attachment at the end, and
+   * every check between is a fact about this line's own text.
+   */
+  function parseDetailLine(raw: RawLine, parent: EntityNode | null, refused: boolean, vocabTable: VocabTable, diags: Diagnostic[]): void {
+    if (!parent && !refused) {
       diagnostics.push(error(raw.line, "detail line has no parent entity"));
       return;
     }
-    if (parent.archetype !== "structure") {
+    // Unanswerable for a refused parent — the line that would have said which
+    // archetype it is never resolved — so it is asked only when there is one.
+    if (parent && parent.archetype !== "structure") {
       diags.push(error(raw.line, "detail lines are only defined beneath structure entities (spec 06 §3)"));
       return;
     }
@@ -842,6 +869,9 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return;
     const subject = parseSubject(split.subject, raw.line, diags);
+    // The detail slot is where #266 did its worst: `opening : at A1.w` drew a
+    // WALL, the exact inverse of the line.
+    if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
     // A BARRIER word in a detail slot REPLACES that side's perimeter with that
     // barrier (#130): `cave-in : east` is the spelling authors already reach
@@ -886,6 +916,11 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       texts: predicate.texts,
       line: raw.line,
     };
+    // Validated, but there is nothing to hang it on. The ids go unregistered
+    // deliberately: the refused parent's own ids never reached the table
+    // either, and registering the child would let a later `via` or `[labels]`
+    // reference resolve to something that will never render.
+    if (!parent) return;
     if (subject.ids.length > 0) symbols.add(subject.ids, subject.name, raw.line, diags);
     parent.details.push(detail);
   }

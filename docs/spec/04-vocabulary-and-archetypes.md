@@ -20,6 +20,17 @@ The language defines only **archetypes**: closed, setting-free behavioral catego
 
 Future spec sections MAY extend this table; documents MUST NOT. Generic parameters (`hidden`, `gm=`, `link=`, `detail=`, `facing=`, `size=`, `width=`, …) remain archetype-independent.
 
+**The nine names above are grammar, and a document MUST NOT use one as a type word** *(from [#266](https://github.com/Nossimonov/Chartdown/issues/266), decided in [ADR 0039](../decisions/0039-an-archetype-name-is-grammar-not-a-type-word.md))*. They are legal in exactly one position — the right-hand side of a vocabulary binding (§2) — and are **reserved** in the type-word position of an entity line, a structure detail line (spec 06 §3), and a `[vocab]` entry's own left-hand side. Writing one there is a **fail-loud error** naming the fix:
+
+```chartdown
+[structures]
+cellar "Cellar" : M14
+  opening : at A1.w sight=all   ; error — 'opening' is an archetype
+```
+> `'opening' is an archetype, not a type word — declare a word for it ('[vocab] arch : opening') and use that (spec 04 §2)`
+
+An archetype has no theme subject: §4's fallback chain terminates at "the archetype's generic shape + **the word as label**", so a bare archetype word could only ever render as its own name, and spec 08 §6 gives themes no way to address it. The definition position is reserved for the same reason a document may not extend the table — a `[vocab]` entry shadowing an archetype name would reintroduce the ambiguity and take the diagnostic with it. §3's promise that an undefined word is legal governs words the language has no opinion about; these nine are the words the language is made of, and it has always had an opinion about them.
+
 ### `passes=` — a closed value set
 
 `passes=` feeds a **normative** transform (the UVTT export of spec 06 §9), so unlike `side=` it cannot be open vocabulary: an unknown value there has no safe degradation, and two conforming renderers would export different portal states from the same document.
@@ -80,7 +91,7 @@ Vocabulary comes from three sources; later **shadows** earlier, silently and del
 
 ## 3. Unknown words and usage inference
 
-A type word with no vocabulary entry anywhere is **legal**. Its archetype is inferred from usage, checking in order:
+A type word with no vocabulary entry anywhere is **legal** — with the one exception §1 states, the nine archetype names, which are grammar and are refused in this position rather than inferred. Its archetype is inferred from usage, checking in order:
 
 1. **Shape or path phrase in the predicate**: `area` or `blob` → `terrain`; `path`, `ridge`, or a `from…to` phrase → `path`. Bare ranges and lone points carry no shape hint.
 2. **Section context**: `[tokens]` → `token`; `[structures]` → `structure`; `[terrain]` → `terrain`; and correspondingly for other primitives-defined sections. Section context outranks placement shape-lessness: a solo unknown creature at a single cell in `[tokens]` is a `token`, and an unknown word with an area placement in `[tokens]` is a staging zone (spec 06 §4), never terrain.
