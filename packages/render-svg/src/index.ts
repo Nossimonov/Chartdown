@@ -43,6 +43,15 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
   const mode = options.mode ?? "player";
   const diagnostics: Diagnostic[] = [];
   const theme = Theme.resolve(options.theme, diagnostics);
+  /**
+   * DOCUMENT FURNITURE IS INK TOO (#286). #150 wired the `ink` surface into
+   * entity drawing and stopped at the entities; the title, the level caption,
+   * the compass and the scale bar kept the bare constant, so `ink : fill=` was
+   * a declaration the renderer's own dead-declaration lint (#116) reported as
+   * reaching nothing — correctly, and the gap was underneath it. Spec 08 §2
+   * lists `ink` in the closed surface set and exempts no part of the sheet.
+   */
+  const furnitureInk = theme.surface("ink", "fill", INK);
   const model = buildModel(doc, mode, theme, diagnostics);
   const body: string[] = [];
 
@@ -69,7 +78,7 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
       if (panelLevels.length > 1) {
         // Bottom-right of the panel — the top margin belongs to the column letters.
         panelBody.push(
-          text(`— ${level} —`, { x: frame.w - 14, y: frame.h - 8, "font-size": 11, "font-style": "italic", fill: INK, "text-anchor": "end", "font-family": "sans-serif" }),
+          text(`— ${level} —`, { x: frame.w - 14, y: frame.h - 8, "font-size": 11, "font-style": "italic", fill: furnitureInk, "text-anchor": "end", "font-family": "sans-serif" }),
         );
       }
       body.push(`<g transform="translate(0 ${fmt(band + index * (frame.h + GAP))})">${panelBody.join("")}</g>`);
@@ -114,16 +123,16 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     }
   }
   if (doc.title) {
-    body.push(text(doc.title, { x: 14, y: 22, "font-size": 16, "font-weight": "bold", fill: INK, "font-family": "sans-serif" }));
+    body.push(text(doc.title, { x: 14, y: 22, "font-size": 16, "font-weight": "bold", fill: furnitureInk, "font-family": "sans-serif" }));
   }
   if (model.header.get("compass") === "on") {
     const cx = w - 34;
     const cy = 40;
     body.push(
       el("g", {},
-        el("circle", { cx, cy, r: 14, fill: "none", stroke: INK, "stroke-width": 1 }),
-        el("polygon", { points: `${fmt(cx)},${fmt(cy - 11)} ${fmt(cx - 4)},${fmt(cy + 6)} ${fmt(cx + 4)},${fmt(cy + 6)}`, fill: INK }),
-        text("N", { x: cx, y: cy - 17, "font-size": 9, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }),
+        el("circle", { cx, cy, r: 14, fill: "none", stroke: furnitureInk, "stroke-width": 1 }),
+        el("polygon", { points: `${fmt(cx)},${fmt(cy - 11)} ${fmt(cx - 4)},${fmt(cy + 6)} ${fmt(cx + 4)},${fmt(cy + 6)}`, fill: furnitureInk }),
+        text("N", { x: cx, y: cy - 17, "font-size": 9, fill: furnitureInk, "text-anchor": "middle", "font-family": "sans-serif" }),
       ),
     );
   }
@@ -137,10 +146,10 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
       const y = h - 16;
       body.push(
         el("g", {},
-          el("line", { x1: 14, y1: y, x2: 14 + barPx, y2: y, stroke: INK, "stroke-width": 2 }),
-          el("line", { x1: 14, y1: y - 4, x2: 14, y2: y + 4, stroke: INK, "stroke-width": 2 }),
-          el("line", { x1: 14 + barPx, y1: y - 4, x2: 14 + barPx, y2: y + 4, stroke: INK, "stroke-width": 2 }),
-          text(`${barUnits}${unit}`, { x: 14 + barPx / 2, y: y - 6, "font-size": 9, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }),
+          el("line", { x1: 14, y1: y, x2: 14 + barPx, y2: y, stroke: furnitureInk, "stroke-width": 2 }),
+          el("line", { x1: 14, y1: y - 4, x2: 14, y2: y + 4, stroke: furnitureInk, "stroke-width": 2 }),
+          el("line", { x1: 14 + barPx, y1: y - 4, x2: 14 + barPx, y2: y + 4, stroke: furnitureInk, "stroke-width": 2 }),
+          text(`${barUnits}${unit}`, { x: 14 + barPx / 2, y: y - 6, "font-size": 9, fill: furnitureInk, "text-anchor": "middle", "font-family": "sans-serif" }),
         ),
       );
     }

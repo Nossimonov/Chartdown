@@ -279,11 +279,24 @@ export function renderBattlemap(
     layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: model.theme.surface("grid", "stroke", GRID_LINE), ...inkStroke(0.6)}));
   }
   if (model.header.get("numbers") === "on") {
+    // THE COORDINATES WERE NOT EVEN `INK` (#286). Every other piece of
+    // furniture at least used the constant; these carried the literal
+    // `#8a8272`, so no lever of any kind reached the letters a GM calls out in
+    // play — and a fallback would not have helped, since the DEFAULT theme
+    // declares `ink` and a surface lookup never reaches its fallback.
+    //
+    // They are ink drawn QUIETLY, and that is now what the output says. The
+    // old literal is ink at 60% over paper — solved per channel it comes out
+    // at 0.590/0.602/0.622, and 0.6 reproduces #878175 against a #8a8272
+    // target, under 3/255 on every channel. So the subduing survives as an
+    // opacity, which is a rendering choice, while the COLOUR comes from the
+    // surface, which is the theme's to set.
+    const coordinateInk = model.theme.surface("ink", "fill", INK);
     for (let c = 1; c <= f.cols; c++) {
-      layers.grid.push(text(colLetters(c), { x: MARGIN + (c - 0.5) * CELL, y: MARGIN - 7, "font-size": 9, fill: "#8a8272", "text-anchor": "middle", "font-family": "sans-serif" }));
+      layers.grid.push(text(colLetters(c), { x: MARGIN + (c - 0.5) * CELL, y: MARGIN - 7, "font-size": 9, fill: coordinateInk, opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
     for (let r = 1; r <= f.rows; r++) {
-      layers.grid.push(text(String(r), { x: MARGIN - 7, y: MARGIN + (r - 0.5) * CELL + 3, "font-size": 9, fill: "#8a8272", "text-anchor": "end", "font-family": "sans-serif" }));
+      layers.grid.push(text(String(r), { x: MARGIN - 7, y: MARGIN + (r - 0.5) * CELL + 3, "font-size": 9, fill: coordinateInk, opacity: 0.6, "text-anchor": "end", "font-family": "sans-serif" }));
     }
   }
 
