@@ -263,6 +263,10 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    plus reach=/taper= on placed morphology), or a declared field's name — else
    it WARNS (spec 04 §2, #195, #267).
    `x-` prefixed pairs are the silent extension namespace, as [x-*] sections are.
+   An AMBIENT baseline (`light: dark` and friends) is drawn only on a
+   battlemap; a region or hexcrawl WARNS and renders without it -- at those
+   scales visibility is tactical (spec 04 5, #287). The regional override
+   works on every map kind.
    A field's DRAWING (ambient wash, emitter pool, the pool's cut-out) is clipped
    to the map field of its own panel -- the frame inset by its margin, never the
    page furniture (spec 04 5, ADR 0042, #284/#288). The declared range is
