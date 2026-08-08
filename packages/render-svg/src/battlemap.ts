@@ -53,6 +53,30 @@ export function renderBattlemap(
   // entity loop below, before any later let would initialise.
   // Emitter pools per field, as mask holes for the ambient wash (#106).
   const fieldHoles = new Map<string, string[]>();
+
+  /**
+   * The map field of THIS panel — the frame inset by its margin (ADR 0042).
+   *
+   * Everything a field draws stops here: the ambient wash, an emitter's pool,
+   * and the hole the pool cuts in the wash. The margin band is the paper the
+   * place is printed on and carries the apparatus for reading the map, so a
+   * lightless cellar gets no black border and a torch lights no coordinate
+   * letters. Per PANEL rather than per page, which is what stops a lamp in the
+   * cellar lighting the floor above (#291) — each level renders into its own
+   * `<g transform>` with these same local coordinates.
+   *
+   * Only the DRAWING is bounded. The declared range is world data and exports
+   * at its true value, exactly as ADR 0037 keeps geometry in map units while
+   * ink answers to the sheet.
+   */
+  const fieldRect = { x: MARGIN, y: MARGIN, w: frame.cols * CELL, h: frame.rows * CELL };
+  const fieldClipId = `cdfieldclip-${model.doc.docId}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
+  let fieldClipUsed = false;
+  /** Reference the clip, emitting its def only if something actually needs it. */
+  function clipToField(): string {
+    fieldClipUsed = true;
+    return `url(#${fieldClipId})`;
+  }
   const noteHole = (field: string, shape: string): void => {
     const list = fieldHoles.get(field) ?? [];
     list.push(shape);
@@ -345,6 +369,18 @@ export function renderBattlemap(
   body.push(...ambientWash());
   body.push(...layers.labels);
 
+  // Emitted only if something referenced it, so a map that draws no field is
+  // byte-identical to before (ADR 0042). A `<clipPath>` resolves document-wide
+  // rather than by document order, so defining it after its users is legal —
+  // and this is the one point where every user has already run.
+  if (fieldClipUsed) {
+    body.unshift(
+      `<defs><clipPath id="${fieldClipId}">`
+        + el("rect", { x: fieldRect.x, y: fieldRect.y, width: fieldRect.w, height: fieldRect.h })
+        + `</clipPath></defs>`,
+    );
+  }
+
   // ---------- helpers ----------
 
   /**
@@ -405,11 +441,11 @@ export function renderBattlemap(
       const holes = fieldHoles.get(field) ?? [];
       const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
       out.push(
-        `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(frame.w)}" height="${fmt(frame.h)}">` +
-          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill: "#fff" }) +
+        `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${fmt(fieldRect.x)}" y="${fmt(fieldRect.y)}" width="${fmt(fieldRect.w)}" height="${fmt(fieldRect.h)}">` +
+          el("rect", { x: fieldRect.x, y: fieldRect.y, width: fieldRect.w, height: fieldRect.h, fill: "#fff" }) +
           holes.join("") +
           `</mask></defs>` +
-          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill, opacity, mask: `url(#${id})` }),
+          el("rect", { x: fieldRect.x, y: fieldRect.y, width: fieldRect.w, height: fieldRect.h, fill, opacity, mask: `url(#${id})` }),
       );
     }
     return out;
@@ -1746,8 +1782,8 @@ export function renderBattlemap(
         noteHole("light", emitterHole(center, radius));
         footprintParts.push(
           sightBlockers.length > 0
-            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 })
-            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }),
+            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() })
+            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() }),
         );
       }
       const themed0 = model.theme.glyphFor(chainR, center.x, center.y);
@@ -1803,9 +1839,9 @@ export function renderBattlemap(
       noteHole("light", emitterHole(c, radius));
       if (sightBlockers.length > 0) {
         const poly = visibilityPolygon(c, radius, sightBlockers);
-        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
+        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
       } else {
-        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
+        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
       }
     }
     const chain = model.chainOf(e.typeWord);
