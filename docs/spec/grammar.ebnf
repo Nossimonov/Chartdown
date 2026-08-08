@@ -105,7 +105,12 @@ control        = point , [ "@" , measure ] ;
                     measured centerline and a sketched one describing the same
                     curve draw the same. *)
 point-range    = point , ".." , point ;
-edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
+edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw.
+                    an EDGE places a wall, door or window -- a barrier, an
+                    opening, or a structure detail naming one; elsewhere it
+                    is an error. a CORNER is consumed by nothing and is an
+                    error wherever written, reserved for a future proposal
+                    (spec 02 5, ADR 0043, #281) *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                  [ "on" , ref , "at" ] , { placement | pair } ;
                  (* `raw` flag on an area = literal edges; without it a

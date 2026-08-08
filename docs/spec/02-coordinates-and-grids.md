@@ -35,9 +35,9 @@ Declared `grid: hex <W>x<H> <pointy|flat> <odd-row|even-row|odd-col|even-col>` (
 Walls, doors, and windows live on cell edges. An edge or corner is a single token, `<address>.<dir>`:
 
 - Edges: `O6.s`, `N4.w` — directions `n e s w`.
-- Corners: `K5.nw` — directions `ne nw se sw`.
+- Corners: `K5.nw` — directions `ne nw se sw`. **No slot consumes a corner yet**, and writing one is an error at the line that wrote it *(from [#281](https://github.com/Nossimonov/Chartdown/issues/281), decided in [ADR 0043](../decisions/0043-an-address-form-a-slot-cannot-consume-is-refused.md))*. The address form is reserved rather than removed: the day something needs it — a post at a corner, a token facing a diagonal — a proposal gives it a meaning without reopening the addressing. Until then a corner is refused rather than quietly read as an edge, which is what it used to be: all four collapsed onto the EAST edge, so a door at `C3.nw` opened on the far wall of its room.
 
-Sequences of edge tokens describe wall runs (`wall : K5.e K6.e K7.e`). Full wall/door/window semantics belong to the battlemap-primitives section; only the addressing is fixed here. Edge-based geometry exports losslessly to polyline formats (UVTT).
+Sequences of edge tokens describe wall runs (`wall : K5.e K6.e K7.e`). **An edge token places a wall, a door or a window and nothing else**: a barrier, an opening (including one in unbuilt geometry, spec 06 §3), or a structure detail naming one of those. On any other archetype it is an error naming the cell form — a point-placed feature on an edge used to render byte-identically to a document without the line (ADR 0043). Full wall/door/window semantics belong to the battlemap-primitives section; only the addressing is fixed here. Edge-based geometry exports losslessly to polyline formats (UVTT).
 
 ## 6. Gridless points
 

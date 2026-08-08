@@ -50,7 +50,14 @@ export function edgeSegment(at: Address, dir: string): Segment {
     case "n": return { a: { x: o.x, y: o.y }, b: { x: o.x + CELL, y: o.y } };
     case "s": return { a: { x: o.x, y: o.y + CELL }, b: { x: o.x + CELL, y: o.y + CELL } };
     case "w": return { a: { x: o.x, y: o.y }, b: { x: o.x, y: o.y + CELL } };
-    default: return { a: { x: o.x + CELL, y: o.y }, b: { x: o.x + CELL, y: o.y + CELL } };
+    // `e` BY NAME, not by fallthrough (#281, ADR 0043). A `default:` standing
+    // in for a real case is how four corner tokens became a fifth cardinal:
+    // `ne`/`nw`/`se`/`sw` rode the east branch, so a door at C3.nw opened on
+    // the far wall. Corners are refused at parse time now, and the next
+    // direction added to spec 02 §5 must fail here rather than quietly
+    // becoming an east edge.
+    case "e": return { a: { x: o.x + CELL, y: o.y }, b: { x: o.x + CELL, y: o.y + CELL } };
+    default: throw new Error(`edgeSegment: unhandled direction '${dir}' — spec 02 §5 defines n, e, s, w`);
   }
 }
 
