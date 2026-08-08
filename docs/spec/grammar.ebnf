@@ -244,8 +244,11 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    pairs:  gm=, link=, detail=, detail-at=, facing=, size=, side=, width=, light=,
            elevation=, key=, level=, to=, through=, at=
    A key OUTSIDE this set must be one the word can consume — a facet it
-   declares or inherits, one its archetype gives it (reach=/taper= on placed
-   morphology), or a declared field's name — else it WARNS (spec 04 §2, #195).
+   declares or inherits, one its ARCHETYPE gives it whether or not the word
+   states a default (spec 04 §1's table: passes=/sight= on barrier and opening,
+   occluded= on field, width= on path, facing= on feature, size=/side= on token;
+   plus reach=/taper= on placed morphology), or a declared field's name — else
+   it WARNS (spec 04 §2, #195, #267).
    `x-` prefixed pairs are the silent extension namespace, as [x-*] sections are.
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
    non-resolving subject with placement = new GM-only entity; otherwise error. *)

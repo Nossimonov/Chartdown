@@ -58,6 +58,40 @@ export const ARCHETYPES = new Set([
   "opening", "token", "zone", "field",
 ]);
 
+/**
+ * The facets each archetype gives a word **whether or not the word states a
+ * default** — spec 04 §1's table, which §2 makes normative for what a `key=`
+ * may be: "a facet its archetype gives it whether or not the word states a
+ * default".
+ *
+ * That clause was unimplemented (#267). Consumable keys were resolved from
+ * DECLARED facets alone, so a word bound straight to an archetype inherited
+ * nothing — `[vocab] hatch : opening` then `hatch : at A1.w sight=all` warned
+ * that `sight=` was not a parameter `hatch` could use, citing the very section
+ * that grants it. The standard library hid it: `door` and `window` declare
+ * `passes=`/`sight=` themselves and so never exercised the clause. It showed on
+ * its own words the moment one of them left a facet at the default — `pillar`
+ * declares neither and could take neither, and `fence` declares `sight=` and
+ * could not take `passes=`.
+ *
+ * Mirrors §1 exactly rather than listing only the gaps. Four of these keys are
+ * also reserved generic parameters usable on any line (spec 01 §5) and would be
+ * accepted without this table; they are here so the table can be read against
+ * the spec section it encodes, instead of against that section minus another
+ * list somewhere else.
+ */
+export const ARCHETYPE_FACETS: Record<string, readonly string[]> = {
+  terrain: [],                      // `difficult` is a STATE, not a facet
+  path: ["width"],
+  feature: ["facing"],
+  structure: [],
+  barrier: ["passes", "sight"],
+  opening: ["passes", "sight"],
+  token: ["size", "side"],
+  zone: [],
+  field: ["occluded"],
+};
+
 /** The shipped standard library — normative content of specs 05 §1 and 06 §2. */
 export const STDLIB_SOURCE = `# Chartdown Standard Library
 
