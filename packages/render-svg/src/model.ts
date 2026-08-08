@@ -85,7 +85,22 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
       switch (entry.kind) {
         case "entity": {
           if (mode === "player" && (entry.gmOnly || entry.flags.includes("hidden"))) break;
-          entities.push(entry);
+          // A DETAIL CARRIES THE FLAG TOO (#295). Spec 01 §6 makes `hidden`
+          // legal on ANY content line and player mode fail-closed, and a
+          // structure detail is a content line — but the strip above reads only
+          // the entity, so `door : at B2.s hidden` written one indent in drew
+          // the secret door on the players' sheet, byte-identical to a door
+          // nobody was hiding. The same secret written outdented as
+          // `door : on cellar at B2.s hidden` was withheld correctly, so the
+          // slot decided whether a secret was kept.
+          //
+          // Stripped HERE rather than in the parser, so the AST keeps saying
+          // what the document said and the mode stays the renderer's question.
+          entities.push(
+            mode === "player" && entry.details.some((d) => d.flags.includes("hidden"))
+              ? { ...entry, details: entry.details.filter((d) => !d.flags.includes("hidden")) }
+              : entry,
+          );
           break;
         }
         case "hex-line":

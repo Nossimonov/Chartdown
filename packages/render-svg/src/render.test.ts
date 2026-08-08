@@ -162,6 +162,51 @@ describe("GM/player split is fail-closed (spec 01 §6)", () => {
     expect(svg).toContain("Archers hold fire until the trigger.");
   });
 
+  // A STRUCTURE DETAIL IS A CONTENT LINE (#295). §6 makes `hidden` legal on any
+  // content line and player mode fail-closed, but the strip read only the
+  // entity — so a secret door written one indent in was drawn on the players'
+  // sheet while the same secret written outdented was withheld. The slot
+  // decided whether a secret was kept, which is the one failure this section
+  // exists to prevent.
+  describe("a hidden structure detail (#295)", () => {
+    const base = ["map: battlemap", "grid: square 8x6", "scale: 5ft", "", "[structures]", "building cellar : A1..B2"];
+    const withDetail = (line: string): string => [...base, `  ${line}`].join("\n");
+    const withoutDetail = base.join("\n");
+
+    it("is absent from the player render — identically to never having been written", () => {
+      // The strongest available statement: not 'the door is faint' but 'the
+      // sheet is the sheet of a document that has no such door'.
+      const hidden = renderSource(withDetail("door : at B2.s hidden"), { mode: "player" }).svg;
+      expect(hidden).toBe(renderSource(withoutDetail, { mode: "player" }).svg);
+    });
+
+    it("is present in the gm render", () => {
+      const gm = renderSource(withDetail("door : at B2.s hidden"), { mode: "gm" }).svg;
+      expect(gm).not.toBe(renderSource(withoutDetail, { mode: "gm" }).svg);
+    });
+
+    it("agrees with the outdented spelling of the same secret", () => {
+      // The property the bug broke. These two documents say the same thing, and
+      // one of them used to keep the secret while the other gave it away.
+      const indented = renderSource(withDetail("door : at B2.s hidden"), { mode: "player" }).svg;
+      const outdented = renderSource(
+        [...base, "door : on cellar at B2.s hidden"].join("\n"), { mode: "player" },
+      ).svg;
+      expect(indented).toBe(outdented);
+    });
+
+    it("does not strip a detail that is not hidden", () => {
+      // The mirror failure: over-stripping would hide every door on every map.
+      const open = renderSource(withDetail("door : at B2.s"), { mode: "player" }).svg;
+      expect(open).not.toBe(renderSource(withoutDetail, { mode: "player" }).svg);
+    });
+
+    it("still withholds a detail's gm= note, which was never the broken half", () => {
+      const noted = renderSource(withDetail('door : at B2.s gm="the lever is behind the barrel"'), { mode: "player" }).svg;
+      expect(noted).not.toContain("lever is behind");
+    });
+  });
+
   it("hexcrawl gm notes and seen-hex contents stay out of player renders", () => {
     const src = example("brenmark");
     const player = renderSource(src, { mode: "player" }).svg;
