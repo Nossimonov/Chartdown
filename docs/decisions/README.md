@@ -53,3 +53,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0040](0040-ink-holds-its-device-width-while-zoomed.md) | Ink holds its device width while zoomed; a measured stroke scales | Accepted |
 | [0041](0041-breaking-means-a-clean-document-stops-checking-clean.md) | Breaking means a clean document stops checking clean; breaking work rides `preview` | Accepted |
 | [0042](0042-a-field-is-drawn-on-the-map-field-of-its-own-panel.md) | Everything a field draws is clipped to the map field of its own panel | Accepted |
+| [0043](0043-an-address-form-a-slot-cannot-consume-is-refused.md) | An address form a slot cannot consume is refused, never quietly reinterpreted | Accepted |

@@ -6,6 +6,8 @@
  */
 
 import type {
+  Edge,
+  Placement,
   Address,
   AddressRange,
   DetailNode,
@@ -440,6 +442,49 @@ function reportDeadVocab(document: DocumentNode, vocabTable: VocabTable, diagnos
   }
 }
 
+/** Corner directions — addressable (spec 02 §5) and consumed by nothing. */
+const CORNER_DIRS = new Set(["ne", "nw", "se", "sw"]);
+
+/**
+ * Every edge placement in a predicate, unwrapping the `at`-prefixed form so a
+ * parent-local `at A1.n` is seen as readily as a bare `A1.n`.
+ */
+function edgePlacements(placements: Placement[]): Edge[] {
+  const out: Edge[] = [];
+  for (const p of placements) {
+    if (p.kind === "edge") out.push(p);
+    else if (p.kind === "relational" && p.form === "at" && p.target.kind === "edge") out.push(p.target);
+  }
+  return out;
+}
+
+/**
+ * A CORNER IS ADDRESSABLE AND NOTHING CONSUMES IT (#281, ADR 0043).
+ *
+ * Spec 02 §5 defines `K5.nw` beside `O6.s` and then gives a job only to the
+ * edge: "walls, doors, and windows live on cell EDGES". No section since has
+ * given a corner a meaning and no example writes one — so the renderer
+ * answered by accident, and `edgeSegment`'s `default:` swallowed all four into
+ * the east edge. A door at `C3.nw` opened on the far wall of the room; a
+ * freestanding `wall : C3.nw` drew the same segment as `C3.e`.
+ *
+ * Refused at the line that wrote it, rather than at each of the places that
+ * might have consumed it, because there are none: an address form nothing can
+ * honour is a mistake wherever it appears.
+ */
+function checkNoCorner(placements: Placement[], line: number, diags: Diagnostic[]): void {
+  for (const edge of edgePlacements(placements)) {
+    if (!CORNER_DIRS.has(edge.dir)) continue;
+    diags.push(
+      error(
+        line,
+        `'${edge.at.col}${edge.at.row}.${edge.dir}' names a corner, and nothing in the language is placed on a corner — `
+        + `a wall, door or window lives on an EDGE: n, e, s or w (spec 02 §5)`,
+      ),
+    );
+  }
+}
+
 export function parse(source: string, options: ParseOptions = {}): ParseResult {
   const diagnostics: Diagnostic[] = [];
   const lines = splitLines(source);
@@ -758,6 +803,26 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // gone and says so; a staging zone is the word `start` (or anything
     // deriving from it). gm-only range entities are unaffected: they resolve
     // to `feature`, not `token`.
+    checkNoCorner(predicate.placements, raw.line, diags);
+    // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
+    // one job -- "walls, doors, and windows live on cell edges" -- and at
+    // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
+    // or an opening in unbuilt geometry (spec 06 §3). Every other archetype
+    // simply never looked at an edge placement, so `statue s1 : C3.n` rendered
+    // byte-identically to an empty section and said nothing.
+    if (archetype !== "barrier" && archetype !== "opening") {
+      const edge = edgePlacements(predicate.placements)[0];
+      if (edge) {
+        diags.push(
+          error(
+            raw.line,
+            `'${subject.typeWord ?? "this"}' is ${archetype === "structure" ? "a structure" : `a ${archetype}`}, and an edge token places a wall, door or window `
+            + `(spec 02 §5) — place it on the cell instead: '${edge.at.col}${edge.at.row}'`,
+          ),
+        );
+      }
+    }
+
     if (archetype === "token" && predicate.placements.some((p) => p.kind === "range")) {
       diags.push(
         error(
@@ -873,6 +938,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // WALL, the exact inverse of the line.
     if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
+    checkNoCorner(predicate.placements, raw.line, diags);
     // A BARRIER word in a detail slot REPLACES that side's perimeter with that
     // barrier (#130): `cave-in : east` is the spelling authors already reach
     // for, and it used to draw an ordinary wall and take no styling. Its
