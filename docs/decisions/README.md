@@ -3,8 +3,9 @@
 Every decision that closes off alternatives — syntax choices, technology choices, scope cuts — is recorded here before its issue is closed. See [CONTRIBUTING.md](../../CONTRIBUTING.md#adrs-architecture-decision-records) for the rules.
 
 - Files are numbered sequentially: `0001-<slug>.md`, `0002-<slug>.md`, …
+- **The number is claimed on merge, not on draft** — take the next free one while writing, and if a concurrent branch took it too, whoever merges second renumbers. The index table below is what makes that collision surface as a git conflict rather than as two files sharing a number.
 - Copy [0000-template.md](0000-template.md) to start a new one.
-- ADRs are immutable once **Accepted**. To reverse a decision, write a new ADR that marks the old one **Superseded** and links both ways.
+- **Immutable once it reaches `preview`**, not once the header says Accepted: before that it is a draft and errors are fixed in place; after it, a change of mind is a new ADR that marks the old one **Superseded**, linking both ways.
 
 ## Index
 
@@ -50,3 +51,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0038](0038-a-placement-form-means-the-same-thing-on-every-map-kind.md) | A placement form means the same thing on every map kind: the half-plane places battlemap terrain, ink to the centerline and cells by their centres | Accepted |
 | [0039](0039-an-archetype-name-is-grammar-not-a-type-word.md) | An archetype name is grammar, not a type word: using one as a type word is an error | Accepted |
 | [0040](0040-ink-holds-its-device-width-while-zoomed.md) | Ink holds its device width while zoomed; a measured stroke scales | Accepted |
+| [0041](0041-breaking-means-a-clean-document-stops-checking-clean.md) | Breaking means a clean document stops checking clean; breaking work rides `preview` | Accepted |

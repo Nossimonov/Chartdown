@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main, preview, 0.4-dev]
+    # 0.4-dev dropped with the lane it served (ADR 0041, #273). Pull requests
+    # are covered by the trigger below whatever branch they come from, so this
+    # list only needs the branches that are pushed to directly.
+    branches: [main, preview]
   pull_request:
 
 jobs:
