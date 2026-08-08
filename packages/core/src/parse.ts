@@ -739,7 +739,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
           lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
           lastEntityRefused = lastEntity === null;
         } else {
-          parseHexLedgerLine(raw, tokens, section, symbols, diagnostics);
+          parseHexLedgerLine(raw, tokens, section, symbols, vocab, diagnostics);
         }
         break;
       }
@@ -991,11 +991,33 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     parent.details.push(detail);
   }
 
+  /**
+   * THE LEDGER FORM IS CHECKED LIKE THE GROUPED FORM (#277, #280).
+   *
+   * `hex-ledger-line` and the ordinary entity line are two spellings of the
+   * same thing — the grammar says so outright ("grouped alternative: ordinary
+   * line form"). Every check added since was taught to one of them. Swept
+   * against the entity path, four differed:
+   *
+   *   archetype word as a type word (#266) .... missing, now checked
+   *   unknown `key=` (#195) ................... missing, now checked
+   *   out-of-set facet value .................. missing, now checked
+   *   undeclared state (spec 04 §2) ........... DOES NOT APPLY, see below
+   *
+   * The last is a real difference rather than a gap. On a ledger line a bare
+   * word is a CONTENT word by grammar — `C2 volcano erupting` puts `erupting`
+   * in contents, where `volcano : C2 erupting` puts it in flags — so there is
+   * no flag to check against `states=`, and an unknown content word is legal
+   * (spec 04 §3). That the two spellings disagree about what a bare word MEANS
+   * is a separate question from whether they are checked alike, and is not
+   * settled here.
+   */
   function parseHexLedgerLine(
     raw: RawLine,
     tokens: Token[],
     into: SectionNode,
     table: SymbolTable,
+    vocabTable: VocabTable,
     diags: Diagnostic[],
   ): void {
     const addresses: (Address | AddressRange)[] = [];
@@ -1004,6 +1026,9 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const flags: string[] = [];
     const pairs: Pair[] = [];
     let name: string | null = null;
+    /** Set when the address slot has already been reported on, so the
+     *  "malformed line" catch-all does not report the same mistake twice. */
+    let addressReported = false;
 
     for (const t of tokens) {
       if (t.kind === "pair") {
@@ -1017,6 +1042,14 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       }
       if (t.kind === "colon") continue; // unreachable; grouped form routed elsewhere
       const positional = parsePositional(t.text);
+      // Without this an edge token falls through to the terrain slot and the
+      // line reports as malformed, which names neither the token nor the fix.
+      if (positional && positional.kind === "edge") {
+        const what = CORNER_DIRS.has(positional.dir) ? "a corner" : "an edge";
+        diags.push(error(raw.line, `'${t.text}' names ${what}, and a hex ledger line addresses HEXES — write the hex itself ('${positional.at.col}${positional.at.row}') (spec 05 §3)`));
+        addressReported = true;
+        continue;
+      }
       if (positional && (positional.kind === "address" || positional.kind === "range")) {
         if (terrain !== null) {
           diags.push(error(raw.line, "hex addresses must precede the terrain word"));
@@ -1034,9 +1067,19 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     }
 
     if (addresses.length === 0 || terrain === null) {
-      diags.push(error(raw.line, "malformed hex ledger line — expected '<address> <terrain> [contents] [\"Name\"]' (spec 05 §3)"));
+      // Silent only when the address slot has already been explained in words:
+      // reporting "malformed line" underneath `'C2.nw' names a corner` states
+      // one mistake twice and buries the half that names the fix.
+      if (!addressReported) {
+        diags.push(error(raw.line, "malformed hex ledger line — expected '<address> <terrain> [contents] [\"Name\"]' (spec 05 §3)"));
+      }
       return;
     }
+    // The terrain word and every content word sit in a type-word slot.
+    if (checkTypeWordNotArchetype(terrain, raw.line, diags)) return;
+    for (const word of contents) checkTypeWordNotArchetype(word, raw.line, diags);
+    checkFacetValues(pairs, raw.line, diags);
+    checkPairKeys(terrain, pairs, vocabTable, raw.line, diags);
     const node: HexLineNode = { kind: "hex-line", addresses, terrain, contents, name, flags, pairs, line: raw.line };
     table.add([], name, raw.line, diags);
     into.entries.push(node);
