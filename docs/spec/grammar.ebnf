@@ -1,5 +1,5 @@
 (* ===================================================================
-   Chartdown consolidated grammar — spec v0.5 (sections 01–08)
+   Chartdown consolidated grammar — spec v0.6 (sections 01–08)
    Status: informative consolidation; the prose spec sections are
    normative and win on any conflict. Maintained per issue #12:
    every spec change updates this file in the same commit.
@@ -61,6 +61,10 @@ detail-line    = INDENT , line ;                     (* structure details only �
 subject        = [ type-word ] , { id-word } , [ string ] ;
                  (* sections may permit omitting the type word (spec 01 §4);
                     identity/uniqueness rules: spec 03 §1 *)
+type-word      = word - archetype ;
+                 (* an archetype name is GRAMMAR, legal only on the right-hand
+                    side of a vocab-line: writing one here is an ERROR naming
+                    the fix (spec 04 §1, ADR 0039, #266) *)
 predicate      = { token } ;
 token          = placement | word | string | pair ;
 pair           = key , "=" , ( word | string | measure | level-span ) ;
@@ -101,7 +105,12 @@ control        = point , [ "@" , measure ] ;
                     measured centerline and a sketched one describing the same
                     curve draw the same. *)
 point-range    = point , ".." , point ;
-edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw *)
+edge           = address , "." , dir ;               (* O6.s edges: n e s w ; K5.nw corners: ne nw se sw.
+                    an EDGE places a wall, door or window -- a barrier, an
+                    opening, or a structure detail naming one; elsewhere it
+                    is an error. a CORNER is consumed by nothing and is an
+                    error wherever written, reserved for a future proposal
+                    (spec 02 5, ADR 0043, #281) *)
 shape          = ( "area" | "path" | "blob" | "ridge" ) ,
                  [ "on" , ref , "at" ] , { placement | pair } ;
                  (* `raw` flag on an area = literal edges; without it a
@@ -159,7 +168,7 @@ relational     = ( "at" , ( point | address | range | edge ) )
                     never picked — spec 05 §4, ADR 0031, #191. *)
                | ( compass , "edge" , "of" , ref )
                | ( "near" , ( ref | point ) )
-               | ( "from" , endpoint , [ "via" , point , { point } ] ,
+               | ( "from" , endpoint , [ "via" , via-control , { via-control } ] ,
                    ( ( "to" , endpoint ) | ( "join" , ref ) ) )
                | ( "along" , [ compass , "edge" , "of" ] , ref ) ;
                  (* closed grammar — no other relational forms exist.
@@ -174,6 +183,12 @@ relational     = ( "at" , ( point | address | range | edge ) )
 endpoint       = ( ref , [ "at" , point ] ) | point ;
 ref            = word | string ;                     (* word: explicit-id lookup; string: display-name
                                                         lookup; fail-loud — spec 03 §2 *)
+(* A course's SHAPE control. A world point anywhere; a CELL on a grid, where
+   every other position is written that way (#258). A gridless point on a grid
+   map is REPORTED, never rounded to a cell: cell size follows `scale:`, so the
+   same (60,40) would name a different square after a scale edit. *)
+via-control    = point | address ;
+
 compass        = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
                | "north" | "south" | "east" | "west"
                | "northeast" | "northwest" | "southeast" | "southwest" ;
@@ -189,14 +204,18 @@ hex-ledger-line = ( address | range ) , terrain-word , { content-word } ,
 
 (* ---- vocabulary, [vocab] sections and use: libraries — spec 04 ---- *)
 
-vocab-line     = word , ":" , ( archetype | word ) , { pair | word } , EOL ;
+vocab-line     = type-word , ":" , ( archetype | word ) , { pair | word } , EOL ;
                  (* second form = derivation from another word, with overrides;
-                    cycles are errors; shadowing order: stdlib < use: < document *)
+                    cycles are errors; shadowing order: stdlib < use: < document.
+                    the DEFINED word is a type-word, so a document may not
+                    shadow an archetype name (ADR 0039, #266) *)
 archetype      = "terrain" | "path" | "feature" | "structure" | "barrier"
                | "opening" | "token" | "zone" | "field" ;
                  (* closed; extensible by spec sections only.
                     unknown words never fail: archetype inferred from
-                    shape token, else section, else feature — spec 04 §3 *)
+                    shape token, else section, else feature — spec 04 §3.
+                    the nine names themselves are the exception: reserved in
+                    the type-word position, refused rather than inferred *)
 
 (* ---- themes, [theme]/[glyphs] sections — spec 08 ----
    theme documents contain only these sections; no map: header required. *)
@@ -238,9 +257,20 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    pairs:  gm=, link=, detail=, detail-at=, facing=, size=, side=, width=, light=,
            elevation=, key=, level=, to=, through=, at=
    A key OUTSIDE this set must be one the word can consume — a facet it
-   declares or inherits, one its archetype gives it (reach=/taper= on placed
-   morphology), or a declared field's name — else it WARNS (spec 04 §2, #195).
+   declares or inherits, one its ARCHETYPE gives it whether or not the word
+   states a default (spec 04 §1's table: passes=/sight= on barrier and opening,
+   occluded= on field, width= on path, facing= on feature, size=/side= on token;
+   plus reach=/taper= on placed morphology), or a declared field's name — else
+   it WARNS (spec 04 §2, #195, #267).
    `x-` prefixed pairs are the silent extension namespace, as [x-*] sections are.
+   An AMBIENT baseline (`light: dark` and friends) is drawn only on a
+   battlemap; a region or hexcrawl WARNS and renders without it -- at those
+   scales visibility is tactical (spec 04 5, #287). The regional override
+   works on every map kind.
+   A field's DRAWING (ambient wash, emitter pool, the pool's cut-out) is clipped
+   to the map field of its own panel -- the frame inset by its margin, never the
+   page furniture (spec 04 5, ADR 0042, #284/#288). The declared range is
+   unaffected and exports at its true value.
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
    non-resolving subject with placement = new GM-only entity; otherwise error. *)
 

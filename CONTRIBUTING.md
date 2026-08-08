@@ -56,7 +56,11 @@ Proposals are decided by discussion on the issue. Acceptance means: an ADR is wr
 
 ## ADRs (Architecture Decision Records)
 
-Live in [docs/decisions/](docs/decisions/), numbered sequentially (`0001-...md`, `0002-...md`). Copy [0000-template.md](docs/decisions/0000-template.md). ADRs are immutable once accepted — a reversal is a *new* ADR that supersedes the old one.
+Live in [docs/decisions/](docs/decisions/), numbered sequentially (`0001-...md`, `0002-...md`). Copy [0000-template.md](docs/decisions/0000-template.md). A reversal is a *new* ADR that supersedes the old one.
+
+**A number is claimed when the ADR merges, not when it is drafted** ([#276](https://github.com/Nossimonov/Chartdown/issues/276)). Take the next free number while drafting so you can cite it in code and commits, and accept that a concurrent branch may take the same one — **whoever merges second renumbers.** Two ADRs drafted at once always collide in this section's index table, so git raises the conflict and nothing lands ambiguously; renaming the file, its index row and any references is the whole job. Chartdown 0039 and 0040 were drafted against each other this way.
+
+**An ADR becomes immutable when it reaches `preview`, not when its header says Accepted.** Until then it is a draft with a status field — a factual error in it is corrected in place, and its number may still move. After it, the text is fixed and a change of mind is a new ADR that marks it **Superseded**, linking both ways. The boundary is publication because that is when others can rely on it; nothing enforces this but review.
 
 ## Branches, deploys, and releases
 
@@ -64,9 +68,19 @@ Three lanes (issue #37):
 
 - **`preview`** — the staging branch. Pushes deploy a staging playground at [/Chartdown/preview/](https://nossimonov.github.io/Chartdown/preview/) so features can be exercised live before they reach `main`. CI runs here too.
 - **`main`** — production. Merges deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit. **Direct pushes are rejected — including for admins**: changes reach `main` only by pull request from `preview`, with CI (`test`) and the source-branch check (`gatekeeper`) required to pass.
-- **`0.4-dev`** — the breaking-change lane, open while Phase 4 runs. `preview` must stay **releasable as a patch at all times**, so anything that breaks existing documents lands here instead and merges to `preview` only when the minor is ready. Branched from `preview`; rebase or merge `preview` into it as bugfixes ship.
+**Breaking work rides `preview` like everything else** ([ADR 0041](docs/decisions/0041-breaking-means-a-clean-document-stops-checking-clean.md), [#273](https://github.com/Nossimonov/Chartdown/issues/273)). There is no separate lane. Mark the changelog entry `BREAKING`, and the release cut from `preview` is a **minor**; with no BREAKING entry in `[Unreleased]` it is a **patch**. The changelog is the answer — check it rather than remember it.
 
-  > **Merging it back:** `0.4-dev` was created by branching at the breaking commit and then **reverting that commit on `preview`** (which is protected against force-pushes). Git therefore considers the change already-seen, and a plain merge will NOT re-apply it. When Phase 4 is ready, **revert the revert on `preview` first** (`git revert <revert-sha>`), then merge `0.4-dev`. The revert commit names the branch and this note.
+> **What counts as breaking:** a document that used to check clean stops checking clean, a declaration's meaning changes, or a shipped tool changes a default or a contract. **Nothing else** — including a change that repaints every map. `light: daylight` moving from 0.82 to 0.20 opacity is a fix; a bare archetype word becoming an error is breaking. The question is not how large the diff looks, it is whose promise was broken. ADR 0041 carries the worked table.
+
+> **A patch while breaking work is unreleased** needs a branch from the last tag, not from `preview` — cherry-pick the fix there. This is the cost of having no separate lane, and it is deliberate.
+
+<details><summary>Historical: the <code>0.4-dev</code> lane (retired)</summary>
+
+Phase 4 opened a `0.4-dev` branch so `preview` could stay releasable as a patch at all times. Every breaking change since went through `preview` anyway, and by 2026-08-08 the branch was 82 commits behind with none of its own; ADR 0041 retired it. The branch is left in place unreferenced.
+
+It was created by branching at the breaking commit and **reverting that commit on `preview`**, which makes git treat the change as already-seen so a plain merge will not re-apply it — the merge-back required reverting the revert first (`git revert <revert-sha>`). That operation has already been carried out; the note is kept because the git subtlety is expensive to rediscover if the pattern is ever used again.
+
+</details>
 
 - **Version tags** — the npm release lane. Publishing is *never* triggered by a branch push. To release, run the bump command — it rewrites **every** version surface in one shot (the six `packages/*/package.json`, render-svg's pin on core, the parser's `SPEC_VERSION`, the digest/grammar/spec-README headers, and it rolls the `[Unreleased]` changelog items into the new `## [x.y.z]` section with compare links) — then review the diff, commit, and after the PR reaches `main`, tag:
 

@@ -20,6 +20,17 @@ The language defines only **archetypes**: closed, setting-free behavioral catego
 
 Future spec sections MAY extend this table; documents MUST NOT. Generic parameters (`hidden`, `gm=`, `link=`, `detail=`, `facing=`, `size=`, `width=`, …) remain archetype-independent.
 
+**The nine names above are grammar, and a document MUST NOT use one as a type word** *(from [#266](https://github.com/Nossimonov/Chartdown/issues/266), decided in [ADR 0039](../decisions/0039-an-archetype-name-is-grammar-not-a-type-word.md))*. They are legal in exactly one position — the right-hand side of a vocabulary binding (§2) — and are **reserved** in the type-word position of an entity line, a structure detail line (spec 06 §3), and a `[vocab]` entry's own left-hand side. Writing one there is a **fail-loud error** naming the fix:
+
+```chartdown
+[structures]
+cellar "Cellar" : M14
+  opening : at A1.w sight=all   ; error — 'opening' is an archetype
+```
+> `'opening' is an archetype, not a type word — declare a word for it ('[vocab] arch : opening') and use that (spec 04 §2)`
+
+An archetype has no theme subject: §4's fallback chain terminates at "the archetype's generic shape + **the word as label**", so a bare archetype word could only ever render as its own name, and spec 08 §6 gives themes no way to address it. The definition position is reserved for the same reason a document may not extend the table — a `[vocab]` entry shadowing an archetype name would reintroduce the ambiguity and take the diagnostic with it. §3's promise that an undefined word is legal governs words the language has no opinion about; these nine are the words the language is made of, and it has always had an opinion about them.
+
 ### `passes=` — a closed value set
 
 `passes=` feeds a **normative** transform (the UVTT export of spec 06 §9), so unlike `side=` it cannot be open vocabulary: an unknown value there has no safe degradation, and two conforming renderers would export different portal states from the same document.
@@ -80,7 +91,7 @@ Vocabulary comes from three sources; later **shadows** earlier, silently and del
 
 ## 3. Unknown words and usage inference
 
-A type word with no vocabulary entry anywhere is **legal**. Its archetype is inferred from usage, checking in order:
+A type word with no vocabulary entry anywhere is **legal** — with the one exception §1 states, the nine archetype names, which are grammar and are refused in this position rather than inferred. Its archetype is inferred from usage, checking in order:
 
 1. **Shape or path phrase in the predicate**: `area` or `blob` → `terrain`; `path`, `ridge`, or a `from…to` phrase → `path`. Bare ranges and lone points carry no shape hint.
 2. **Section context**: `[tokens]` → `token`; `[structures]` → `structure`; `[terrain]` → `terrain`; and correspondingly for other primitives-defined sections. Section context outranks placement shape-lessness: a solo unknown creature at a single cell in `[tokens]` is a `token`, and an unknown word with an area placement in `[tokens]` is a staging zone (spec 06 §4), never terrain.
@@ -126,6 +137,8 @@ A **field word** earns four affordances, each reusing machinery that already exi
 - **`occluded=`** says whether matter stops the field: `sight` (the default — blocked by whatever blocks sight, which is what light does) or `none` (fills regardless of interceding material). Without it every declared field would silently inherit light's occlusion, which is wrong for an antimagic zone or a radiation hazard.
 - **Ambient is content, not presentation.** Whether a place is dark is a fact about the place that survives changing themes, exactly as an entity's `light=` is — and spec 08 §6 forbids themes from altering semantics for this reason. The default is unchanged when no ambient is declared, so no existing document moves.
 - **A renderer owes an unknown field only geometry and a lookup**: ambient as page treatment, emitters as pools of their range, regions as their extent, each taking its fill from the theme's `<field>` / `<field>.<state>` entry. A renderer that has never heard of `radiation` still draws it, degrading through §4's fallback chain. Extra cleverness for the field a renderer *does* understand — tracing light against sight blockers — is a renderer's privilege, not a semantic difference.
+- **An ambient baseline is a battlemap concern** *(from [#287](https://github.com/Nossimonov/Chartdown/issues/287))*. A `battlemap` draws the ambient as page treatment; a `region` or `hexcrawl` does not. At those scales a reader is above the weather, and whether a place is dark enough to matter is a **tactical** question — the same reasoning that keeps `difficult` off a region map (spec 05 §5: difficulty is tactical, and a region map has no tactical layer). Declaring one is not an error and the map still renders, but it **WARNS**: an author who writes `light: dark` is picturing a dark sheet, and silence would let them keep picturing it. To say that *part* of a region is lit differently — a cavern roof open to the sun over one stretch of the Underdark — use the regional override, which every map kind draws: `light "The Sunwell" : blob at (140,120) size=70mi daylight`.
+- **Everything a field draws is clipped to the map field of the panel it belongs to** *(from [#284](https://github.com/Nossimonov/Chartdown/issues/284)/[#288](https://github.com/Nossimonov/Chartdown/issues/288), decided in [ADR 0042](../decisions/0042-a-field-is-drawn-on-the-map-field-of-its-own-panel.md))*. The ambient wash, an emitter's pool, and the hole that pool cuts in the wash all stop at the area the grid or `extent:` occupies — the frame inset by its margin. **The margin band is not part of the place**: it is the paper the place is printed on, and it carries the apparatus for reading the map (title, coordinate letters, compass, level caption). A printed battlemap of a lightless cellar has no black border. Where a map draws its levels as separate panels, each panel clips to its own field, so a lamp in the cellar does not light the floor above. Bounding the *drawing* costs no fact: an emitter's declared range is world data and exports at its true value, exactly as [ADR 0037](../decisions/0037-geometry-is-in-map-units-ink-is-in-canvas-units.md) keeps geometry in map units while ink answers to the sheet.
 
 > The emitter-parameter namespace is therefore **derived from the vocabulary**: declaring `radiation : field` is what makes `radiation=40ft` meaningful, and a document that does not declare it leaves the pair an ordinary unrecognized parameter.
 

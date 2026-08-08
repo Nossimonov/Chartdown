@@ -4,11 +4,11 @@
  * emergent-elevation ledges, and the GM/player split.
  */
 
-import type { Address, AddressRange, Diagnostic, EntityNode, Placement } from "@chartdown/core";
+import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY } from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -53,6 +53,30 @@ export function renderBattlemap(
   // entity loop below, before any later let would initialise.
   // Emitter pools per field, as mask holes for the ambient wash (#106).
   const fieldHoles = new Map<string, string[]>();
+
+  /**
+   * The map field of THIS panel — the frame inset by its margin (ADR 0042).
+   *
+   * Everything a field draws stops here: the ambient wash, an emitter's pool,
+   * and the hole the pool cuts in the wash. The margin band is the paper the
+   * place is printed on and carries the apparatus for reading the map, so a
+   * lightless cellar gets no black border and a torch lights no coordinate
+   * letters. Per PANEL rather than per page, which is what stops a lamp in the
+   * cellar lighting the floor above (#291) — each level renders into its own
+   * `<g transform>` with these same local coordinates.
+   *
+   * Only the DRAWING is bounded. The declared range is world data and exports
+   * at its true value, exactly as ADR 0037 keeps geometry in map units while
+   * ink answers to the sheet.
+   */
+  const fieldRect = { x: MARGIN, y: MARGIN, w: frame.cols * CELL, h: frame.rows * CELL };
+  const fieldClipId = `cdfieldclip-${model.doc.docId}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
+  let fieldClipUsed = false;
+  /** Reference the clip, emitting its def only if something actually needs it. */
+  function clipToField(): string {
+    fieldClipUsed = true;
+    return `url(#${fieldClipId})`;
+  }
   const noteHole = (field: string, shape: string): void => {
     const list = fieldHoles.get(field) ?? [];
     list.push(shape);
@@ -122,6 +146,30 @@ export function renderBattlemap(
     course: XY[] | null;
   }
   const pendingTerrainLabels: PendingTerrainLabel[] = [];
+
+  /** Compass words to a unit offset, y down as the canvas runs. */
+  const COMPASS_OFFSET: Record<string, XY> = {
+    n: { x: 0, y: -1 }, north: { x: 0, y: -1 },
+    s: { x: 0, y: 1 }, south: { x: 0, y: 1 },
+    e: { x: 1, y: 0 }, east: { x: 1, y: 0 },
+    w: { x: -1, y: 0 }, west: { x: -1, y: 0 },
+    ne: { x: 1, y: -1 }, northeast: { x: 1, y: -1 },
+    nw: { x: -1, y: -1 }, northwest: { x: -1, y: -1 },
+    se: { x: 1, y: 1 }, southeast: { x: 1, y: 1 },
+    sw: { x: -1, y: 1 }, southwest: { x: -1, y: 1 },
+  };
+
+  /**
+   * `[labels]` overrides, keyed by the entity they name (#252). Resolved once
+   * here rather than searched per label site: a reference is by id or by
+   * display name (spec 03 §2), and the renderer should not re-decide that.
+   */
+  const overrideHints = new Map<EntityNode, LabelHint>();
+  for (const o of model.labelOverrides) {
+    const target = model.entities.find((e) =>
+      o.target.form === "id" ? e.ids.includes(o.target.value) : e.name === o.target.value);
+    if (target) overrideHints.set(target, o.hint);
+  }
 
   // Sight-blocking segments for light (spec 06: solid walls and closed doors
   // block sight; windows pass it; ruined walls are collapsed and pass).
@@ -224,18 +272,31 @@ export function renderBattlemap(
   const f = frame;
   for (let c = 0; c <= f.cols; c++) {
     const x = MARGIN + c * CELL;
-    layers.grid.push(el("line", { x1: x, y1: MARGIN, x2: x, y2: MARGIN + f.rows * CELL, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 0.6 }));
+    layers.grid.push(el("line", { x1: x, y1: MARGIN, x2: x, y2: MARGIN + f.rows * CELL, stroke: model.theme.surface("grid", "stroke", GRID_LINE), ...inkStroke(0.6)}));
   }
   for (let r = 0; r <= f.rows; r++) {
     const y = MARGIN + r * CELL;
-    layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: model.theme.surface("grid", "stroke", GRID_LINE), "stroke-width": 0.6 }));
+    layers.grid.push(el("line", { x1: MARGIN, y1: y, x2: MARGIN + f.cols * CELL, y2: y, stroke: model.theme.surface("grid", "stroke", GRID_LINE), ...inkStroke(0.6)}));
   }
   if (model.header.get("numbers") === "on") {
+    // THE COORDINATES WERE NOT EVEN `INK` (#286). Every other piece of
+    // furniture at least used the constant; these carried the literal
+    // `#8a8272`, so no lever of any kind reached the letters a GM calls out in
+    // play — and a fallback would not have helped, since the DEFAULT theme
+    // declares `ink` and a surface lookup never reaches its fallback.
+    //
+    // They are ink drawn QUIETLY, and that is now what the output says. The
+    // old literal is ink at 60% over paper — solved per channel it comes out
+    // at 0.590/0.602/0.622, and 0.6 reproduces #878175 against a #8a8272
+    // target, under 3/255 on every channel. So the subduing survives as an
+    // opacity, which is a rendering choice, while the COLOUR comes from the
+    // surface, which is the theme's to set.
+    const coordinateInk = model.theme.surface("ink", "fill", INK);
     for (let c = 1; c <= f.cols; c++) {
-      layers.grid.push(text(colLetters(c), { x: MARGIN + (c - 0.5) * CELL, y: MARGIN - 7, "font-size": 9, fill: "#8a8272", "text-anchor": "middle", "font-family": "sans-serif" }));
+      layers.grid.push(text(colLetters(c), { x: MARGIN + (c - 0.5) * CELL, y: MARGIN - 7, "font-size": 9, fill: coordinateInk, opacity: 0.6, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
     for (let r = 1; r <= f.rows; r++) {
-      layers.grid.push(text(String(r), { x: MARGIN - 7, y: MARGIN + (r - 0.5) * CELL + 3, "font-size": 9, fill: "#8a8272", "text-anchor": "end", "font-family": "sans-serif" }));
+      layers.grid.push(text(String(r), { x: MARGIN - 7, y: MARGIN + (r - 0.5) * CELL + 3, "font-size": 9, fill: coordinateInk, opacity: 0.6, "text-anchor": "end", "font-family": "sans-serif" }));
     }
   }
 
@@ -321,6 +382,18 @@ export function renderBattlemap(
   body.push(...ambientWash());
   body.push(...layers.labels);
 
+  // Emitted only if something referenced it, so a map that draws no field is
+  // byte-identical to before (ADR 0042). A `<clipPath>` resolves document-wide
+  // rather than by document order, so defining it after its users is legal —
+  // and this is the one point where every user has already run.
+  if (fieldClipUsed) {
+    body.unshift(
+      `<defs><clipPath id="${fieldClipId}">`
+        + el("rect", { x: fieldRect.x, y: fieldRect.y, width: fieldRect.w, height: fieldRect.h })
+        + `</clipPath></defs>`,
+    );
+  }
+
   // ---------- helpers ----------
 
   /**
@@ -363,15 +436,29 @@ export function renderBattlemap(
       // No theme entry for this condition: the renderer has nothing to say
       // about it, and inventing a tone would be guessing (spec 04 §4).
       if (!fill) continue;
-      const opacity = model.theme.prop(model.chainOf(field), "opacity", { state: value }) ?? "0.82";
+      // A DECLARED TONE WITH NO DECLARED WEIGHT IS REPORTED (#263). The
+      // fallback below is what let `daylight` render at a darkness value
+      // without anything saying so, and the same hole waits for the next word
+      // added to a field's closed set. Named rather than guessed at, in the
+      // spirit of the dead-declaration warnings (#116, ADR 0022) — the wash
+      // still draws, so a theme is not silently disabled by the report.
+      const declared = model.theme.prop(model.chainOf(field), "opacity", { state: value });
+      if (declared === undefined) {
+        diagnostics.push({
+          severity: "warning",
+          line: 1,
+          message: `'${field}: ${value}' gives a colour but no opacity, so it is drawn at the default weight — declare \`${field}.${value} : opacity=\` to say how heavy it should be (spec 08 §2)`,
+        });
+      }
+      const opacity = declared ?? "0.82";
       const holes = fieldHoles.get(field) ?? [];
       const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
       out.push(
-        `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${fmt(frame.w)}" height="${fmt(frame.h)}">` +
-          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill: "#fff" }) +
+        `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${fmt(fieldRect.x)}" y="${fmt(fieldRect.y)}" width="${fmt(fieldRect.w)}" height="${fmt(fieldRect.h)}">` +
+          el("rect", { x: fieldRect.x, y: fieldRect.y, width: fieldRect.w, height: fieldRect.h, fill: "#fff" }) +
           holes.join("") +
           `</mask></defs>` +
-          el("rect", { x: 0, y: 0, width: frame.w, height: frame.h, fill, opacity, mask: `url(#${id})` }),
+          el("rect", { x: fieldRect.x, y: fieldRect.y, width: fieldRect.w, height: fieldRect.h, fill, opacity, mask: `url(#${id})` }),
       );
     }
     return out;
@@ -628,16 +715,16 @@ export function renderBattlemap(
   function dropEdge(r: { x: number; y: number; w: number; h: number }): string {
     const ink = model.theme.surface("ledge", "stroke", "#6b5d4a");
     const parts: string[] = [
-      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, "stroke-width": 2, class: "drop" }),
+      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, ...inkStroke(2), class: "drop" }),
     ];
     const tick = 4;
     for (let x = r.x + 5; x < r.x + r.w; x += 9) {
-      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, "stroke-width": 1.2 }));
-      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, "stroke-width": 1.2 }));
+      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, ...inkStroke(1.2)}));
+      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, ...inkStroke(1.2)}));
     }
     for (let y = r.y + 5; y < r.y + r.h; y += 9) {
-      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, "stroke-width": 1.2 }));
-      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, "stroke-width": 1.2 }));
+      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
+      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
     }
     return el("g", {}, ...parts);
   }
@@ -658,10 +745,10 @@ export function renderBattlemap(
     into.push(
       el("rect", {
         x: c.x - half, y: c.y - half, width: half * 2, height: half * 2,
-        fill: "none", stroke: ink, "stroke-width": 1.6,
+        fill: "none", stroke: ink, ...inkStroke(1.6),
       }),
-      el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
-      el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, "stroke-width": 1 }),
+      el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, ...inkStroke(1)}),
+      el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, ...inkStroke(1)}),
     );
   }
 
@@ -731,7 +818,7 @@ export function renderBattlemap(
       for (let i = 0; i < 3; i++) {
         const half = 10 - i * 3;
         const y = c.y + (up ? 6 - i * 6 : -6 + i * 6);
-        parts.push(el("line", { x1: c.x - half, y1: y, x2: c.x + half, y2: y, stroke: ink, "stroke-width": 2.2 }));
+        parts.push(el("line", { x1: c.x - half, y1: y, x2: c.x + half, y2: y, stroke: ink, ...inkStroke(2.2)}));
       }
     }
     parts.push(
@@ -896,6 +983,75 @@ export function renderBattlemap(
     layers.areas[p.slot] = el("g", { id: p.anchor }, p.titleEl, ...parts);
   }
 
+  /**
+   * An author-placed `[labels]` override, applied (#252).
+   *
+   * Spec 07 §5 states one absolute — "author-placed `[labels]` overrides are
+   * never omitted" — and this renderer read none of them. The override was
+   * parsed, resolved against the entity, and validated fail-loud (a typo'd
+   * subject is a hard error here), so an author had positive evidence their
+   * line was good, and the label rendered at its default position anyway.
+   *
+   * `at` returns a point in cell space; `side` offsets from wherever the
+   * caller would have put it, so each site keeps its own idea of "beside";
+   * `sprawl` letter-spaces across the declared range, as free text does; and
+   * `along` rides the referenced course, reusing the machinery notes use.
+   *
+   * Returns true when it has emitted the label, so the caller skips its own.
+   */
+  function emitOverride(e: EntityNode, label: string, at: XY, into: string[]): boolean {
+    const hint = overrideHints.get(e);
+    if (!hint) return false;
+    const base = { "font-size": 10, fill: INK, "font-family": "sans-serif" } as const;
+    if (hint.kind === "at") {
+      if (hint.target.kind === "point") {
+        diagnostics.push({
+          severity: "error",
+          line: e.line,
+          message: `'${label}' is placed at a gridless point on a battlemap — give the cell you mean (\`F6\`) (spec 07 §2)`,
+        });
+        return false;
+      }
+      const c = cellCenter(hint.target);
+      into.push(text(label, { ...base, x: c.x, y: c.y + 4, "text-anchor": "middle" }));
+      return true;
+    }
+    if (hint.kind === "side") {
+      const d = COMPASS_OFFSET[hint.compass.toLowerCase()] ?? { x: 0, y: -1 };
+      const gap = CELL * 0.75;
+      into.push(text(label, {
+        ...base,
+        x: at.x + d.x * gap,
+        y: at.y + d.y * gap + 4,
+        "text-anchor": d.x > 0 ? "start" : d.x < 0 ? "end" : "middle",
+      }));
+      return true;
+    }
+    if (hint.kind === "sprawl") {
+      if (hint.range.kind !== "range") return false;
+      const r = rangeRect(hint.range);
+      const size = 10;
+      const spacing = Math.max(0, (r.w - label.length * size * 0.58) / Math.max(1, label.length - 1));
+      into.push(text(label, {
+        ...base, x: r.x + r.w / 2, y: r.y + r.h / 2 + 4, "letter-spacing": spacing, "text-anchor": "middle",
+      }));
+      return true;
+    }
+    // `along <ref>` — the same textPath a caption uses (spec 07 §2).
+    const course = courseOf(hint.ref);
+    if (!course || course.length < 2) return false;
+    const pid = `cdoverride-${model.doc.docId}-${terrainCourseCount++}`;
+    const leftward = course[course.length - 1]!.x < course[0]!.x;
+    const ride = leftward ? [...course].reverse() : course;
+    const d = `M${fmt(ride[0]!.x)} ${fmt(ride[0]!.y)}` + ride.slice(1).map((q) => `L${fmt(q.x)} ${fmt(q.y)}`).join("");
+    into.push(
+      `<defs><path id="${pid}" d="${d}"/></defs>` +
+        `<text font-size="10" fill="${INK}" text-anchor="middle" font-family="sans-serif">` +
+        `<textPath href="#${pid}" startOffset="50%"><tspan dy="-3">${escapeText(label)}</tspan></textPath></text>`,
+    );
+    return true;
+  }
+
   /** The text a terrain entity labels itself with, or null if it labels none. */
   function terrainLabelText(e: EntityNode): string | null {
     if (!e.name || e.flags.includes("nolabel") || !labelsOn(model)) return null;
@@ -936,6 +1092,8 @@ export function renderBattlemap(
     const label = terrainLabelText(t.e);
     if (label === null || !t.course || t.course.length < 2) return;
     const course = t.course;
+    // An override outranks the arc-length rule: the author said where.
+    if (emitOverride(t.e, label, alongCourse(t.course, 0.5), layers.roomLabels)) return;
     const w = label.length * 9 * 0.58;
     // Text on a path RIDES the path, so a name on a north-south road is drawn
     // turned on its side. Measured as a horizontal box the way every other
@@ -1000,6 +1158,7 @@ export function renderBattlemap(
     const cells = surfaceCells(t.e, halfPlaneContext(model.doc, model.entities));
     if (cells.size === 0) return;
     const at = placeRoomLabel(label, cells);
+    if (emitOverride(t.e, label, at, layers.roomLabels)) return;
     const w = label.length * 10 * 0.58;
     labelObstructions.push({ x: at.x - w / 2, y: at.y - 8, w, h: 10 });
     layers.roomLabels.push(
@@ -1090,7 +1249,7 @@ export function renderBattlemap(
         parts.push(
           el("line", {
             x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
-            stroke, "stroke-width": width, "stroke-dasharray": dash,
+            stroke, ...inkStroke(width), "stroke-dasharray": dash,
           }),
         );
       }
@@ -1105,15 +1264,63 @@ export function renderBattlemap(
         el("line", {
           x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2,
           stroke: ruinedStroke ?? wallStroke,
-          "stroke-width": wallWidth,
+          ...inkStroke(wallWidth),
           "stroke-dasharray": ruined ? (ruinedDash ?? "5 6") : (model.theme.prop(structChain, "dash", wallCtx)?.replace(",", " ")),
           opacity: ruined ? 0.7 : 1,
         }),
       );
     }
+    // SPEC 06 §3 IS A CLOSED SET, AND BOTH HALVES OF IT WERE UNENFORCED.
+    // A structure detail's subject is a wall state, an opening, or a barrier
+    // word; its predicate is side words or edge tokens. Anything else used to
+    // be swallowed instead of refused: a cell predicate hit the `continue`
+    // below and rendered byte-identically to its own absence, doors included
+    // (#293), and a subject outside the three drew a line in the wall's own
+    // ink at the wall's own weight — invisible, on top of the wall it sat on
+    // (#294, the else-branch #103 left live). A barrier subject fared worse
+    // still: it drew there AND on its own themed run, so a `fence` edge came
+    // out twice at two different weights.
+    //
+    // What the author almost always means by a detail the slot cannot take is
+    // a thing standing IN the room, which is an entity of its own — so the
+    // messages name that spelling rather than only refusing.
+    const detailParent = e.ids[0] ?? e.name ?? e.typeWord ?? "the structure";
+    const wallStates = model.statesOf(e.typeWord);
     for (const d of e.details) {
+      const subject = d.typeWord;
+      const archetype = model.archetypeOf(subject);
+      // `ruined` and its kin resolve to no archetype — they are states of the
+      // structure's own word, which is why this asks the parent rather than
+      // matching a literal (the trap #103 named).
+      const isWallState = subject !== null && archetype === null && wallStates.has(subject);
+      if (subject !== null && archetype !== "opening" && archetype !== "barrier" && !isWallState) {
+        diagnostics.push({
+          severity: "error",
+          line: d.line,
+          message:
+            `'${subject}' is not an opening, a wall state, or a barrier, so it cannot be a detail of `
+            + `'${detailParent}' — those three are what an indented line under a structure may say `
+            + `(spec 06 §3). For something standing in the room, give it its own line: `
+            + `'${subject} : on ${detailParent} at A1'`,
+        });
+        continue;
+      }
       for (const p of d.placements) {
-        if (p.kind !== "edge") continue;
+        if (p.kind !== "edge") {
+          // An opening wants an EDGE — telling its author to move the door
+          // out of the room would be answering a question they did not ask.
+          const fix = archetype === "opening"
+            ? `name the edge it sits on: '${subject} : at A1.n'`
+            : `give it its own line: '${subject ?? "it"} : on ${detailParent} at A1'`;
+          diagnostics.push({
+            severity: "error",
+            line: d.line,
+            message:
+              `'${subject ?? "this detail"}' is placed on a cell, but a structure detail addresses a `
+              + `WALL — side words ('north east') or edge tokens ('A1.n') (spec 06 §3). ${fix}`,
+          });
+          continue;
+        }
         const o = cellOrigin(p.at);
         const seg =
           p.dir === "n" ? { x1: o.x, y1: o.y, x2: o.x + CELL, y2: o.y }
@@ -1126,10 +1333,12 @@ export function renderBattlemap(
         // every derived opening to an else-branch that drew it in the wall's
         // own ink at the wall's own weight — invisible, on top of the wall.
         const openingChain = model.chainOf(d.typeWord);
-        if (model.archetypeOf(d.typeWord) !== "opening") {
-          parts.push(el("line", { ...seg, stroke: model.theme.prop(openingChain, "stroke") ?? INK, "stroke-width": 3 }));
-          continue;
-        }
+        // A barrier and a wall state are drawn by their own paths above — the
+        // barrier as its own themed run, the state on the perimeter it marks.
+        // Drawing them here as well is what doubled a `fence` edge at two
+        // different weights; the subject check above has already refused
+        // everything that belongs to neither path.
+        if (model.archetypeOf(d.typeWord) !== "opening") continue;
         const windowLike = openingChain.includes("window") || openingChain.includes("arrow-slit");
         const stroke = model.theme.prop(openingChain, "stroke") ?? (windowLike ? "#6fa8c9" : "#a8763e");
         const width = Number(model.theme.prop(openingChain, "width") ?? (windowLike ? 2.5 : 5)) || (windowLike ? 2.5 : 5);
@@ -1138,7 +1347,7 @@ export function renderBattlemap(
         // the one the four `door` states were invisible on.
         const ruinedOpening = d.flags.includes("ruined");
         layers.openings.push(el("line", {
-          ...seg, stroke, "stroke-width": width,
+          ...seg, stroke, ...inkStroke(width),
           "stroke-dasharray": ruinedOpening ? "4 4" : undefined,
           opacity: ruinedOpening ? 0.6 : undefined,
         }));
@@ -1158,6 +1367,7 @@ export function renderBattlemap(
       const lbl = labelTextFor(model, e);
       if (lbl !== null) {
         const at = placeRoomLabel(lbl, cells);
+        if (emitOverride(e, lbl, at, layers.roomLabels)) return;
         layers.roomLabels.push(
           text(lbl, {
             x: at.x, y: at.y, "font-size": 10, fill: INK,
@@ -1301,7 +1511,7 @@ export function renderBattlemap(
       // ink, so they read at battle scale without a legend.
       const ruinedDoor = e.flags.includes("ruined");
       parts.push(el("line", {
-        x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, "stroke-width": width,
+        x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y, stroke, ...inkStroke(width),
         "stroke-dasharray": ruinedDoor ? "4 4" : undefined,
         opacity: ruinedDoor ? 0.6 : undefined,
       }));
@@ -1404,11 +1614,13 @@ export function renderBattlemap(
           fill: themed ?? (gmZone ? "#b5504a" : elevation ? "#efe6d2" : "#4a9a6a"),
           opacity: elevation ? 0.7 : 0.12,
         }),
-        el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke, "stroke-width": elevation ? 3.5 : 1.5, "stroke-dasharray": elevation ? undefined : "6 4" }),
+        el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke, ...inkStroke(elevation ? 3.5 : 1.5), "stroke-dasharray": elevation ? undefined : "6 4" }),
       ),
     );
     const label = e.name ?? e.ids[0] ?? e.typeWord;
     if (label && !e.flags.includes("nolabel") && labelsOn(model)) {
+      const zoneAt = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      if (!emitOverride(e, label, zoneAt, labels))
       labels.push(text(elevation ? `${label} (${elevation})` : label, { x: r.x + r.w / 2, y: r.y + 12, "font-size": 9, fill: stroke, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
@@ -1436,7 +1648,7 @@ export function renderBattlemap(
           el("line", {
             x1: s.a.x, y1: s.a.y, x2: s.b.x, y2: s.b.y,
             stroke: themedStroke ?? (isFence ? "#8a7a5c" : INK),
-            "stroke-width": Number(themedWidth ?? (isFence ? 2 : 3)) || (isFence ? 2 : 3),
+            ...inkStroke(Number(themedWidth ?? (isFence ? 2 : 3)) || (isFence ? 2 : 3)),
             "stroke-dasharray": ruined && !isFence ? "5 6" : (themedDash ?? (isFence ? "3 3" : undefined)),
             opacity: ruined ? 0.7 : 1,
             "stroke-linecap": "square",
@@ -1451,7 +1663,7 @@ export function renderBattlemap(
           parts.push(themedGlyphPath(glyph, chain, c));
         } else {
           const fill = model.theme.prop(chain, "fill") ?? "#5a5244";
-          parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
+          parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, ...inkStroke(1)}));
         }
       }
     }
@@ -1493,11 +1705,11 @@ export function renderBattlemap(
     const has = (w: string): boolean => chain.includes(w);
     if (has("campfire") || has("torch") || has("brazier") || has("lantern")) {
       // Sized to be seen (#66): the ember plus a flame lick above it.
-      parts.push(el("circle", { cx: c.x, cy: c.y + 1.5 * scale, r: 6 * scale, fill: "#d9822b", stroke: "#a8541e", "stroke-width": 1.5 }));
+      parts.push(el("circle", { cx: c.x, cy: c.y + 1.5 * scale, r: 6 * scale, fill: "#d9822b", stroke: "#a8541e", ...inkStroke(1.5)}));
       parts.push(
         el("path", {
           d: `M${fmt(c.x - 3 * scale)} ${fmt(c.y - 3 * scale)} Q${fmt(c.x - 1 * scale)} ${fmt(c.y - 9 * scale)} ${fmt(c.x + 1 * scale)} ${fmt(c.y - 5 * scale)} Q${fmt(c.x + 2.5 * scale)} ${fmt(c.y - 8 * scale)} ${fmt(c.x + 3.5 * scale)} ${fmt(c.y - 3.5 * scale)}`,
-          fill: "none", stroke: "#a8541e", "stroke-width": 1.5, "stroke-linecap": "round",
+          fill: "none", stroke: "#a8541e", ...inkStroke(1.5), "stroke-linecap": "round",
         }),
       );
       return true;
@@ -1508,7 +1720,7 @@ export function renderBattlemap(
       parts.push(
         el("rect", {
           x: c.x - CELL * 0.45 * scale, y: c.y - CELL * 0.28 * scale, width: CELL * 0.9 * scale, height: CELL * 0.56 * scale,
-          fill: "#a8763e", stroke: INK, "stroke-width": 1.5,
+          fill: "#a8763e", stroke: INK, ...inkStroke(1.5),
           "stroke-dasharray": e.flags.includes("overturned") ? "4 3" : undefined,
           transform: rot ? `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` : undefined,
         }),
@@ -1523,12 +1735,12 @@ export function renderBattlemap(
       const stair: string[] = [];
       for (const [i, w] of [4, 7, 10].entries()) {
         const y = c.y + (i - 1) * 6 * scale;
-        stair.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, "stroke-width": 2.2 }));
+        stair.push(el("line", { x1: c.x - w * scale, y1: y, x2: c.x + w * scale, y2: y, stroke: INK, ...inkStroke(2.2)}));
       }
       stair.push(
         el("path", {
           d: `M${fmt(c.x - 3 * scale)} ${fmt(c.y - 9 * scale)} L${fmt(c.x)} ${fmt(c.y - 13 * scale)} L${fmt(c.x + 3 * scale)} ${fmt(c.y - 9 * scale)}`,
-          fill: "none", stroke: INK, "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round",
+          fill: "none", stroke: INK, ...inkStroke(1.8), "stroke-linecap": "round", "stroke-linejoin": "round",
         }),
       );
       parts.push(rot === 0 ? stair.join("") : el("g", { transform: `rotate(${rot} ${fmt(c.x)} ${fmt(c.y)})` }, ...stair));
@@ -1556,12 +1768,13 @@ export function renderBattlemap(
           el("circle", {
             cx: center.x, cy: center.y, r: radius, fill, opacity: 0.9,
             stroke: e.flags.includes("hidden") ? "#fff" : "#3d3629",
-            "stroke-width": 1.5,
+            ...inkStroke(1.5),
             "stroke-dasharray": e.flags.includes("hidden") ? "3 3" : undefined,
           }),
         ),
       );
       if (!e.flags.includes("nolabel") && labelsOn(model)) {
+        if (!emitOverride(e, label, center, labels))
         labels.push(text(label, { x: center.x, y: center.y + radius + 10, "font-size": 9, fill: INK, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
     });
@@ -1632,8 +1845,8 @@ export function renderBattlemap(
         noteHole("light", emitterHole(center, radius));
         footprintParts.push(
           sightBlockers.length > 0
-            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 })
-            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }),
+            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() })
+            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() }),
         );
       }
       const themed0 = model.theme.glyphFor(chainR, center.x, center.y);
@@ -1642,7 +1855,7 @@ export function renderBattlemap(
         ? (model.theme.prop(chainR, "fill") ?? wordTint(chainR[chainR.length - 1] ?? ""))
         : "#8f8474";
       footprintParts.push(
-        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: slabFill, stroke: INK, "stroke-width": 1.2, rx: 2 }),
+        el("rect", { x: r.x + 3, y: r.y + 3, width: r.w - 6, height: r.h - 6, fill: slabFill, stroke: INK, ...inkStroke(1.2), rx: 2 }),
       );
       const themed = themed0;
       if (themed) {
@@ -1667,6 +1880,7 @@ export function renderBattlemap(
       into.push(el("g", { id: anchor }, ...footprintParts));
       if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
         const lbl = labelTextFor(model, e) ?? e.name;
+        if (!emitOverride(e, lbl, center, labels))
         labels.push(text(lbl, { x: center.x, y: r.y + r.h + 10, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
       }
       return;
@@ -1688,9 +1902,9 @@ export function renderBattlemap(
       noteHole("light", emitterHole(c, radius));
       if (sightBlockers.length > 0) {
         const poly = visibilityPolygon(c, radius, sightBlockers);
-        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
+        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
       } else {
-        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 }));
+        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
       }
     }
     const chain = model.chainOf(e.typeWord);
@@ -1704,7 +1918,7 @@ export function renderBattlemap(
       // Glyphless words tint deterministically (#71): theme fill wins, else
       // the word-hash — table and barrel stop being the same grey square.
       const fill = model.theme.prop(chain, "fill") ?? wordTint(chain[chain.length - 1] ?? "");
-      parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, "stroke-width": 1 }));
+      parts.push(el("rect", { x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill, stroke: INK, ...inkStroke(1)}));
     }
     // Label conduct (spec 06 §7): at battlemap scale, fallback word-labels are
     // tooltips — visible text is reserved for display names, tokens, and zones.
@@ -1721,6 +1935,7 @@ export function renderBattlemap(
     into.push(el("g", { id: anchor }, ...parts));
     if (e.name && !e.flags.includes("nolabel") && labelsOn(model)) {
       const lbl = labelTextFor(model, e) ?? e.name;
+      if (!emitOverride(e, lbl, c, labels))
       labels.push(text(lbl, { x: c.x, y: c.y + 20, "font-size": 8, fill: INK, "font-weight": model.labelsMode === "keyed" ? "bold" : undefined, "text-anchor": "middle", "font-family": "sans-serif" }));
     }
   }
@@ -1769,7 +1984,7 @@ function openingStateMarks(
     out.push(el("line", {
       x1: mid.x - ux * reach + nx * off, y1: mid.y - uy * reach + ny * off,
       x2: mid.x + ux * reach + nx * off, y2: mid.y + uy * reach + ny * off,
-      stroke, "stroke-width": Math.max(1.2, width * 0.4), "stroke-linecap": "round",
+      stroke, ...inkStroke(Math.max(1.2, width * 0.4)), "stroke-linecap": "round",
     }));
   }
   if (e.flags.includes("stuck")) {

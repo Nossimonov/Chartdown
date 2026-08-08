@@ -58,6 +58,80 @@ export const ARCHETYPES = new Set([
   "opening", "token", "zone", "field",
 ]);
 
+/**
+ * The facets each archetype gives a word **whether or not the word states a
+ * default** — spec 04 §1's table, which §2 makes normative for what a `key=`
+ * may be: "a facet its archetype gives it whether or not the word states a
+ * default".
+ *
+ * That clause was unimplemented (#267). Consumable keys were resolved from
+ * DECLARED facets alone, so a word bound straight to an archetype inherited
+ * nothing — `[vocab] hatch : opening` then `hatch : at A1.w sight=all` warned
+ * that `sight=` was not a parameter `hatch` could use, citing the very section
+ * that grants it. The standard library hid it: `door` and `window` declare
+ * `passes=`/`sight=` themselves and so never exercised the clause. It showed on
+ * its own words the moment one of them left a facet at the default — `pillar`
+ * declares neither and could take neither, and `fence` declares `sight=` and
+ * could not take `passes=`.
+ *
+ * Mirrors §1 exactly rather than listing only the gaps. Four of these keys are
+ * also reserved generic parameters usable on any line (spec 01 §5) and would be
+ * accepted without this table; they are here so the table can be read against
+ * the spec section it encodes, instead of against that section minus another
+ * list somewhere else.
+ */
+export const ARCHETYPE_FACETS: Record<string, readonly string[]> = {
+  terrain: [],                      // `difficult` is a STATE, not a facet
+  path: ["width"],
+  feature: ["facing"],
+  structure: [],
+  barrier: ["passes", "sight"],
+  opening: ["passes", "sight"],
+  token: ["size", "side"],
+  zone: [],
+  field: ["occluded"],
+};
+
+/**
+ * A word to suggest for each archetype, so the error below names a fix the
+ * author can paste rather than a shape they have to instantiate. None is a
+ * standard-library word — the suggestion has to be free to define.
+ */
+const ARCHETYPE_EXAMPLE: Record<string, string> = {
+  terrain: "heath", path: "causeway", feature: "obelisk",
+  structure: "granary", barrier: "railing", opening: "arch",
+  token: "goblin", zone: "muster", field: "radiation",
+};
+
+/**
+ * An archetype name is GRAMMAR, not a type word (spec 04 §1, ADR 0039, #266):
+ * the nine are legal only on the right-hand side of a vocabulary binding, and
+ * reserved everywhere a type word goes — entity lines, structure details, and
+ * a `[vocab]` entry's own left-hand side.
+ *
+ * They used to resolve to `null` — an archetype name is never an ENTRY, only
+ * ever the target of one — so the word fell through to spec 04 §3's inference
+ * as though it were undefined. In a structure detail that inverted the line:
+ * `opening : at A1.w` drew a WALL where the document asked for a hole in one,
+ * and `check` said nothing. Reports and returns true when `word` is one, so
+ * the caller can drop the line instead of drawing the wrong thing.
+ */
+export function checkTypeWordNotArchetype(
+  word: string | null,
+  line: number,
+  diagnostics: Diagnostic[],
+): boolean {
+  if (word === null || !ARCHETYPES.has(word)) return false;
+  const example = ARCHETYPE_EXAMPLE[word] ?? "my-word";
+  diagnostics.push(
+    error(
+      line,
+      `'${word}' is an archetype, not a type word — declare a word for it ('[vocab] ${example} : ${word}') and use that (spec 04 §2)`,
+    ),
+  );
+  return true;
+}
+
 /** The shipped standard library — normative content of specs 05 §1 and 06 §2. */
 export const STDLIB_SOURCE = `# Chartdown Standard Library
 
@@ -340,6 +414,9 @@ export function parseVocabLine(
     diagnostics.push(error(line, "malformed [vocab] line — expected 'word : archetype-or-word'"));
     return null;
   }
+  // The DEFINED word is a type word (ADR 0039): a document that could shadow an
+  // archetype name would reintroduce #266 and take the diagnostic with it.
+  if (checkTypeWordNotArchetype(first.text, line, diagnostics)) return null;
   const pairs: Pair[] = [];
   const flags: string[] = [];
   for (const t of tokens.slice(3)) {

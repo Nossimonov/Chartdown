@@ -80,6 +80,24 @@ export function tokenize(text: string, line: number, diagnostics: Diagnostic[]):
       tokens.push({ kind: "colon" });
       continue;
     }
+    // A DISPLAY NAME MAY HUG THE COLON (#251): `forest "Dark Wood": blob …`.
+    // The header-style rule above refuses any chunk containing a quote, which
+    // is right for `gm="a: b"` and wrong here — so this spelling fell through
+    // to the string branch below, where the trailing-quote strip cannot match
+    // a chunk ending in a colon. The name became `Dark Wood":`, no colon token
+    // was emitted, and the line was rejected as having no predicate: an error
+    // naming the whole line, for one absent space.
+    //
+    // It matters most in `[labels]`, where an override's subject IS a bare
+    // quoted name, so `"The Black Altar": at …` is the natural thing to type
+    // and was exactly the shape that failed. The closing quote is what makes
+    // this unambiguous — the colon is outside the string, so it is punctuation
+    // and not part of the name.
+    if (chunk.startsWith('"') && chunk.endsWith('":') && chunk.length > 2) {
+      tokens.push({ kind: "string", value: chunk.slice(1, -2) });
+      tokens.push({ kind: "colon" });
+      continue;
+    }
     if (chunk.startsWith('"')) {
       tokens.push({ kind: "string", value: chunk.replace(/^"|"$/g, "") });
       continue;

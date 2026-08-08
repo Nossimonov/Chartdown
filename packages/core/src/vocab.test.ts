@@ -59,3 +59,71 @@ ${line}
     expect(warnings(doc(`sound a "A" : on shore at (30,10) size=2mi x-internal=7`))).toEqual([]);
   });
 });
+
+describe("an archetype's facets reach a word that states no default (#267)", () => {
+  // Spec 04 §2 grants "a facet its archetype gives it WHETHER OR NOT THE WORD
+  // STATES A DEFAULT". Only the `morph=` half was implemented, so consumable
+  // keys came from declared facets alone — and a word bound straight to an
+  // archetype has nothing above it in the chain to inherit from.
+  const battlemap = (body: string): string => `map: battlemap
+grid: square 30x20
+
+${body}
+`;
+  const warnings = (src: string): string[] =>
+    parse(src).diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
+
+  it("lets a word bound straight to an archetype use that archetype's facets", () => {
+    // The report: `sight=` is what an opening is FOR, and the warning refusing
+    // it cited the section that grants it.
+    expect(warnings(battlemap(`[vocab]
+hatch : opening
+
+[structures]
+cellar "Cellar" : M14
+  hatch : at A1.w sight=all passes=open`))).toEqual([]);
+  });
+
+  it("closes the same hole on the standard library's own barriers", () => {
+    // `pillar : barrier` declares neither facet and could take neither;
+    // `fence : barrier sight=all` declares one and could not take the other.
+    expect(warnings(battlemap(`[features]
+pillar p1 : D4 sight=all
+fence f1 : E4 passes=none`))).toEqual([]);
+  });
+
+  it("gives a declared field its occluded= facet", () => {
+    // Filtered to this rule's own warnings: the same document also trips #268,
+    // where an emitter pair does not count as spending the field word it names.
+    // That is a different checker and a different fix; asserting [] here would
+    // couple this test to it.
+    const unconsumable = warnings(battlemap(`[vocab]
+silence : field
+
+[features]
+bell b1 : D4 silence=30ft occluded=none`)).filter((m) => m.includes("is not a parameter"));
+    expect(unconsumable).toEqual([]);
+  });
+
+  it("still reports a key the archetype does not give either", () => {
+    // The point of #195 survives: the set grew by exactly the spec's table.
+    const [msg] = warnings(battlemap(`[vocab]
+hatch : opening
+
+[structures]
+cellar "Cellar" : M14
+  hatch : at A1.w wibble=1`));
+    expect(msg).toMatch(/'wibble=' is not a parameter 'hatch' can use/);
+  });
+
+  it("does not hand one archetype's facets to another", () => {
+    // `occluded=` belongs to a field, not to an opening.
+    const [msg] = warnings(battlemap(`[vocab]
+hatch : opening
+
+[structures]
+cellar "Cellar" : M14
+  hatch : at A1.w occluded=none`));
+    expect(msg).toMatch(/'occluded=' is not a parameter 'hatch' can use/);
+  });
+});

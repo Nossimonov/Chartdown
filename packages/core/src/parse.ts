@@ -6,6 +6,8 @@
  */
 
 import type {
+  Edge,
+  Placement,
   Address,
   AddressRange,
   DetailNode,
@@ -25,11 +27,11 @@ import type {
 import { error, warning, type Diagnostic } from "./diagnostics";
 import { splitLines, tokenize, type RawLine, type Token } from "./lex";
 import { isCompass, parseAddress, parsePositional, parsePredicate } from "./placements";
-import { checkFacetValues, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
+import { ARCHETYPE_FACETS, checkFacetValues, checkTypeWordNotArchetype, inferArchetype, loadStdlib, parseVocabDocument, parseVocabLine, VocabTable } from "./vocab";
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
-export const SPEC_VERSION = "0.5";
+export const SPEC_VERSION = "0.6";
 
 export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
@@ -202,10 +204,17 @@ function checkPairKeys(
   diagnostics: Diagnostic[],
 ): void {
   if (typeWord === null || pairs.length === 0) return;
-  if (vocabTable.archetypeOf(typeWord) === null) return;
+  const archetype = vocabTable.archetypeOf(typeWord);
+  if (archetype === null) return;
   if (vocabTable.chain(typeWord).includes("border")) return;
   const facets = vocabTable.facetKeysOf(typeWord);
   const fields = vocabTable.fieldWords();
+  // The facets the ARCHETYPE gives, which spec 04 §2 grants whether or not the
+  // word states a default (#267). A word bound straight to an archetype has
+  // nothing above it in the chain, so declared facets alone left it with none —
+  // and `hatch : opening` could not take the `sight=` that is what an opening
+  // is for.
+  for (const key of ARCHETYPE_FACETS[archetype] ?? []) facets.add(key);
   // WHAT THE ARCHETYPE CAN CONSUME, not only what the word happens to declare.
   // `reach=` and `taper=` belong to placed morphology as such (spec 05 §4), and
   // the stdlib declares them only where it has a non-default to state — so
@@ -376,7 +385,7 @@ function parseGrid(value: string, line: number, diagnostics: Diagnostic[]): Grid
  * to offer more words than any one map spends, so silence is its normal
  * condition — the same reason a shared theme is exempt on the theme side.
  */
-function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): void {
+function reportDeadVocab(document: DocumentNode, vocabTable: VocabTable, diagnostics: Diagnostic[]): void {
   if (document.mapType === "") return; // a vocabulary document's words ARE its product
   const spent = new Set<string>();
   // Header keys AND values: a `field` word is spent by `light: dim`, and
@@ -385,6 +394,23 @@ function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): voi
     spent.add(h.key);
     for (const word of h.value.split(/[\s,]+/)) if (word) spent.add(word);
   }
+  /**
+   * A pair key spends the word it names when that word is a declared FIELD
+   * (#268): spec 04 §5 makes the emitter namespace a function of the
+   * vocabulary, so `silence : field` is what gives `bell : D4 silence=30ft`
+   * its meaning — the declaration is what the pair depends on, which is the
+   * opposite of unused. The header loop above already covered the ambient
+   * baseline (`silence: heavy`) and this covers the emitter, the affordance
+   * the archetype exists for.
+   *
+   * Restricted to fields rather than crediting every pair key, so a document
+   * declaring a word that happens to collide with a facet or a reserved
+   * parameter — `[vocab] size : feature` — is not held to be using it by any
+   * line carrying `size=`.
+   */
+  const spendIfField = (key: string): void => {
+    if (vocabTable.archetypeOf(key) === "field") spent.add(key);
+  };
   const declared: VocabEntryNode[] = [];
   for (const section of document.sections) {
     for (const entry of section.entries) {
@@ -395,7 +421,11 @@ function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): voi
       }
       if (entry.kind !== "entity") continue;
       if (entry.typeWord) spent.add(entry.typeWord);
-      for (const d of entry.details) if (d.typeWord) spent.add(d.typeWord);
+      for (const p of entry.pairs) spendIfField(p.key);
+      for (const d of entry.details) {
+        if (d.typeWord) spent.add(d.typeWord);
+        for (const p of d.pairs) spendIfField(p.key);
+      }
       // Flags are open vocabulary (states), but a word declared as a state's
       // home is spent by carrying it — `volcano : peak states=erupting` is
       // spent by `volcano ... erupting`, which the typeWord above covers.
@@ -407,6 +437,49 @@ function reportDeadVocab(document: DocumentNode, diagnostics: Diagnostic[]): voi
       warning(
         entry.line,
         `'${entry.word}' is declared here and never used — nothing in this document carries the word or derives from it (spec 04 §3)`,
+      ),
+    );
+  }
+}
+
+/** Corner directions — addressable (spec 02 §5) and consumed by nothing. */
+const CORNER_DIRS = new Set(["ne", "nw", "se", "sw"]);
+
+/**
+ * Every edge placement in a predicate, unwrapping the `at`-prefixed form so a
+ * parent-local `at A1.n` is seen as readily as a bare `A1.n`.
+ */
+function edgePlacements(placements: Placement[]): Edge[] {
+  const out: Edge[] = [];
+  for (const p of placements) {
+    if (p.kind === "edge") out.push(p);
+    else if (p.kind === "relational" && p.form === "at" && p.target.kind === "edge") out.push(p.target);
+  }
+  return out;
+}
+
+/**
+ * A CORNER IS ADDRESSABLE AND NOTHING CONSUMES IT (#281, ADR 0043).
+ *
+ * Spec 02 §5 defines `K5.nw` beside `O6.s` and then gives a job only to the
+ * edge: "walls, doors, and windows live on cell EDGES". No section since has
+ * given a corner a meaning and no example writes one — so the renderer
+ * answered by accident, and `edgeSegment`'s `default:` swallowed all four into
+ * the east edge. A door at `C3.nw` opened on the far wall of the room; a
+ * freestanding `wall : C3.nw` drew the same segment as `C3.e`.
+ *
+ * Refused at the line that wrote it, rather than at each of the places that
+ * might have consumed it, because there are none: an address form nothing can
+ * honour is a mistake wherever it appears.
+ */
+function checkNoCorner(placements: Placement[], line: number, diags: Diagnostic[]): void {
+  for (const edge of edgePlacements(placements)) {
+    if (!CORNER_DIRS.has(edge.dir)) continue;
+    diags.push(
+      error(
+        line,
+        `'${edge.at.col}${edge.at.row}.${edge.dir}' names a corner, and nothing in the language is placed on a corner — `
+        + `a wall, door or window lives on an EDGE: n, e, s or w (spec 02 §5)`,
       ),
     );
   }
@@ -595,11 +668,23 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   let section: SectionNode | null = null;
   let skippingUnknown = false;
   let lastEntity: EntityNode | null = null;
+  /**
+   * Did the last entity LINE exist and get refused? Its details then have a
+   * parent that was reported, not a missing one, and saying "detail line has no
+   * parent entity" underneath a refusal reports one cause twice. That ONE
+   * message is suppressed — nothing else is: a detail line's own errors are
+   * facts about its own text, and hiding them makes the author fix the parent
+   * only to be told about the child on the next run. A stray indent with no
+   * entity line above it at all still reports, which is why this resets per
+   * section rather than tracking null.
+   */
+  let lastEntityRefused = false;
 
   const finishSection = () => {
     if (section) document.sections.push(section);
     section = null;
     lastEntity = null;
+    lastEntityRefused = false;
   };
 
   for (; i < lines.length; i++) {
@@ -652,18 +737,20 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
         if (tokens.some((t) => t.kind === "colon")) {
           // Grouped form (spec 02 §4): an ordinary entity line.
           lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
+          lastEntityRefused = lastEntity === null;
         } else {
-          parseHexLedgerLine(raw, tokens, section, symbols, diagnostics);
+          parseHexLedgerLine(raw, tokens, section, symbols, vocab, diagnostics);
         }
         break;
       }
       default: {
         if (raw.indent > 0) {
-          parseDetailLine(raw, lastEntity, vocab, diagnostics);
+          parseDetailLine(raw, lastEntity, lastEntityRefused, vocab, diagnostics);
           break;
         }
         const tokens = tokenize(raw.text, raw.line, diagnostics);
         lastEntity = parseEntityLine(raw, tokens, section, symbols, vocab, diagnostics, false);
+        lastEntityRefused = lastEntity === null;
         break;
       }
     }
@@ -671,7 +758,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   finishSection();
 
   reportUnknownHeaderKeys();
-  reportDeadVocab(document, diagnostics);
+  reportDeadVocab(document, vocab, diagnostics);
   return { document, diagnostics };
 
   // ---------- line parsers ----------
@@ -688,6 +775,10 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return null;
     const subject = parseSubject(split.subject, raw.line, diags);
+    // Dropped rather than inferred (ADR 0039): letting the line through means
+    // rendering something the document did not ask for, which is the whole
+    // finding of #266.
+    if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return null;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
 
     // Order-bounded reference validation happens against the table BEFORE this entity registers.
@@ -712,6 +803,26 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // gone and says so; a staging zone is the word `start` (or anything
     // deriving from it). gm-only range entities are unaffected: they resolve
     // to `feature`, not `token`.
+    checkNoCorner(predicate.placements, raw.line, diags);
+    // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
+    // one job -- "walls, doors, and windows live on cell edges" -- and at
+    // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
+    // or an opening in unbuilt geometry (spec 06 §3). Every other archetype
+    // simply never looked at an edge placement, so `statue s1 : C3.n` rendered
+    // byte-identically to an empty section and said nothing.
+    if (archetype !== "barrier" && archetype !== "opening") {
+      const edge = edgePlacements(predicate.placements)[0];
+      if (edge) {
+        diags.push(
+          error(
+            raw.line,
+            `'${subject.typeWord ?? "this"}' is ${archetype === "structure" ? "a structure" : `a ${archetype}`}, and an edge token places a wall, door or window `
+            + `(spec 02 §5) — place it on the cell instead: '${edge.at.col}${edge.at.row}'`,
+          ),
+        );
+      }
+    }
+
     if (archetype === "token" && predicate.placements.some((p) => p.kind === "range")) {
       diags.push(
         error(
@@ -801,12 +912,21 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     return entity;
   }
 
-  function parseDetailLine(raw: RawLine, parent: EntityNode | null, vocabTable: VocabTable, diags: Diagnostic[]): void {
-    if (!parent) {
+  /**
+   * A detail line is validated for what it says about ITSELF, and only then
+   * attached. The two are separate questions: `refused` means the parent line
+   * existed and was reported, so the missing parent is old news — but nothing
+   * below this point consults the parent until the attachment at the end, and
+   * every check between is a fact about this line's own text.
+   */
+  function parseDetailLine(raw: RawLine, parent: EntityNode | null, refused: boolean, vocabTable: VocabTable, diags: Diagnostic[]): void {
+    if (!parent && !refused) {
       diagnostics.push(error(raw.line, "detail line has no parent entity"));
       return;
     }
-    if (parent.archetype !== "structure") {
+    // Unanswerable for a refused parent — the line that would have said which
+    // archetype it is never resolved — so it is asked only when there is one.
+    if (parent && parent.archetype !== "structure") {
       diags.push(error(raw.line, "detail lines are only defined beneath structure entities (spec 06 §3)"));
       return;
     }
@@ -814,7 +934,11 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const split = splitAtColon(tokens, raw.line, diags);
     if (!split) return;
     const subject = parseSubject(split.subject, raw.line, diags);
+    // The detail slot is where #266 did its worst: `opening : at A1.w` drew a
+    // WALL, the exact inverse of the line.
+    if (checkTypeWordNotArchetype(subject.typeWord, raw.line, diags)) return;
     const predicate = parsePredicate(split.predicate, raw.line, diags);
+    checkNoCorner(predicate.placements, raw.line, diags);
     // A BARRIER word in a detail slot REPLACES that side's perimeter with that
     // barrier (#130): `cave-in : east` is the spelling authors already reach
     // for, and it used to draw an ordinary wall and take no styling. Its
@@ -858,15 +982,42 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       texts: predicate.texts,
       line: raw.line,
     };
+    // Validated, but there is nothing to hang it on. The ids go unregistered
+    // deliberately: the refused parent's own ids never reached the table
+    // either, and registering the child would let a later `via` or `[labels]`
+    // reference resolve to something that will never render.
+    if (!parent) return;
     if (subject.ids.length > 0) symbols.add(subject.ids, subject.name, raw.line, diags);
     parent.details.push(detail);
   }
 
+  /**
+   * THE LEDGER FORM IS CHECKED LIKE THE GROUPED FORM (#277, #280).
+   *
+   * `hex-ledger-line` and the ordinary entity line are two spellings of the
+   * same thing — the grammar says so outright ("grouped alternative: ordinary
+   * line form"). Every check added since was taught to one of them. Swept
+   * against the entity path, four differed:
+   *
+   *   archetype word as a type word (#266) .... missing, now checked
+   *   unknown `key=` (#195) ................... missing, now checked
+   *   out-of-set facet value .................. missing, now checked
+   *   undeclared state (spec 04 §2) ........... DOES NOT APPLY, see below
+   *
+   * The last is a real difference rather than a gap. On a ledger line a bare
+   * word is a CONTENT word by grammar — `C2 volcano erupting` puts `erupting`
+   * in contents, where `volcano : C2 erupting` puts it in flags — so there is
+   * no flag to check against `states=`, and an unknown content word is legal
+   * (spec 04 §3). That the two spellings disagree about what a bare word MEANS
+   * is a separate question from whether they are checked alike, and is not
+   * settled here.
+   */
   function parseHexLedgerLine(
     raw: RawLine,
     tokens: Token[],
     into: SectionNode,
     table: SymbolTable,
+    vocabTable: VocabTable,
     diags: Diagnostic[],
   ): void {
     const addresses: (Address | AddressRange)[] = [];
@@ -875,6 +1026,9 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const flags: string[] = [];
     const pairs: Pair[] = [];
     let name: string | null = null;
+    /** Set when the address slot has already been reported on, so the
+     *  "malformed line" catch-all does not report the same mistake twice. */
+    let addressReported = false;
 
     for (const t of tokens) {
       if (t.kind === "pair") {
@@ -888,6 +1042,14 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       }
       if (t.kind === "colon") continue; // unreachable; grouped form routed elsewhere
       const positional = parsePositional(t.text);
+      // Without this an edge token falls through to the terrain slot and the
+      // line reports as malformed, which names neither the token nor the fix.
+      if (positional && positional.kind === "edge") {
+        const what = CORNER_DIRS.has(positional.dir) ? "a corner" : "an edge";
+        diags.push(error(raw.line, `'${t.text}' names ${what}, and a hex ledger line addresses HEXES — write the hex itself ('${positional.at.col}${positional.at.row}') (spec 05 §3)`));
+        addressReported = true;
+        continue;
+      }
       if (positional && (positional.kind === "address" || positional.kind === "range")) {
         if (terrain !== null) {
           diags.push(error(raw.line, "hex addresses must precede the terrain word"));
@@ -905,9 +1067,19 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     }
 
     if (addresses.length === 0 || terrain === null) {
-      diags.push(error(raw.line, "malformed hex ledger line — expected '<address> <terrain> [contents] [\"Name\"]' (spec 05 §3)"));
+      // Silent only when the address slot has already been explained in words:
+      // reporting "malformed line" underneath `'C2.nw' names a corner` states
+      // one mistake twice and buries the half that names the fix.
+      if (!addressReported) {
+        diags.push(error(raw.line, "malformed hex ledger line — expected '<address> <terrain> [contents] [\"Name\"]' (spec 05 §3)"));
+      }
       return;
     }
+    // The terrain word and every content word sit in a type-word slot.
+    if (checkTypeWordNotArchetype(terrain, raw.line, diags)) return;
+    for (const word of contents) checkTypeWordNotArchetype(word, raw.line, diags);
+    checkFacetValues(pairs, raw.line, diags);
+    checkPairKeys(terrain, pairs, vocabTable, raw.line, diags);
     const node: HexLineNode = { kind: "hex-line", addresses, terrain, contents, name, flags, pairs, line: raw.line };
     table.add([], name, raw.line, diags);
     into.entries.push(node);
