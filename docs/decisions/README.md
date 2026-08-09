@@ -58,3 +58,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0045](0045-a-redaction-is-not-the-document.md) | A redaction is not the document: coherence lints read what was declared, in every mode | Accepted |
 | [0046](0046-a-landing-is-suppressed-by-a-declaration-not-by-a-drawing.md) | A landing is suppressed by a declaration, not by a drawing: the far end yields to what the document said | Accepted |
 | [0047](0047-a-document-path-is-a-token.md) | A document path is a token: quoting protects its spaces, and the quotes are not part of the path | Accepted |
+| [0050](0050-a-pool-that-fills-its-field-is-reported-not-redrawn.md) | A pool that fills its whole map field is reported, not redrawn | Accepted |

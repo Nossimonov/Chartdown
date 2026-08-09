@@ -281,6 +281,10 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    to the map field of its own panel -- the frame inset by its margin, never the
    page furniture (spec 04 5, ADR 0042, #284/#288). The declared range is
    unaffected and exports at its true value.
+   A pool that FILLS its whole field is REPORTED, not redrawn (spec 04 5,
+   ADR 0050, #290): a 60ft lantern in a 15ft room leaves no ambient visible,
+   which is faithful, so the renderer changes nothing and WARNS instead,
+   naming the emitter. Per panel, like the clip.
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
    non-resolving subject with placement = new GM-only entity; otherwise error.
    `hidden` and [gm] decide what a READER is shown, not what the document SAYS,
