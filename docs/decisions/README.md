@@ -55,3 +55,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0042](0042-a-field-is-drawn-on-the-map-field-of-its-own-panel.md) | Everything a field draws is clipped to the map field of its own panel | Accepted |
 | [0043](0043-an-address-form-a-slot-cannot-consume-is-refused.md) | An address form a slot cannot consume is refused, never quietly reinterpreted | Accepted |
 | [0044](0044-where-courses-meet-they-merge.md) | Where courses meet, they merge: a joining end stops in the water, and no bank is drawn over water | Accepted |
+| [0045](0045-a-redaction-is-not-the-document.md) | A redaction is not the document: coherence lints read what was declared, in every mode | Accepted |

@@ -27,7 +27,14 @@ export function battlemapFrame(model: Model): Frame {
 
 export interface LevelContext {
   level: string;
+  /** What is DRAWN — mode-stripped. What the renderer itself reads. */
   allEntities: EntityNode[];
+  /**
+   * What was DECLARED — passed straight through to the coherence lints, which
+   * reason about the document rather than the redaction of it (spec 06 §10,
+   * ADR 0045, #320). Nothing that DRAWS may read this.
+   */
+  declaredEntities?: EntityNode[];
   /** Physical order, topmost first (spec 06 §8). */
   levels: string[];
 }
@@ -356,6 +363,18 @@ export function renderBattlemap(
       const atValue = pairOf(source.pairs, "at");
       const landing = atValue ? parseCell(atValue) : source.placements.find((p): p is Address => p.kind === "address");
       if (!landing) continue;
+      // DELIBERATELY THE STRIPPED SET, and it is a known defect (#319).
+      //
+      // Spec 06 §8 says the reciprocal landing is suppressed where a connector
+      // is DECLARED at the cell; this asks whether one is DRAWN there. So in
+      // player mode a hidden connector is absent, the cell reads as unoccupied,
+      // and the far end's projection draws a stair into the square the strip
+      // just emptied — a secret that leaks onto the players' sheet.
+      //
+      // `levelCtx.declaredEntities` is the set that fixes it, and it is right
+      // here. It is NOT used yet on purpose: #320 (ADR 0045) claims only that
+      // no rendered output moves, and this line moves rendered output. #319
+      // owns the change, and it needs its own before/after on the corpus.
       const occupied = model.entities.some(
         (e) => pairOf(e.pairs, "to") !== undefined &&
           e.placements.some((p) => p.kind === "address" && p.col === landing.col && p.row === landing.row),

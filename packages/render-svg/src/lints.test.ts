@@ -8,6 +8,10 @@
 import { describe, expect, it } from "vitest";
 import { renderSource } from "./index";
 
+const warningsIn = (src: string, mode: "gm" | "player"): string[] =>
+  renderSource(src, { mode }).diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
+
+/** Default mode, which is `player` (spec 01 §6) — what `render` gives an author unasked. */
 const warnings = (src: string): string[] =>
   renderSource(src).diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
 
@@ -223,5 +227,95 @@ describe("a path is its BAND, not its centreline (#147)", () => {
 
   it("a bridge band counts as walkable too", () => {
     expect(has(map(`[terrain]\nearth : area A1..T20\nbridge span : path A8 T8 width=3\n\n[structures]\nbuilding shop : D2..H6\n  door : F6.s`), VOID)).toBe(false);
+  });
+});
+
+/**
+ * A REDACTION IS NOT THE DOCUMENT (spec 06 §10, ADR 0045, #320).
+ *
+ * The suite used to be handed the mode-stripped model, so a player render
+ * linted its own redaction: strip the only way into a room and the room has no
+ * way in, so EVERY secret entrance reported `unreachable-room` — by default,
+ * since `render` defaults to player; unsilenceably, since §10 has no
+ * suppression syntax; and with advice that destroyed the secret if followed.
+ *
+ * The first test is the one that matters. It asserts the PROPERTY the decision
+ * rests on rather than the symptom, over fixtures this file already trusts, so
+ * it fails loudly if the lint input is ever re-narrowed to what is drawn — which
+ * is what a test for the vault alone would sit quietly through.
+ */
+describe("a redaction is not the document (#320)", () => {
+  const UNREACHABLE = "no opening and no connector inside it";
+
+  const SECRET_ONLY_WAY_IN = map(`[structures]\nbuilding vault: A1..B2\n  door secretdoor : at B2.s hidden`);
+  const NO_WAY_IN_AT_ALL = map(`[structures]\nbuilding vault: A1..B2`);
+  const SECRET_AS_ENTITY = map(`[structures]\nbuilding vault: A1..B2\ndoor secretdoor : on vault at B2.s hidden`);
+
+  it("lints a document identically in gm and player mode", () => {
+    // Every fixture in this file that carries a secret, plus the plain ones
+    // beside them — the mode must not be able to change the answer for ANY of
+    // them, in either direction.
+    for (const src of [
+      SECRET_ONLY_WAY_IN,
+      SECRET_AS_ENTITY,
+      NO_WAY_IN_AT_ALL,
+      map(`[terrain]\nair : area A1..T20\n\n[structures]\nbuilding hall : C3..F6\n  door : D6.s`),
+      map(`[terrain]\nearth : area A1..T20\nroad highstreet : path A8 T8 width=3\n\n[structures]\nbuilding shop : D2..H6\n  door : F6.s`),
+      map(`[structures]\nbuilding keep : C3..H8\nbuilding vault : D4..E5\n  door : E5.s`),
+    ]) {
+      expect(warningsIn(src, "player").sort()).toEqual(warningsIn(src, "gm").sort());
+    }
+  });
+
+  it("a room whose only way in is a hidden DETAIL is not unreachable", () => {
+    expect(warningsIn(SECRET_ONLY_WAY_IN, "player").some((m) => m.includes(UNREACHABLE))).toBe(false);
+  });
+
+  it("a room whose only way in is a hidden ENTITY is not unreachable", () => {
+    // The other spelling of the same secret (#295 kept these apart for a
+    // release): outdented, the door is an entity rather than a detail.
+    expect(warningsIn(SECRET_AS_ENTITY, "player").some((m) => m.includes(UNREACHABLE))).toBe(false);
+  });
+
+  it("a room with genuinely no way in STILL warns in player mode", () => {
+    // The negative that rules out "suppress the lints in player mode", which
+    // clears the symptom by clearing everything and would pass without this.
+    expect(warningsIn(NO_WAY_IN_AT_ALL, "player").some((m) => m.includes(UNREACHABLE))).toBe(true);
+  });
+
+  it("the secret is still WITHHELD from the player render", () => {
+    // Asserted on the drawn output, not on the diagnostic. A renderer that
+    // stopped redacting would satisfy every test above and leak the door.
+    const svg = (mode: "gm" | "player"): string => renderSource(SECRET_AS_ENTITY, { mode }).svg;
+    expect(svg("gm")).toContain("secretdoor");
+    expect(svg("player")).not.toContain("secretdoor");
+  });
+
+  it("does not carry one storey's rock onto the panel above it", () => {
+    // The declared set spans EVERY level, and `impassableCells` does not filter
+    // by level — it relies on the panel model having been filtered already. Fed
+    // an unfiltered set it makes the cellar's blanket `earth` solid on the
+    // ground floor too, and the ground-floor door onto open ground reports
+    // `door-onto-void`.
+    //
+    // Asserted as the ABSENCE of that warning, not as gm/player equality: the
+    // defect breaks both modes identically, so an equality check sits through
+    // it. This is the pair to the mode test above and it must not be merged
+    // into it.
+    // Two details make this fixture load-bearing, and both were arrived at by
+    // watching it pass when it should not have:
+    //   - the cellar's door opens onto `passage`, carved out of the blanket
+    //     `earth`, or it warns `door-onto-void` legitimately and drowns the
+    //     signal;
+    //   - the GROUND door faces A2, which no cellar room carves. Rooms carve
+    //     the rock (`impassableCells` deletes every structure's footprint), so
+    //     a ground door facing a cell that happens to sit over a cellar room
+    //     reads as walkable either way and tests nothing.
+    const src = `# Two floors\n\nmap: battlemap\ngrid: square 6x6\nscale: 5ft\nlevels: ground cellar\n\n[terrain cellar]\nearth : area A1..F6\n\n[structures ground]\nbuilding hall : B2..D4\n  door : B2.w\n\n[structures cellar]\nbuilding undercroft : B2..D4\n  door : C4.s hidden\nbuilding passage : B5..D5`;
+    const VOID = "leads out onto ground that cannot be walked on";
+    for (const mode of ["gm", "player"] as const) {
+      expect(warningsIn(src, mode).some((m) => m.includes(VOID))).toBe(false);
+    }
+    expect(warningsIn(src, "player").sort()).toEqual(warningsIn(src, "gm").sort());
   });
 });

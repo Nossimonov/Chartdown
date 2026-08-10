@@ -272,7 +272,12 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    page furniture (spec 04 5, ADR 0042, #284/#288). The declared range is
    unaffected and exports at its true value.
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
-   non-resolving subject with placement = new GM-only entity; otherwise error. *)
+   non-resolving subject with placement = new GM-only entity; otherwise error.
+   `hidden` and [gm] decide what a READER is shown, not what the document SAYS,
+   so spec 06 10's coherence lints read the DECLARED model and a document
+   produces the SAME lints in gm and player mode -- a lint set that varies with
+   the render mode is non-conforming (spec 06 10, ADR 0045, #320). What is
+   DRAWN is still the redaction; this governs only what is REASONED ABOUT. *)
 
 (* ---- identity and anchors — spec 03 ----
    entity-id = explicit id, else display-name slug; anonymous entities unreferenceable.

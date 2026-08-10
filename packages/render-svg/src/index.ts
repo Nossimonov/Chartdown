@@ -99,6 +99,20 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const selected = options.level !== undefined ? levels.filter((l) => l === options.level) : levels;
     const panelLevels = selected.length > 0 ? selected : levels;
     if (levels.length > 1) warnFlooredOpenStructures(model, levels, diagnostics);
+    // A REDACTION IS NOT THE DOCUMENT (spec 06 §10, ADR 0045, #320).
+    //
+    // The coherence lints reason about what a document MEANS, and `hidden` and
+    // `[gm]` say what a reader is SHOWN — so a player render was linting its
+    // own redaction and reporting every secret entrance as `unreachable-room`,
+    // since stripping the only way in leaves a room with no way in. Built ONCE
+    // here rather than per panel, and only when the mode actually strips
+    // something: in GM mode the model already IS the declared one.
+    //
+    // Diagnostics go to a SCRATCH array. This pass re-derives what `buildModel`
+    // already reported for the drawn model — theme resolution, vocabulary,
+    // placement resolution — and letting it report again would double every
+    // one of them.
+    const declaredEntities = mode === "gm" ? model.entities : buildModel(doc, "gm", theme, []).entities;
     const GAP = 18;
     // With `numbers: on` the column letters occupy the top margin band; the
     // document title gets its own band above them instead of overprinting A-D.
@@ -109,7 +123,10 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     panelLevels.forEach((level, index) => {
       const panelModel = { ...model, entities: model.entities.filter((e) => e.level === level) };
       const panelBody: string[] = [];
-      renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, levels });
+      // `allEntities` stays STRIPPED — the reciprocal-landing rule reads it to
+      // decide whether a connector on another level projects a landing here,
+      // and a hidden connector must not. Only the lints take the declared set.
+      renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, declaredEntities, levels });
       if (panelLevels.length > 1) {
         // Bottom-right of the panel — the top margin belongs to the column letters.
         panelBody.push(

@@ -73,21 +73,44 @@ function laysSurface(e: EntityNode): boolean {
  * manor's undercroft as unreachable when its ladder was five lines away.
  */
 export interface LintContext {
+  /**
+   * What is DRAWN — mode-stripped. The renderer's own set; the lints do not
+   * read it when `declaredEntities` is supplied. Kept distinct on purpose: the
+   * reciprocal-landing rule needs the stripped set (a hidden connector must not
+   * project a landing) while the lints need the declared one, so one field
+   * cannot serve both. Collapsing them is how #319 and #320 both arose.
+   */
   allEntities: EntityNode[];
+  /**
+   * What was DECLARED — every entity, whatever the mode (spec 06 §10, ADR 0045,
+   * #320). A REDACTION IS NOT THE DOCUMENT: `hidden` and `[gm]` decide what a
+   * reader is shown, not what the document says, so a document produces the
+   * same lints in both modes. Linting the redaction reported every secret
+   * entrance as `unreachable-room` — stripping the only way in leaves a room
+   * with no way in — unsilenceably, by default, with advice that destroyed the
+   * secret if followed.
+   */
+  declaredEntities?: EntityNode[];
   /** Physical order, topmost first (spec 06 §8). */
   levels: string[];
 }
 
 export function coherenceLints(model: Model, level: string, diagnostics: Lint[], ctx?: LintContext): void {
-  const all = ctx?.allEntities ?? model.entities;
+  const all = ctx?.declaredEntities ?? ctx?.allEntities ?? model.entities;
+  // The panel's own slice of the declared set. `model` here is the PANEL model,
+  // whose entities are already level-filtered, and `impassableCells` iterates
+  // them without filtering again — so handing it every level's entities would
+  // make one storey's rock impassable on all of them.
+  const lintModel: Model =
+    ctx?.declaredEntities === undefined ? model : { ...model, entities: ctx.declaredEntities.filter((e) => e.level === level) };
   const on = <T extends { level: string }>(xs: T[]): T[] => xs.filter((x) => x.level === level);
-  const structures = on(model.entities.filter((e) => e.archetype === "structure"));
+  const structures = on(lintModel.entities.filter((e) => e.archetype === "structure"));
   // A relational extent is ground like any other, so the lints resolve it too
   // (spec 06 §6, ADR 0038) — it is deliberately NOT exempt, and that report is
   // what makes a derived extent auditable when its reference is edited.
   const hp = halfPlaneContext(model.doc, all);
   const surface = surfaceByCell(all, level, hp);
-  const rock = impassableCells(model);
+  const rock = impassableCells(lintModel);
 
   /** The level physically beneath this one, or null at the bottom of the stack. */
   const levelBelow = ((): string | null => {
@@ -140,7 +163,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   // 1 — door-onto-void: an opening whose far side is not walkable. Windows and
   // arrow-slits are exempt: facing open air is their job.
   const openingEdges: { e: EntityNode; seg: Segment; at: Address; dir: string }[] = [];
-  for (const e of on(model.entities)) {
+  for (const e of on(lintModel.entities)) {
     const collect = (word: string | null, placements: readonly { kind: string }[], owner: EntityNode): void => {
       if (model.archetypeOf(word) !== "opening") return;
       if (model.facetOf(word, "passes") === "none") return; // window family
@@ -246,7 +269,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   }
 
   // 4 — dangling-connector: the landing cell is not walkable on the target level.
-  for (const e of on(model.entities)) {
+  for (const e of on(lintModel.entities)) {
     const to = e.pairs.find((p) => p.key === "to")?.value;
     if (to === undefined || to.includes("..")) continue; // a range lands on many; checked per level as each renders
     const landing = e.placements.find((p): p is Address => p.kind === "address");
@@ -304,7 +327,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   for (const s of structures) {
     const cells = structureCells(s);
     if (cells.size === 0) continue;
-    for (const t of on(model.entities)) {
+    for (const t of on(lintModel.entities)) {
       if (t.archetype !== "terrain" && t.archetype !== "path") continue;
       const tc = surfaceCells(t, hp);
       if (tc.size === 0) continue;
