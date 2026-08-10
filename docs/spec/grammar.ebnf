@@ -183,6 +183,16 @@ relational     = ( "at" , ( point | address | range | edge ) )
 endpoint       = ( ref , [ "at" , point ] ) | point ;
 ref            = word | string ;                     (* word: explicit-id lookup; string: display-name
                                                         lookup; fail-loud — spec 03 §2 *)
+doc-path       = word | string ;                     (* a file reference — `use:`, `detail=`, `inset:`.
+                                                        QUOTING IS HOW A PATH HOLDS A SPACE, and the
+                                                        quotes DELIMIT it rather than belong to it:
+                                                        "The Chipped Tankard.md" and an unspaced bare
+                                                        path resolve alike, which is what lets the two
+                                                        ends of a seam be compared. An unquoted path
+                                                        containing a space is an ERROR — `at` is the
+                                                        separator, so `inset: The Parent.cd at tavern`
+                                                        cannot be split without guessing.
+                                                        Spec 03 §4, ADR 0047, #323/#324 *)
 (* A course's SHAPE control. A world point anywhere; a CELL on a grid, where
    every other position is written that way (#258). A gridless point on a grid
    map is REPORTED, never rounded to a cell: cell size follows `scale:`, so the

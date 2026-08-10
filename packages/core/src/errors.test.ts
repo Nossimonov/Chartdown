@@ -638,6 +638,76 @@ describe("inset: the child half of the seam (#143)", () => {
   });
 });
 
+/**
+ * ADR 0047 / #323: a document path is a TOKEN, so quoting is how it holds a
+ * space and the quotes are not part of the path.
+ *
+ * The decision rests on ONE property — that both ends of the seam resolve the
+ * SAME string from the SAME spelling — and it is deliberately not tested by
+ * asserting that a quoted path "reports ok". It used to report ok: the quoted
+ * key matched no supplied document, so the checker warned that a parent it HAD
+ * been given was missing and returned clean with the seam unvalidated. A test
+ * that only pins the absence of diagnostics would have passed against that bug.
+ * So the load-bearing cases below feed a quoted path a parent that DISAGREES
+ * and require the disagreement to be caught — proving the seam is checked,
+ * not merely quiet.
+ */
+describe("a document path is a token (ADR 0047, #323)", () => {
+  const SPACED = "The Chipped Tankard.md";
+  const parentDoc = (entity: string): string =>
+    ["# P", "map: battlemap", "grid: square 20x15", "scale: 10ft", "[structures]", entity].join("\n");
+  const agreeing = `building tavern "The Chipped Tankard" : J12..M14 detail="${SPACED}" detail-at=J12`;
+  const child = (inset: string, grid = "square 8x6"): string =>
+    ["# C", "map: battlemap", `grid: ${grid}`, "scale: 5ft", inset].join("\n");
+  const run = (insetLine: string, key: string, parent: string): string =>
+    checkInset(child(insetLine), { documents: { [key]: parent } })
+      .map((d) => `${d.severity}: ${d.message}`).join(" | ");
+
+  it("a quoted path resolves to the same document a bare one does", () => {
+    expect(run('inset: "parent.cd" at tavern', "parent.cd",
+      parentDoc('building tavern "T" : J12..M14 detail="parent.cd" detail-at=J12'))).toBe("");
+  });
+
+  it("a path containing a space is nameable when quoted", () => {
+    expect(run(`inset: "${SPACED}" at tavern`, SPACED, parentDoc(agreeing))).toBe("");
+  });
+
+  // THE decision property. A quoted path that reaches its parent must be
+  // VALIDATED against it — the symptom being fixed is a seam that went
+  // unchecked while `check` exited ok, so silence here would be the bug.
+  it("a seam reached through a quoted path is actually checked, not merely quiet", () => {
+    expect(run(`inset: "${SPACED}" at tavern`, SPACED,
+      parentDoc(`building tavern "The Chipped Tankard" : J12..M14 detail="${SPACED}"`)))
+      .toMatch(/no 'detail-at='/);
+  });
+
+  it("geometry through a quoted path is checked too", () => {
+    // 4x3 at 10ft against a 5ft child needs 8x6; 4x4 cannot cover it.
+    expect(checkInset(child(`inset: "${SPACED}" at tavern`, "square 4x4"), { documents: { [SPACED]: parentDoc(agreeing) } })
+      .map((d) => d.message).join(" | ")).toMatch(/needs 8x6/);
+  });
+
+  // grammar.ebnf has always had `ref = word | string`, and `\S+` refused the
+  // string half. This was a spec violation, not a new spelling.
+  it("the entity half takes a quoted display name, as ref always allowed", () => {
+    expect(run('inset: parent.cd at "The Chipped Tankard"', "parent.cd",
+      parentDoc('building tavern "The Chipped Tankard" : J12..M14 detail="parent.cd" detail-at=J12'))).toBe("");
+  });
+
+  it("both halves may be quoted at once", () => {
+    expect(run(`inset: "${SPACED}" at "The Chipped Tankard"`, SPACED, parentDoc(agreeing))).toBe("");
+  });
+
+  // Rejected in the ADR on ambiguity: `at` is the separator, so this line
+  // cannot be split without guessing. The diagnostic is load-bearing — it is
+  // the only thing between an author and "the feature is broken".
+  it("an unquoted path with a space is an error that says to quote it", () => {
+    const out = run(`inset: ${SPACED} at tavern`, SPACED, parentDoc(agreeing));
+    expect(out).toMatch(/error:/);
+    expect(out).toMatch(/containing a space is quoted/);
+  });
+});
+
 
 /**
  * #144: the seam is checked from BOTH ends. The child validated the linkage
