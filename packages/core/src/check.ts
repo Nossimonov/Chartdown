@@ -15,6 +15,7 @@
  */
 
 import type { Diagnostic } from "./diagnostics";
+import { tokenize, type Token } from "./lex";
 import { parse, type ParseOptions } from "./parse";
 import { parseThemeDocument } from "./theme";
 import { loadStdlib, parseVocabDocument, VocabTable } from "./vocab";
@@ -200,6 +201,23 @@ function footprintSize(entry: { placements: { kind: string }[] }): { cols: numbe
 }
 
 /**
+ * The text a token stands for, with quoting resolved (ADR 0047).
+ *
+ * A quoted string is one token whose quotes DELIMIT it rather than belong to
+ * it, which is what lets a path or a display name contain a space. `detail=`
+ * on the parent half of the seam already yields the unquoted string, so this
+ * is what makes the two ends resolve the same key from the same spelling.
+ */
+function tokenText(token: Token): string {
+  switch (token.kind) {
+    case "string": return token.value;
+    case "chunk": return token.text;
+    case "pair": return `${token.key}=${token.value}`;
+    case "colon": return ":";
+  }
+}
+
+/**
  * The child side of the seam (#143, ADR 0021): `inset: <document> at <entity>`.
  *
  * The owner's acceptance of a child referencing its parent was explicitly
@@ -212,11 +230,30 @@ export function checkInset(source: string, options: ParseOptions = {}): Diagnost
   const parsed = parse(source, options);
   const header = parsed.document.header.find((h) => h.key === "inset");
   if (!header) return [];
-  const match = /^(\S+)\s+at\s+(\S+)$/.exec(header.value.trim());
-  if (!match) {
-    return [{ severity: "error", line: header.line, message: `'inset:' names the document and the entity this is a window onto — 'inset: khazad-dum.cd at mazarbul' (spec 03 §4)` }];
+  // A file reference is a TOKEN, not a substring (ADR 0047, #323). What arrives
+  // here is a RE-SERIALIZATION of tokens the lexer already got right: it strips
+  // the quotes around a string, and the header builder puts them back to rebuild
+  // `value`. Splitting that with /^(\S+)\s+at\s+(\S+)$/ therefore choked on
+  // quotes this parser had itself re-added — so a spaced path was unwriteable,
+  // and, worse, a QUOTED path became a different lookup key: the parent was
+  // reported "not provided" while being supplied, and the seam went unchecked
+  // while `check` exited ok. That is the silent drift spec 03 §4 says declaring
+  // the relationship twice exists to prevent.
+  //
+  // Re-tokenizing is lossless precisely BECAUSE the serializer re-quotes, and it
+  // buys the entity half for free: `ref = word | string` (grammar.ebnf) has
+  // always admitted a quoted display name, which `\S+` refused.
+  //
+  // The diagnostics array is a throwaway: this text was tokenized once already,
+  // on the raw line, so anything malformed in it was reported there and
+  // reporting again would double it.
+  const tokens = tokenize(header.value, header.line, []);
+  const separator = tokens[1];
+  if (tokens.length !== 3 || separator === undefined || separator.kind !== "chunk" || separator.text !== "at") {
+    return [{ severity: "error", line: header.line, message: `'inset:' names the document and the entity this is a window onto — 'inset: khazad-dum.cd at mazarbul' (spec 03 §4). A path or a name containing a space is quoted: 'inset: "Whispering Glen.md" at "The Chipped Tankard"'` }];
   }
-  const [, parentPath, entityRef] = match as unknown as [string, string, string];
+  const parentPath = tokenText(tokens[0]!);
+  const entityRef = tokenText(tokens[2]!);
   const parentSource = options.documents?.[parentPath];
   if (parentSource === undefined) {
     return [{ severity: "warning", line: header.line, message: `parent document '${parentPath}' was not provided to the checker — this inset's seam is unchecked (spec 03 §4)` }];

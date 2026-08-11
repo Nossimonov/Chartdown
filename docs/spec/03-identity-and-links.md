@@ -52,6 +52,8 @@ Two reserved generic parameters (joining `hidden` and `gm=`, spec 01 §6), legal
 
 Paths resolve relative to the document. An entity may carry both. Renderers that don't support them MUST ignore them silently.
 
+**A document path is a token, and quoting is how it holds a space** ([ADR 0047](../decisions/0047-a-document-path-is-a-token.md), [#323](https://github.com/Nossimonov/Chartdown/issues/323)). It is spelled `doc-path = word | string` — the same two shapes as a `ref` — so `detail="maps/big top.cd"` and `inset: "The Chipped Tankard.md" at tavern` name files whose names contain spaces, and **the quotes delimit the path rather than belong to it**: both spellings resolve to the identical string, which is what lets the two ends of a seam be compared at all. A path with a space that is NOT quoted is an error, because `at` is the separator and `inset: The Parent.cd at tavern` cannot be split without guessing. This matters most for vaults whose filenames are prose — an Obsidian vault names every file the Obsidian way — where an unquotable path makes the seam unwriteable.
+
 
 **The seam is validated when both documents are available.** With `detail-at=` and both `scale:` values known, the covered parent region is derived, and two things fail loud: a magnification that is not a whole number (10ft→5ft is a window; 10ft→3ft is a different map), and a child grid too small to cover the parent footprint it claims. The exercise that raised this shipped a 42×28 child at 5ft against a footprint needing 44×42, and **both files checked clean** — the checker had nothing to compare.
 
@@ -84,6 +86,7 @@ Attachment subjects obey spec 02 §8's order-bounded rule like any reference.
 
 ```ebnf
 ref        = word | string ;                (* word: explicit-id lookup; string: display-name lookup *)
+doc-path   = word | string ;                (* a file reference; quoting holds a space and is not part of the path — §4, ADR 0047 *)
 doc-id     = slug ;                          (* from id: header, else title slug *)
 anchor     = "cd-" , doc-id , "-" , entity-id ;
 entity-id  = explicit-id | name-slug ;
