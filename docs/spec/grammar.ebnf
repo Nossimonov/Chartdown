@@ -287,7 +287,16 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    so spec 06 10's coherence lints read the DECLARED model and a document
    produces the SAME lints in gm and player mode -- a lint set that varies with
    the render mode is non-conforming (spec 06 10, ADR 0045, #320). What is
-   DRAWN is still the redaction; this governs only what is REASONED ABOUT. *)
+   DRAWN is still the redaction; this governs only what is REASONED ABOUT.
+   The reciprocal landing (spec 06 8) reads BOTH sets, and which side takes
+   which is normative (ADR 0046, #319): the SOURCE -- does a connector on
+   another level project a landing here -- is the DRAWN model, so a hidden
+   connector projects nothing anywhere; the GUARD -- is a connector DECLARED at
+   the cell it would land on -- is the DECLARED model, filtered to that panel's
+   level. Testing the drawn set on BOTH sides is non-conforming: the strip
+   removed the secret and the projection wrote it straight back. Each panel is
+   governed by the end declared ON it, which is how a double declaration spells
+   a ONE-SIDED secret -- hidden above, plain below. *)
 
 (* ---- identity and anchors — spec 03 ----
    entity-id = explicit id, else display-name slug; anonymous entities unreferenceable.
