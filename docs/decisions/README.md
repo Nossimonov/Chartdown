@@ -56,3 +56,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0043](0043-an-address-form-a-slot-cannot-consume-is-refused.md) | An address form a slot cannot consume is refused, never quietly reinterpreted | Accepted |
 | [0044](0044-where-courses-meet-they-merge.md) | Where courses meet, they merge: a joining end stops in the water, and no bank is drawn over water | Accepted |
 | [0045](0045-a-redaction-is-not-the-document.md) | A redaction is not the document: coherence lints read what was declared, in every mode | Accepted |
+| [0046](0046-a-merged-branch-is-not-an-archive.md) | A merged branch is not an archive: history is carried by the branch it merged into | Accepted |

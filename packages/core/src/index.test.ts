@@ -30,6 +30,33 @@ describe("basics", () => {
     expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
   });
 
+  it("no shipped doc calls a released version unreleased (#331)", () => {
+    // The test above checks version TOKENS, which is all `bump` can rewrite:
+    // `spec v0.5` → `spec v0.6`. It cannot see a SENTENCE making a version
+    // claim, so digest.md's banner — "in-progress spec 0.4 … 0.4.0 has not
+    // shipped … carry no `chartdown:` pin" — survived three releases directly
+    // beneath a heading the same test was keeping correct. Worst possible file
+    // for it: agents read the digest first, and it told them the shipped
+    // language was unfinished and that pinning it was wrong.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const CLAIM = /in-progress|has not shipped|not yet shipped|unreleased|on this branch/i;
+    const rank = (v: string): number[] => v.split(".").map(Number);
+    const shipped = (v: string): boolean => {
+      const [a, b] = rank(v);
+      const [x, y] = rank(SPEC_VERSION);
+      return a! < x! || (a === x && b! <= y!);
+    };
+    for (const rel of ["docs/spec/digest.md", "docs/spec/grammar.ebnf", "docs/spec/README.md", "README.md"]) {
+      const prose = readFileSync(join(root, rel), "utf8").split(/\n|(?<=[.!?])\s+/);
+      for (const sentence of prose.filter((s) => CLAIM.test(s))) {
+        for (const [, v] of sentence.matchAll(/\b(\d+\.\d+(?:\.\d+)?)\b/g)) {
+          // A claim about a FUTURE version is fine — that is a roadmap note.
+          expect(shipped(v!), `${rel} calls shipped ${v} unshipped: ${sentence.trim()}`).toBe(false);
+        }
+      }
+    }
+  });
+
   it("every known header key is defined in the digest's Header keys list (#99)", () => {
     // Agents learn the language from the digest — a key the parser accepts
     // but the digest never names is invisible to them (user-caught: map:).

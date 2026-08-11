@@ -78,7 +78,7 @@ Three lanes (issue #37):
 
 <details><summary>Historical: the <code>0.4-dev</code> lane (retired)</summary>
 
-Phase 4 opened a `0.4-dev` branch so `preview` could stay releasable as a patch at all times. Every breaking change since went through `preview` anyway, and by 2026-08-08 the branch was 82 commits behind with none of its own; ADR 0041 retired it. The branch is left in place unreferenced.
+Phase 4 opened a `0.4-dev` branch so `preview` could stay releasable as a patch at all times. Every breaking change since went through `preview` anyway, and by 2026-08-08 the branch was 82 commits behind with none of its own; ADR 0041 retired it. The branch was deleted on 2026-08-10 — it was 0 commits ahead of `preview`, so its history is `preview`'s history ([ADR 0046](docs/decisions/0046-a-merged-branch-is-not-an-archive.md), which is also why branches now delete themselves on merge).
 
 It was created by branching at the breaking commit and **reverting that commit on `preview`**, which makes git treat the change as already-seen so a plain merge will not re-apply it — the merge-back required reverting the revert first (`git revert <revert-sha>`). That operation has already been carried out; the note is kept because the git subtlety is expensive to rediscover if the pattern is ever used again.
 
