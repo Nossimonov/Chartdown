@@ -700,6 +700,83 @@ describe("levels (spec 06 §8)", () => {
     expect(diagnostics.map((d) => d.message).join()).toMatch(/unknown level 'attic'/);
   });
 
+  describe("a landing is suppressed by a declaration, not by a drawing (ADR 0046, #319)", () => {
+    // Both panels live in ONE SVG, and `▼ cellar` is emitted with IDENTICAL
+    // text by the house's own stair and by the cellar's reciprocal projection.
+    // Asserting `svg.toContain("▼ cellar")` therefore passes on a renderer that
+    // draws the secret on the wrong sheet — the whole defect. Every assertion
+    // here is PER PANEL.
+    const panels = (svg: string): Record<string, string[]> => {
+      const out: Record<string, string[]> = {};
+      for (const chunk of svg.split(/<g transform="translate\(0 [\d.]+\)">/).slice(1)) {
+        const level = /— (\w+) —/.exec(chunk)?.[1];
+        if (level) out[level] = chunk.match(/[▲▼] \w+/g) ?? [];
+      }
+      return out;
+    };
+
+    // ONE base document, and each case replaces exactly one line. Two documents
+    // that differ anywhere else — a `#` title included, since it renders —
+    // compare unequal for the wrong reason.
+    const doc = (house: string, cellar: string): string =>
+      [
+        "# The Hidden Trapdoor", "map: battlemap", "grid: square 3x3", "scale: 5ft",
+        "levels: house cellar", "level: house", "",
+        "[structures]", "building house: A1..B2", `stairs trapdoor : on house at A1 to=cellar${house}`, "",
+        "[structures cellar]", "building cellar: A1..B2", cellar,
+      ].join("\n");
+
+    const NONE = "";
+    const plainFar = "stairs backdoor : on cellar at A1 to=house";
+
+    it("a hidden NEAR end hides its own panel and leaves the far panel's stair", () => {
+      // The idiom for one-sided secrecy: secret from above, obvious from below.
+      const { svg } = renderSource(doc(" hidden", plainFar), { mode: "player" });
+      expect(panels(svg).house).toEqual([]);
+      expect(panels(svg).cellar).toEqual(["▲ house"]);
+    });
+
+    it("a hidden FAR end changes the render — it is not inert", () => {
+      // The silent half of #319: this used to be byte-identical to no flag at
+      // all, so writing `hidden` did nothing whatsoever.
+      const secret = renderSource(doc(NONE, `${plainFar} hidden`), { mode: "player" }).svg;
+      const plain = renderSource(doc(NONE, plainFar), { mode: "player" }).svg;
+      expect(secret).not.toBe(plain);
+      expect(panels(secret).house).toEqual(["▼ cellar"]);
+      expect(panels(secret).cellar).toEqual([]);
+    });
+
+    it("a LONE hidden connector still hides on BOTH panels (spec 01 §6)", () => {
+      // The guard reads the declared set; the PROJECTION SOURCE must not. Read
+      // the declared set on both sides and the cellar panel reconstructs
+      // `▲ house` out of the very entity that was stripped to keep the secret.
+      const { svg } = renderSource(doc(" hidden", NONE), { mode: "player" });
+      expect(panels(svg).house).toEqual([]);
+      expect(panels(svg).cellar).toEqual([]);
+      // and hiding BOTH ends is not a way to reveal either
+      const both = renderSource(doc(" hidden", `${plainFar} hidden`), { mode: "player" }).svg;
+      expect(panels(both).house).toEqual([]);
+      expect(panels(both).cellar).toEqual([]);
+    });
+
+    it("the declared set is filtered to the panel's level", () => {
+      // A document with NO secrets in it. The declared set spans every level,
+      // so an unfiltered guard lets the house's A1 connector mark the CELLAR's
+      // A1 occupied and suppress the landing that should fill it.
+      const { svg } = renderSource(doc(NONE, NONE), { mode: "player" });
+      expect(panels(svg).house).toEqual(["▼ cellar"]);
+      expect(panels(svg).cellar).toEqual(["▲ house"]);
+    });
+
+    it("GM mode shows every declared connector, secret or not", () => {
+      for (const cellar of [NONE, plainFar, `${plainFar} hidden`]) {
+        const { svg } = renderSource(doc(" hidden", cellar), { mode: "gm" });
+        expect(panels(svg).house, cellar).toEqual(["▼ cellar"]);
+        expect(panels(svg).cellar, cellar).toEqual(["▲ house"]);
+      }
+    });
+  });
+
   it("qualifiers and to= without levels: fail loud", () => {
     const qualified = "map: battlemap\ngrid: square 8x8\nscale: 5ft\n[features upper]\ncrates : B2\n";
     expect(renderSource(qualified).diagnostics.map((d) => d.message).join()).toMatch(/requires a levels: declaration/);

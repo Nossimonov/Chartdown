@@ -341,6 +341,14 @@ export function renderBattlemap(
   // this one show their landing here automatically, unless an explicit
   // connector already occupies the cell.
   if (levelCtx) {
+    // THE SOURCE SIDE IS THE DRAWN SET, and that is half of ADR 0046.
+    //
+    // A hidden connector must project a landing NOWHERE — spec 01 §6 is
+    // fail-closed, and a stripped connector that still projected would
+    // RECONSTRUCT the secret on the far panel out of the very entity that was
+    // removed to keep it. Measured: reading the declared set here draws
+    // `▲ house` on the cellar panel for a document whose only connector is a
+    // lone `hidden` trapdoor. The guard below reads the OTHER set on purpose.
     for (const source of levelCtx.allEntities) {
       const to = pairOf(source.pairs, "to");
       if (to === undefined || source.level === levelCtx.level) continue;
@@ -363,22 +371,24 @@ export function renderBattlemap(
       const atValue = pairOf(source.pairs, "at");
       const landing = atValue ? parseCell(atValue) : source.placements.find((p): p is Address => p.kind === "address");
       if (!landing) continue;
-      // DELIBERATELY THE STRIPPED SET, and it is a known defect (#319).
+      // A LANDING IS SUPPRESSED BY A DECLARATION, NOT BY A DRAWING
+      // (spec 06 §8, ADR 0046, #319). Spec 06 §8's word is DECLARED, so this
+      // asks what the document SAID and not what this mode DRAWS. Asking the
+      // drawn set meant player mode stripped a hidden connector, the cell read
+      // as unoccupied, and the far end's projection drew a stair into the
+      // square the strip had just emptied — the secret, on the players' sheet.
       //
-      // Spec 06 §8 says the reciprocal landing is suppressed where a connector
-      // is DECLARED at the cell; this asks whether one is DRAWN there. So in
-      // player mode a hidden connector is absent, the cell reads as unoccupied,
-      // and the far end's projection draws a stair into the square the strip
-      // just emptied — a secret that leaks onto the players' sheet.
-      //
-      // `levelCtx.declaredEntities` is the set that fixes it, and it is right
-      // here. It is NOT used yet on purpose: #320 (ADR 0045) claims only that
-      // no rendered output moves, and this line moves rendered output. #319
-      // owns the change, and it needs its own before/after on the corpus.
-      const occupied = model.entities.some(
-        (e) => pairOf(e.pairs, "to") !== undefined &&
-          e.placements.some((p) => p.kind === "address" && p.col === landing.col && p.row === landing.row),
-      );
+      // FILTERED TO THIS PANEL'S LEVEL, and the filter is load-bearing: the
+      // declared set spans the whole document while the stripped set it
+      // replaces was already per-panel (`index.ts`). Without it, a house
+      // connector at A1 makes the cellar's A1 read as occupied and an ordinary
+      // two-level map with no secrets in it silently loses its landing.
+      const occupied = (levelCtx.declaredEntities ?? model.entities)
+        .filter((e) => e.level === levelCtx.level)
+        .some(
+          (e) => pairOf(e.pairs, "to") !== undefined &&
+            e.placements.some((p) => p.kind === "address" && p.col === landing.col && p.row === landing.row),
+        );
       if (occupied) continue;
       const c = cellCenter(landing);
       renderConnector(source, model.chainOf(source.typeWord), c, source.level, [], layers.features, undefined);

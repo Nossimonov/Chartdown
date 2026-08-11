@@ -123,9 +123,12 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     panelLevels.forEach((level, index) => {
       const panelModel = { ...model, entities: model.entities.filter((e) => e.level === level) };
       const panelBody: string[] = [];
-      // `allEntities` stays STRIPPED — the reciprocal-landing rule reads it to
-      // decide whether a connector on another level projects a landing here,
-      // and a hidden connector must not. Only the lints take the declared set.
+      // BOTH sets go down, and the reciprocal-landing rule reads BOTH — one on
+      // each side of itself (ADR 0046, #319). `allEntities` stays STRIPPED, so
+      // a hidden connector projects a landing nowhere; `declaredEntities` is
+      // what the guard consults to ask whether a connector was DECLARED at the
+      // cell a projection would fill. Collapsing them is how #319 and #320 both
+      // arose, so they are passed separately and named for what they are.
       renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, declaredEntities, levels });
       if (panelLevels.length > 1) {
         // Bottom-right of the panel — the top margin belongs to the column letters.
