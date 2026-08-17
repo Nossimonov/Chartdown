@@ -1948,9 +1948,73 @@ describe("shafts span more than two levels (#112)", () => {
     }
   });
 
-  it("the annotation names the NEXT landing, not the far end of the flight", () => {
-    // Standing on a long stair, what matters is the step about to be taken.
-    expect(renderSource(doc, { level: "mid" }).svg).toMatch(/[▲▼] (top|low)/);
+  /**
+   * Every annotation on one panel, sorted so the assertion does not depend on
+   * whether the reciprocal loop or the entity pass reached the layer first.
+   *
+   * `[\w.-]+` and NOT `\w+`, which is the trap next door in ADR 0046's helper:
+   * a renderer printing the raw `to=` emits `▼ top..pit`, and a pattern that
+   * stops at the dot reports `▼ top` — a wrong answer wearing the shape of a
+   * plausible right one.
+   */
+  const notes = (level: string, source = doc): string[] =>
+    (renderSource(source, { level }).svg.match(/[▲▼] [\w.-]+/g) ?? []).sort();
+
+  /**
+   * #321 / ADR 0048. The rule these four pin is that the annotation is a
+   * property of the FLIGHT, not of the panel that drew it.
+   *
+   * The test this replaced asserted `/[▲▼] (top|low)/` on the `mid` panel and
+   * passed on the broken renderer and the fixed one alike: `mid` is served by
+   * the reciprocal path, which handed it the DECLARING level (`low`), and the
+   * alternation accepted that. It is why the defect outlived #112 — so these
+   * assert the exact set per panel, never a pattern that either answer matches.
+   */
+  it("the DECLARING panel of a range names the next landing, not the range", () => {
+    // `▲ top..pit` before the fix: the raw `to=` string, which names no level.
+    expect(notes("low")).toEqual(["▲ mid"]);
+  });
+
+  it("a RECIPROCAL panel names the flight's next landing, not the declaring level", () => {
+    // `pit` sees both stairs project. `▲ low` is descent's next landing up;
+    // `▲ top` is endless's, and endless SKIPS mid and low because it only
+    // passes through them. Before the fix both read the declaring level, which
+    // is right here only by the accident of adjacency.
+    expect(notes("pit")).toEqual(["▲ low", "▲ top"]);
+    // `top` is the one that moved: `▼ low` (where descent was written) → `▼ mid`
+    // (where the party actually steps off next).
+    expect(notes("top")).toEqual(["▼ mid", "▼ pit"]);
+  });
+
+  it("a through= level is never named as a landing, having none", () => {
+    // The trap in the fix #321 itself suggested. Printing the computed `shown`
+    // and nothing else turns `▼ top..bot` into `▼ mid` — and `mid` is declared
+    // `through=`, so spec 06 §8 gives it no landing at all. A wrong answer
+    // replaced by a plausible one is the worse outcome.
+    const shaft = ["map: battlemap", "grid: square 3x3", "scale: 5ft",
+      "levels: top mid bot", "level: top",
+      "[features top]", "stairs shaft : A1 to=top..bot through=mid"].join("\n");
+    expect(notes("top", shaft)).toEqual(["▼ bot"]);
+    expect(notes("mid", shaft)).toEqual([]);
+  });
+
+  it("an interior panel equidistant from two landings names the one above", () => {
+    // `mid` is one step from `top` and one step from `low`. Both are correct
+    // readings of "the next landing in the direction of travel"; spec 06 §8
+    // picks up. Pinned because unpinned it is an array-iteration order that a
+    // later reader can reverse without noticing.
+    expect(notes("mid")).toEqual(["▲ top"]);
+  });
+
+  it("the declaring level is part of the flight, so a single hop still annotates", () => {
+    // Guards the `∪ declaring level` term, which looks like dead weight on any
+    // `to=a..b` range that already contains it. Drop it and the cellar panel of
+    // an ordinary two-level map has no landing to name but itself.
+    const hop = ["map: battlemap", "grid: square 3x3", "scale: 5ft",
+      "levels: house cellar", "level: house",
+      "[features house]", "stairs trapdoor : A1 to=cellar"].join("\n");
+    expect(notes("house", hop)).toEqual(["▼ cellar"]);
+    expect(notes("cellar", hop)).toEqual(["▲ house"]);
   });
 
   it("an air area states where the fall lands", () => {
