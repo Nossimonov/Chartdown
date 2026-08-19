@@ -346,6 +346,22 @@ export function measureToNumber(measure: string): number {
   return m ? Number(m[1]) : 0;
 }
 
+/**
+ * The levels a `to=`/`through=` value covers (#112). A single name is a
+ * one-level span; `a..b` is every declared level between them inclusive, in
+ * the document's own physical order — so an author need not know which end
+ * they wrote first. Shared by the renderer and the coherence lints (#322) so
+ * the two cannot disagree about which levels a range reaches.
+ */
+export function levelSpan(levels: string[], value: string): string[] {
+  const [a, b] = value.split("..");
+  if (b === undefined) return levels.includes(a!) ? [a!] : [];
+  const i = levels.indexOf(a!);
+  const j = levels.indexOf(b!);
+  if (i === -1 || j === -1) return [];
+  return levels.slice(Math.min(i, j), Math.max(i, j) + 1);
+}
+
 export interface Segment {
   a: XY;
   b: XY;

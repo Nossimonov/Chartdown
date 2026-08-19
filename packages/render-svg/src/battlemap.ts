@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placemen
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, levelSpan, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -797,21 +797,6 @@ export function renderBattlemap(
       el("line", { x1: c.x - half, y1: c.y - half, x2: c.x + half, y2: c.y + half, stroke: ink, ...inkStroke(1)}),
       el("line", { x1: c.x + half, y1: c.y - half, x2: c.x - half, y2: c.y + half, stroke: ink, ...inkStroke(1)}),
     );
-  }
-
-  /**
-   * The levels a `to=`/`through=` value covers (#112). A single name is a
-   * one-level span; `a..b` is every declared level between them inclusive, in
-   * the document's own physical order — so an author need not know which end
-   * they wrote first.
-   */
-  function levelSpan(levels: string[], value: string): string[] {
-    const [a, b] = value.split("..");
-    if (b === undefined) return levels.includes(a!) ? [a!] : [];
-    const i = levels.indexOf(a!);
-    const j = levels.indexOf(b!);
-    if (i === -1 || j === -1) return [];
-    return levels.slice(Math.min(i, j), Math.max(i, j) + 1);
   }
 
   /** The nearest landing in the span other than the level being drawn. */
