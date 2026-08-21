@@ -7,6 +7,7 @@
 - Grids are 1-indexed. Row 1 (grids) and y=0 (gridless) are north; columns/x grow east, rows/y grow south. The origin is always northwest.
 - `scale:` (grid maps) gives the real size of one cell: `scale: 5ft`, `scale: 6mi`.
 - `detail:` (gridless maps) chooses the **render resolution** — how much canvas the map is drawn onto, and therefore how much detail survives label arbitration. `overview` (default) is readable taken in whole; `reference` doubles the canvas for a map meant to be studied at zoom, keeping fine names a smaller frame would shrink or drop. Font sizes are absolute, so the trade runs both ways: a reference map's text is proportionally smaller when the whole map is shown at once. Closed value set; inert on grid maps, whose size comes from the grid, and using it there warns ([ADR 0020](../decisions/0020-render-resolution-is-editorial.md)).
+- `grid:` (grid maps) declares the geometry a cell address is read in — square or hex, and its dimensions (§3, §4). Inert on gridless maps, whose positions are points in extent units, and using it there warns ([ADR 0049](../decisions/0049-a-cell-address-on-a-gridless-map-is-refused-not-dropped.md)). It does not give an address a referent: a gridded gridless map would give one position two incompatible spellings, which is a proposal for a new map kind rather than a reading of this one.
 - `extent:` (gridless maps) gives the map's world size: `extent: 900x600mi`.
 - Bare numbers in placements are cells (grid maps) or world units (gridless maps). Explicit units (`70mi`, `20ft`) are always legal and MUST match the map's unit dimension.
 - The optional header key `seed:` takes an integer that varies deterministic organic rendering (§8). Same document + same seed → same geometry, always.
@@ -17,6 +18,8 @@ A cell address is column letters followed by a row number: `K11`, `C4`. Columns 
 
 - **Lists**: whitespace-separated addresses (`C12 E13`).
 - **Ranges**: `A11..F15` — inclusive between the two corner cells. On square grids this is the rectangle; on hex grids, a range with one matching axis is a run along the other, and a range with both differing is the bounding block in offset space. On gridless maps, `(x1,y1)..(x2,y2)` bounds the rectangle between two points (used by, e.g., label `sprawl`).
+
+**An address needs a grid.** A gridless map declares none, so a cell address written on one names nothing at all — and a cell address, address range, or edge token **in a placement is an error at the line that wrote it**, wherever in the predicate it appears: bare, under `at`, under `on`'s `at` payload, in a course's `via` controls, in a shape's argument list, or in a `[labels]` override's `at` or `sprawl` target *(from [#325](https://github.com/Nossimonov/Chartdown/issues/325), decided in [ADR 0049](../decisions/0049-a-cell-address-on-a-gridless-map-is-refused-not-dropped.md))*. The message names the gridless spelling, the point `(x,y)` of §6. Refused rather than approximated, for the reason §5 refuses a corner: reading `C4` as world units converts one address form into another the author did not write, and three units into a thousand-unit extent is the northwest corner — so the map would gain a landmark in the wrong place rather than lose one. Every spelling used to render byte-identically to a document that never had the line, and `area C4..D5` emitted a polygon with an empty point list. **An entity that resolves to no geometry contributes no element.**
 
 ## 3. Square grids
 
@@ -41,7 +44,7 @@ Sequences of edge tokens describe wall runs (`wall : K5.e K6.e K7.e`). **An edge
 
 ## 6. Gridless points
 
-On gridless maps, a point is `(x,y)` in the map's extent units from the northwest origin: `(360,330)`. Points are written coarsely by design — precision is never required, and relational placement (§7) is preferred wherever a named anchor exists. Point sequences form polylines and polygons exactly as cell lists do.
+On gridless maps, a point is `(x,y)` in the map's extent units from the northwest origin: `(360,330)`. Points are written coarsely by design — precision is never required, and relational placement (§7) is preferred wherever a named anchor exists. Point sequences form polylines and polygons exactly as cell lists do. A point is the *only* position a gridless map has: the cell forms of §2 and §5 are refused here, not reinterpreted.
 
 ## 7. Relational placement — the closed grammar
 

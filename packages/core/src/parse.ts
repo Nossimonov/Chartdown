@@ -485,6 +485,73 @@ function checkNoCorner(placements: Placement[], line: number, diags: Diagnostic[
   }
 }
 
+/**
+ * A CELL ADDRESS NEEDS A GRID (#325, ADR 0049).
+ *
+ * Spec 02 §2 gives the cell address "one form for every GRID", and says the
+ * geometry comes from "the header's `grid:` declaration". A gridless map
+ * declares none, so `C4` written on one names nothing at all — and the region
+ * renderer's placement loop has no branch for `address`, `range` or `edge`, so
+ * the placement evaporated and the entity kept its default of nothing. Five
+ * spellings rendered byte-identically to their own absence and `area C4..D5`
+ * emitted `<polygon points="">`, an element no renderer can draw.
+ *
+ * Refused at the line that wrote it rather than at each of the sites that
+ * might have consumed it — the same shape as `checkNoCorner` above, and for
+ * the same reason: an address form nothing on this map can honour is a
+ * mistake wherever it appears. `region.ts` already refused exactly one of
+ * them, the `via` payload of a course (#258); this generalises that rule and
+ * that special case is deleted rather than kept beside it.
+ */
+function gridAddressesIn(placements: Placement[], out: (Address | AddressRange | Edge)[] = []): (Address | AddressRange | Edge)[] {
+  for (const p of placements) {
+    if (p.kind === "address" || p.kind === "range" || p.kind === "edge") out.push(p);
+    else if (p.kind === "shape") gridAddressesIn(p.args, out);
+    else if (p.kind === "relational") {
+      if (p.form === "at" && p.target.kind !== "point") out.push(p.target);
+      else if (p.form === "on" && p.at) out.push(p.at);
+      else if (p.form === "from-to") {
+        for (const control of p.via) if (control.kind === "address") out.push(control);
+      }
+    }
+  }
+  return out;
+}
+
+function addressToken(a: Address | AddressRange | Edge): string {
+  if (a.kind === "address") return `${a.col}${a.row}`;
+  if (a.kind === "range") return `${a.from.col}${a.from.row}..${a.to.col}${a.to.row}`;
+  return `${a.at.col}${a.at.row}.${a.dir}`;
+}
+
+/**
+ * Reports the FIRST grid address on the line and returns whether it did, so
+ * the caller can suppress the grid-flavoured checks that follow. Two
+ * diagnostics for one line is worse than the silence being fixed, and
+ * "place it on the cell instead: 'C4'" is advice a gridless document cannot
+ * take.
+ */
+function checkGridlessAddress(placements: Placement[], mapType: string, line: number, diags: Diagnostic[]): boolean {
+  if (mapType !== "region") return false;
+  const found = gridAddressesIn(placements)[0];
+  if (!found) return false;
+  const noun =
+    found.kind === "address" ? "a cell address"
+    : found.kind === "range" ? "a range of cell addresses"
+    : "a cell edge";
+  const instead =
+    found.kind === "range"
+      ? "a range of points in the document's extent units, e.g. `(400,400)..(500,500)`"
+      : "a point in the document's extent units, e.g. `(400,400)`";
+  diags.push(
+    error(
+      line,
+      `'${addressToken(found)}' is ${noun} and this map has no grid — give ${instead} (spec 02 §1, §6)`,
+    ),
+  );
+  return true;
+}
+
 export function parse(source: string, options: ParseOptions = {}): ParseResult {
   const diagnostics: Diagnostic[] = [];
   const lines = splitLines(source);
@@ -632,6 +699,18 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       if (h.key !== "detail" || document.mapType === "region") continue;
       diagnostics.push(
         warning(h.line, `'detail:' sets the render resolution of a gridless canvas and does nothing on a ${document.mapType} — its size comes from its grid (spec 02 §5)`),
+      );
+    }
+    // The mirror of the rule above, which ran one way only (#325, ADR 0049).
+    // `grid:` declares the geometry a cell address is read in (spec 02 §2), and
+    // a region map has no cells: the key is stored on the document and nothing
+    // downstream of a gridless map ever reads it. The map still draws correctly
+    // without it -- the author loses nothing -- so this warns where a placement
+    // errors, exactly as ADR 0020 has `detail:` warn on a battlemap.
+    for (const h of document.header) {
+      if (h.key !== "grid" || document.mapType !== "region") continue;
+      diagnostics.push(
+        warning(h.line, `'grid:' declares the geometry a cell address is read in and does nothing on a region map, whose positions are points in its extent units (spec 02 §1, §6)`),
       );
     }
     for (const h of document.header) {
@@ -796,40 +875,48 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       archetypeSource = inferred.source;
     }
 
-    // One spelling for a staging zone (#121, ADR 0015): a token word with an
-    // area placement used to render as one, which meant `party start : <range>`
-    // and `start party : <range>` produced the same picture from different
-    // words — and therefore different theme subjects. The token+range form is
-    // gone and says so; a staging zone is the word `start` (or anything
-    // deriving from it). gm-only range entities are unaffected: they resolve
-    // to `feature`, not `token`.
-    checkNoCorner(predicate.placements, raw.line, diags);
-    // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
-    // one job -- "walls, doors, and windows live on cell edges" -- and at
-    // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
-    // or an opening in unbuilt geometry (spec 06 §3). Every other archetype
-    // simply never looked at an edge placement, so `statue s1 : C3.n` rendered
-    // byte-identically to an empty section and said nothing.
-    if (archetype !== "barrier" && archetype !== "opening") {
-      const edge = edgePlacements(predicate.placements)[0];
-      if (edge) {
+    // A CELL ADDRESS NEEDS A GRID (#325, ADR 0049). Asked FIRST, and the three
+    // checks below are skipped when it fires: each of them answers in cell
+    // space -- "place it on the cell instead: 'C4'", "a token takes a cell" --
+    // which is advice a gridless document cannot take, and one line deserves
+    // one diagnostic.
+    const gridless = checkGridlessAddress(predicate.placements, document.mapType, raw.line, diags);
+    if (!gridless) {
+      checkNoCorner(predicate.placements, raw.line, diags);
+      // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
+      // one job -- "walls, doors, and windows live on cell edges" -- and at
+      // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
+      // or an opening in unbuilt geometry (spec 06 §3). Every other archetype
+      // simply never looked at an edge placement, so `statue s1 : C3.n` rendered
+      // byte-identically to an empty section and said nothing.
+      if (archetype !== "barrier" && archetype !== "opening") {
+        const edge = edgePlacements(predicate.placements)[0];
+        if (edge) {
+          diags.push(
+            error(
+              raw.line,
+              `'${subject.typeWord ?? "this"}' is ${archetype === "structure" ? "a structure" : `a ${archetype}`}, and an edge token places a wall, door or window `
+              + `(spec 02 §5) — place it on the cell instead: '${edge.at.col}${edge.at.row}'`,
+            ),
+          );
+        }
+      }
+
+      // One spelling for a staging zone (#121, ADR 0015): a token word with an
+      // area placement used to render as one, which meant `party start : <range>`
+      // and `start party : <range>` produced the same picture from different
+      // words — and therefore different theme subjects. The token+range form is
+      // gone and says so; a staging zone is the word `start` (or anything
+      // deriving from it). gm-only range entities are unaffected: they resolve
+      // to `feature`, not `token`.
+      if (archetype === "token" && predicate.placements.some((p) => p.kind === "range")) {
         diags.push(
           error(
             raw.line,
-            `'${subject.typeWord ?? "this"}' is ${archetype === "structure" ? "a structure" : `a ${archetype}`}, and an edge token places a wall, door or window `
-            + `(spec 02 §5) — place it on the cell instead: '${edge.at.col}${edge.at.row}'`,
+            "a token takes a cell (use size= for a larger token); for a staging area use 'start' ('start party : <range>'), and for another kind of zone declare the word ('[vocab] watch : zone') (spec 06 §4)",
           ),
         );
       }
-    }
-
-    if (archetype === "token" && predicate.placements.some((p) => p.kind === "range")) {
-      diags.push(
-        error(
-          raw.line,
-          "a token takes a cell (use size= for a larger token); for a staging area use 'start' ('start party : <range>'), and for another kind of zone declare the word ('[vocab] watch : zone') (spec 06 §4)",
-        ),
-      );
     }
 
     // Level resolution and validation (spec 06 §8).
@@ -1171,6 +1258,14 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
 
     const hint = parseLabelHint(split.predicate, raw.line, table, diags);
     if (!hint) return;
+    // A CELL ADDRESS NEEDS A GRID (#325, ADR 0049), in an override's `at` or
+    // `sprawl` target as much as in a placement. Both used to render
+    // byte-identically to the same document with no override at all.
+    const hintTarget: Placement[] =
+      hint.kind === "at" ? [hint.target]
+      : hint.kind === "sprawl" ? [hint.range]
+      : [];
+    if (checkGridlessAddress(hintTarget, document.mapType, raw.line, diags)) return;
     const node: LabelOverrideNode = { kind: "label-override", target: ref, hint, line: raw.line };
     into.entries.push(node);
   }
