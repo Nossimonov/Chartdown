@@ -94,6 +94,22 @@ step           = number , [ "x" , number ] ;
                     the `along` form spaces by MEASURE down a resolved
                     course — expanded once the reference is in hand (#140). *)
 address        = col-letters , row-number ;          (* chess-style, all grid types; AA past Z *)
+                 (* AND ONLY ON A GRID. A gridless map declares no `grid:`,
+                    so an address, a range or an edge token in a PLACEMENT
+                    names nothing there and is an ERROR at the line that
+                    wrote it -- bare, under "at", under "on"'s "at"
+                    payload, in a course's "via" controls, in a shape's
+                    argument list, and in a [labels] override's "at" or
+                    "sprawl" target. The message names the point form.
+                    Refused rather than approximated, as §5 refuses a
+                    corner: reading C4 as world units substitutes an
+                    address form the author did not write. Every spelling
+                    used to render byte-identically to its own absence and
+                    `area C4..D5` emitted an empty point list -- an entity
+                    that resolves to NO GEOMETRY contributes no element.
+                    `grid:` on a gridless map WARNS instead (the map draws
+                    correctly without it) and does not rescue the address.
+                    Spec 02 §1/§2/§6, ADR 0049, #325 *)
 range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
 control        = point , [ "@" , measure ] ;
@@ -203,7 +219,11 @@ doc-path       = word | string ;                     (* a file reference — `us
 (* A course's SHAPE control. A world point anywhere; a CELL on a grid, where
    every other position is written that way (#258). A gridless point on a grid
    map is REPORTED, never rounded to a cell: cell size follows `scale:`, so the
-   same (60,40) would name a different square after a scale edit. *)
+   same (60,40) would name a different square after a scale edit. The converse
+   -- a CELL on a gridless map -- is refused by the general rule on `address`
+   above, which is where it now lives: the region renderer used to refuse it
+   HERE and in no other slot, which is what left the other six silent
+   (ADR 0049, #325). *)
 via-control    = point | address ;
 
 compass        = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
