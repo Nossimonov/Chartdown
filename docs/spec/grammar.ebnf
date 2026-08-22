@@ -1,5 +1,5 @@
 (* ===================================================================
-   Chartdown consolidated grammar — spec v0.6 (sections 01–08)
+   Chartdown consolidated grammar — spec v0.7 (sections 01–08)
    Status: informative consolidation; the prose spec sections are
    normative and win on any conflict. Maintained per issue #12:
    a spec change updates this file in the same commit WHEN
