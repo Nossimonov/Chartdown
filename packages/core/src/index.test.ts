@@ -30,6 +30,28 @@ describe("basics", () => {
     expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
   });
 
+  it("the core and the renderer carry no third-party runtime dependency (ADR 0007, #335)", () => {
+    // The rule that decides whether these packages stay embeddable, and until
+    // now nothing asserted it. The test above checks that render-svg's PIN on
+    // core matches the version — a different claim, which would pass just as
+    // happily with `lodash` sitting beside it.
+    //
+    // Scope is exactly what the rule says: ADR 0007 binds the language core and
+    // the renderer, and ADR 0011 deliberately lets `@chartdown/mcp` carry
+    // runtime dependencies. Asserting more than was decided would block work
+    // nobody has ruled on.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    for (const name of ["core", "render-svg"]) {
+      const deps = Object.keys(
+        (JSON.parse(readFileSync(join(root, "packages", name, "package.json"), "utf8").replace(/^﻿/, "")) as
+          { dependencies?: Record<string, string> }).dependencies ?? {},
+      );
+      // A workspace sibling is not a dependency in the sense that matters — it
+      // ships from this repo and carries the same rule.
+      expect(deps.filter((d) => !d.startsWith("@chartdown/")), `${name} took a runtime dependency`).toEqual([]);
+    }
+  });
+
   it("no shipped doc calls a released version unreleased (#331)", () => {
     // The test above checks version TOKENS, which is all `bump` can rewrite:
     // `spec v0.5` → `spec v0.6`. It cannot see a SENTENCE making a version

@@ -8,6 +8,8 @@ Chartdown is in its design phase, so most contributions are *ideas and words*, n
 2. **Spec-first.** No feature is implemented before it exists in [docs/spec/](docs/spec/). The renderer follows the spec, never the reverse.
 3. **Decisions leave a record.** Any decision that closes off alternatives (syntax choices, tech stack, scope cuts) gets an Architecture Decision Record in [docs/decisions/](docs/decisions/) before the issue is closed.
 
+> **Nothing enforces these three but review**, deliberately — each is a judgement about whether a thing is worth an issue, a spec line or a record, and a checker would answer a different question than the one being asked. Rules elsewhere in this file that a machine *can* check now are checked: the version surfaces, the release audit, `Closes #n`, the ADR index, the zero-dependency rule and the BREAKING marker. Where a rule is unenforced, this file says so rather than sounding automatic ([#335](https://github.com/Nossimonov/Chartdown/issues/335)).
+
 ## Issue tracking rules
 
 ### Labels
@@ -50,9 +52,10 @@ Proposals are decided by discussion on the issue. Acceptance means: an ADR is wr
 
 ## Git conventions
 
-- Branch names: `issue-<number>-<short-slug>` (e.g. `issue-12-hex-coordinates`).
+- Branch names: `issue-<number>-<short-slug>` (e.g. `issue-12-hex-coordinates`) for work that has an issue — which is most work, because of rule 1. **Release and chore lanes are exempt and always were**: `release-0.6.0`, `plugin-0.4.0`, `chore-nanoid-advisory` reference no issue because they answer to no issue. Nothing enforces this, and it is not worth enforcing — a branch name is read by people ([#335](https://github.com/Nossimonov/Chartdown/issues/335)).
 - Commits and PRs reference their issue; use `Closes #<n>` when the change completes the issue's done-state.
 - `main` stays coherent: spec, examples, and implementation must not contradict each other at any commit on `main`. If a spec change lands, its examples land in the same PR.
+- A change to a `docs/spec/` section updates [digest.md](docs/spec/digest.md) in the same commit, and [grammar.ebnf](docs/spec/grammar.ebnf) **when the grammar changed** ([#12](https://github.com/Nossimonov/Chartdown/issues/12), scope corrected in [#335](https://github.com/Nossimonov/Chartdown/issues/335)). The digest is the machine-readable face of the prose and moves with every spec change; the grammar describes only form, and 29 of the last 59 spec commits rightly left it untouched. CI raises a warning — not a failure — when a spec section moves without the digest, because whether the prose actually drifted is a judgement a reviewer makes.
 
 ## ADRs (Architecture Decision Records)
 
