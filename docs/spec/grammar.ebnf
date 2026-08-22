@@ -2,7 +2,8 @@
    Chartdown consolidated grammar — spec v0.6 (sections 01–08)
    Status: informative consolidation; the prose spec sections are
    normative and win on any conflict. Maintained per issue #12:
-   every spec change updates this file in the same commit.
+   a spec change updates this file in the same commit WHEN
+   THE GRAMMAR CHANGED — 29 of 59 spec commits rightly did not (#335).
    Lexical fine print (whitespace, string escapes, INDENT) is defined
    in prose (spec 01); semantic rules (resolution order, fail-loud
    references, GM stripping) are prose-only and noted as comments.
@@ -206,7 +207,9 @@ relational     = ( "at" , ( point | address | range | edge ) )
 endpoint       = ( ref , [ "at" , point ] ) | point ;
 ref            = word | string ;                     (* word: explicit-id lookup; string: display-name
                                                         lookup; fail-loud — spec 03 §2 *)
-doc-path       = word | string ;                     (* a file reference — `use:`, `detail=`, `inset:`.
+doc-path       = word | string ;                     (* a file reference — `detail=` and `inset:`. NOT `use:`,
+                                                        which still reads its whole header value as the key
+                                                        and is left inconsistent on purpose (#324).
                                                         QUOTING IS HOW A PATH HOLDS A SPACE, and the
                                                         quotes DELIMIT it rather than belong to it:
                                                         "The Chipped Tankard.md" and an unspaced bare

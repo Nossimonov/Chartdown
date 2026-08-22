@@ -1,6 +1,6 @@
 # Chartdown Digest — spec v0.6
 
-*Single-file language reference for machine/agent ingestion (issue #12). Informative — the prose sections 01–07 are normative. Maintained in the same commit as any spec change. Companion: [grammar.ebnf](grammar.ebnf).*
+*Single-file language reference for machine/agent ingestion (issue #12). Informative — the prose sections 01–08 are normative. Maintained in the same commit as any spec change. Companion: [grammar.ebnf](grammar.ebnf).*
 
 Chartdown is a plain-text language for TTRPG maps. A document is a standalone `.cd` file **or** a ` ```chartdown ` fenced block in Markdown — byte-identical content rules.
 

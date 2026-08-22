@@ -1,6 +1,6 @@
 # The Brenmark
 
-**Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07), including the sanctioned `[hexes]` ledger shorthand. Spec-01 canonicalization (2026-07-20): `(difficult)` → `difficult`, `gm "…"` → `gm="…"`. Spec-02 canonicalization (2026-07-20): digit-pair addresses re-rendered to unified chess-style (`0203` → `B3`). Fulfills [#4](https://github.com/Nossimonov/Chartdown/issues/4), authored against Marcus's hexcrawl narrative in [docs/use-cases.md](../../docs/use-cases.md) §2.
+**Status: spec-aligned** — valid under spec v0.6 (sections 01–08), including the sanctioned `[hexes]` ledger shorthand. Spec-01 canonicalization (2026-07-20): `(difficult)` → `difficult`, `gm "…"` → `gm="…"`. Spec-02 canonicalization (2026-07-20): digit-pair addresses re-rendered to unified chess-style (`0203` → `B3`). Fulfills [#4](https://github.com/Nossimonov/Chartdown/issues/4), authored against Marcus's hexcrawl narrative in [docs/use-cases.md](../../docs/use-cases.md) §2.
 
 ## The chart
 

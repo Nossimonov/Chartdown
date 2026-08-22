@@ -30,6 +30,25 @@ describe("basics", () => {
     expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
   });
 
+  it("the README's syntax sketch is a document that checks (#351)", () => {
+    // The README calls it "real, working syntax … this document renders today",
+    // and it had not for some time: ADR 0015 made `start` the one staging-zone
+    // spelling, #121 fixed the examples, and the sketch kept `party start`.
+    // It is the first Chartdown most readers type, and nothing was reading it.
+    //
+    // The sketch is illustrative rather than normative (CONTRIBUTING rule 5),
+    // so this asserts only that it PARSES CLEAN — not that it demonstrates any
+    // particular feature, which would make the README a spec by the back door.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+    // `\r?\n`: this file is CRLF on Windows checkouts, and a `\n`-only fence
+    // pattern silently matched nothing — the test passed by finding no sketch.
+    const sketch = /```chartdown\r?\n([\s\S]*?)```/.exec(readme)?.[1];
+    expect(sketch, "no ```chartdown block in README.md").toBeDefined();
+    const errors = parse(sketch!).diagnostics.filter((d) => d.severity === "error");
+    expect(errors.map((d) => `line ${d.line}: ${d.message}`)).toEqual([]);
+  });
+
   it("the core and the renderer carry no third-party runtime dependency (ADR 0007, #335)", () => {
     // The rule that decides whether these packages stay embeddable, and until
     // now nothing asserted it. The test above checks that render-svg's PIN on

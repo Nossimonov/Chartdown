@@ -6,7 +6,7 @@
 
 ## Machine-ingestion artifacts (issue #12)
 
-Three artifacts keep the spec agent-consumable, and they are **mandatory maintenance**: any commit that changes a spec section MUST update the first two in the same commit.
+Three artifacts keep the spec agent-consumable, and they are **mandatory maintenance**: any commit that changes a spec section MUST update the digest, and the grammar when the grammar changed (#335) — the first two in the same commit.
 
 1. [`grammar.ebnf`](grammar.ebnf) — the consolidated grammar of all drafted sections. Informative: prose sections are normative and win on conflict; the grammar exists as the cross-section consistency check and the parser-writer's map.
 2. [`digest.md`](digest.md) — the single-file language reference (llms.txt-style), compressed for dropping into an agent's context, ending in a few-shot micro-corpus. Every snippet in it must be valid — it teaches by example.

@@ -42,7 +42,7 @@ building tollhouse "Ruined Toll House" : N3..Q6
 [tokens]
 goblins g1 g2 : C12 E13
 ogre "Gruk" : G9 size=2 hidden
-party start : J14..L15
+start party : J14..L15
 ```
 
 ![Ambush at Redford Crossing, rendered](examples/redford-crossing/redford-crossing.svg)

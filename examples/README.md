@@ -7,9 +7,9 @@ Chartdown documents live here — **written before the syntax exists**. This is 
 - One directory per example: `examples/<slug>/`
   - `<slug>.cd` — the Chartdown source (aspirational until the spec catches up)
   - `README.md` — what map this describes, and a sketch/image of the intended render if available
-  - `<slug>.svg` / `<slug>-gm.svg` — **generated** player/GM renders from the reference renderer (`@chartdown/render-svg`); regenerate rather than edit. The CLI (issue #23) will make this a command.
+  - `<slug>.svg` / `<slug>-gm.svg` — **generated** player/GM renders from the reference renderer (`@chartdown/render-svg`); regenerate rather than edit. Regenerate with the release action, which stamps ADR 0014's provenance marker; `chartdown render` does not yet (#349).
 - Each example declares its status at the top of its README:
-  - **aspirational** — not yet valid under any spec draft; exists to drive syntax design
+  - **aspirational** — not yet valid under any spec draft; exists to drive syntax design. No example carries this today; every committed example is verified against the current renderer in CI.
   - **spec-aligned** — valid under the current spec draft
 - Cover all three target map types. Phase 0 aims for at least one aspirational example each of: a region/fantasy map, a hex chart, and a battlemap.
 
