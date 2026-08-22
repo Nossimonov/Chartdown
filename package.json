@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bump": "node bump.mjs",
-    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser && tsc --noEmit -p packages/obsidian && tsc --noEmit -p packages/mcp && tsc --noEmit -p packages/measure && tsc --noEmit -p packages/action && tsc --noEmit -p playground"
+    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/render-svg && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/browser && tsc --noEmit -p packages/obsidian && tsc --noEmit -p packages/mcp && tsc --noEmit -p packages/measure && tsc --noEmit -p packages/action && tsc --noEmit -p playground",
+    "preflight:plugin": "node plugin-preflight.mjs"
   },
   "devDependencies": {
     "@rgrove/parse-xml": "^4.2.3",
