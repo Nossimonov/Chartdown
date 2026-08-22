@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Every decision that closes off alternatives — syntax choices, technology choices, scope cuts — is recorded here before its issue is closed. See [CONTRIBUTING.md](../../CONTRIBUTING.md#adrs-architecture-decision-records) for the rules.
+A contentious decision that closes off alternatives — syntax choices, technology choices, scope cuts — is recorded here before its issue is closed. See [CONTRIBUTING.md](../../CONTRIBUTING.md#adrs-architecture-decision-records) for the rules.
 
 - Files are numbered sequentially: `0001-<slug>.md`, `0002-<slug>.md`, …
 - **The number is claimed on merge, not on draft** — take the next free one while writing, and if a concurrent branch took it too, whoever merges second renumbers. The index table below is what makes that collision surface as a git conflict rather than as two files sharing a number.

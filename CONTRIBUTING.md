@@ -6,7 +6,7 @@ Chartdown is in its design phase, so most contributions are *ideas and words*, n
 
 1. **Issue-first.** Every unit of work — spec section, code change, doc rewrite — starts as a GitHub issue *before* the work happens. Trivial fixes (typos, broken links) are exempt.
 2. **Spec-first.** No feature is implemented before it exists in [docs/spec/](docs/spec/). The renderer follows the spec, never the reverse.
-3. **Decisions leave a record.** Any decision that closes off alternatives (syntax choices, tech stack, scope cuts) gets an Architecture Decision Record in [docs/decisions/](docs/decisions/) before the issue is closed.
+3. **Contentious decisions leave a record.** A decision that will be re-litigated or will constrain future work (syntax choices, tech stack, scope cuts) gets an Architecture Decision Record in [docs/decisions/](docs/decisions/) before the issue is closed.
 
 > **Nothing enforces these three but review**, deliberately — each is a judgement about whether a thing is worth an issue, a spec line or a record, and a checker would answer a different question than the one being asked. Rules elsewhere in this file that a machine *can* check now are checked: the version surfaces, the release audit, `Closes #n`, the ADR index, the zero-dependency rule and the BREAKING marker. Where a rule is unenforced, this file says so rather than sounding automatic ([#335](https://github.com/Nossimonov/Chartdown/issues/335)).
 

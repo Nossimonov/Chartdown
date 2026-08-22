@@ -8,7 +8,7 @@
 // together), the digest and grammar headers (served publicly as
 // llms-full.txt), the spec README status line, and the CHANGELOG (the
 // [Unreleased] items roll into the new section with compare links).
-// The Obsidian plugin's 0.1.x lane is deliberately separate.
+// The Obsidian plugin versions on its own lane, deliberately.
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { refuseBump } from "./release-guards.mjs";

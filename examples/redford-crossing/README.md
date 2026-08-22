@@ -1,6 +1,6 @@
 # Ambush at Redford Crossing
 
-**Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07). Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
+**Status: spec-aligned** — valid under spec v0.6 (sections 01–08). Fulfills [#3](https://github.com/Nossimonov/Chartdown/issues/3), authored against Sarah's battlemap narrative in [docs/use-cases.md](../../docs/use-cases.md) §1.
 
 **Derived crossing (2026-07-20, [#25](https://github.com/Nossimonov/Chartdown/issues/25)):** the ford no longer declares cells — `ford : on redford on tollroad difficult` derives its region from the river×road band intersection, making ford/river disagreement unrepresentable (a crossing's location is a consequence, not a fact); the river and road carry ids because they're referenced, per ADR 0004.
 
