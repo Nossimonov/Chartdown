@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placemen
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, levelSpan, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -24,6 +24,27 @@ export function battlemapFrame(model: Model): Frame {
   const rows = model.doc.grid?.rows ?? 15;
   return { cols, rows, w: MARGIN * 2 + cols * CELL, h: MARGIN * 2 + rows * CELL };
 }
+
+/**
+ * One emitter's pool, as the shape it was drawn from plus who drew it (#290).
+ *
+ * The shape is whichever of the two forms occlusion selected — a visibility
+ * polygon where sight blockers cut it, a circle where nothing does — so the
+ * pool, the hole and the coverage test all read the SAME geometry rather than
+ * three copies of the branch that chose it.
+ */
+type EmitterCover = {
+  shape: { kind: "circle"; at: XY; r: number } | { kind: "poly"; pts: XY[] };
+  /**
+   * How the document named this emitter, for the report — display name, else
+   * explicit id, else the type word. The id beats the type word because a map
+   * with three lamps on it needs to be told WHICH lamp out-ranges the room.
+   */
+  label: string;
+  /** Its declared range, verbatim — `60ft`, not 384. */
+  measure: string;
+  line: number;
+};
 
 export interface LevelContext {
   level: string;
@@ -60,6 +81,14 @@ export function renderBattlemap(
   // entity loop below, before any later let would initialise.
   // Emitter pools per field, as mask holes for the ambient wash (#106).
   const fieldHoles = new Map<string, string[]>();
+  /**
+   * The same pools as GEOMETRY, with the emitter that made each one (#290).
+   *
+   * `fieldHoles` carries markup, which cannot be asked whether any of the wash
+   * survives it. This carries the shape the markup was built from, so
+   * `fillsTheField()` can answer that question and name who is responsible.
+   */
+  const fieldCovers = new Map<string, EmitterCover[]>();
 
   /**
    * The map field of THIS panel — the frame inset by its margin (ADR 0042).
@@ -84,10 +113,13 @@ export function renderBattlemap(
     fieldClipUsed = true;
     return `url(#${fieldClipId})`;
   }
-  const noteHole = (field: string, shape: string): void => {
+  const noteHole = (field: string, shape: string, cover: EmitterCover): void => {
     const list = fieldHoles.get(field) ?? [];
     list.push(shape);
     fieldHoles.set(field, list);
+    const covers = fieldCovers.get(field) ?? [];
+    covers.push(cover);
+    fieldCovers.set(field, covers);
   };
   let noteCourseCount = 0;
   let terrainCourseCount = 0;
@@ -464,17 +496,85 @@ export function renderBattlemap(
   }
 
   /**
-   * A hole in the ambient wash for one emitter. Occlusion follows the field's
+   * The shape one emitter's field reaches. Occlusion follows the field's
    * `occluded=` facet (spec 04 §5): `sight` (light's default) traces against
    * sight blockers, `none` fills through matter — an antimagic zone or a
    * radiation hazard is not stopped by a wall.
+   *
+   * Chosen ONCE per emitter. The pool, the hole it cuts in the wash and the
+   * coverage test of #290 are three readings of this one shape; when each made
+   * the choice for itself they could disagree, and the identical branch stood
+   * in three places.
    */
-  function emitterHole(at: XY, radius: number): string {
+  function emitterShape(at: XY, radius: number): EmitterCover["shape"] {
     const occluded = model.facetOf("light", "occluded") ?? "sight";
     if (occluded !== "none" && sightBlockers.length > 0) {
-      return el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill: "#000" });
+      return { kind: "poly", pts: visibilityPolygon(at, radius, sightBlockers) };
     }
-    return el("circle", { cx: at.x, cy: at.y, r: radius, fill: "#000" });
+    return { kind: "circle", at, r: radius };
+  }
+
+  /** The hole that shape cuts in the ambient wash. */
+  function emitterHole(shape: EmitterCover["shape"]): string {
+    return shape.kind === "poly"
+      ? el("polygon", { points: pointsAttr(shape.pts), fill: "#000" })
+      : el("circle", { cx: shape.at.x, cy: shape.at.y, r: shape.r, fill: "#000" });
+  }
+
+  /**
+   * The pool itself, painted on the field and bounded by it (ADR 0042).
+   *
+   * NOT built from `emitterShape()`, deliberately. The pool has always branched
+   * on blockers ALONE while the hole consults `occluded=` as well, so a field
+   * declared `occluded=none` on a map with walls draws a pool traced against
+   * those walls and a cut-out that ignores them — the two disagree about the
+   * same emitter. That is a real defect and it is not #290's; unifying them
+   * here would move renders this change promises not to move, and would ship an
+   * unfiled fix inside a filed one. Left exactly as it was, on purpose.
+   */
+  function emitterPool(at: XY, radius: number): string {
+    const fill = model.theme.surface("light", "fill", "#ffd98a");
+    return sightBlockers.length > 0
+      ? el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill, opacity: 0.22, "clip-path": clipToField() })
+      : el("circle", { cx: at.x, cy: at.y, r: radius, fill, opacity: 0.22, "clip-path": clipToField() });
+  }
+
+  function coversPoint(shape: EmitterCover["shape"], p: XY): boolean {
+    return shape.kind === "circle"
+      ? Math.hypot(p.x - shape.at.x, p.y - shape.at.y) <= shape.r
+      : pip(p, shape.pts);
+  }
+
+  /**
+   * Does nothing of the wash survive these pools? (#290, ADR 0050.)
+   *
+   * Union-of-shapes against a rect has no exact form the renderer can afford —
+   * `render-svg` carries no runtime dependencies (ADR 0007) — so the field is
+   * SAMPLED on a lattice and the answer is "no point of it stayed uncovered".
+   *
+   * The step is a quarter cell, and the limitation that buys is admitted rather
+   * than hidden: a surviving filament of ambient thinner than 8px on the page
+   * goes unreported. That is the intended trade. The question this answers is
+   * whether any darkness READS on the sheet, and a sub-8px thread does not.
+   *
+   * It errs toward SILENCE in the other direction too. Boundary samples sit
+   * exactly on the field edge, where `pip()` on a polygon whose blockers run
+   * along that same edge — the cave idiom — may answer either way; a false
+   * "not covered" costs a report that would have been true, and a false report
+   * would cost the author's trust in every other one.
+   */
+  function fillsTheField(covers: EmitterCover[]): boolean {
+    if (covers.length === 0) return false;
+    const step = CELL / 4;
+    const nx = Math.round(fieldRect.w / step);
+    const ny = Math.round(fieldRect.h / step);
+    for (let i = 0; i <= nx; i++) {
+      for (let j = 0; j <= ny; j++) {
+        const p = { x: fieldRect.x + i * step, y: fieldRect.y + j * step };
+        if (!covers.some((c) => coversPoint(c.shape, p))) return false;
+      }
+    }
+    return true;
   }
 
   /** Full-frame wash for every declared ambient whose theme entry has a fill. */
@@ -504,6 +604,40 @@ export function renderBattlemap(
       }
       const opacity = declared ?? "0.82";
       const holes = fieldHoles.get(field) ?? [];
+      // A POOL THAT FILLS ITS FIELD IS REPORTED, NOT REDRAWN (#290, ADR 0050).
+      //
+      // A 60ft lantern in a 15ft room leaves no ambient visible, and that
+      // render is FAITHFUL — the lamp does light the room, and an emitter is a
+      // pool of its range cut into the wash. So nothing below softens the pool
+      // or shortens the range; the wash is emitted exactly as it always was.
+      //
+      // What was missing is the author. The document declares two things that
+      // cannot both show, the renderer picks one silently, and `check` passes
+      // over a sheet that contradicts its own first lines. This is the ruling
+      // #287 already makes one bullet up in spec 04 §5: an author who writes
+      // `light: dark` is picturing a dark sheet, and silence would let them
+      // keep picturing it. Only they can say which of the two they meant.
+      //
+      // Per PANEL, because ambientWash() is — a lamp that fills the cellar
+      // says nothing about the floor above it (ADR 0042).
+      const covers = fieldCovers.get(field) ?? [];
+      if (fillsTheField(covers)) {
+        // Named where one emitter does it alone, counted where only the
+        // combination does: "shorten this one" is advice, and pointing at an
+        // arbitrary member of a set that jointly covers the field is not.
+        const alone = covers.find((c) => fillsTheField([c]));
+        diagnostics.push({
+          severity: "warning",
+          line: alone?.line ?? 1,
+          message:
+            `'${field}: ${value}' declares an ambient this map never shows: `
+            + (alone
+              ? `'${alone.label}' reaches ${alone.measure}, which covers`
+              : `its ${covers.length} emitters together cover`)
+            + ` the whole map field, so no part of the map renders ${value} — `
+            + `shorten the ${alone ? "range" : "ranges"}, or drop the ambient (spec 04 §5)`,
+        });
+      }
       const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
       out.push(
         `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${fmt(fieldRect.x)}" y="${fmt(fieldRect.y)}" width="${fmt(fieldRect.w)}" height="${fmt(fieldRect.h)}">` +
@@ -1918,12 +2052,9 @@ export function renderBattlemap(
       const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
       if (light) {
         const radius = measureToCells(light, model) * CELL;
-        noteHole("light", emitterHole(center, radius));
-        footprintParts.push(
-          sightBlockers.length > 0
-            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() })
-            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() }),
-        );
+        const shape = emitterShape(center, radius);
+        noteHole("light", emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: light, line: e.line });
+        footprintParts.push(emitterPool(center, radius));
       }
       const themed0 = model.theme.glyphFor(chainR, center.x, center.y);
       const glyphless = !themed0 && !["campfire", "torch", "brazier", "lantern", "wagon", "stairs", "ramp"].some((w) => chainR.includes(w));
@@ -1975,13 +2106,9 @@ export function renderBattlemap(
     const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;
-      noteHole("light", emitterHole(c, radius));
-      if (sightBlockers.length > 0) {
-        const poly = visibilityPolygon(c, radius, sightBlockers);
-        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
-      } else {
-        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
-      }
+      const shape = emitterShape(c, radius);
+      noteHole("light", emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: light, line: e.line });
+      parts.push(emitterPool(c, radius));
     }
     const chain = model.chainOf(e.typeWord);
     const themedGlyph = model.theme.glyphFor(chain, c.x, c.y);

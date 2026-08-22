@@ -60,3 +60,4 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0047](0047-a-document-path-is-a-token.md) | A document path is a token: quoting protects its spaces, and the quotes are not part of the path | Accepted |
 | [0048](0048-an-annotation-names-the-nearest-landing-of-its-own-flight.md) | An annotation names the nearest landing of its own flight, on every panel | Accepted |
 | [0049](0049-a-cell-address-on-a-gridless-map-is-refused-not-dropped.md) | A cell address on a gridless map is refused, not dropped; a grid-only header key that has nothing to do warns | Accepted |
+| [0050](0050-a-pool-that-fills-its-field-is-reported-not-redrawn.md) | A pool that fills its whole map field is reported, not redrawn | Accepted |
