@@ -94,6 +94,16 @@ describe("3 — unreachable-room", () => {
     const src = `# Lint fixture\n\nmap: battlemap\ngrid: square 20x20\nscale: 5ft\nlevels: ground cellar\nlevel: ground\n\n[structures]\nbuilding kitchen : D7..H10\n  door : D7.w\n\n[structures cellar]\nbuilding undercroft : E7..K10\n\n[features]\nstairs : on kitchen at C3 to=cellar\n`;
     expect(has(src, SEALED)).toBe(false);
   });
+
+  it("is silent on a shaft's MIDDLE level, reached only by a `to=` RANGE (#322)", () => {
+    // The renderer walks the full span between a range's endpoints (#112,
+    // levelSpan()); this lint used to test only the two endpoints named in the
+    // string, so `mid` — reachable solely because it sits between `top` and
+    // `bot` — read as sealed while the render drew a landing into it.
+    const src = `# Lint fixture\n\nmap: battlemap\ngrid: square 20x20\nscale: 5ft\nlevels: top mid bot\nlevel: top\n\n[structures]\nbuilding t : C3..F6\n  door : D6.s\nstairs shaft : D4 to=top..bot\n\n[structures mid]\nbuilding m : C3..F6\n\n[structures bot]\nbuilding b : C3..F6\n`;
+    expect(has(src, SEALED)).toBe(false);
+    expect(warningsIn(src, "gm").some((m) => m.includes(SEALED))).toBe(false);
+  });
 });
 
 describe("4 — dangling-connector", () => {
