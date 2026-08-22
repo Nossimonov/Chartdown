@@ -1079,16 +1079,10 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
             const B = resolveEnd(p.to);
             if (A.p && B.p) {
               // A region map has no grid, so a `via <cell>` (#258) names
-              // nothing here. Refused rather than approximated: a cell means a
-              // square of a grid this document does not have.
-              const gridControls = p.via.filter((c) => c.kind === "address");
-              if (gridControls.length > 0) {
-                diagnostics.push({
-                  severity: "error",
-                  line: e.line,
-                  message: `'via' names a cell on a region map, which has no grid — give a point \`(x,y)\` in the document's extent units (spec 02 §7)`,
-                });
-              }
+              // nothing here — refused in the parser now, along with every
+              // other spelling of an address on a gridless map (#325, ADR
+              // 0049). The refusal used to live HERE and covered this one slot
+              // only, which is what made the other six silent.
               const via = p.via.filter((c): c is Point => c.kind === "point").map(toXY);
               const a = A.shore ? nearestOnPolyline(A.shore, via[0] ?? B.p) : A.p;
               const b = B.shore ? nearestOnPolyline(B.shore, via[via.length - 1] ?? A.p) : B.p;
@@ -1143,6 +1137,15 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         out.point = { x: out.point.x - waterVector.x * 7, y: out.point.y - waterVector.y * 7 };
       }
     }
+    // AN ENTITY THAT RESOLVES TO NO GEOMETRY CONTRIBUTES NO ELEMENT (#325,
+    // ADR 0049). `area C4..D5` on a gridless map filtered its args down to the
+    // points among them, found none, and still assigned the empty list — so
+    // `<polygon points=""/>` reached the output, an element nothing can draw.
+    // `render` deliberately proceeds past errors, so the refusal in the parser
+    // does not remove this on its own. An outline of ONE or TWO points is left
+    // exactly as it was: that is a live defect reachable with points alone and
+    // it is filed separately, not folded in here.
+    if (out.polygon && out.polygon.length === 0) delete out.polygon;
     return out;
   };
 
