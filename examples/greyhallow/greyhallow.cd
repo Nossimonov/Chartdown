@@ -1,0 +1,59 @@
+# Greyhallow Chapel
+
+map: battlemap
+grid: square 14x12          ; columns A-N, rows 1-12
+scale: 5ft
+numbers: on
+levels: chapel crypt        ; physical order, topmost first
+level: chapel               ; unqualified sections are the chapel floor
+
+[terrain]
+grass : area A1..N1
+grass : area A10..N12
+
+[structures]
+building nave "The Nave" : B2..H9
+  door : E9.s               ; the public way in, off the green
+  window : B4.w
+  window : B7.w
+; the reliquary has no public door, and that is the whole point of it: the
+; only way in is the panel beside the altar. A map that showed a way in would
+; be a different room.
+building reliquary "The Reliquary" : I3..K6
+  door : I4.w hidden
+
+[features]
+candles altar : E3 light=15ft
+bench : C5..C7
+bench : G5..G7
+font : D8
+; under the runner. Hidden from the nave, and a plain stair from below —
+; the priests come and go; a stranger standing here sees floor.
+trapdoor : F8 to=crypt hidden
+
+[vocab]
+trapdoor : stairs           ; a connector kind of its own, themable
+shaft : stairs
+
+[terrain crypt]
+earth : area A1..N12        ; solid rock; the room carves it
+
+[structures crypt]
+building undercroft "The Crypt" : C3..K9
+
+[features crypt]
+stairs : F8 to=chapel       ; the far end of the trapdoor, declared plainly
+tomb : D4..D6
+tomb : H4..H6
+; the sexton's way out, and it surfaces INSIDE the reliquary — one secret
+; opening onto another. Declared once, on this level, and nowhere above.
+shaft bolthole "The Sexton's Bolt-hole" : J5 to=chapel hidden
+
+[tokens]
+priest "Father Enno" : E4
+start party : E11..G11
+
+[gm]
+"Father Enno" : "Knows both ways down. Will not speak of the bolt-hole."
+reliquary : "The saint's hand in a silver case, and the ledger naming who paid for the roof."
+bolthole : "Comes up behind the reliquary panel. Father Enno used it the night the tithe went missing."
