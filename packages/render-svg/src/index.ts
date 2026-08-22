@@ -39,9 +39,54 @@ export interface RenderResult {
   diagnostics: Diagnostic[];
 }
 
+/**
+ * A RENDERER INVARIANT IS REPORTED, NOT THROWN AT THE CALLER (#341).
+ *
+ * ADR 0043 made an unhandled edge direction a loud failure rather than a
+ * silent east edge, which is right — `edgeSegment` throws on `nw`. Nothing
+ * caught it. `check` renders unconditionally (#120), so a document the PARSER
+ * had already refused with the exact right message — *"'C3.nw' names a corner,
+ * and nothing in the language is placed on a corner"* — died before the print
+ * loop and the author got a Node stack trace and no diagnostic at all.
+ *
+ * The guard lives HERE rather than in the CLI because `render` has three
+ * callers outside this package — the CLI, `obsidian/src/block.ts` and
+ * `mcp/src/raster.ts`. In a plugin an uncaught throw is worse than a stack
+ * trace: a dead pane with no line number. Fixing it at one caller would have
+ * left it live in two shipped products.
+ *
+ * The throw stays exactly as loud. What changes is that it arrives as a
+ * result the caller can print instead of ending the process, and it is
+ * reported as a RENDERER failure rather than folded in among the document's
+ * own diagnostics — an invariant that fired means the renderer met something
+ * it believes impossible, and flattening that would make the next one read as
+ * the author's mistake.
+ */
 export function render(doc: DocumentNode, options: RenderOptions = {}): RenderResult {
-  const mode = options.mode ?? "player";
+  // Shared, so diagnostics earned BEFORE the throw survive it — a theme error
+  // is still worth printing even when the drawing later gives out.
   const diagnostics: Diagnostic[] = [];
+  try {
+    return renderGuarded(doc, options, diagnostics);
+  } catch (e) {
+    diagnostics.push({
+      severity: "error",
+      line: 0,
+      message:
+        `the renderer could not draw this document: ${e instanceof Error ? e.message : String(e)}` +
+        ` — this is a renderer fault, not a fault in the document, though an error reported above may be its cause`,
+    });
+    // A blank sheet rather than nothing: `render` writes its file and exits 1,
+    // and a caller that embeds the output needs something valid to place.
+    return {
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 620" width="860" height="620" font-family="sans-serif"></svg>`,
+      diagnostics,
+    };
+  }
+}
+
+function renderGuarded(doc: DocumentNode, options: RenderOptions, diagnostics: Diagnostic[]): RenderResult {
+  const mode = options.mode ?? "player";
   const theme = Theme.resolve(options.theme, diagnostics);
   /**
    * DOCUMENT FURNITURE IS INK TOO (#286). #150 wired the `ink` surface into
