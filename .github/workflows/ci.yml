@@ -22,6 +22,39 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  # THE DIGEST MOVES WITH THE PROSE (#12), AND THIS IS A PROMPT, NOT A GATE.
+  #
+  # Measured over 59 spec-section commits (#335): digest.md moved with 58 of
+  # them, so the habit is real. It is a WARNING rather than a failure because
+  # the one exception was legitimate — a rationale-only note that changed no
+  # normative text — and because whether the prose actually drifted is a
+  # judgement no diff can make. What this catches is the case nobody meant:
+  # a spec edit that simply forgot, which is how a stale banner rode three
+  # releases in the file agents read first (#331).
+  #
+  # The grammar half is deliberately NOT checked. 29 of those 59 commits
+  # rightly left grammar.ebnf alone — a semantic change has no grammatical
+  # surface — so a check would fail half of all legitimate spec work.
+  spec-digest:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Warn if a spec section moved without the digest
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD)
+          sections=$(echo "$changed" | grep -E '^docs/spec/[0-9]+-.*\.md$' || true)
+          if [ -n "$sections" ] && ! echo "$changed" | grep -qx 'docs/spec/digest.md'; then
+            echo "::warning file=docs/spec/digest.md::A spec section changed without docs/spec/digest.md. The digest is the machine-readable face of the prose (#12) and is published as llms-full.txt. If the change was rationale only, this warning is the expected outcome and needs no action."
+            echo "Spec sections changed without the digest:"
+            echo "$sections" | sed 's/^/  /'
+          else
+            echo "ok — no spec section changed, or the digest moved with it."
+          fi
+
   # A published package's dependencies are the user's problem, not ours, the
   # moment we ship them (ADR 0029). Scoped to what is SHIPPED — `--omit=dev`
   # — because a advisory in a test runner is a chore and one in `@chartdown/mcp`

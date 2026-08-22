@@ -23,7 +23,7 @@ These come from CONTRIBUTING.md; follow them even when the user doesn't mention 
 
    When one *is* warranted: copy the template, take the next number, update the index table in `docs/decisions/README.md`. Accepted ADRs are immutable — reversals are new ADRs that supersede.
 4. **Spec and examples move together.** A PR that changes the spec must update any examples it invalidates. `main` never has a spec that contradicts `examples/` or the implementation.
-   Additionally (issue #12): any change to a `docs/spec/` section updates `docs/spec/grammar.ebnf` and `docs/spec/digest.md` in the same commit — the grammar and digest are never allowed to drift from the prose.
+   Additionally (issue #12): a change to a `docs/spec/` section updates `docs/spec/digest.md` in the same commit, and updates `docs/spec/grammar.ebnf` **when the grammar changed**. The digest half is near-absolute — measured over 59 spec-section commits it held 58 times, the exception being a rationale-only note. The grammar half is conditional and always was: 29 of those 59 rightly left `grammar.ebnf` alone, because a change like "difficult reaches a feature" has no grammatical surface. Neither file may drift from the prose; only the digest must move every time (#335).
 5. **Syntax changes go through proposals.** Use the syntax-proposal issue template (problem, worked example, alternatives, interactions). The README's syntax sketch is illustrative, not normative — don't cite it as spec, and don't extend it; if the spec diverges from it, update the README sketch to match the spec.
 
 ## Untrusted content (binding)
