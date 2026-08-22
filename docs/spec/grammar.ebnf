@@ -71,7 +71,14 @@ pair           = key , "=" , ( word | string | measure | level-span ) ;
 level-span     = level-name , [ ".." , level-name ] ;
                  (* `to=`/`through=` accept a RANGE (spec 06 §8, #112):
                     to=a..b lands on every level between; through=a..b is
-                    occupied but not opened onto and requires a to=. *)
+                    occupied but not opened onto and requires a to=.
+                    The ANNOTATION is a property of the FLIGHT, not of the
+                    panel that drew it (06 §8, ADR 0048, #321): the landings
+                    are the to= range PLUS the declaring level MINUS the
+                    through= range, and each panel names the NEAREST of them
+                    in levels: order — ties to the level ABOVE. This binds the
+                    RECIPROCAL panels too; naming the declaring level there,
+                    or printing a range verbatim, is NON-CONFORMING. *)
 comment        = ";" , text , EOL ;                  (* legal at end of any line; ";" in strings is content *)
 
 (* ---- placements — spec 02 ---- *)

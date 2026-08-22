@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placemen
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, levelSpan, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -391,7 +391,12 @@ export function renderBattlemap(
         );
       if (occupied) continue;
       const c = cellCenter(landing);
-      renderConnector(source, model.chainOf(source.typeWord), c, source.level, [], layers.features, undefined);
+      // The connector's OWN `to=` and its OWN declaring level, not this panel's
+      // (spec 06 §8, ADR 0048, #321). This call used to pass `source.level` as
+      // the `to` argument, so a projected landing announced the level the stair
+      // was WRITTEN ON — correct only when the two happen to be adjacent, which
+      // is every two-level map and no shaft.
+      renderConnector(source, model.chainOf(source.typeWord), c, to, [], layers.features, undefined, source.level);
     }
   }
 
@@ -800,29 +805,41 @@ export function renderBattlemap(
   }
 
   /**
-   * The levels a `to=`/`through=` value covers (#112). A single name is a
-   * one-level span; `a..b` is every declared level between them inclusive, in
-   * the document's own physical order — so an author need not know which end
-   * they wrote first.
+   * The nearest landing other than the level being drawn. `landings` arrives in
+   * `levels:` order (topmost first) and the comparison is strict, so an exact
+   * tie — a panel with a landing one step above and one step below — keeps the
+   * first seen and therefore resolves UPWARD. That is spec 06 §8's stated
+   * tie-break (ADR 0048), not an artefact of the iteration: an interior panel
+   * of a shaft genuinely has two next landings and the spec has to pick one.
    */
-  function levelSpan(levels: string[], value: string): string[] {
-    const [a, b] = value.split("..");
-    if (b === undefined) return levels.includes(a!) ? [a!] : [];
-    const i = levels.indexOf(a!);
-    const j = levels.indexOf(b!);
-    if (i === -1 || j === -1) return [];
-    return levels.slice(Math.min(i, j), Math.max(i, j) + 1);
-  }
-
-  /** The nearest landing in the span other than the level being drawn. */
-  function nextLandingIndex(levels: string[], span: string[], from: number): number {
+  function nextLandingIndex(levels: string[], landings: string[], from: number): number {
     let best = -1;
-    for (const name of span) {
+    for (const name of landings) {
       const idx = levels.indexOf(name);
       if (idx === -1 || idx === from) continue;
       if (best === -1 || Math.abs(idx - from) < Math.abs(best - from)) best = idx;
     }
     return best;
+  }
+
+  /**
+   * The levels a flight actually stops at (spec 06 §8, ADR 0048, #321).
+   *
+   * All three terms are load-bearing and each looks redundant from a different
+   * starting document. The DECLARING LEVEL is not in the `to=` value — a stair
+   * `to=cellar` written on `house` stops at both — and without it a reciprocal
+   * panel has no landing to name but itself. The `through=` range must be
+   * SUBTRACTED because §8 gives those levels no landing at all; naming one
+   * sends the party off a step that does not exist. And a `to=a..b` range
+   * usually already contains its own declaring level, which is exactly what
+   * makes the union look like dead weight on the first document you read.
+   */
+  function landingsOf(e: EntityNode, to: string, declaredLevel: string, levels: string[]): string[] {
+    const named = new Set(levelSpan(levels, to));
+    named.add(declaredLevel);
+    const throughValue = pairOf(e.pairs, "through");
+    if (throughValue !== undefined) for (const l of levelSpan(levels, throughValue)) named.delete(l);
+    return levels.filter((l) => named.has(l));
   }
 
   /**
@@ -839,6 +856,7 @@ export function renderBattlemap(
     parts: string[],
     into: string[],
     anchor: string | undefined,
+    declaredLevel: string,
   ): void {
     if (!levelCtx) return;
     const currentIdx = levelCtx.levels.indexOf(levelCtx.level);
@@ -847,11 +865,22 @@ export function renderBattlemap(
     // Third Level of one long stair, what matters is that the next landing
     // down is the First. Naming the bottom of the whole run would misreport
     // the step the party is about to take.
-    const span = levelSpan(levelCtx.levels, to);
-    const targetIdx = span.length > 1
-      ? nextLandingIndex(levelCtx.levels, span, currentIdx)
-      : levelCtx.levels.indexOf(to);
+    //
+    // THE ANNOTATION IS A PROPERTY OF THE FLIGHT, NOT OF THE PANEL THAT DREW IT
+    // (spec 06 §8, ADR 0048, #321). So `declaredLevel` is a parameter and NOT
+    // `levelCtx.level`: on the reciprocal path this is a DIFFERENT entity's
+    // level than the panel being drawn, and collapsing the two — which is the
+    // obvious simplification — is what makes every projected landing name the
+    // level the stair was written on. `to` is likewise the connector's own
+    // `to=` value on both paths, never the panel's.
+    const targetIdx = nextLandingIndex(
+      levelCtx.levels,
+      landingsOf(e, to, declaredLevel, levelCtx.levels),
+      currentIdx,
+    );
     const up = targetIdx !== -1 && targetIdx < currentIdx;
+    // Falls back to the raw `to=` only when nothing resolved — an undeclared
+    // level, which fails loud elsewhere (§8).
     const shown = levelCtx.levels[targetIdx] ?? to;
     const ink = model.theme.surface("ink", "fill", INK);
     const themed =
@@ -869,7 +898,7 @@ export function renderBattlemap(
       }
     }
     parts.push(
-      text(`${up ? "▲" : "▼"} ${to}`, {
+      text(`${up ? "▲" : "▼"} ${shown}`, {
         x: c.x, y: c.y + CELL * 0.72, "font-size": 7.5, fill: ink, "text-anchor": "middle", "font-family": "sans-serif",
       }),
     );
@@ -1939,7 +1968,7 @@ export function renderBattlemap(
     // Level connectors (spec 06 §8): any feature with to=<level>.
     const to = pairOf(e.pairs, "to");
     if (to !== undefined && levelCtx) {
-      renderConnector(e, model.chainOf(e.typeWord), c, to, parts, into, anchor);
+      renderConnector(e, model.chainOf(e.typeWord), c, to, parts, into, anchor, e.level);
       return;
     }
     // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.

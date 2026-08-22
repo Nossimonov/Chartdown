@@ -14,7 +14,7 @@
  */
 
 import type { Address, EntityNode } from "@chartdown/core";
-import { colLetters, type Segment } from "./util";
+import { colLetters, levelSpan, type Segment } from "./util";
 import { cellKey, edgeSegment, halfPlaneContext, perimeterEdges, segKey, structureCells, surfaceCells, type Cell, type HalfPlaneContext } from "./grid";
 import { impassableCells } from "./walls";
 import type { Model } from "./model";
@@ -248,7 +248,11 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
     const hasConnector = all.some((e) => {
       const to = e.pairs.find((p) => p.key === "to")?.value;
       if (to === undefined) return false;
-      const reachesHere = e.level === level || to === level || to.split("..").includes(level);
+      // A `to=` RANGE lands on every level between its endpoints (#112), not
+      // just the two named — the renderer walks the same span via levelSpan()
+      // (battlemap.ts), and the two must agree or a shaft's middle floors warn
+      // unreachable while the render draws a landing into them (#322).
+      const reachesHere = e.level === level || levelSpan(ctx?.levels ?? [level], to).includes(level);
       if (!reachesHere) return false;
       const atValue = e.pairs.find((p) => p.key === "at")?.value;
       const landing = atValue ?? null;
