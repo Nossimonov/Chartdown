@@ -1,7 +1,7 @@
 /**
  * Would the Obsidian store's scan pass? (#350)
  *
- * Every plugin release so far has been followed by a patch release to clear
+ * Every plugin release up to 0.4.0 was followed by a patch release to clear
  * something the store's scan objected to — and the scan CACHES its result per
  * version, so a rejected release cannot be re-scanned. The fix always costs a
  * version number, and the fix is usually one line.
@@ -11,6 +11,14 @@
  * | 0.2.1 | stale `@chartdown` pins, and test files published as plugin source |
  * | 0.3.1 | `styles.css` — twelve opens, thirteen closes |
  * | 0.4.0 | version surfaces drifting between manifest, package.json, lockfile |
+ *
+ * 0.5.0 was the first release cut behind this check, and the first the store
+ * passed with no patch behind it. That is correlation rather than proof — the
+ * counterfactual is not observable — but the four classes below were verified
+ * absent BEFORE the dispatch rather than discovered after, which had not
+ * happened before. The check earned itself during that release: the lockfile
+ * entry carries a `name` line between the key and the version, the first edit
+ * pattern missed it, and this is what said so.
  *
  * Two of those already have tests. What none of them had is a single command
  * that answers "is this releasable" over the ARTIFACT — the three files that go
