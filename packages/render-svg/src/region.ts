@@ -28,7 +28,13 @@ interface Resolved {
   ridge?: boolean;
   /** Massif breadth in px (from `width=`, a measure) — a ridge is a BELT, not a centerline. */
   beltW?: number;
-  halfPlane?: { compass: string; of: XY[]; refKey?: string };
+  /**
+   * `polygon` is the half-plane CLIPPED TO THE MAP FIELD — where the water is,
+   * is where the land is not, and that is geometry rather than ink (#355).
+   * Filled by the sweep at the end of pass 1, once every course it could be
+   * cut against is final, so it is present on every resolved half-plane.
+   */
+  halfPlane?: { compass: string; of: XY[]; refKey?: string; polygon?: XY[] };
   /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
   alongSpans?: { ref: string; refKey?: string; start: number; end: number }[];
 }
@@ -1194,6 +1200,23 @@ function resolveRegionGeometry(
     items.push({ e, r, chain });
   }
 
+  // A HALF-PLANE IS CLIPPED HERE, NOT AT EMIT (#355).
+  //
+  // `halfPlanePolygon` used to run in the emit pass, at two call sites, which
+  // made the water's actual outline the one piece of region geometry a
+  // non-SVG consumer could not be handed. It is geometry by ADR 0037's test —
+  // it decides where the land is — so it resolves.
+  //
+  // The sweep runs AFTER the loop rather than at the assignment in
+  // `resolveEntity`, because `of` holds a live reference to the referenced
+  // course's polyline. Clipping at assignment time would freeze the shape
+  // against whatever that course looked like when the half-plane was read,
+  // and a coast declared later, or finished later, would cut against a stale
+  // outline. After the loop, every course is final.
+  for (const { r } of items) {
+    if (r.halfPlane) r.halfPlane.polygon = halfPlanePolygon(r.halfPlane, w, h);
+  }
+
   return { items, resolved, byName, chainByKey, mapUnit, toXY, lookup, assembleWaterBoundary };
 }
 
@@ -1259,7 +1282,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const frontierFills = new Map<string, { fill: string; zonePoly: XY[] }>();
   for (const it of items) {
     if (it.r.halfPlane?.refKey && it.e.section !== "water" && it.e.archetype !== "zone") {
-      frontierFills.set(it.r.halfPlane.refKey, { fill: theme.terrainFill(it.chain), zonePoly: halfPlanePolygon(it.r.halfPlane, w, h) });
+      // The polygon is resolved (see the sweep in `resolveRegionGeometry`);
+      // only the fill is decided here, because only the fill is ink.
+      frontierFills.set(it.r.halfPlane.refKey, { fill: theme.terrainFill(it.chain), zonePoly: it.r.halfPlane.polygon ?? [] });
     }
     // Area-declared zones (a tundra following the coasts): any non-coastline
     // path their boundary follows is likewise a zonal frontier.
@@ -1536,7 +1561,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
 
     if (r.halfPlane) {
-      const poly = halfPlanePolygon(r.halfPlane, w, h);
+      const poly = r.halfPlane.polygon ?? [];
       const isWater = e.section === "water";
       const isZone = !isWater && e.archetype === "zone";
       if (isWater) {
