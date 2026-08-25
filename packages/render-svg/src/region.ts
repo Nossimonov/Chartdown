@@ -20,7 +20,7 @@ import {
   shade,} from "./util";
 import { CHANNEL_FLOOR, narrowChannels } from "./channel";
 
-interface Resolved {
+export interface Resolved {
   point?: XY;
   polyline?: XY[];
   polygon?: XY[];
@@ -41,6 +41,47 @@ interface Resolved {
 
 
 
+/**
+ * Region canvas widths (#139, ADR 0020). `reference` is 2x, which is where the
+ * measured returns flatten: 1640 and 2460 place the same number of line
+ * labels, and 3280 buys one more for four times the coordinate precision.
+ */
+const OVERVIEW_WIDTH = 820;
+const REFERENCE_WIDTH = 1640;
+
+/** A region's field: its own units, the canvas it is drawn on, and the ratio. */
+export interface RegionFrame {
+  /** Canvas width in px — moves with `detail:`. */
+  w: number;
+  /** Canvas height in px. */
+  h: number;
+  /** Canvas px per map unit. `toXY` multiplies by it; an export divides it out. */
+  scale: number;
+  /** `extent:`'s own width, in `unit`. */
+  unitsW: number;
+  /** `extent:`'s own height, in `unit`. */
+  unitsH: number;
+  /** The unit `extent:` was written in ("mi", "km", …), or "" if bare. */
+  unit: string;
+}
+
+/**
+ * THE ONE PLACE THAT KNOWS MAP UNITS FROM CANVAS UNITS (ADR 0037).
+ *
+ * `render` computed this inline, which was fine while the SVG was the only
+ * consumer. A scene export has to divide the same `scale` back out to get
+ * geometry in the author's own units (#355), and two copies of a conversion
+ * are two answers to "how big is this map".
+ */
+export function regionFrame(model: Model): RegionFrame {
+  const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
+  const unitsW = Number(extent?.[1] ?? 800);
+  const unitsH = Number(extent?.[2] ?? 600);
+  const canvasW = model.header.get("detail") === "reference" ? REFERENCE_WIDTH : OVERVIEW_WIDTH;
+  const scale = canvasW / unitsW;
+  return { w: canvasW, h: unitsH * scale, scale, unitsW, unitsH, unit: extent?.[3] ?? "" };
+}
+
 /** An entity's stable key: its anchor, else a line-addressed placeholder. */
 const keyOf = (e: EntityNode): string => entityAnchor(e) ?? `@anon-${e.line}`;
 /** A map coordinate an author can paste back into the document. */
@@ -48,7 +89,7 @@ const round1 = (n: number): string => String(Math.round(n * 10) / 10);
 /** Two points the same to within a hair — geometry is compared, not identity. */
 const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
 
-interface Item {
+export interface Item {
   e: EntityNode;
   r: Resolved;
   chain: string[];
@@ -79,7 +120,7 @@ interface RegionResolve {
  * was already true of this code, which is why the move is an extraction and
  * not a disentangling.
  */
-function resolveRegionGeometry(
+export function resolveRegionGeometry(
   model: Model,
   size: { w: number; h: number; scale: number },
   diagnostics: { severity: "error" | "warning"; line: number; message: string }[],

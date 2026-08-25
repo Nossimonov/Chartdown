@@ -12,17 +12,9 @@ import { titleBand } from "./grid";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildLegend } from "./legend";
 import { buildModel, pairOf, type Model, type RenderMode } from "./model";
-import { renderRegion } from "./region";
+import { regionFrame, renderRegion } from "./region";
 import { INK, PAPER, Theme } from "./theme";
 import { colLetters, colToNumber, el, fmt, text } from "./util";
-
-/**
- * Region canvas widths (#139, ADR 0020). `reference` is 2x, which is where the
- * measured returns flatten: 1640 and 2460 place the same number of line
- * labels, and 3280 buys one more for four times the coordinate precision.
- */
-const OVERVIEW_WIDTH = 820;
-const REFERENCE_WIDTH = 1640;
 
 export interface RenderOptions {
   /** Fail-closed default per spec 01 §6. */
@@ -190,9 +182,7 @@ function renderGuarded(doc: DocumentNode, options: RenderOptions, diagnostics: D
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderHexcrawl(model, body, diagnostics);
   } else {
-    const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
-    const unitsW = Number(extent?.[1] ?? 800);
-    const unitsH = Number(extent?.[2] ?? 600);
+    const frame = regionFrame(model);
     // Render resolution is an editorial choice, not a constant (#139, ADR
     // 0020). An SVG is resolution-independent and a reader of a large regional
     // map expects to zoom for detail, but every label decision was being made
@@ -205,10 +195,9 @@ function renderGuarded(doc: DocumentNode, options: RenderOptions, diagnostics: D
     // `overview` stays the default so no existing document re-renders: the
     // trade is real in both directions, since absolute font sizes mean a
     // larger canvas is proportionally smaller text at a glance.
-    const canvasW = model.header.get("detail") === "reference" ? REFERENCE_WIDTH : OVERVIEW_WIDTH;
-    const scale = canvasW / unitsW;
-    w = canvasW;
-    h = unitsH * scale;
+    const scale = frame.scale;
+    w = frame.w;
+    h = frame.h;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderRegion(model, body, { w, h, scale }, diagnostics);
   }
