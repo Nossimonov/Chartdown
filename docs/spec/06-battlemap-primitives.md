@@ -226,6 +226,8 @@ At battlemap scale, table legibility outranks self-description: **fallback word-
 
 Richer multi-level and roof-aware targets (e.g. Foundry scene levels) remain ecosystem-phase work.
 
+> **Non-normative — the other thing you can consume.** UVTT is a transform for virtual tabletops. A host that draws the map itself wants the geometry rather than a file format, and the reference renderer exports it: `resolveScene` returns resolved geometry in the map's own units, with each feature's identity ([ADR 0051](../decisions/0051-the-renderers-answer-is-data-before-it-is-ink.md)). That contract is the renderer's and not the language's — it versions with `@chartdown/render-svg` and not with `SPEC_VERSION` — so it is documented in that package's README and its `scene.schema.json`. Named here because a reader asking *"what can I consume"* should find both answers in one place.
+
 ## 10. Coherence lints
 
 *(From proposal [#123](https://github.com/Nossimonov/Chartdown/issues/123), per the [#80](https://github.com/Nossimonov/Chartdown/issues/80) decision.)* Everything above governs what a document may **say**. These six checks govern what a document **means** — geometry that is legal under every rule and that no reader would intend. They exist because a prototype found 32 such defects in a map that passed validation and rendered without a single warning; the failure mode is not a rejected document but a plausible one, drawn confidently and wrong.
