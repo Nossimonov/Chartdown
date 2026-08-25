@@ -2,6 +2,35 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [0.5.0] - 2026-08-25
+
+Carries the Chartdown 0.7.0 renderer. Most of this release is about secrets — three separate ways a hidden thing could reach a player's screen anyway, all of which showed up in a note rendered in this plugin.
+
+### Your secrets stay on your side of the screen
+
+A stair marked `hidden` no longer appears on the player view. It was being stripped correctly and then drawn back in: the floor below announced a landing into the square the strip had just emptied, so a trapdoor you had deliberately concealed was published one loop later, in the same render.
+
+Marking the *far* end `hidden` used to do nothing at all, silently. It now spells a one-sided secret — hidden from above, an ordinary stair from below — which is what a priest-hole or a smuggler's cellar actually is.
+
+And a room whose only way in is a secret door no longer reports that nothing can reach it. That warning appeared on the player view by default, could not be turned off, and the one edit that cleared it was the edit that destroyed the secret.
+
+The new **Greyhallow Chapel** example is built out of all three, if you want to see them side by side: open it, switch between GM and player, and the player sheet shows no way down at all.
+
+### A map that cannot be drawn tells you why
+
+A corner-placed wall or door used to break the render outright. In a note that meant a dead pane with nothing to read. The map now reports the problem in the warnings list, on the line that wrote it, with the renderer's own explanation beneath it.
+
+### Better-looking water, and better labels underground
+
+Where two rivers meet they now merge, instead of each laying its bank across the other's water. On a multi-level map, a stair's annotation names the **next** floor it reaches rather than the far end of the shaft, so a three-storey stairwell reads correctly on every panel.
+
+### Two things that may light up an existing note
+
+Both are deliberate, and both are cases where a document was quietly not doing what it said:
+
+- A cell address such as `C4` on a **region** map is now an error. It never drew anything; it was silently discarded, so the feature you wrote simply was not there.
+- A quoted file path in `inset:` is now read as a path rather than as text-with-quotes, so a sub-map seam that was being skipped is now actually checked. Documents whose seams disagreed will say so.
+
 ## [0.4.0] — 2026-08-08
 
 ### You can get closer to a map
