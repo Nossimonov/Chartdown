@@ -35,15 +35,50 @@ interface Resolved {
 
 
 
-export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
+/** An entity's stable key: its anchor, else a line-addressed placeholder. */
+const keyOf = (e: EntityNode): string => entityAnchor(e) ?? `@anon-${e.line}`;
+/** A map coordinate an author can paste back into the document. */
+const round1 = (n: number): string => String(Math.round(n * 10) / 10);
+/** Two points the same to within a hair — geometry is compared, not identity. */
+const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
+
+interface Item {
+  e: EntityNode;
+  r: Resolved;
+  chain: string[];
+}
+
+/**
+ * What pass 1 produces. `items` is the resolved geometry in document order;
+ * the rest are the lookups pass 2 reads it through.
+ */
+interface RegionResolve {
+  items: Item[];
+  resolved: Map<string, Resolved>;
+  byName: Map<string, string>;
+  chainByKey: Map<string, string[]>;
+  mapUnit: string;
+  toXY: (p: Point) => XY;
+  lookup: (ref: Ref) => Resolved | undefined;
+  assembleWaterBoundary: (pts: XY[]) => XY[];
+}
+
+/**
+ * PASS 1 — resolve every entity's geometry, with nothing about ink.
+ *
+ * Hoisted out of `renderRegion` whole (#355). The two-pass shape was always
+ * there in that function's header comment; this makes the first pass a thing
+ * with a name, so a caller that wants the geometry without the drawing can
+ * have it. It consults no theme, pushes no markup and places no label — that
+ * was already true of this code, which is why the move is an extraction and
+ * not a disentangling.
+ */
+function resolveRegionGeometry(
+  model: Model,
+  size: { w: number; h: number; scale: number },
+  diagnostics: { severity: "error" | "warning"; line: number; message: string }[],
+): RegionResolve {
   const { w, h, scale } = size;
-  const theme = model.theme;
-  const ink = theme.surface("ink", "fill", INK);
-  // Named ground (ADR 0013): the author states what unmarked land IS —
-  // the parchment stops being an assumption.
-  const groundWord = model.header.get("ground")?.trim();
-  const groundFill = groundWord ? theme.terrainFill(groundWord.split(/\s+/)) : null;
-  if (groundFill) body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: groundFill }));
   // No shared noise stream: every organic shape keys on its OWN geometry
   // (owner review caught the defect — one stream meant adding a forest
   // reshaped every blob and river declared after it).
@@ -52,12 +87,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   /** Direction toward declared water (from e.g. `sea : west of coast`), for landward nudges. */
   let waterVector: XY | null = null;
 
-  const keyOf = (e: EntityNode): string => entityAnchor(e) ?? `@anon-${e.line}`;
   const lookup = (ref: Ref): Resolved | undefined =>
     resolved.get(ref.form === "id" ? ref.value : (byName.get(ref.value) ?? slugify(ref.value)));
   const toXY = (p: Point): XY => ({ x: p.x * scale, y: p.y * scale });
-  /** A map coordinate an author can paste back into the document. */
-  const round1 = (n: number): string => String(Math.round(n * 10) / 10);
   /** The unit `extent:` was written in, so a reported distance carries it. */
   const mapUnit = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "")?.[3] ?? "";
 
@@ -684,7 +716,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const massRng = (word: string | undefined, size: number): (() => number) =>
     rng(hashSeed(hashString(word ?? "mass"), Math.round(size * 1000)));
 
-  const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
   const runMatches = (pts: XY[], start: number, raw: XY[], reversed: boolean): boolean => {
     if (start + raw.length > pts.length) return false;
     for (let k = 0; k < raw.length; k++) {
@@ -1150,11 +1181,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   };
 
   // ---------- pass 1: resolve everything ----------
-  interface Item {
-    e: EntityNode;
-    r: Resolved;
-    chain: string[];
-  }
   const items: Item[] = [];
   const chainByKey = new Map<string, string[]>();
   for (const e of model.entities) {
@@ -1167,6 +1193,21 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     chainByKey.set(key, chain);
     items.push({ e, r, chain });
   }
+
+  return { items, resolved, byName, chainByKey, mapUnit, toXY, lookup, assembleWaterBoundary };
+}
+
+export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
+  const { w, h, scale } = size;
+  const theme = model.theme;
+  const ink = theme.surface("ink", "fill", INK);
+  // Named ground (ADR 0013): the author states what unmarked land IS —
+  // the parchment stops being an assumption.
+  const groundWord = model.header.get("ground")?.trim();
+  const groundFill = groundWord ? theme.terrainFill(groundWord.split(/\s+/)) : null;
+  if (groundFill) body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: groundFill }));
+  const { items, resolved, byName, chainByKey, mapUnit, toXY, lookup, assembleWaterBoundary } =
+    resolveRegionGeometry(model, size, diagnostics);
 
   // Two watercourses that cross without meeting are nonsense on the ground:
   // water does not flow over water. Nothing governed this before — the
