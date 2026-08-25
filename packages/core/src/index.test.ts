@@ -30,6 +30,74 @@ describe("basics", () => {
     expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
   });
 
+  it("the README's syntax sketch is a document that checks (#351)", () => {
+    // The README calls it "real, working syntax … this document renders today",
+    // and it had not for some time: ADR 0015 made `start` the one staging-zone
+    // spelling, #121 fixed the examples, and the sketch kept `party start`.
+    // It is the first Chartdown most readers type, and nothing was reading it.
+    //
+    // The sketch is illustrative rather than normative (CONTRIBUTING rule 5),
+    // so this asserts only that it PARSES CLEAN — not that it demonstrates any
+    // particular feature, which would make the README a spec by the back door.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+    // `\r?\n`: this file is CRLF on Windows checkouts, and a `\n`-only fence
+    // pattern silently matched nothing — the test passed by finding no sketch.
+    const sketch = /```chartdown\r?\n([\s\S]*?)```/.exec(readme)?.[1];
+    expect(sketch, "no ```chartdown block in README.md").toBeDefined();
+    const errors = parse(sketch!).diagnostics.filter((d) => d.severity === "error");
+    expect(errors.map((d) => `line ${d.line}: ${d.message}`)).toEqual([]);
+  });
+
+  it("the core and the renderer carry no third-party runtime dependency (ADR 0007, #335)", () => {
+    // The rule that decides whether these packages stay embeddable, and until
+    // now nothing asserted it. The test above checks that render-svg's PIN on
+    // core matches the version — a different claim, which would pass just as
+    // happily with `lodash` sitting beside it.
+    //
+    // Scope is exactly what the rule says: ADR 0007 binds the language core and
+    // the renderer, and ADR 0011 deliberately lets `@chartdown/mcp` carry
+    // runtime dependencies. Asserting more than was decided would block work
+    // nobody has ruled on.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    for (const name of ["core", "render-svg"]) {
+      const deps = Object.keys(
+        (JSON.parse(readFileSync(join(root, "packages", name, "package.json"), "utf8").replace(/^﻿/, "")) as
+          { dependencies?: Record<string, string> }).dependencies ?? {},
+      );
+      // A workspace sibling is not a dependency in the sense that matters — it
+      // ships from this repo and carries the same rule.
+      expect(deps.filter((d) => !d.startsWith("@chartdown/")), `${name} took a runtime dependency`).toEqual([]);
+    }
+  });
+
+  it("no shipped doc calls a released version unreleased (#331)", () => {
+    // The test above checks version TOKENS, which is all `bump` can rewrite:
+    // `spec v0.5` → `spec v0.6`. It cannot see a SENTENCE making a version
+    // claim, so digest.md's banner — "in-progress spec 0.4 … 0.4.0 has not
+    // shipped … carry no `chartdown:` pin" — survived three releases directly
+    // beneath a heading the same test was keeping correct. Worst possible file
+    // for it: agents read the digest first, and it told them the shipped
+    // language was unfinished and that pinning it was wrong.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const CLAIM = /in-progress|has not shipped|not yet shipped|unreleased|on this branch/i;
+    const rank = (v: string): number[] => v.split(".").map(Number);
+    const shipped = (v: string): boolean => {
+      const [a, b] = rank(v);
+      const [x, y] = rank(SPEC_VERSION);
+      return a! < x! || (a === x && b! <= y!);
+    };
+    for (const rel of ["docs/spec/digest.md", "docs/spec/grammar.ebnf", "docs/spec/README.md", "README.md"]) {
+      const prose = readFileSync(join(root, rel), "utf8").split(/\n|(?<=[.!?])\s+/);
+      for (const sentence of prose.filter((s) => CLAIM.test(s))) {
+        for (const [, v] of sentence.matchAll(/\b(\d+\.\d+(?:\.\d+)?)\b/g)) {
+          // A claim about a FUTURE version is fine — that is a roadmap note.
+          expect(shipped(v!), `${rel} calls shipped ${v} unshipped: ${sentence.trim()}`).toBe(false);
+        }
+      }
+    }
+  });
+
   it("every known header key is defined in the digest's Header keys list (#99)", () => {
     // Agents learn the language from the digest — a key the parser accepts
     // but the digest never names is invisible to them (user-caught: map:).

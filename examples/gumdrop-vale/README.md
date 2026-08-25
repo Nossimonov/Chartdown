@@ -1,6 +1,6 @@
 # Gumdrop Vale, Sigma-5-5
 
-**Status: spec-aligned** — valid under spec draft v0.1 (sections 01–07). Added with [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) (via [#16](https://github.com/Nossimonov/Chartdown/issues/16)) as the **candyland test**: proof that the vocabulary model imposes no setting.
+**Status: spec-aligned** — valid under spec v0.6 (sections 01–08). Added with [spec 04](../../docs/spec/04-vocabulary-and-archetypes.md) (via [#16](https://github.com/Nossimonov/Chartdown/issues/16)) as the **candyland test**: proof that the vocabulary model imposes no setting.
 
 ## The scene
 

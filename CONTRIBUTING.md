@@ -6,7 +6,9 @@ Chartdown is in its design phase, so most contributions are *ideas and words*, n
 
 1. **Issue-first.** Every unit of work — spec section, code change, doc rewrite — starts as a GitHub issue *before* the work happens. Trivial fixes (typos, broken links) are exempt.
 2. **Spec-first.** No feature is implemented before it exists in [docs/spec/](docs/spec/). The renderer follows the spec, never the reverse.
-3. **Decisions leave a record.** Any decision that closes off alternatives (syntax choices, tech stack, scope cuts) gets an Architecture Decision Record in [docs/decisions/](docs/decisions/) before the issue is closed.
+3. **Contentious decisions leave a record.** A decision that will be re-litigated or will constrain future work (syntax choices, tech stack, scope cuts) gets an Architecture Decision Record in [docs/decisions/](docs/decisions/) before the issue is closed.
+
+> **Nothing enforces these three but review**, deliberately — each is a judgement about whether a thing is worth an issue, a spec line or a record, and a checker would answer a different question than the one being asked. Rules elsewhere in this file that a machine *can* check now are checked: the version surfaces, the release audit, `Closes #n`, the ADR index, the zero-dependency rule and the BREAKING marker. Where a rule is unenforced, this file says so rather than sounding automatic ([#335](https://github.com/Nossimonov/Chartdown/issues/335)).
 
 ## Issue tracking rules
 
@@ -50,9 +52,10 @@ Proposals are decided by discussion on the issue. Acceptance means: an ADR is wr
 
 ## Git conventions
 
-- Branch names: `issue-<number>-<short-slug>` (e.g. `issue-12-hex-coordinates`).
+- Branch names: `issue-<number>-<short-slug>` (e.g. `issue-12-hex-coordinates`) for work that has an issue — which is most work, because of rule 1. **Release and chore lanes are exempt and always were**: `release-0.6.0`, `plugin-0.4.0`, `chore-nanoid-advisory` reference no issue because they answer to no issue. Nothing enforces this, and it is not worth enforcing — a branch name is read by people ([#335](https://github.com/Nossimonov/Chartdown/issues/335)).
 - Commits and PRs reference their issue; use `Closes #<n>` when the change completes the issue's done-state.
 - `main` stays coherent: spec, examples, and implementation must not contradict each other at any commit on `main`. If a spec change lands, its examples land in the same PR.
+- A change to a `docs/spec/` section updates [digest.md](docs/spec/digest.md) in the same commit, and [grammar.ebnf](docs/spec/grammar.ebnf) **when the grammar changed** ([#12](https://github.com/Nossimonov/Chartdown/issues/12), scope corrected in [#335](https://github.com/Nossimonov/Chartdown/issues/335)). The digest is the machine-readable face of the prose and moves with every spec change; the grammar describes only form, and 29 of the last 59 spec commits rightly left it untouched. CI raises a warning — not a failure — when a spec section moves without the digest, because whether the prose actually drifted is a judgement a reviewer makes.
 
 ## ADRs (Architecture Decision Records)
 
@@ -67,8 +70,10 @@ Live in [docs/decisions/](docs/decisions/), numbered sequentially (`0001-...md`,
 Three lanes (issue #37):
 
 - **`preview`** — the staging branch. Pushes deploy a staging playground at [/Chartdown/preview/](https://nossimonov.github.io/Chartdown/preview/) so features can be exercised live before they reach `main`. CI runs here too.
+> **`Closes #n` is honoured on merge to `preview`, by a workflow** ([#310](https://github.com/Nossimonov/Chartdown/issues/310)). GitHub itself acts on closing keywords only for the **default** branch, and every PR here targets `preview` — so the keyword did nothing at all until this was automated, and 0.6.0 shipped with twenty issues fixed, released and published while still showing open. Write the keyword as you would anywhere; [`close-on-preview.yml`](.github/workflows/close-on-preview.yml) closes the issue when your PR merges, with a comment saying the fix is on `preview` and the release is still to come. A cited issue (`see #50`) is untouched — only a closing keyword closes. The parsing lives in [`closing-refs.mjs`](closing-refs.mjs) and is tested, because a regex over prose that decides whether somebody's issue closes should not sit unexercised inside a YAML file.
+
 - **`main`** — production. Merges deploy the production playground at the site root. `main` stays coherent (spec = examples = implementation) at every commit. **Direct pushes are rejected — including for admins**: changes reach `main` only by pull request from `preview`, with CI (`test`) and the source-branch check (`gatekeeper`) required to pass.
-**Breaking work rides `preview` like everything else** ([ADR 0041](docs/decisions/0041-breaking-means-a-clean-document-stops-checking-clean.md), [#273](https://github.com/Nossimonov/Chartdown/issues/273)). There is no separate lane. Mark the changelog entry `BREAKING`, and the release cut from `preview` is a **minor**; with no BREAKING entry in `[Unreleased]` it is a **patch**. The changelog is the answer — check it rather than remember it.
+**Breaking work rides `preview` like everything else** ([ADR 0041](docs/decisions/0041-breaking-means-a-clean-document-stops-checking-clean.md), [#273](https://github.com/Nossimonov/Chartdown/issues/273)). There is no separate lane. Mark the changelog entry `BREAKING`, and the release cut from `preview` is a **minor**; with no BREAKING entry in `[Unreleased]` it is a **patch**. The changelog is the answer — check it rather than remember it, and since [#334](https://github.com/Nossimonov/Chartdown/issues/334) `npm run bump` checks it for you: a patch bump refuses while `[Unreleased]` holds a BREAKING entry, before anything is rewritten. A minor or major is never blocked, with or without one.
 
 > **What counts as breaking:** a document that used to check clean stops checking clean, a declaration's meaning changes, or a shipped tool changes a default or a contract. **Nothing else** — including a change that repaints every map. `light: daylight` moving from 0.82 to 0.20 opacity is a fix; a bare archetype word becoming an error is breaking. The question is not how large the diff looks, it is whose promise was broken. ADR 0041 carries the worked table.
 
@@ -76,7 +81,7 @@ Three lanes (issue #37):
 
 <details><summary>Historical: the <code>0.4-dev</code> lane (retired)</summary>
 
-Phase 4 opened a `0.4-dev` branch so `preview` could stay releasable as a patch at all times. Every breaking change since went through `preview` anyway, and by 2026-08-08 the branch was 82 commits behind with none of its own; ADR 0041 retired it. The branch is left in place unreferenced.
+Phase 4 opened a `0.4-dev` branch so `preview` could stay releasable as a patch at all times. Every breaking change since went through `preview` anyway, and by 2026-08-08 the branch was 82 commits behind with none of its own; ADR 0041 retired it. The branch was deleted on 2026-08-10 — 0 commits ahead of `preview`, so its history is `preview`'s history. Branches now delete themselves on merge.
 
 It was created by branching at the breaking commit and **reverting that commit on `preview`**, which makes git treat the change as already-seen so a plain merge will not re-apply it — the merge-back required reverting the revert first (`git revert <revert-sha>`). That operation has already been carried out; the note is kept because the git subtlety is expensive to rediscover if the pattern is ever used again.
 
@@ -91,7 +96,9 @@ It was created by branching at the breaking commit and **reverting that commit o
   git tag v0.4.0 && git push origin v0.4.0
   ```
 
-  Never bump by hand-editing the list above — a core test asserts all surfaces agree, so a missed one fails `npm test` (and with it the release gate), but the *easy* way is the command. (The Obsidian plugin's `0.1.x` lane versions separately by design.)
+  Never bump by hand-editing the list above — a core test asserts all surfaces agree, so a missed one fails `npm test` (and with it the release gate), but the *easy* way is the command. (The Obsidian plugin versions on its own lane by design.)
+
+- **The Obsidian plugin** — before tagging a plugin release, run `npm run preflight:plugin`. The community store's scan **caches per version**, so a release it rejects cannot be re-scanned and the fix costs a version number; every plugin release so far has been followed by a patch for exactly that reason ([#350](https://github.com/Nossimonov/Chartdown/issues/350)). The preflight checks the **artifact** — the three files that go in the zip — not the source: manifest completeness and the store's naming rules, the version surfaces agreeing, `dist/` holding exactly `main.js`/`manifest.json`/`styles.css` with its copies current, no test scaffolding or stale version bundled, and the stylesheet balanced. Each check is replayed against the failure that motivated it in `plugin-preflight.test.ts`, so none of them is untested. A clean run is **not** a promise the store's scan passes — the scan is closed and changes — but a dirty run is a promise it does not. The code-guideline half is `eslint-plugin-obsidianmd`, run manually and currently reporting only false positives; adopting it standing would add an eslint toolchain this repo does not otherwise have.
 
   The [release workflow](.github/workflows/release.yml) builds, typechecks, tests, refuses to publish unless the tag equals every package version **and** has a matching changelog section, publishes `@chartdown/{core,render-svg,cli,browser}` via **npm OIDC trusted publishing** — no tokens or OTPs; provenance attestations are automatic — and creates the GitHub Release with that changelog section as its notes. Each package on npmjs.com names `release.yml` in this repo as its trusted publisher.
 

@@ -700,6 +700,83 @@ describe("levels (spec 06 §8)", () => {
     expect(diagnostics.map((d) => d.message).join()).toMatch(/unknown level 'attic'/);
   });
 
+  describe("a landing is suppressed by a declaration, not by a drawing (ADR 0046, #319)", () => {
+    // Both panels live in ONE SVG, and `▼ cellar` is emitted with IDENTICAL
+    // text by the house's own stair and by the cellar's reciprocal projection.
+    // Asserting `svg.toContain("▼ cellar")` therefore passes on a renderer that
+    // draws the secret on the wrong sheet — the whole defect. Every assertion
+    // here is PER PANEL.
+    const panels = (svg: string): Record<string, string[]> => {
+      const out: Record<string, string[]> = {};
+      for (const chunk of svg.split(/<g transform="translate\(0 [\d.]+\)">/).slice(1)) {
+        const level = /— (\w+) —/.exec(chunk)?.[1];
+        if (level) out[level] = chunk.match(/[▲▼] \w+/g) ?? [];
+      }
+      return out;
+    };
+
+    // ONE base document, and each case replaces exactly one line. Two documents
+    // that differ anywhere else — a `#` title included, since it renders —
+    // compare unequal for the wrong reason.
+    const doc = (house: string, cellar: string): string =>
+      [
+        "# The Hidden Trapdoor", "map: battlemap", "grid: square 3x3", "scale: 5ft",
+        "levels: house cellar", "level: house", "",
+        "[structures]", "building house: A1..B2", `stairs trapdoor : on house at A1 to=cellar${house}`, "",
+        "[structures cellar]", "building cellar: A1..B2", cellar,
+      ].join("\n");
+
+    const NONE = "";
+    const plainFar = "stairs backdoor : on cellar at A1 to=house";
+
+    it("a hidden NEAR end hides its own panel and leaves the far panel's stair", () => {
+      // The idiom for one-sided secrecy: secret from above, obvious from below.
+      const { svg } = renderSource(doc(" hidden", plainFar), { mode: "player" });
+      expect(panels(svg).house).toEqual([]);
+      expect(panels(svg).cellar).toEqual(["▲ house"]);
+    });
+
+    it("a hidden FAR end changes the render — it is not inert", () => {
+      // The silent half of #319: this used to be byte-identical to no flag at
+      // all, so writing `hidden` did nothing whatsoever.
+      const secret = renderSource(doc(NONE, `${plainFar} hidden`), { mode: "player" }).svg;
+      const plain = renderSource(doc(NONE, plainFar), { mode: "player" }).svg;
+      expect(secret).not.toBe(plain);
+      expect(panels(secret).house).toEqual(["▼ cellar"]);
+      expect(panels(secret).cellar).toEqual([]);
+    });
+
+    it("a LONE hidden connector still hides on BOTH panels (spec 01 §6)", () => {
+      // The guard reads the declared set; the PROJECTION SOURCE must not. Read
+      // the declared set on both sides and the cellar panel reconstructs
+      // `▲ house` out of the very entity that was stripped to keep the secret.
+      const { svg } = renderSource(doc(" hidden", NONE), { mode: "player" });
+      expect(panels(svg).house).toEqual([]);
+      expect(panels(svg).cellar).toEqual([]);
+      // and hiding BOTH ends is not a way to reveal either
+      const both = renderSource(doc(" hidden", `${plainFar} hidden`), { mode: "player" }).svg;
+      expect(panels(both).house).toEqual([]);
+      expect(panels(both).cellar).toEqual([]);
+    });
+
+    it("the declared set is filtered to the panel's level", () => {
+      // A document with NO secrets in it. The declared set spans every level,
+      // so an unfiltered guard lets the house's A1 connector mark the CELLAR's
+      // A1 occupied and suppress the landing that should fill it.
+      const { svg } = renderSource(doc(NONE, NONE), { mode: "player" });
+      expect(panels(svg).house).toEqual(["▼ cellar"]);
+      expect(panels(svg).cellar).toEqual(["▲ house"]);
+    });
+
+    it("GM mode shows every declared connector, secret or not", () => {
+      for (const cellar of [NONE, plainFar, `${plainFar} hidden`]) {
+        const { svg } = renderSource(doc(" hidden", cellar), { mode: "gm" });
+        expect(panels(svg).house, cellar).toEqual(["▼ cellar"]);
+        expect(panels(svg).cellar, cellar).toEqual(["▲ house"]);
+      }
+    });
+  });
+
   it("qualifiers and to= without levels: fail loud", () => {
     const qualified = "map: battlemap\ngrid: square 8x8\nscale: 5ft\n[features upper]\ncrates : B2\n";
     expect(renderSource(qualified).diagnostics.map((d) => d.message).join()).toMatch(/requires a levels: declaration/);
@@ -1871,9 +1948,73 @@ describe("shafts span more than two levels (#112)", () => {
     }
   });
 
-  it("the annotation names the NEXT landing, not the far end of the flight", () => {
-    // Standing on a long stair, what matters is the step about to be taken.
-    expect(renderSource(doc, { level: "mid" }).svg).toMatch(/[▲▼] (top|low)/);
+  /**
+   * Every annotation on one panel, sorted so the assertion does not depend on
+   * whether the reciprocal loop or the entity pass reached the layer first.
+   *
+   * `[\w.-]+` and NOT `\w+`, which is the trap next door in ADR 0046's helper:
+   * a renderer printing the raw `to=` emits `▼ top..pit`, and a pattern that
+   * stops at the dot reports `▼ top` — a wrong answer wearing the shape of a
+   * plausible right one.
+   */
+  const notes = (level: string, source = doc): string[] =>
+    (renderSource(source, { level }).svg.match(/[▲▼] [\w.-]+/g) ?? []).sort();
+
+  /**
+   * #321 / ADR 0048. The rule these four pin is that the annotation is a
+   * property of the FLIGHT, not of the panel that drew it.
+   *
+   * The test this replaced asserted `/[▲▼] (top|low)/` on the `mid` panel and
+   * passed on the broken renderer and the fixed one alike: `mid` is served by
+   * the reciprocal path, which handed it the DECLARING level (`low`), and the
+   * alternation accepted that. It is why the defect outlived #112 — so these
+   * assert the exact set per panel, never a pattern that either answer matches.
+   */
+  it("the DECLARING panel of a range names the next landing, not the range", () => {
+    // `▲ top..pit` before the fix: the raw `to=` string, which names no level.
+    expect(notes("low")).toEqual(["▲ mid"]);
+  });
+
+  it("a RECIPROCAL panel names the flight's next landing, not the declaring level", () => {
+    // `pit` sees both stairs project. `▲ low` is descent's next landing up;
+    // `▲ top` is endless's, and endless SKIPS mid and low because it only
+    // passes through them. Before the fix both read the declaring level, which
+    // is right here only by the accident of adjacency.
+    expect(notes("pit")).toEqual(["▲ low", "▲ top"]);
+    // `top` is the one that moved: `▼ low` (where descent was written) → `▼ mid`
+    // (where the party actually steps off next).
+    expect(notes("top")).toEqual(["▼ mid", "▼ pit"]);
+  });
+
+  it("a through= level is never named as a landing, having none", () => {
+    // The trap in the fix #321 itself suggested. Printing the computed `shown`
+    // and nothing else turns `▼ top..bot` into `▼ mid` — and `mid` is declared
+    // `through=`, so spec 06 §8 gives it no landing at all. A wrong answer
+    // replaced by a plausible one is the worse outcome.
+    const shaft = ["map: battlemap", "grid: square 3x3", "scale: 5ft",
+      "levels: top mid bot", "level: top",
+      "[features top]", "stairs shaft : A1 to=top..bot through=mid"].join("\n");
+    expect(notes("top", shaft)).toEqual(["▼ bot"]);
+    expect(notes("mid", shaft)).toEqual([]);
+  });
+
+  it("an interior panel equidistant from two landings names the one above", () => {
+    // `mid` is one step from `top` and one step from `low`. Both are correct
+    // readings of "the next landing in the direction of travel"; spec 06 §8
+    // picks up. Pinned because unpinned it is an array-iteration order that a
+    // later reader can reverse without noticing.
+    expect(notes("mid")).toEqual(["▲ top"]);
+  });
+
+  it("the declaring level is part of the flight, so a single hop still annotates", () => {
+    // Guards the `∪ declaring level` term, which looks like dead weight on any
+    // `to=a..b` range that already contains it. Drop it and the cellar panel of
+    // an ordinary two-level map has no landing to name but itself.
+    const hop = ["map: battlemap", "grid: square 3x3", "scale: 5ft",
+      "levels: house cellar", "level: house",
+      "[features house]", "stairs trapdoor : A1 to=cellar"].join("\n");
+    expect(notes("house", hop)).toEqual(["▼ cellar"]);
+    expect(notes("cellar", hop)).toEqual(["▲ house"]);
   });
 
   it("an air area states where the fall lands", () => {

@@ -1,8 +1,9 @@
 (* ===================================================================
-   Chartdown consolidated grammar — spec v0.6 (sections 01–08)
+   Chartdown consolidated grammar — spec v0.7 (sections 01–08)
    Status: informative consolidation; the prose spec sections are
    normative and win on any conflict. Maintained per issue #12:
-   every spec change updates this file in the same commit.
+   a spec change updates this file in the same commit WHEN
+   THE GRAMMAR CHANGED — 29 of 59 spec commits rightly did not (#335).
    Lexical fine print (whitespace, string escapes, INDENT) is defined
    in prose (spec 01); semantic rules (resolution order, fail-loud
    references, GM stripping) are prose-only and noted as comments.
@@ -71,7 +72,14 @@ pair           = key , "=" , ( word | string | measure | level-span ) ;
 level-span     = level-name , [ ".." , level-name ] ;
                  (* `to=`/`through=` accept a RANGE (spec 06 §8, #112):
                     to=a..b lands on every level between; through=a..b is
-                    occupied but not opened onto and requires a to=. *)
+                    occupied but not opened onto and requires a to=.
+                    The ANNOTATION is a property of the FLIGHT, not of the
+                    panel that drew it (06 §8, ADR 0048, #321): the landings
+                    are the to= range PLUS the declaring level MINUS the
+                    through= range, and each panel names the NEAREST of them
+                    in levels: order — ties to the level ABOVE. This binds the
+                    RECIPROCAL panels too; naming the declaring level there,
+                    or printing a range verbatim, is NON-CONFORMING. *)
 comment        = ";" , text , EOL ;                  (* legal at end of any line; ";" in strings is content *)
 
 (* ---- placements — spec 02 ---- *)
@@ -87,6 +95,22 @@ step           = number , [ "x" , number ] ;
                     the `along` form spaces by MEASURE down a resolved
                     course — expanded once the reference is in hand (#140). *)
 address        = col-letters , row-number ;          (* chess-style, all grid types; AA past Z *)
+                 (* AND ONLY ON A GRID. A gridless map declares no `grid:`,
+                    so an address, a range or an edge token in a PLACEMENT
+                    names nothing there and is an ERROR at the line that
+                    wrote it -- bare, under "at", under "on"'s "at"
+                    payload, in a course's "via" controls, in a shape's
+                    argument list, and in a [labels] override's "at" or
+                    "sprawl" target. The message names the point form.
+                    Refused rather than approximated, as §5 refuses a
+                    corner: reading C4 as world units substitutes an
+                    address form the author did not write. Every spelling
+                    used to render byte-identically to its own absence and
+                    `area C4..D5` emitted an empty point list -- an entity
+                    that resolves to NO GEOMETRY contributes no element.
+                    `grid:` on a gridless map WARNS instead (the map draws
+                    correctly without it) and does not rescue the address.
+                    Spec 02 §1/§2/§6, ADR 0049, #325 *)
 range          = address , ".." , address ;
 point          = "(" , number , "," , number , ")" ; (* gridless world units, origin NW *)
 control        = point , [ "@" , measure ] ;
@@ -183,10 +207,26 @@ relational     = ( "at" , ( point | address | range | edge ) )
 endpoint       = ( ref , [ "at" , point ] ) | point ;
 ref            = word | string ;                     (* word: explicit-id lookup; string: display-name
                                                         lookup; fail-loud — spec 03 §2 *)
+doc-path       = word | string ;                     (* a file reference — `detail=` and `inset:`. NOT `use:`,
+                                                        which still reads its whole header value as the key
+                                                        and is left inconsistent on purpose (#324).
+                                                        QUOTING IS HOW A PATH HOLDS A SPACE, and the
+                                                        quotes DELIMIT it rather than belong to it:
+                                                        "The Chipped Tankard.md" and an unspaced bare
+                                                        path resolve alike, which is what lets the two
+                                                        ends of a seam be compared. An unquoted path
+                                                        containing a space is an ERROR — `at` is the
+                                                        separator, so `inset: The Parent.cd at tavern`
+                                                        cannot be split without guessing.
+                                                        Spec 03 §4, ADR 0047, #323/#324 *)
 (* A course's SHAPE control. A world point anywhere; a CELL on a grid, where
    every other position is written that way (#258). A gridless point on a grid
    map is REPORTED, never rounded to a cell: cell size follows `scale:`, so the
-   same (60,40) would name a different square after a scale edit. *)
+   same (60,40) would name a different square after a scale edit. The converse
+   -- a CELL on a gridless map -- is refused by the general rule on `address`
+   above, which is where it now lives: the region renderer used to refuse it
+   HERE and in no other slot, which is what left the other six silent
+   (ADR 0049, #325). *)
 via-control    = point | address ;
 
 compass        = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
@@ -271,8 +311,26 @@ label-hint     = ( "sprawl" , ( range | point-range ) )
    to the map field of its own panel -- the frame inset by its margin, never the
    page furniture (spec 04 5, ADR 0042, #284/#288). The declared range is
    unaffected and exports at its true value.
+   A pool that FILLS its whole field is REPORTED, not redrawn (spec 04 5,
+   ADR 0050, #290): a 60ft lantern in a 15ft room leaves no ambient visible,
+   which is faithful, so the renderer changes nothing and WARNS instead,
+   naming the emitter. Per panel, like the clip.
    [gm] semantics (spec 03 §5): resolving subject = attachment (no placement allowed);
-   non-resolving subject with placement = new GM-only entity; otherwise error. *)
+   non-resolving subject with placement = new GM-only entity; otherwise error.
+   `hidden` and [gm] decide what a READER is shown, not what the document SAYS,
+   so spec 06 10's coherence lints read the DECLARED model and a document
+   produces the SAME lints in gm and player mode -- a lint set that varies with
+   the render mode is non-conforming (spec 06 10, ADR 0045, #320). What is
+   DRAWN is still the redaction; this governs only what is REASONED ABOUT.
+   The reciprocal landing (spec 06 8) reads BOTH sets, and which side takes
+   which is normative (ADR 0046, #319): the SOURCE -- does a connector on
+   another level project a landing here -- is the DRAWN model, so a hidden
+   connector projects nothing anywhere; the GUARD -- is a connector DECLARED at
+   the cell it would land on -- is the DECLARED model, filtered to that panel's
+   level. Testing the drawn set on BOTH sides is non-conforming: the strip
+   removed the secret and the projection wrote it straight back. Each panel is
+   governed by the end declared ON it, which is how a double declaration spells
+   a ONE-SIDED secret -- hidden above, plain below. *)
 
 (* ---- identity and anchors — spec 03 ----
    entity-id = explicit id, else display-name slug; anonymous entities unreferenceable.

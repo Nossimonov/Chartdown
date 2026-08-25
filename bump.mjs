@@ -8,9 +8,10 @@
 // together), the digest and grammar headers (served publicly as
 // llms-full.txt), the spec README status line, and the CHANGELOG (the
 // [Unreleased] items roll into the new section with compare links).
-// The Obsidian plugin's 0.1.x lane is deliberately separate.
+// The Obsidian plugin versions on its own lane, deliberately.
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { refuseBump } from "./release-guards.mjs";
 
 const next = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(next ?? "")) {
@@ -57,6 +58,19 @@ const today = new Date().toISOString().slice(0, 10);
     );
     console.error("  A release nobody can read is a release nobody can adopt — write the section, then bump.");
     console.error(`  (This check wants at least ${wanted}. Nothing has been modified.)`);
+    process.exit(1);
+  }
+
+  // THE BREAKING MARKER DECIDES THE VERSION, AND NOTHING READ IT (#334).
+  //
+  // The gate above counts bullets; it cannot see what one says. CONTRIBUTING
+  // makes the changelog the ANSWER to minor-vs-patch — so a BREAKING entry
+  // riding out in a patch was possible with every check green, which is the
+  // same shape as #310 and #331: a rule in prose with nothing that fails when
+  // the habit lapses. Here too, ahead of every replaceIn.
+  const refusal = refuseBump(changelog, current, next);
+  if (refusal) {
+    console.error(refusal);
     process.exit(1);
   }
 }

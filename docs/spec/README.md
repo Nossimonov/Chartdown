@@ -2,11 +2,11 @@
 
 **License:** the contents of this directory are licensed [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) (not MIT like the rest of the repository) — see [ADR 0001](../decisions/0001-mit-code-cc-by-spec.md). Spec files should carry a CC-BY-4.0 notice as they are added.
 
-**Status: sections 01–08 drafted and released — currently spec v0.6** (the spec and the `@chartdown` packages version together; see the [CHANGELOG](../../CHANGELOG.md) for what each version added). This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
+**Status: sections 01–08 drafted and released — currently spec v0.7** (the spec and the `@chartdown` packages version together; see the [CHANGELOG](../../CHANGELOG.md) for what each version added). This directory is the single source of truth for the Chartdown language; anything not written here is not part of the language, including the illustrative sketch in the project README.
 
 ## Machine-ingestion artifacts (issue #12)
 
-Three artifacts keep the spec agent-consumable, and they are **mandatory maintenance**: any commit that changes a spec section MUST update the first two in the same commit.
+Three artifacts keep the spec agent-consumable, and they are **mandatory maintenance**: any commit that changes a spec section MUST update the digest, and the grammar when the grammar changed (#335) — the first two in the same commit.
 
 1. [`grammar.ebnf`](grammar.ebnf) — the consolidated grammar of all drafted sections. Informative: prose sections are normative and win on conflict; the grammar exists as the cross-section consistency check and the parser-writer's map.
 2. [`digest.md`](digest.md) — the single-file language reference (llms.txt-style), compressed for dropping into an agent's context, ending in a few-shot micro-corpus. Every snippet in it must be valid — it teaches by example.

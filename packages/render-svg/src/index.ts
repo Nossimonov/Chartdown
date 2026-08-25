@@ -39,9 +39,54 @@ export interface RenderResult {
   diagnostics: Diagnostic[];
 }
 
+/**
+ * A RENDERER INVARIANT IS REPORTED, NOT THROWN AT THE CALLER (#341).
+ *
+ * ADR 0043 made an unhandled edge direction a loud failure rather than a
+ * silent east edge, which is right — `edgeSegment` throws on `nw`. Nothing
+ * caught it. `check` renders unconditionally (#120), so a document the PARSER
+ * had already refused with the exact right message — *"'C3.nw' names a corner,
+ * and nothing in the language is placed on a corner"* — died before the print
+ * loop and the author got a Node stack trace and no diagnostic at all.
+ *
+ * The guard lives HERE rather than in the CLI because `render` has three
+ * callers outside this package — the CLI, `obsidian/src/block.ts` and
+ * `mcp/src/raster.ts`. In a plugin an uncaught throw is worse than a stack
+ * trace: a dead pane with no line number. Fixing it at one caller would have
+ * left it live in two shipped products.
+ *
+ * The throw stays exactly as loud. What changes is that it arrives as a
+ * result the caller can print instead of ending the process, and it is
+ * reported as a RENDERER failure rather than folded in among the document's
+ * own diagnostics — an invariant that fired means the renderer met something
+ * it believes impossible, and flattening that would make the next one read as
+ * the author's mistake.
+ */
 export function render(doc: DocumentNode, options: RenderOptions = {}): RenderResult {
-  const mode = options.mode ?? "player";
+  // Shared, so diagnostics earned BEFORE the throw survive it — a theme error
+  // is still worth printing even when the drawing later gives out.
   const diagnostics: Diagnostic[] = [];
+  try {
+    return renderGuarded(doc, options, diagnostics);
+  } catch (e) {
+    diagnostics.push({
+      severity: "error",
+      line: 0,
+      message:
+        `the renderer could not draw this document: ${e instanceof Error ? e.message : String(e)}` +
+        ` — this is a renderer fault, not a fault in the document, though an error reported above may be its cause`,
+    });
+    // A blank sheet rather than nothing: `render` writes its file and exits 1,
+    // and a caller that embeds the output needs something valid to place.
+    return {
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 620" width="860" height="620" font-family="sans-serif"></svg>`,
+      diagnostics,
+    };
+  }
+}
+
+function renderGuarded(doc: DocumentNode, options: RenderOptions, diagnostics: Diagnostic[]): RenderResult {
+  const mode = options.mode ?? "player";
   const theme = Theme.resolve(options.theme, diagnostics);
   /**
    * DOCUMENT FURNITURE IS INK TOO (#286). #150 wired the `ink` surface into
@@ -99,6 +144,20 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     const selected = options.level !== undefined ? levels.filter((l) => l === options.level) : levels;
     const panelLevels = selected.length > 0 ? selected : levels;
     if (levels.length > 1) warnFlooredOpenStructures(model, levels, diagnostics);
+    // A REDACTION IS NOT THE DOCUMENT (spec 06 §10, ADR 0045, #320).
+    //
+    // The coherence lints reason about what a document MEANS, and `hidden` and
+    // `[gm]` say what a reader is SHOWN — so a player render was linting its
+    // own redaction and reporting every secret entrance as `unreachable-room`,
+    // since stripping the only way in leaves a room with no way in. Built ONCE
+    // here rather than per panel, and only when the mode actually strips
+    // something: in GM mode the model already IS the declared one.
+    //
+    // Diagnostics go to a SCRATCH array. This pass re-derives what `buildModel`
+    // already reported for the drawn model — theme resolution, vocabulary,
+    // placement resolution — and letting it report again would double every
+    // one of them.
+    const declaredEntities = mode === "gm" ? model.entities : buildModel(doc, "gm", theme, []).entities;
     const GAP = 18;
     // With `numbers: on` the column letters occupy the top margin band; the
     // document title gets its own band above them instead of overprinting A-D.
@@ -109,7 +168,13 @@ export function render(doc: DocumentNode, options: RenderOptions = {}): RenderRe
     panelLevels.forEach((level, index) => {
       const panelModel = { ...model, entities: model.entities.filter((e) => e.level === level) };
       const panelBody: string[] = [];
-      renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, levels });
+      // BOTH sets go down, and the reciprocal-landing rule reads BOTH — one on
+      // each side of itself (ADR 0046, #319). `allEntities` stays STRIPPED, so
+      // a hidden connector projects a landing nowhere; `declaredEntities` is
+      // what the guard consults to ask whether a connector was DECLARED at the
+      // cell a projection would fill. Collapsing them is how #319 and #320 both
+      // arose, so they are passed separately and named for what they are.
+      renderBattlemap(panelModel, panelBody, frame, diagnostics, { level, allEntities: model.entities, declaredEntities, levels });
       if (panelLevels.length > 1) {
         // Bottom-right of the panel — the top margin belongs to the column letters.
         panelBody.push(

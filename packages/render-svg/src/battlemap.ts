@@ -8,7 +8,7 @@ import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placemen
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, nearestOnPolyline, pointsAttr, shade, svgTitle, text, visibilityPolygon, type Segment, type XY , inkStroke} from "./util";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
@@ -25,9 +25,37 @@ export function battlemapFrame(model: Model): Frame {
   return { cols, rows, w: MARGIN * 2 + cols * CELL, h: MARGIN * 2 + rows * CELL };
 }
 
+/**
+ * One emitter's pool, as the shape it was drawn from plus who drew it (#290).
+ *
+ * The shape is whichever of the two forms occlusion selected — a visibility
+ * polygon where sight blockers cut it, a circle where nothing does — so the
+ * pool, the hole and the coverage test all read the SAME geometry rather than
+ * three copies of the branch that chose it.
+ */
+type EmitterCover = {
+  shape: { kind: "circle"; at: XY; r: number } | { kind: "poly"; pts: XY[] };
+  /**
+   * How the document named this emitter, for the report — display name, else
+   * explicit id, else the type word. The id beats the type word because a map
+   * with three lamps on it needs to be told WHICH lamp out-ranges the room.
+   */
+  label: string;
+  /** Its declared range, verbatim — `60ft`, not 384. */
+  measure: string;
+  line: number;
+};
+
 export interface LevelContext {
   level: string;
+  /** What is DRAWN — mode-stripped. What the renderer itself reads. */
   allEntities: EntityNode[];
+  /**
+   * What was DECLARED — passed straight through to the coherence lints, which
+   * reason about the document rather than the redaction of it (spec 06 §10,
+   * ADR 0045, #320). Nothing that DRAWS may read this.
+   */
+  declaredEntities?: EntityNode[];
   /** Physical order, topmost first (spec 06 §8). */
   levels: string[];
 }
@@ -53,6 +81,14 @@ export function renderBattlemap(
   // entity loop below, before any later let would initialise.
   // Emitter pools per field, as mask holes for the ambient wash (#106).
   const fieldHoles = new Map<string, string[]>();
+  /**
+   * The same pools as GEOMETRY, with the emitter that made each one (#290).
+   *
+   * `fieldHoles` carries markup, which cannot be asked whether any of the wash
+   * survives it. This carries the shape the markup was built from, so
+   * `fillsTheField()` can answer that question and name who is responsible.
+   */
+  const fieldCovers = new Map<string, EmitterCover[]>();
 
   /**
    * The map field of THIS panel — the frame inset by its margin (ADR 0042).
@@ -77,10 +113,13 @@ export function renderBattlemap(
     fieldClipUsed = true;
     return `url(#${fieldClipId})`;
   }
-  const noteHole = (field: string, shape: string): void => {
+  const noteHole = (field: string, shape: string, cover: EmitterCover): void => {
     const list = fieldHoles.get(field) ?? [];
     list.push(shape);
     fieldHoles.set(field, list);
+    const covers = fieldCovers.get(field) ?? [];
+    covers.push(cover);
+    fieldCovers.set(field, covers);
   };
   let noteCourseCount = 0;
   let terrainCourseCount = 0;
@@ -111,6 +150,21 @@ export function renderBattlemap(
     width: number;
   }
   const pathRecords: PathRecord[] = [];
+  /**
+   * EVERY BANK GOES DOWN BEFORE ANY WATER (ADR 0044, #315).
+   *
+   * A themed course draws a wide edge band and then a narrower core. Emitting
+   * both per entity meant each course laid its bank across the water of every
+   * course drawn before it, so a confluence came out as a lattice of banks over
+   * the water — and WHICH cuts survived depended on the order the lines
+   * happened to sit in the document, which made line order a drawing decision.
+   *
+   * Cores are collected here and emitted after every entity's band, so no bank
+   * can land on any water whatever order the courses are written in. They leave
+   * their entity's group to do it: the group keeps the id and the title, which
+   * is what anchors and tooltips read, and a core carries neither.
+   */
+  const pathCores: string[] = [];
   const crossingCells = new Set<string>();
   interface PendingCrossing {
     e: EntityNode;
@@ -319,6 +373,14 @@ export function renderBattlemap(
   // this one show their landing here automatically, unless an explicit
   // connector already occupies the cell.
   if (levelCtx) {
+    // THE SOURCE SIDE IS THE DRAWN SET, and that is half of ADR 0046.
+    //
+    // A hidden connector must project a landing NOWHERE — spec 01 §6 is
+    // fail-closed, and a stripped connector that still projected would
+    // RECONSTRUCT the secret on the far panel out of the very entity that was
+    // removed to keep it. Measured: reading the declared set here draws
+    // `▲ house` on the cellar panel for a document whose only connector is a
+    // lone `hidden` trapdoor. The guard below reads the OTHER set on purpose.
     for (const source of levelCtx.allEntities) {
       const to = pairOf(source.pairs, "to");
       if (to === undefined || source.level === levelCtx.level) continue;
@@ -341,13 +403,32 @@ export function renderBattlemap(
       const atValue = pairOf(source.pairs, "at");
       const landing = atValue ? parseCell(atValue) : source.placements.find((p): p is Address => p.kind === "address");
       if (!landing) continue;
-      const occupied = model.entities.some(
-        (e) => pairOf(e.pairs, "to") !== undefined &&
-          e.placements.some((p) => p.kind === "address" && p.col === landing.col && p.row === landing.row),
-      );
+      // A LANDING IS SUPPRESSED BY A DECLARATION, NOT BY A DRAWING
+      // (spec 06 §8, ADR 0046, #319). Spec 06 §8's word is DECLARED, so this
+      // asks what the document SAID and not what this mode DRAWS. Asking the
+      // drawn set meant player mode stripped a hidden connector, the cell read
+      // as unoccupied, and the far end's projection drew a stair into the
+      // square the strip had just emptied — the secret, on the players' sheet.
+      //
+      // FILTERED TO THIS PANEL'S LEVEL, and the filter is load-bearing: the
+      // declared set spans the whole document while the stripped set it
+      // replaces was already per-panel (`index.ts`). Without it, a house
+      // connector at A1 makes the cellar's A1 read as occupied and an ordinary
+      // two-level map with no secrets in it silently loses its landing.
+      const occupied = (levelCtx.declaredEntities ?? model.entities)
+        .filter((e) => e.level === levelCtx.level)
+        .some(
+          (e) => pairOf(e.pairs, "to") !== undefined &&
+            e.placements.some((p) => p.kind === "address" && p.col === landing.col && p.row === landing.row),
+        );
       if (occupied) continue;
       const c = cellCenter(landing);
-      renderConnector(source, model.chainOf(source.typeWord), c, source.level, [], layers.features, undefined);
+      // The connector's OWN `to=` and its OWN declaring level, not this panel's
+      // (spec 06 §8, ADR 0048, #321). This call used to pass `source.level` as
+      // the `to` argument, so a projected landing announced the level the stair
+      // was WRITTEN ON — correct only when the two happen to be adjacent, which
+      // is every two-level map and no shaft.
+      renderConnector(source, model.chainOf(source.typeWord), c, to, [], layers.features, undefined, source.level);
     }
   }
 
@@ -370,6 +451,9 @@ export function renderBattlemap(
 
   // Openings render above ALL structure walls: a door on a shared wall must
   // not be overpainted by the sibling structure's coincident wall line.
+  // The deferred cores, after every course's band and before anything that
+  // draws over water (crossings, the grid, structures) — ADR 0044.
+  layers.paths.push(...pathCores);
   body.push(
     ...layers.areas, ...layers.paths, ...layers.crossings, ...layers.grid,
     ...layers.structures, ...layers.openings, ...layers.roomLabels, ...layers.zones, ...layers.features, ...layers.tokens,
@@ -412,17 +496,85 @@ export function renderBattlemap(
   }
 
   /**
-   * A hole in the ambient wash for one emitter. Occlusion follows the field's
+   * The shape one emitter's field reaches. Occlusion follows the field's
    * `occluded=` facet (spec 04 §5): `sight` (light's default) traces against
    * sight blockers, `none` fills through matter — an antimagic zone or a
    * radiation hazard is not stopped by a wall.
+   *
+   * Chosen ONCE per emitter. The pool, the hole it cuts in the wash and the
+   * coverage test of #290 are three readings of this one shape; when each made
+   * the choice for itself they could disagree, and the identical branch stood
+   * in three places.
    */
-  function emitterHole(at: XY, radius: number): string {
+  function emitterShape(at: XY, radius: number): EmitterCover["shape"] {
     const occluded = model.facetOf("light", "occluded") ?? "sight";
     if (occluded !== "none" && sightBlockers.length > 0) {
-      return el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill: "#000" });
+      return { kind: "poly", pts: visibilityPolygon(at, radius, sightBlockers) };
     }
-    return el("circle", { cx: at.x, cy: at.y, r: radius, fill: "#000" });
+    return { kind: "circle", at, r: radius };
+  }
+
+  /** The hole that shape cuts in the ambient wash. */
+  function emitterHole(shape: EmitterCover["shape"]): string {
+    return shape.kind === "poly"
+      ? el("polygon", { points: pointsAttr(shape.pts), fill: "#000" })
+      : el("circle", { cx: shape.at.x, cy: shape.at.y, r: shape.r, fill: "#000" });
+  }
+
+  /**
+   * The pool itself, painted on the field and bounded by it (ADR 0042).
+   *
+   * NOT built from `emitterShape()`, deliberately. The pool has always branched
+   * on blockers ALONE while the hole consults `occluded=` as well, so a field
+   * declared `occluded=none` on a map with walls draws a pool traced against
+   * those walls and a cut-out that ignores them — the two disagree about the
+   * same emitter. That is a real defect and it is not #290's; unifying them
+   * here would move renders this change promises not to move, and would ship an
+   * unfiled fix inside a filed one. Left exactly as it was, on purpose.
+   */
+  function emitterPool(at: XY, radius: number): string {
+    const fill = model.theme.surface("light", "fill", "#ffd98a");
+    return sightBlockers.length > 0
+      ? el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill, opacity: 0.22, "clip-path": clipToField() })
+      : el("circle", { cx: at.x, cy: at.y, r: radius, fill, opacity: 0.22, "clip-path": clipToField() });
+  }
+
+  function coversPoint(shape: EmitterCover["shape"], p: XY): boolean {
+    return shape.kind === "circle"
+      ? Math.hypot(p.x - shape.at.x, p.y - shape.at.y) <= shape.r
+      : pip(p, shape.pts);
+  }
+
+  /**
+   * Does nothing of the wash survive these pools? (#290, ADR 0050.)
+   *
+   * Union-of-shapes against a rect has no exact form the renderer can afford —
+   * `render-svg` carries no runtime dependencies (ADR 0007) — so the field is
+   * SAMPLED on a lattice and the answer is "no point of it stayed uncovered".
+   *
+   * The step is a quarter cell, and the limitation that buys is admitted rather
+   * than hidden: a surviving filament of ambient thinner than 8px on the page
+   * goes unreported. That is the intended trade. The question this answers is
+   * whether any darkness READS on the sheet, and a sub-8px thread does not.
+   *
+   * It errs toward SILENCE in the other direction too. Boundary samples sit
+   * exactly on the field edge, where `pip()` on a polygon whose blockers run
+   * along that same edge — the cave idiom — may answer either way; a false
+   * "not covered" costs a report that would have been true, and a false report
+   * would cost the author's trust in every other one.
+   */
+  function fillsTheField(covers: EmitterCover[]): boolean {
+    if (covers.length === 0) return false;
+    const step = CELL / 4;
+    const nx = Math.round(fieldRect.w / step);
+    const ny = Math.round(fieldRect.h / step);
+    for (let i = 0; i <= nx; i++) {
+      for (let j = 0; j <= ny; j++) {
+        const p = { x: fieldRect.x + i * step, y: fieldRect.y + j * step };
+        if (!covers.some((c) => coversPoint(c.shape, p))) return false;
+      }
+    }
+    return true;
   }
 
   /** Full-frame wash for every declared ambient whose theme entry has a fill. */
@@ -452,6 +604,40 @@ export function renderBattlemap(
       }
       const opacity = declared ?? "0.82";
       const holes = fieldHoles.get(field) ?? [];
+      // A POOL THAT FILLS ITS FIELD IS REPORTED, NOT REDRAWN (#290, ADR 0050).
+      //
+      // A 60ft lantern in a 15ft room leaves no ambient visible, and that
+      // render is FAITHFUL — the lamp does light the room, and an emitter is a
+      // pool of its range cut into the wash. So nothing below softens the pool
+      // or shortens the range; the wash is emitted exactly as it always was.
+      //
+      // What was missing is the author. The document declares two things that
+      // cannot both show, the renderer picks one silently, and `check` passes
+      // over a sheet that contradicts its own first lines. This is the ruling
+      // #287 already makes one bullet up in spec 04 §5: an author who writes
+      // `light: dark` is picturing a dark sheet, and silence would let them
+      // keep picturing it. Only they can say which of the two they meant.
+      //
+      // Per PANEL, because ambientWash() is — a lamp that fills the cellar
+      // says nothing about the floor above it (ADR 0042).
+      const covers = fieldCovers.get(field) ?? [];
+      if (fillsTheField(covers)) {
+        // Named where one emitter does it alone, counted where only the
+        // combination does: "shorten this one" is advice, and pointing at an
+        // arbitrary member of a set that jointly covers the field is not.
+        const alone = covers.find((c) => fillsTheField([c]));
+        diagnostics.push({
+          severity: "warning",
+          line: alone?.line ?? 1,
+          message:
+            `'${field}: ${value}' declares an ambient this map never shows: `
+            + (alone
+              ? `'${alone.label}' reaches ${alone.measure}, which covers`
+              : `its ${covers.length} emitters together cover`)
+            + ` the whole map field, so no part of the map renders ${value} — `
+            + `shorten the ${alone ? "range" : "ranges"}, or drop the ambient (spec 04 §5)`,
+        });
+      }
       const id = `cdfield-${model.doc.docId}-${field}${levelCtx?.level ? `-${levelCtx.level}` : ""}`;
       out.push(
         `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${fmt(fieldRect.x)}" y="${fmt(fieldRect.y)}" width="${fmt(fieldRect.w)}" height="${fmt(fieldRect.h)}">` +
@@ -753,29 +939,41 @@ export function renderBattlemap(
   }
 
   /**
-   * The levels a `to=`/`through=` value covers (#112). A single name is a
-   * one-level span; `a..b` is every declared level between them inclusive, in
-   * the document's own physical order — so an author need not know which end
-   * they wrote first.
+   * The nearest landing other than the level being drawn. `landings` arrives in
+   * `levels:` order (topmost first) and the comparison is strict, so an exact
+   * tie — a panel with a landing one step above and one step below — keeps the
+   * first seen and therefore resolves UPWARD. That is spec 06 §8's stated
+   * tie-break (ADR 0048), not an artefact of the iteration: an interior panel
+   * of a shaft genuinely has two next landings and the spec has to pick one.
    */
-  function levelSpan(levels: string[], value: string): string[] {
-    const [a, b] = value.split("..");
-    if (b === undefined) return levels.includes(a!) ? [a!] : [];
-    const i = levels.indexOf(a!);
-    const j = levels.indexOf(b!);
-    if (i === -1 || j === -1) return [];
-    return levels.slice(Math.min(i, j), Math.max(i, j) + 1);
-  }
-
-  /** The nearest landing in the span other than the level being drawn. */
-  function nextLandingIndex(levels: string[], span: string[], from: number): number {
+  function nextLandingIndex(levels: string[], landings: string[], from: number): number {
     let best = -1;
-    for (const name of span) {
+    for (const name of landings) {
       const idx = levels.indexOf(name);
       if (idx === -1 || idx === from) continue;
       if (best === -1 || Math.abs(idx - from) < Math.abs(best - from)) best = idx;
     }
     return best;
+  }
+
+  /**
+   * The levels a flight actually stops at (spec 06 §8, ADR 0048, #321).
+   *
+   * All three terms are load-bearing and each looks redundant from a different
+   * starting document. The DECLARING LEVEL is not in the `to=` value — a stair
+   * `to=cellar` written on `house` stops at both — and without it a reciprocal
+   * panel has no landing to name but itself. The `through=` range must be
+   * SUBTRACTED because §8 gives those levels no landing at all; naming one
+   * sends the party off a step that does not exist. And a `to=a..b` range
+   * usually already contains its own declaring level, which is exactly what
+   * makes the union look like dead weight on the first document you read.
+   */
+  function landingsOf(e: EntityNode, to: string, declaredLevel: string, levels: string[]): string[] {
+    const named = new Set(levelSpan(levels, to));
+    named.add(declaredLevel);
+    const throughValue = pairOf(e.pairs, "through");
+    if (throughValue !== undefined) for (const l of levelSpan(levels, throughValue)) named.delete(l);
+    return levels.filter((l) => named.has(l));
   }
 
   /**
@@ -792,6 +990,7 @@ export function renderBattlemap(
     parts: string[],
     into: string[],
     anchor: string | undefined,
+    declaredLevel: string,
   ): void {
     if (!levelCtx) return;
     const currentIdx = levelCtx.levels.indexOf(levelCtx.level);
@@ -800,11 +999,22 @@ export function renderBattlemap(
     // Third Level of one long stair, what matters is that the next landing
     // down is the First. Naming the bottom of the whole run would misreport
     // the step the party is about to take.
-    const span = levelSpan(levelCtx.levels, to);
-    const targetIdx = span.length > 1
-      ? nextLandingIndex(levelCtx.levels, span, currentIdx)
-      : levelCtx.levels.indexOf(to);
+    //
+    // THE ANNOTATION IS A PROPERTY OF THE FLIGHT, NOT OF THE PANEL THAT DREW IT
+    // (spec 06 §8, ADR 0048, #321). So `declaredLevel` is a parameter and NOT
+    // `levelCtx.level`: on the reciprocal path this is a DIFFERENT entity's
+    // level than the panel being drawn, and collapsing the two — which is the
+    // obvious simplification — is what makes every projected landing name the
+    // level the stair was written on. `to` is likewise the connector's own
+    // `to=` value on both paths, never the panel's.
+    const targetIdx = nextLandingIndex(
+      levelCtx.levels,
+      landingsOf(e, to, declaredLevel, levelCtx.levels),
+      currentIdx,
+    );
     const up = targetIdx !== -1 && targetIdx < currentIdx;
+    // Falls back to the raw `to=` only when nothing resolved — an undeclared
+    // level, which fails loud elsewhere (§8).
     const shown = levelCtx.levels[targetIdx] ?? to;
     const ink = model.theme.surface("ink", "fill", INK);
     const themed =
@@ -822,7 +1032,7 @@ export function renderBattlemap(
       }
     }
     parts.push(
-      text(`${up ? "▲" : "▼"} ${to}`, {
+      text(`${up ? "▲" : "▼"} ${shown}`, {
         x: c.x, y: c.y + CELL * 0.72, "font-size": 7.5, fill: ink, "text-anchor": "middle", "font-family": "sans-serif",
       }),
     );
@@ -907,7 +1117,7 @@ export function renderBattlemap(
         const pts = addresses.map(cellCenter);
         // Drawn to the edges of the terminal cells; RECORDED as the declared
         // spine (#145) — see extendToCellEdge.
-        const drawn = extendToCellEdge(pts);
+        const drawn = extendToCellEdge(pts, p.joinsAtEnd === true);
         const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
         const stroke = model.theme.pathStroke(chain);
         const bandStroke = chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke;
@@ -918,7 +1128,7 @@ export function renderBattlemap(
         if (pathZones) {
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.edge, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
           const coreWidth = Math.max(width - 2 * pathZones.width, 1);
-          pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
+          pathCores.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: pathZones.core, "stroke-width": coreWidth, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         } else {
           pathParts.push(el("polyline", { points: pointsAttr(drawn), fill: "none", stroke: bandStroke, "stroke-width": width, "stroke-linecap": "butt", "stroke-linejoin": "round" }));
         }
@@ -1842,12 +2052,9 @@ export function renderBattlemap(
       const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
       if (light) {
         const radius = measureToCells(light, model) * CELL;
-        noteHole("light", emitterHole(center, radius));
-        footprintParts.push(
-          sightBlockers.length > 0
-            ? el("polygon", { points: pointsAttr(visibilityPolygon(center, radius, sightBlockers)), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() })
-            : el("circle", { cx: center.x, cy: center.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22 , "clip-path": clipToField() }),
-        );
+        const shape = emitterShape(center, radius);
+        noteHole("light", emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: light, line: e.line });
+        footprintParts.push(emitterPool(center, radius));
       }
       const themed0 = model.theme.glyphFor(chainR, center.x, center.y);
       const glyphless = !themed0 && !["campfire", "torch", "brazier", "lantern", "wagon", "stairs", "ramp"].some((w) => chainR.includes(w));
@@ -1892,20 +2099,16 @@ export function renderBattlemap(
     // Level connectors (spec 06 §8): any feature with to=<level>.
     const to = pairOf(e.pairs, "to");
     if (to !== undefined && levelCtx) {
-      renderConnector(e, model.chainOf(e.typeWord), c, to, parts, into, anchor);
+      renderConnector(e, model.chainOf(e.typeWord), c, to, parts, into, anchor, e.level);
       return;
     }
     // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.
     const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
     if (light) {
       const radius = measureToCells(light, model) * CELL;
-      noteHole("light", emitterHole(c, radius));
-      if (sightBlockers.length > 0) {
-        const poly = visibilityPolygon(c, radius, sightBlockers);
-        parts.push(el("polygon", { points: pointsAttr(poly), fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
-      } else {
-        parts.push(el("circle", { cx: c.x, cy: c.y, r: radius, fill: model.theme.surface("light", "fill", "#ffd98a"), opacity: 0.22, "clip-path": clipToField() }));
-      }
+      const shape = emitterShape(c, radius);
+      noteHole("light", emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: light, line: e.line });
+      parts.push(emitterPool(c, radius));
     }
     const chain = model.chainOf(e.typeWord);
     const themedGlyph = model.theme.glyphFor(chain, c.x, c.y);
@@ -2067,7 +2270,16 @@ function halfPlaneArea(compass: string, course: XY[], frame: { cols: number; row
   return [{ x: first.x, y: y0 }, ...inside, { x: last.x, y: y1 }, { x: edgeX, y: y1 }, { x: edgeX, y: y0 }];
 }
 
-function extendToCellEdge(pts: XY[]): XY[] {
+/**
+ * Push each end of a course out to its terminal cell's face, so the course
+ * fills the cell it ends in (#145) rather than stopping at the middle of it.
+ *
+ * `joinsAtEnd` holds the LAST point back (ADR 0044, #314): a course that meets
+ * another does not terminate in a cell of its own, and extending it there sends
+ * it through the trunk and out the far side. The first point is unaffected —
+ * `from` is always a free end.
+ */
+function extendToCellEdge(pts: XY[], joinsAtEnd = false): XY[] {
   if (pts.length < 2) return pts;
   const out = pts.map((p) => ({ ...p }));
   const reach = (end: XY, inward: XY): void => {
@@ -2088,6 +2300,6 @@ function extendToCellEdge(pts: XY[]): XY[] {
     end.y += uy * t;
   };
   reach(out[0]!, out[1]!);
-  reach(out[out.length - 1]!, out[out.length - 2]!);
+  if (!joinsAtEnd) reach(out[out.length - 1]!, out[out.length - 2]!);
   return out;
 }

@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Every decision that closes off alternatives — syntax choices, technology choices, scope cuts — is recorded here before its issue is closed. See [CONTRIBUTING.md](../../CONTRIBUTING.md#adrs-architecture-decision-records) for the rules.
+A contentious decision that closes off alternatives — syntax choices, technology choices, scope cuts — is recorded here before its issue is closed. See [CONTRIBUTING.md](../../CONTRIBUTING.md#adrs-architecture-decision-records) for the rules.
 
 - Files are numbered sequentially: `0001-<slug>.md`, `0002-<slug>.md`, …
 - **The number is claimed on merge, not on draft** — take the next free one while writing, and if a concurrent branch took it too, whoever merges second renumbers. The index table below is what makes that collision surface as a git conflict rather than as two files sharing a number.
@@ -54,3 +54,10 @@ Every decision that closes off alternatives — syntax choices, technology choic
 | [0041](0041-breaking-means-a-clean-document-stops-checking-clean.md) | Breaking means a clean document stops checking clean; breaking work rides `preview` | Accepted |
 | [0042](0042-a-field-is-drawn-on-the-map-field-of-its-own-panel.md) | Everything a field draws is clipped to the map field of its own panel | Accepted |
 | [0043](0043-an-address-form-a-slot-cannot-consume-is-refused.md) | An address form a slot cannot consume is refused, never quietly reinterpreted | Accepted |
+| [0044](0044-where-courses-meet-they-merge.md) | Where courses meet, they merge: a joining end stops in the water, and no bank is drawn over water | Accepted |
+| [0045](0045-a-redaction-is-not-the-document.md) | A redaction is not the document: coherence lints read what was declared, in every mode | Accepted |
+| [0046](0046-a-landing-is-suppressed-by-a-declaration-not-by-a-drawing.md) | A landing is suppressed by a declaration, not by a drawing: the far end yields to what the document said | Accepted |
+| [0047](0047-a-document-path-is-a-token.md) | A document path is a token: quoting protects its spaces, and the quotes are not part of the path | Accepted |
+| [0048](0048-an-annotation-names-the-nearest-landing-of-its-own-flight.md) | An annotation names the nearest landing of its own flight, on every panel | Accepted |
+| [0049](0049-a-cell-address-on-a-gridless-map-is-refused-not-dropped.md) | A cell address on a gridless map is refused, not dropped; a grid-only header key that has nothing to do warns | Accepted |
+| [0050](0050-a-pool-that-fills-its-field-is-reported-not-redrawn.md) | A pool that fills its whole map field is reported, not redrawn | Accepted |
