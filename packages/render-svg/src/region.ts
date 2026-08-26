@@ -20,7 +20,7 @@ import {
   shade,} from "./util";
 import { CHANNEL_FLOOR, narrowChannels } from "./channel";
 
-interface Resolved {
+export interface Resolved {
   point?: XY;
   polyline?: XY[];
   polygon?: XY[];
@@ -28,22 +28,104 @@ interface Resolved {
   ridge?: boolean;
   /** Massif breadth in px (from `width=`, a measure) — a ridge is a BELT, not a centerline. */
   beltW?: number;
-  halfPlane?: { compass: string; of: XY[]; refKey?: string };
+  /**
+   * `polygon` is the half-plane CLIPPED TO THE MAP FIELD — where the water is,
+   * is where the land is not, and that is geometry rather than ink (#355).
+   * Filled by the sweep at the end of pass 1, once every course it could be
+   * cut against is final, so it is present on every resolved half-plane.
+   */
+  halfPlane?: { compass: string; of: XY[]; refKey?: string; polygon?: XY[] };
   /** Vertex-index ranges of the polygon that were spliced from a followed feature (#81). */
   alongSpans?: { ref: string; refKey?: string; start: number; end: number }[];
 }
 
 
 
-export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
+/**
+ * Region canvas widths (#139, ADR 0020). `reference` is 2x, which is where the
+ * measured returns flatten: 1640 and 2460 place the same number of line
+ * labels, and 3280 buys one more for four times the coordinate precision.
+ */
+const OVERVIEW_WIDTH = 820;
+const REFERENCE_WIDTH = 1640;
+
+/** A region's field: its own units, the canvas it is drawn on, and the ratio. */
+export interface RegionFrame {
+  /** Canvas width in px — moves with `detail:`. */
+  w: number;
+  /** Canvas height in px. */
+  h: number;
+  /** Canvas px per map unit. `toXY` multiplies by it; an export divides it out. */
+  scale: number;
+  /** `extent:`'s own width, in `unit`. */
+  unitsW: number;
+  /** `extent:`'s own height, in `unit`. */
+  unitsH: number;
+  /** The unit `extent:` was written in ("mi", "km", …), or "" if bare. */
+  unit: string;
+}
+
+/**
+ * THE ONE PLACE THAT KNOWS MAP UNITS FROM CANVAS UNITS (ADR 0037).
+ *
+ * `render` computed this inline, which was fine while the SVG was the only
+ * consumer. A scene export has to divide the same `scale` back out to get
+ * geometry in the author's own units (#355), and two copies of a conversion
+ * are two answers to "how big is this map".
+ */
+export function regionFrame(model: Model): RegionFrame {
+  const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
+  const unitsW = Number(extent?.[1] ?? 800);
+  const unitsH = Number(extent?.[2] ?? 600);
+  const canvasW = model.header.get("detail") === "reference" ? REFERENCE_WIDTH : OVERVIEW_WIDTH;
+  const scale = canvasW / unitsW;
+  return { w: canvasW, h: unitsH * scale, scale, unitsW, unitsH, unit: extent?.[3] ?? "" };
+}
+
+/** An entity's stable key: its anchor, else a line-addressed placeholder. */
+const keyOf = (e: EntityNode): string => entityAnchor(e) ?? `@anon-${e.line}`;
+/** A map coordinate an author can paste back into the document. */
+const round1 = (n: number): string => String(Math.round(n * 10) / 10);
+/** Two points the same to within a hair — geometry is compared, not identity. */
+const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
+
+export interface Item {
+  e: EntityNode;
+  r: Resolved;
+  chain: string[];
+}
+
+/**
+ * What pass 1 produces. `items` is the resolved geometry in document order;
+ * the rest are the lookups pass 2 reads it through.
+ */
+interface RegionResolve {
+  items: Item[];
+  resolved: Map<string, Resolved>;
+  byName: Map<string, string>;
+  chainByKey: Map<string, string[]>;
+  mapUnit: string;
+  toXY: (p: Point) => XY;
+  lookup: (ref: Ref) => Resolved | undefined;
+  assembleWaterBoundary: (pts: XY[]) => XY[];
+}
+
+/**
+ * PASS 1 — resolve every entity's geometry, with nothing about ink.
+ *
+ * Hoisted out of `renderRegion` whole (#355). The two-pass shape was always
+ * there in that function's header comment; this makes the first pass a thing
+ * with a name, so a caller that wants the geometry without the drawing can
+ * have it. It consults no theme, pushes no markup and places no label — that
+ * was already true of this code, which is why the move is an extraction and
+ * not a disentangling.
+ */
+export function resolveRegionGeometry(
+  model: Model,
+  size: { w: number; h: number; scale: number },
+  diagnostics: { severity: "error" | "warning"; line: number; message: string }[],
+): RegionResolve {
   const { w, h, scale } = size;
-  const theme = model.theme;
-  const ink = theme.surface("ink", "fill", INK);
-  // Named ground (ADR 0013): the author states what unmarked land IS —
-  // the parchment stops being an assumption.
-  const groundWord = model.header.get("ground")?.trim();
-  const groundFill = groundWord ? theme.terrainFill(groundWord.split(/\s+/)) : null;
-  if (groundFill) body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: groundFill }));
   // No shared noise stream: every organic shape keys on its OWN geometry
   // (owner review caught the defect — one stream meant adding a forest
   // reshaped every blob and river declared after it).
@@ -52,12 +134,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   /** Direction toward declared water (from e.g. `sea : west of coast`), for landward nudges. */
   let waterVector: XY | null = null;
 
-  const keyOf = (e: EntityNode): string => entityAnchor(e) ?? `@anon-${e.line}`;
   const lookup = (ref: Ref): Resolved | undefined =>
     resolved.get(ref.form === "id" ? ref.value : (byName.get(ref.value) ?? slugify(ref.value)));
   const toXY = (p: Point): XY => ({ x: p.x * scale, y: p.y * scale });
-  /** A map coordinate an author can paste back into the document. */
-  const round1 = (n: number): string => String(Math.round(n * 10) / 10);
   /** The unit `extent:` was written in, so a reported distance carries it. */
   const mapUnit = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "")?.[3] ?? "";
 
@@ -684,7 +763,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const massRng = (word: string | undefined, size: number): (() => number) =>
     rng(hashSeed(hashString(word ?? "mass"), Math.round(size * 1000)));
 
-  const near = (a: XY, b: XY): boolean => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
   const runMatches = (pts: XY[], start: number, raw: XY[], reversed: boolean): boolean => {
     if (start + raw.length > pts.length) return false;
     for (let k = 0; k < raw.length; k++) {
@@ -1150,11 +1228,6 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   };
 
   // ---------- pass 1: resolve everything ----------
-  interface Item {
-    e: EntityNode;
-    r: Resolved;
-    chain: string[];
-  }
   const items: Item[] = [];
   const chainByKey = new Map<string, string[]>();
   for (const e of model.entities) {
@@ -1167,6 +1240,38 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     chainByKey.set(key, chain);
     items.push({ e, r, chain });
   }
+
+  // A HALF-PLANE IS CLIPPED HERE, NOT AT EMIT (#355).
+  //
+  // `halfPlanePolygon` used to run in the emit pass, at two call sites, which
+  // made the water's actual outline the one piece of region geometry a
+  // non-SVG consumer could not be handed. It is geometry by ADR 0037's test —
+  // it decides where the land is — so it resolves.
+  //
+  // The sweep runs AFTER the loop rather than at the assignment in
+  // `resolveEntity`, because `of` holds a live reference to the referenced
+  // course's polyline. Clipping at assignment time would freeze the shape
+  // against whatever that course looked like when the half-plane was read,
+  // and a coast declared later, or finished later, would cut against a stale
+  // outline. After the loop, every course is final.
+  for (const { r } of items) {
+    if (r.halfPlane) r.halfPlane.polygon = halfPlanePolygon(r.halfPlane, w, h);
+  }
+
+  return { items, resolved, byName, chainByKey, mapUnit, toXY, lookup, assembleWaterBoundary };
+}
+
+export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
+  const { w, h, scale } = size;
+  const theme = model.theme;
+  const ink = theme.surface("ink", "fill", INK);
+  // Named ground (ADR 0013): the author states what unmarked land IS —
+  // the parchment stops being an assumption.
+  const groundWord = model.header.get("ground")?.trim();
+  const groundFill = groundWord ? theme.terrainFill(groundWord.split(/\s+/)) : null;
+  if (groundFill) body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: groundFill }));
+  const { items, resolved, byName, chainByKey, mapUnit, toXY, lookup, assembleWaterBoundary } =
+    resolveRegionGeometry(model, size, diagnostics);
 
   // Two watercourses that cross without meeting are nonsense on the ground:
   // water does not flow over water. Nothing governed this before — the
@@ -1218,7 +1323,9 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
   const frontierFills = new Map<string, { fill: string; zonePoly: XY[] }>();
   for (const it of items) {
     if (it.r.halfPlane?.refKey && it.e.section !== "water" && it.e.archetype !== "zone") {
-      frontierFills.set(it.r.halfPlane.refKey, { fill: theme.terrainFill(it.chain), zonePoly: halfPlanePolygon(it.r.halfPlane, w, h) });
+      // The polygon is resolved (see the sweep in `resolveRegionGeometry`);
+      // only the fill is decided here, because only the fill is ink.
+      frontierFills.set(it.r.halfPlane.refKey, { fill: theme.terrainFill(it.chain), zonePoly: it.r.halfPlane.polygon ?? [] });
     }
     // Area-declared zones (a tundra following the coasts): any non-coastline
     // path their boundary follows is likewise a zonal frontier.
@@ -1495,7 +1602,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
     }
 
     if (r.halfPlane) {
-      const poly = halfPlanePolygon(r.halfPlane, w, h);
+      const poly = r.halfPlane.polygon ?? [];
       const isWater = e.section === "water";
       const isZone = !isWater && e.archetype === "zone";
       if (isWater) {

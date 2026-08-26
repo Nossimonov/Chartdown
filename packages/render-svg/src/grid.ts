@@ -78,8 +78,15 @@ export const cellKey = (c: Cell): string => `${c.col}:${c.row}`;
 /**
  * A structure's footprint: the union of its range and address placements.
  * `building : K5..M8 K9..K12` is an L-shaped hall (spec 06 §3).
+ *
+ * Takes bare `Address`/`AddressRange` too, because a hex line spells the same
+ * union that way (`addresses`) where an entity spells it as placements — and
+ * the two shapes are structurally identical. One definition, so a hexcrawl
+ * scene cannot disagree with a battlemap one about what `K5..M8` covers.
  */
-export function structureCells(e: { placements: Placement[] }): Map<string, Cell> {
+export function structureCells(
+  e: { placements: (Placement | Address | AddressRange)[] },
+): Map<string, Cell> {
   const cells = new Map<string, Cell>();
   const add = (c: Cell): void => void cells.set(cellKey(c), c);
   for (const p of e.placements) {

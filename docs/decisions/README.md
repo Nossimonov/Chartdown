@@ -61,3 +61,4 @@ A contentious decision that closes off alternatives — syntax choices, technolo
 | [0048](0048-an-annotation-names-the-nearest-landing-of-its-own-flight.md) | An annotation names the nearest landing of its own flight, on every panel | Accepted |
 | [0049](0049-a-cell-address-on-a-gridless-map-is-refused-not-dropped.md) | A cell address on a gridless map is refused, not dropped; a grid-only header key that has nothing to do warns | Accepted |
 | [0050](0050-a-pool-that-fills-its-field-is-reported-not-redrawn.md) | A pool that fills its whole map field is reported, not redrawn | Accepted |
+| [0051](0051-the-renderers-answer-is-data-before-it-is-ink.md) | The renderer's answer is data before it is ink: `resolveScene` exports resolved geometry in map units, and `render` consumes the same pass | Accepted |

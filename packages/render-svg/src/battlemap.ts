@@ -12,7 +12,7 @@ import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSp
 import { coherenceLints } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
-interface Frame {
+export interface Frame {
   cols: number;
   rows: number;
   w: number;
