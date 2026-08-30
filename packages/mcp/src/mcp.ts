@@ -18,7 +18,16 @@ import digest from "../../../docs/spec/digest.md";
 import { rasterizePng } from "./raster";
 import { runCheck, runFrame, runRender, runUvtt } from "./tools";
 
-const server = new McpServer({ name: "chartdown", version: "0.2.0" });
+// THE HANDSHAKE READS ITS VERSION RATHER THAN RESTATING IT (#365).
+// `serverInfo.version` goes to every host on every connection, and this
+// said "0.2.0" at 0.7.0 — compiled into the published bundle. It was on no
+// list: `bump` had never heard of it, and #363's new sweep filters .md/.ebnf,
+// so a .ts is excluded by construction. A version that is DERIVED cannot go
+// stale, which is the only form of this that stays fixed. esbuild inlines the
+// JSON at build time, so there is no runtime read.
+import pkg from "../package.json";
+
+const server = new McpServer({ name: "chartdown", version: pkg.version });
 
 const textResult = (r: { text: string; isError?: boolean }): { content: { type: "text"; text: string }[]; isError?: boolean } => ({
   content: [{ type: "text", text: r.text }],

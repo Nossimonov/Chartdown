@@ -13,6 +13,7 @@ claude mcp add chartdown -- npx -y @chartdown/mcp
 | `chartdown_check` | Parse + render validation; diagnostics cite the spec sections they enforce |
 | `chartdown_render` | Deterministic render — `format: "png"` (default) returns a viewable image; `"svg"` the text. `mode`, `level`, `theme` options |
 | `chartdown_uvtt` | Universal VTT geometry export (spec 06 §9) |
+| `chartdown_frame` | Absolute trace to an anchored outline (#174) |
 
 PNG rendering is self-contained: `@resvg/resvg-wasm` (pure WebAssembly, no native binaries or browser) with a vendored [DejaVu Sans](assets/FONT-LICENSE) — identical rasters on every machine.
 

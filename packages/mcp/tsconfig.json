@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
+    "resolveJsonModule": true,
     "paths": {
       "@chartdown/core": ["../core/src/index"],
       "@chartdown/render-svg": ["../render-svg/src/index"]
