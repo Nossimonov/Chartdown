@@ -1,9 +1,22 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse, SPEC_VERSION } from "./index";
 import { KNOWN_HEADER_KEYS } from "./parse";
+
+/**
+ * The documents a reader or an agent is served, which therefore must not make
+ * a false claim about the language. DERIVED rather than listed: #363 was a
+ * defect the check already existed for, in a file the hand-kept list omitted.
+ */
+const shippedDocs = (root: string): string[] => [
+  ...readdirSync(join(root, "docs", "spec"))
+    .filter((f) => f.endsWith(".md") || f.endsWith(".ebnf"))
+    .map((f) => join("docs", "spec", f)),
+  "README.md",
+  join("playground", "llms.txt"),
+];
 
 describe("basics", () => {
   it("every version surface agrees — one bump command, one truth (#90)", () => {
@@ -71,6 +84,33 @@ describe("basics", () => {
     }
   });
 
+  it("llms.txt names the shipped version, and the corpus it describes (#363)", () => {
+    // The FIRST file an agent reads: served at the site root, ahead of the
+    // digest it points at. It said "the whole v0.2 language" at 0.7, and
+    // "five complete documents" against a corpus of nine — found by the owner
+    // writing a map for a game, which is the one test nothing here performs.
+    //
+    // Neither claim is the shape #331 catches. That check reads sentences that
+    // call a version UNRELEASED; this is a stale statement of the CURRENT one,
+    // which reads as perfectly confident and is simply out of date.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const llms = readFileSync(join(root, "playground", "llms.txt"), "utf8");
+
+    expect(llms).toContain(`whole v${SPEC_VERSION} language`);
+    // And no OTHER version of the language is claimed anywhere in it.
+    const others = [...llms.matchAll(/whole v(\d+\.\d+) language/g)].map((m) => m[1]);
+    expect(others).toEqual([SPEC_VERSION]);
+
+    // The corpus count, checked against the corpus rather than described —
+    // the way #278 checks the playground picker rather than trusting it.
+    const maps = readdirSync(join(root, "examples"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .filter((e) => existsSync(join(root, "examples", e.name, `${e.name}.cd`)));
+    const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+    expect(llms, `the corpus has ${maps.length} map documents`)
+      .toContain(`${WORDS[maps.length]} complete documents`);
+  });
+
   it("no shipped doc calls a released version unreleased (#331)", () => {
     // The test above checks version TOKENS, which is all `bump` can rewrite:
     // `spec v0.5` → `spec v0.6`. It cannot see a SENTENCE making a version
@@ -87,7 +127,11 @@ describe("basics", () => {
       const [x, y] = rank(SPEC_VERSION);
       return a! < x! || (a === x && b! <= y!);
     };
-    for (const rel of ["docs/spec/digest.md", "docs/spec/grammar.ebnf", "docs/spec/README.md", "README.md"]) {
+    // DERIVED, not hand-kept. This list is what failed in #363: the check was
+    // built for exactly that defect and `playground/llms.txt` was not on it, so
+    // the site root told every agent the language was v0.2 for five minor
+    // versions. A new spec section now joins the sweep by existing.
+    for (const rel of shippedDocs(root)) {
       const prose = readFileSync(join(root, rel), "utf8").split(/\n|(?<=[.!?])\s+/);
       for (const sentence of prose.filter((s) => CLAIM.test(s))) {
         for (const [, v] of sentence.matchAll(/\b(\d+\.\d+(?:\.\d+)?)\b/g)) {

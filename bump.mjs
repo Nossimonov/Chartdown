@@ -96,6 +96,11 @@ for (const artifact of ["docs/spec/digest.md", "docs/spec/grammar.ebnf", "docs/s
   replaceIn(artifact, `spec v${spec(current)}`, `spec v${spec(next)}`, { optional: spec(current) === spec(next) });
 }
 replaceIn("README.md", `Spec v${spec(current)}`, `Spec v${spec(next)}`, { optional: spec(current) === spec(next) });
+// llms.txt is the FIRST file an agent reads — served at the site root, ahead of
+// the digest it points at — and it was never on this list, so it told every
+// agent the language was v0.2 for five minor versions (#363). Found by the owner
+// writing a map for an actual game, which is the one test nothing here performs.
+replaceIn("playground/llms.txt", `whole v${spec(current)} language`, `whole v${spec(next)} language`, { optional: spec(current) === spec(next) });
 replaceIn("README.md", `@chartdown/browser@${spec(current)}`, `@chartdown/browser@${spec(next)}`, { optional: spec(current) === spec(next) });
 
 // CHANGELOG: the [Unreleased] items become the new section; links follow.
