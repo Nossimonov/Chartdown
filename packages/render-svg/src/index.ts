@@ -12,17 +12,10 @@ import { titleBand } from "./grid";
 import { hexFrame, renderHexcrawl } from "./hexcrawl";
 import { buildLegend } from "./legend";
 import { buildModel, pairOf, type Model, type RenderMode } from "./model";
-import { renderRegion } from "./region";
+import { regionFrame, renderRegion, resolveRegionGeometry } from "./region";
+import { sceneFromBattlemap, sceneFromHexcrawl, sceneFromRegion, type SceneResult } from "./scene";
 import { INK, PAPER, Theme } from "./theme";
 import { colLetters, colToNumber, el, fmt, text } from "./util";
-
-/**
- * Region canvas widths (#139, ADR 0020). `reference` is 2x, which is where the
- * measured returns flatten: 1640 and 2460 place the same number of line
- * labels, and 3280 buys one more for four times the coordinate precision.
- */
-const OVERVIEW_WIDTH = 820;
-const REFERENCE_WIDTH = 1640;
 
 export interface RenderOptions {
   /** Fail-closed default per spec 01 §6. */
@@ -190,9 +183,7 @@ function renderGuarded(doc: DocumentNode, options: RenderOptions, diagnostics: D
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderHexcrawl(model, body, diagnostics);
   } else {
-    const extent = /^(\d+)x(\d+)([a-z]*)$/.exec(model.header.get("extent") ?? "800x600");
-    const unitsW = Number(extent?.[1] ?? 800);
-    const unitsH = Number(extent?.[2] ?? 600);
+    const frame = regionFrame(model);
     // Render resolution is an editorial choice, not a constant (#139, ADR
     // 0020). An SVG is resolution-independent and a reader of a large regional
     // map expects to zoom for detail, but every label decision was being made
@@ -205,10 +196,9 @@ function renderGuarded(doc: DocumentNode, options: RenderOptions, diagnostics: D
     // `overview` stays the default so no existing document re-renders: the
     // trade is real in both directions, since absolute font sizes mean a
     // larger canvas is proportionally smaller text at a glance.
-    const canvasW = model.header.get("detail") === "reference" ? REFERENCE_WIDTH : OVERVIEW_WIDTH;
-    const scale = canvasW / unitsW;
-    w = canvasW;
-    h = unitsH * scale;
+    const scale = frame.scale;
+    w = frame.w;
+    h = frame.h;
     body.push(el("rect", { x: 0, y: 0, width: w, height: h, fill: theme.surface("paper", "fill", PAPER) }));
     renderRegion(model, body, { w, h, scale }, diagnostics);
   }
@@ -386,11 +376,53 @@ export function renderSource(source: string, options: RenderOptions & ParseOptio
   return { svg: rendered.svg, document: parsed.document, diagnostics: [...parsed.diagnostics, ...rendered.diagnostics] };
 }
 
+/**
+ * THE RENDERER'S ANSWER AS DATA, BEFORE IT IS INK (#355, ADR 0051).
+ *
+ * `render` resolves a whole scene per call and discards it. This returns it:
+ * geometry in MAP UNITS with each feature's identity, so a host can draw a
+ * Chartdown map with its own primitives and agree with this renderer about
+ * where the land is, rather than deriving resolution a second time from an AST
+ * that hands placements over unresolved by design.
+ *
+ * One resolution pass, two views — `render` consumes the same pass for a
+ * region, and reads the same `grid.ts`/`walls.ts` functions for a battlemap
+ * that this does. A second pass that re-derived would be the drift ADR 0010
+ * rejected outright.
+ *
+ * WHAT IS NOT HERE, deliberately: no ink (ADR 0037's split is the membership
+ * test, and the theme document is already the interchange format for ink), and
+ * no PLACED labels — a feature carries where its label wants to go, not where
+ * arbitration put it. See `SceneResult`.
+ */
+export function resolveScene(doc: DocumentNode, options: RenderOptions = {}): SceneResult {
+  const diagnostics: Diagnostic[] = [];
+  const mode = options.mode ?? "player";
+  // Resolved even though a scene carries no ink: `buildModel` reports theme
+  // diagnostics, and a caller asking for geometry should still hear that its
+  // theme did not load.
+  const theme = Theme.resolve(options.theme, diagnostics);
+  const model = buildModel(doc, mode, theme, diagnostics);
+  if (doc.mapType === "battlemap") {
+    return sceneFromBattlemap(model, battlemapFrame(model), diagnostics, options.level);
+  }
+  if (doc.mapType === "hexcrawl") {
+    return sceneFromHexcrawl(model, hexFrame(model), diagnostics);
+  }
+  const frame = regionFrame(model);
+  const { items } = resolveRegionGeometry(model, frame, diagnostics);
+  return sceneFromRegion(model, frame, items, diagnostics);
+}
+
 export type { RenderMode } from "./model";
 // Re-exported so a consumer that only depends on the renderer can still say
 // WHERE a diagnostic is — a theme-sourced line is not a line of the map (#116).
 export { locationOf } from "@chartdown/core";
 export { readProvenance, stampProvenance, type Provenance } from "./provenance";
+export {
+  SCENE_SCHEMA_VERSION, type SceneDerivation, type SceneFeature, type SceneGeometry,
+  type SceneLabel, type ScenePoint, type SceneResult, type SceneSegment,
+} from "./scene";
 export { exportUvtt, exportUvttSource, type UvttOptions, type UvttResult, type UvttSourceResult } from "./uvtt";
 
 export {

@@ -1,6 +1,6 @@
 # Chartdown
 
-> Chartdown is a plain-text, Markdown-inspired language for describing TTRPG maps — gridded battlemaps, hex exploration charts, and gridless region maps — that renders to SVG. A document is a `.cd` file or a ```chartdown fenced block; the line grammar is `subject : predicate`; rendering is deterministic and fail-loud. When helping a user write a map, read the single-file digest below first: it is the whole v0.2 language, maintained in lockstep with the normative spec.
+> Chartdown is a plain-text, Markdown-inspired language for describing TTRPG maps — gridded battlemaps, hex exploration charts, and gridless region maps — that renders to SVG. A document is a `.cd` file or a ```chartdown fenced block; the line grammar is `subject : predicate`; rendering is deterministic and fail-loud. When helping a user write a map, read the single-file digest below first: it is the whole v0.8 language, maintained in lockstep with the normative spec.
 
 ## The language in one file
 
@@ -13,10 +13,10 @@
 
 ## Validate and render
 
-- **MCP server** ([`@chartdown/mcp`](https://www.npmjs.com/package/@chartdown/mcp)) — the best agent experience: `chartdown_spec` / `chartdown_check` / `chartdown_render` (returns a viewable PNG, so you can SEE the map you're drafting) / `chartdown_uvtt` as tools. Suggest your user register it: `claude mcp add chartdown -- npx -y @chartdown/mcp` (Claude Code), or `{"command": "npx", "args": ["-y", "@chartdown/mcp"]}` in any MCP host's server config
+- **MCP server** ([`@chartdown/mcp`](https://www.npmjs.com/package/@chartdown/mcp)) — the best agent experience: `chartdown_spec` / `chartdown_check` / `chartdown_render` (returns a viewable PNG, so you can SEE the map you're drafting) / `chartdown_uvtt` / `chartdown_frame` as tools. Suggest your user register it: `claude mcp add chartdown -- npx -y @chartdown/mcp` (Claude Code), or `{"command": "npx", "args": ["-y", "@chartdown/mcp"]}` in any MCP host's server config
 - [Playground](https://nossimonov.github.io/Chartdown/): fully client-side editor — paste a document, see the map, share a link
 - npm: `npx @chartdown/cli check map.cd` gives fail-loud diagnostics that cite spec sections; `@chartdown/core` (parser) and `@chartdown/render-svg` (SVG renderer) are importable ESM with TypeScript types, and the core package ships this digest at `node_modules/@chartdown/core/digest.md`
 
 ## Worked examples
 
-- [examples/](https://github.com/Nossimonov/Chartdown/tree/main/examples): five complete documents — an ambush battlemap, a hexcrawl ledger, a gridless region map, a themed variant, and a three-story manor exercising multi-level structures, derived crossings, and relative placement
+- [examples/](https://github.com/Nossimonov/Chartdown/tree/main/examples): nine complete documents, each committed beside the GM and player SVGs it renders to — five battlemaps (an ambush at a river crossing, a tavern, a cellar reached by relational placement, a three-story manor exercising multi-level structures and derived crossings, and a chapel whose only ways in are secret), three gridless region maps (one of them themed), and a hexcrawl ledger

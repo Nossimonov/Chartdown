@@ -1,6 +1,6 @@
 {
   "name": "@chartdown/render-svg",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Chartdown SVG renderer — deterministic, seeded, themeable rendering of plain-text TTRPG maps. Runtime-dependency-free beyond @chartdown/core (ADR 0007).",
   "license": "MIT",
   "type": "module",
@@ -13,7 +13,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "scene.schema.json"
   ],
   "keywords": [
     "chartdown",
@@ -38,6 +39,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@chartdown/core": "0.7.0"
+    "@chartdown/core": "0.8.0"
   }
 }

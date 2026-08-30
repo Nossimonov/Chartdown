@@ -1,6 +1,6 @@
 # Greyhallow Chapel
 
-**Status: spec-aligned** — valid under spec v0.6 (sections 01–08). Fulfills [#333](https://github.com/Nossimonov/Chartdown/issues/333): the corpus had no document whose only way in is a secret, so no committed example could express the class of defect that kept being found by hand.
+**Status: spec-aligned** — valid under spec v0.8 (sections 01–08). Fulfills [#333](https://github.com/Nossimonov/Chartdown/issues/333): the corpus had no document whose only way in is a secret, so no committed example could express the class of defect that kept being found by hand.
 
 ## The scene
 

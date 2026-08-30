@@ -47,7 +47,7 @@ start party : J14..L15
 
 ![Ambush at Redford Crossing, rendered](examples/redford-crossing/redford-crossing.svg)
 
-*The player view — "Gruk" is `hidden`, so he and every GM note are stripped; rendering with `--mode gm` shows the whole truth. The full document with GM secrets lives in [examples/redford-crossing](examples/redford-crossing/), alongside a hexcrawl, a gridless region map, the two-continent [Sundered Reach](examples/sundered-reach/), a themed hexcrawl on a candy planet, and a three-story manor with a courtyard, cellar, and wall-walk.*
+*The player view — "Gruk" is `hidden`, so he and every GM note are stripped; rendering with `--mode gm` shows the whole truth. The full document with GM secrets lives in [examples/redford-crossing](examples/redford-crossing/), alongside a hexcrawl, a gridless region map, the two-continent [Sundered Reach](examples/sundered-reach/), a themed region map on a candy planet, and a three-story manor with a courtyard, cellar, and wall-walk.*
 
 Note the `ford` line: it never states a position. It's placed `on` the river and `on` the road, so it *derives* the crossing — move either path and the ford follows. The same anchoring works room-by-room: `table : on kitchen at C2..D2` arranges the kitchen by the kitchen.
 
@@ -66,7 +66,7 @@ npx @chartdown/cli check map.cd                          # fail-loud validation
 **Embed in any web page** — the path this project exists for. One script tag renders every fenced ` ```chartdown ` block in place, entirely client-side:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@chartdown/browser@0.7/dist/chartdown.browser.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@chartdown/browser@0.8/dist/chartdown.browser.js" defer></script>
 ```
 
 **As a library** ([`@chartdown/core`](https://www.npmjs.com/package/@chartdown/core) + [`@chartdown/render-svg`](https://www.npmjs.com/package/@chartdown/render-svg), ESM with TypeScript types, zero runtime dependencies):
@@ -81,7 +81,7 @@ Working from a clone instead: `npm install && npm run build`, then `node package
 
 ## Project status
 
-**Spec v0.7 released and implemented** (the spec and the `@chartdown` packages version together — the [CHANGELOG](CHANGELOG.md) names what each version added). The specification ([sections 01–08](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)) is fully implemented by the reference implementation in [packages/](packages/) — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — and every example in [examples/](examples/) renders with it, verified in CI on every commit. Working today:
+**Spec v0.8 released and implemented** (the spec and the `@chartdown` packages version together — the [CHANGELOG](CHANGELOG.md) names what each version added). The specification ([sections 01–08](docs/spec/), with a [consolidated grammar](docs/spec/grammar.ebnf) and an [agent-ingestible digest](docs/spec/digest.md)) is fully implemented by the reference implementation in [packages/](packages/) — a TypeScript parser and SVG renderer, dependency-free by rule ([ADR 0007](docs/decisions/0007-typescript-stack.md)) — and every example in [examples/](examples/) renders with it, verified in CI on every commit. Working today:
 
 - **Three map types**: gridded battlemaps, hex charts (ledger-style exploration logs), and gridless region maps with organic, seeded rendering
 - **The GM/player split**: `hidden`, `gm=`, and `[gm]` content strips fail-closed from player renders

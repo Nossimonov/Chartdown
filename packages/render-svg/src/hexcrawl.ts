@@ -14,7 +14,7 @@ import { colToNumber, el, fmt, pointsAttr, svgTitle, text, type XY , inkStroke} 
 const R = 24;
 const MARGIN = 30;
 
-interface HexFrame {
+export interface HexFrame {
   cols: number;
   rows: number;
   w: number;

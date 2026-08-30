@@ -7,6 +7,7 @@ Chartdown documents live here — **written before the syntax exists**. This is 
 - One directory per example: `examples/<slug>/`
   - `<slug>.cd` — the Chartdown source (aspirational until the spec catches up)
   - `README.md` — what map this describes, and a sketch/image of the intended render if available
+  - `<slug>.scene.json` — **generated**, and optional: the resolved scene from `resolveScene` (ADR 0051), for a host that draws with its own primitives instead of consuming the SVG. Geometry is in the map's own units. `gumdrop-vale` carries one as the worked example; regenerate rather than edit.
   - `<slug>.svg` / `<slug>-gm.svg` — **generated** player/GM renders from the reference renderer (`@chartdown/render-svg`); regenerate rather than edit. Regenerate with the release action, which stamps ADR 0014's provenance marker; `chartdown render` does not yet (#349).
 - Each example declares its status at the top of its README:
   - **aspirational** — not yet valid under any spec draft; exists to drive syntax design. No example carries this today; every committed example is verified against the current renderer in CI.

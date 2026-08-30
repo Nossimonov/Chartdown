@@ -11,12 +11,13 @@
  * against fixtures written to match it. A regex that passes its own tests and
  * matches nothing real is the failure this repository keeps meeting.
  */
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain ESM helper, shared with bump.mjs.
-import { breakingEntries, refuseBump, unreleasedSection } from "./release-guards.mjs";
+import { breakingEntries, FROZEN_EXCEPTIONS, refuseBump, refuseDriftedSection, releasedSection, unreleasedSection } from "./release-guards.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const CHANGELOG = readFileSync(join(root, "CHANGELOG.md"), "utf8");
@@ -74,10 +75,18 @@ describe("the matcher against this repository's real history", () => {
     expect(breakingEntries(sectionOf(v as string))).toHaveLength(n as number);
   });
 
-  it("finds every one of them, and nothing else in the file says BREAKING", () => {
-    const all = [...CHANGELOG.matchAll(/BREAKING/g)].length;
-    const matched = breakingEntries(CHANGELOG).length;
-    expect(matched).toBe(all); // no occurrence escapes the bullet form
+  it("no BREAKING bullet escapes the matcher", () => {
+    // This asserted that the word appeared NOWHERE but a marked bullet, which
+    // was true when written and is not an invariant: #367's entry says "read as
+    // a fix rather than BREAKING under ADR 0041" — a legitimate sentence
+    // explaining why a change is NOT breaking, and the kind of prose this
+    // changelog is full of.
+    //
+    // What matters is that no marked bullet is MISSED, so that is what is
+    // asserted now.
+    const bulletLines = CHANGELOG.split("\n").filter((l) => /^- \*\*BREAKING\b/.test(l.trim()));
+    expect(bulletLines.length, "no BREAKING bullets found — the anchor moved").toBeGreaterThan(10);
+    expect(breakingEntries(CHANGELOG)).toHaveLength(bulletLines.length);
   });
 
   it("the live [Unreleased] section is consistent with the version being prepared", () => {
@@ -101,5 +110,49 @@ describe("the refusal happens before anything is rewritten", () => {
     expect(guard, "bump.mjs never calls refuseBump").toBeGreaterThan(-1);
     expect(firstWrite).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(firstWrite);
+  });
+});
+
+describe("a released section is frozen (#378)", () => {
+  // The defect this guards happened three times: an entry aimed at
+  // [Unreleased] landed in a shipped section, crediting a release with a fix it
+  // does not contain and guaranteeing the fix reaches NO release's notes, since
+  // bump rolls only [Unreleased].
+  const tagged = (version: string): string | null => {
+    try {
+      return execSync(`git show v${version}:CHANGELOG.md`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      return null; // shallow clone, or the tag is not reachable
+    }
+  };
+
+  const versions = [...CHANGELOG.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map((m) => m[1]!);
+
+  it("finds the released versions at all", () => {
+    expect(versions.length, "no released sections parsed — the heading shape moved").toBeGreaterThan(3);
+  });
+
+  it.each(versions)("[%s] matches what it said at its tag", (v) => {
+    const atTag = tagged(v);
+    if (atTag === null) return; // history unavailable; the bump gate still checks
+    expect(refuseDriftedSection(v, releasedSection(CHANGELOG, v), releasedSection(atTag, v))).toBeNull();
+  });
+
+  it("and the check is not vacuous — a planted entry is caught", () => {
+    // Positive control. Without this the suite above passes on a comparison
+    // that never fires, which is how the original defect survived.
+    const now = "## [0.6.0] — x\n\n### Fixed\n\n- **a** thing\n- **another** thing\n";
+    const atTag = "## [0.6.0] — x\n\n### Fixed\n\n- **a** thing\n";
+    const out = refuseDriftedSection("0.6.0", now.trimEnd(), atTag.trimEnd());
+    expect(out).toContain("no longer matches its tag");
+    expect(out).toContain("gained 1 entry");
+  });
+
+  it("0.4.0 is exempt, and the exemption is deliberate", () => {
+    // Tagged with one bullet for 117 commits because its section had been
+    // written onto the wrong branch; the real notes were written afterwards.
+    // Freezing it to its tag would restore the broken version.
+    expect(FROZEN_EXCEPTIONS.has("0.4.0")).toBe(true);
+    expect(refuseDriftedSection("0.4.0", "anything", "different")).toBeNull();
   });
 });

@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nossimonov.github.io/Chartdown/scene.schema.json",
+  "title": "Chartdown resolved scene",
+  "description": "The renderer's answer as data, before it is ink (ADR 0051). Geometry is in the map's own units and carries no ink. Versioned with @chartdown/render-svg, NOT with SPEC_VERSION — a renderer output is not language.",
+  "type": "object",
+  "required": ["schemaVersion", "mapType", "mode", "unit", "extent", "features", "diagnostics"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "mapType": { "enum": ["region", "battlemap", "hexcrawl"] },
+    "mode": {
+      "enum": ["player", "gm"],
+      "description": "The scene is produced PER MODE (ADR 0045). A host does not filter a full scene itself."
+    },
+    "unit": {
+      "type": "string",
+      "description": "The extent's own unit on a region (\"mi\", \"km\", … or \"\" if bare); \"cell\" on a battlemap; \"hex\" on a hexcrawl."
+    },
+    "extent": {
+      "type": "object",
+      "required": ["w", "h"],
+      "additionalProperties": false,
+      "properties": { "w": { "type": "number" }, "h": { "type": "number" } }
+    },
+    "levels": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Physical order, topmost first (spec 06 §8). Absent on a map with one level."
+    },
+    "features": { "type": "array", "items": { "$ref": "#/$defs/feature" } },
+    "walls": {
+      "type": "object",
+      "description": "Battlemap sight and movement geometry, in cell coordinates, from the same walls.ts the light engine and exportUvtt read (ADR 0010).",
+      "required": ["blockers", "losWalls", "portals"],
+      "additionalProperties": false,
+      "properties": {
+        "blockers": { "type": "array", "items": { "$ref": "#/$defs/segment" } },
+        "losWalls": { "type": "array", "items": { "$ref": "#/$defs/segment" } },
+        "portals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["seg", "closed"],
+            "additionalProperties": false,
+            "properties": { "seg": { "$ref": "#/$defs/segment" }, "closed": { "type": "boolean" } }
+          }
+        }
+      }
+    },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } }
+  },
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+    },
+    "segment": {
+      "type": "object",
+      "required": ["a", "b"],
+      "additionalProperties": false,
+      "properties": { "a": { "$ref": "#/$defs/point" }, "b": { "$ref": "#/$defs/point" } }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["severity", "line", "message"],
+      "properties": {
+        "severity": { "enum": ["error", "warning"] },
+        "line": { "type": "integer" },
+        "message": { "type": "string" }
+      }
+    },
+    "geometry": {
+      "description": "What is DRAWN, after organic finishing — the outline the coast has, not the outline the document declared.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "at"],
+          "additionalProperties": false,
+          "properties": { "kind": { "const": "point" }, "at": { "$ref": "#/$defs/point" } }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "at", "radius"],
+          "additionalProperties": false,
+          "properties": { "kind": { "const": "circle" }, "at": { "$ref": "#/$defs/point" }, "radius": { "type": "number" } }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "points"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["polyline", "ridge"] },
+            "points": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+            "width": { "type": "number", "description": "Belt breadth in map units. A ridge is a BELT, not a centreline." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "points"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "polygon" },
+            "points": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+            "from": {
+              "type": "object",
+              "description": "Why the polygon has this shape, when it was derived rather than declared.",
+              "required": ["halfPlane"],
+              "additionalProperties": false,
+              "properties": { "halfPlane": { "type": "string" }, "of": { "type": "string" } }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A cell union in cell (or hex) coordinates, 1-based. What a grid map's geometry IS — a structure occupies cells, and spec 06 §3 derives the outline from them.",
+          "required": ["kind", "cells"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "cells" },
+            "cells": { "type": "array", "items": { "$ref": "#/$defs/point" } }
+          }
+        }
+      ]
+    },
+    "feature": {
+      "type": "object",
+      "required": ["anchor", "line", "section", "level", "word", "archetype", "chain", "flags", "pairs"],
+      "additionalProperties": false,
+      "properties": {
+        "anchor": { "type": "string", "description": "Explicit id, else display-name slug, else @anon-<line>." },
+        "line": { "type": "integer" },
+        "section": { "type": "string" },
+        "level": { "type": "string" },
+        "word": { "type": ["string", "null"], "description": "The type word as written, before resolution." },
+        "archetype": { "type": "string" },
+        "chain": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Derivation chain (spec 04 §4), so a host applies its own theme through the same fallback this renderer uses."
+        },
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "pairs": { "type": "object", "additionalProperties": { "type": "string" } },
+        "geometry": { "$ref": "#/$defs/geometry" },
+        "label": {
+          "type": "object",
+          "description": "Where a label WANTS to go. Arbitration is not in v1, so a host places its own.",
+          "required": ["anchor", "text"],
+          "additionalProperties": false,
+          "properties": {
+            "anchor": { "$ref": "#/$defs/point" },
+            "text": { "type": ["string", "null"] },
+            "key": { "type": "integer", "description": "Key number under labels: keyed (spec 07 §3)." }
+          }
+        },
+        "along": {
+          "type": "array",
+          "description": "Vertex ranges of geometry.points spliced from a followed feature (#81).",
+          "items": {
+            "type": "object",
+            "required": ["ref", "start", "end"],
+            "properties": {
+              "ref": { "type": "string" },
+              "refKey": { "type": "string" },
+              "start": { "type": "integer" },
+              "end": { "type": "integer" }
+            }
+          }
+        },
+        "perimeter": {
+          "type": "array",
+          "description": "The derived boundary of a cells union (spec 06 §3) — one entry per exposed cell side.",
+          "items": {
+            "type": "object",
+            "required": ["cell", "dir"],
+            "additionalProperties": false,
+            "properties": { "cell": { "$ref": "#/$defs/point" }, "dir": { "enum": ["n", "e", "s", "w"] } }
+          }
+        }
+      }
+    }
+  }
+}
