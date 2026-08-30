@@ -472,6 +472,48 @@ function edgePlacements(placements: Placement[]): Edge[] {
  * might have consumed it, because there are none: an address form nothing can
  * honour is a mistake wherever it appears.
  */
+/**
+ * An `at (x,y)` that frames nothing is refused (#368).
+ *
+ * Spec 05 §4's anchored outline is `island whidbey : near shore at (40,100)
+ * area (…)`, and its points are offsets "the referent-frame rule of ADR 0009
+ * and spec 02 §9" — it is the RELATION that gives `at` a frame. Written bare,
+ * with no relation before it, there is no frame: the shape is placed by its own
+ * coordinates and the anchor contributes nothing.
+ *
+ * `chartdown frame` emits exactly that fragment, so an author pasting the CLI's
+ * own output got a shape at negative coordinates, off-canvas, with `check`
+ * silent. A placement that renders identically to its own absence is the defect
+ * this project spent 0.7.0 removing; this is one more of them.
+ *
+ * NOT refused: `near <ref> at (…) area (…)` and `on <ref> at (…) area (…)`,
+ * which are the spec's own forms — measured, they carry a relational placement
+ * before the `at`, or fold the point into an `on`.
+ */
+function checkUnframedAnchor(placements: Placement[], line: number, diags: Diagnostic[]): void {
+  const shape = placements.find((p) => p.kind === "shape");
+  if (!shape || shape.kind !== "shape" || shape.frame) return;
+  // ONLY WHEN THE SHAPE BRINGS ITS OWN COORDINATES. A sized blob carries no
+  // points at all — `forest wood : blob at (200,150) size=120mi`, ADR 0025's
+  // "a blob declares an extent, not an outline" — so there the `at` IS the
+  // placement and is doing the whole job. Caught by the existing suite when the
+  // first version of this check refused it.
+  if (shape.args.length === 0) return;
+  const anchorAt = placements.findIndex((p) => p.kind === "relational" && p.form === "at");
+  if (anchorAt === -1) return;
+  // A relation BEFORE the `at` is what gives it a frame.
+  const framed = placements.slice(0, anchorAt).some((p) => p.kind === "relational" && p.form !== "at");
+  if (framed) return;
+  diags.push(
+    error(
+      line,
+      `this 'at' frames nothing — the shape carries its own coordinates, so the anchor is discarded. `
+      + `A shape's points are offsets from a REFERENT's frame: write 'near <ref> at (x,y) area …' `
+      + `(spec 05 §4), or drop the 'at' and give the shape absolute points`,
+    ),
+  );
+}
+
 function checkNoCorner(placements: Placement[], line: number, diags: Diagnostic[]): void {
   for (const edge of edgePlacements(placements)) {
     if (!CORNER_DIRS.has(edge.dir)) continue;
@@ -883,6 +925,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const gridless = checkGridlessAddress(predicate.placements, document.mapType, raw.line, diags);
     if (!gridless) {
       checkNoCorner(predicate.placements, raw.line, diags);
+      checkUnframedAnchor(predicate.placements, raw.line, diags);
       // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
       // one job -- "walls, doors, and windows live on cell edges" -- and at
       // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
