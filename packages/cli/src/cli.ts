@@ -49,6 +49,20 @@ if (command === "frame") {
     `${framed.derived ? " — anchor derived from the shape's centre" : ""}`,
   );
   console.log(`at (${framed.anchor.x},${framed.anchor.y}) area ${formatPoints(framed.offsets)}`);
+  // THIS IS A FRAGMENT, NOT A PREDICATE (#368).
+  //
+  // The offsets are framed against a REFERENT — spec 05 §4's worked line is
+  // `island whidbey : near shore at (40,100) area …`, and it is the `near shore`
+  // that gives `at` a frame to be relative to. Pasted without a relation, the
+  // offsets are read as absolute coordinates, so a negative one lands
+  // off-canvas and `check` says nothing. A reporter did exactly that, following
+  // this command's own output, and lost a shape into the north-west.
+  //
+  // Printed to stderr so the line above still pipes cleanly.
+  console.error(
+    `  paste after a relation, which is what the offsets are framed against:\n` +
+    `    marsh m1 "Name" : near <ref> at (${framed.anchor.x},${framed.anchor.y}) area …   (spec 05 §4)`,
+  );
   process.exit(0);
 }
 
