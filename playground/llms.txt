@@ -1,6 +1,6 @@
 # Chartdown
 
-> Chartdown is a plain-text, Markdown-inspired language for describing TTRPG maps — gridded battlemaps, hex exploration charts, and gridless region maps — that renders to SVG. A document is a `.cd` file or a ```chartdown fenced block; the line grammar is `subject : predicate`; rendering is deterministic and fail-loud. When helping a user write a map, read the single-file digest below first: it is the whole v0.7 language, maintained in lockstep with the normative spec.
+> Chartdown is a plain-text, Markdown-inspired language for describing TTRPG maps — gridded battlemaps, hex exploration charts, and gridless region maps — that renders to SVG. A document is a `.cd` file or a ```chartdown fenced block; the line grammar is `subject : predicate`; rendering is deterministic and fail-loud. When helping a user write a map, read the single-file digest below first: it is the whole v0.8 language, maintained in lockstep with the normative spec.
 
 ## The language in one file
 

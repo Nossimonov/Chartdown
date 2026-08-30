@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-30
+
 ### Changed
 
 - **BREAKING — an `at` that frames nothing is refused, and `chartdown frame` says what its output is** ([#368](https://github.com/Nossimonov/Chartdown/issues/368)). Found by an agent drafting a real map, following the CLI's own output. `chartdown frame` prints `at (10,8) area (-6,-3.5) …`, and spec 05 §4's worked line is `island whidbey : **near shore** at (40,100) area (…)` — it is the RELATION that gives `at` a frame for those offsets to be measured in. Pasted bare, as the command invites, the offsets were read as absolute coordinates: a negative one put the shape at `-246,-143.5`, off-canvas, and `check` said nothing. A marsh simply was not on the map. The anchor is now refused where the shape carries its own points, with a diagnostic naming both ways out — add the relation, or drop the `at` and give absolute points. `frame` prints the form its fragment belongs in, on stderr so the line still pipes. **Not** refused, and the distinction is the whole check: `near <ref> at (…) area (…)` and `on <ref> at (…) area (…)` are the spec's own forms, and a SIZED blob — `forest wood : blob at (200,150) size=120mi` — has no points, so its `at` is the placement ([ADR 0025](docs/decisions/0025-a-blob-declares-an-extent-not-an-outline.md)). The first version of this check refused that too, and the existing suite caught it. Breaking because a document that checked clean now errors; no committed example uses the form, and none has a negative shape coordinate at all. Whether a bare `at (x,y)` **should** frame a shape without a referent is a language question, filed separately — it is what `frame` implies and what a traced coastline wants, and it belongs in a proposal rather than inside a bug fix.
@@ -276,7 +278,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Nossimonov/Chartdown/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Nossimonov/Chartdown/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Nossimonov/Chartdown/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Nossimonov/Chartdown/compare/v0.4.0...v0.5.0
