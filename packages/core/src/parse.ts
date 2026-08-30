@@ -31,7 +31,7 @@ import { ARCHETYPE_FACETS, checkFacetValues, checkTypeWordNotArchetype, inferArc
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
-export const SPEC_VERSION = "0.7";
+export const SPEC_VERSION = "0.8";
 
 export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
