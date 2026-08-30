@@ -47,7 +47,7 @@ start party : J14..L15
 
 ![Ambush at Redford Crossing, rendered](examples/redford-crossing/redford-crossing.svg)
 
-*The player view — "Gruk" is `hidden`, so he and every GM note are stripped; rendering with `--mode gm` shows the whole truth. The full document with GM secrets lives in [examples/redford-crossing](examples/redford-crossing/), alongside a hexcrawl, a gridless region map, the two-continent [Sundered Reach](examples/sundered-reach/), a themed hexcrawl on a candy planet, and a three-story manor with a courtyard, cellar, and wall-walk.*
+*The player view — "Gruk" is `hidden`, so he and every GM note are stripped; rendering with `--mode gm` shows the whole truth. The full document with GM secrets lives in [examples/redford-crossing](examples/redford-crossing/), alongside a hexcrawl, a gridless region map, the two-continent [Sundered Reach](examples/sundered-reach/), a themed region map on a candy planet, and a three-story manor with a courtyard, cellar, and wall-walk.*
 
 Note the `ford` line: it never states a position. It's placed `on` the river and `on` the road, so it *derives* the crossing — move either path and the ford follows. The same anchoring works room-by-room: `table : on kitchen at C2..D2` arranges the kitchen by the kitchen.
 

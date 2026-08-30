@@ -26,8 +26,16 @@ describe("basics", () => {
     const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
     const pkg = (name: string): { version: string; dependencies?: Record<string, string> } =>
       JSON.parse(readFileSync(join(root, "packages", name, "package.json"), "utf8").replace(/^﻿/, "")) as { version: string; dependencies?: Record<string, string> };
-    const versions = ["core", "render-svg", "cli", "browser", "mcp", "action"].map((name) => pkg(name).version);
-    expect(new Set(versions).size).toBe(1); // the six packages version together
+    // DERIVED (#365): this was a hand-kept list, and it both included `action`
+    // — private, never published — and omitted `measure`, which is published.
+    // Every package versions with the monorepo except the Obsidian plugin,
+    // which is on its own lane by design, so that is the only exclusion.
+    const packageNames = readdirSync(join(root, "packages"))
+      .filter((n) => existsSync(join(root, "packages", n, "package.json")))
+      .filter((n) => n !== "obsidian");
+    expect(packageNames).toContain("measure"); // the one the old list forgot
+    const versions = packageNames.map((name) => pkg(name).version);
+    expect(new Set(versions).size, `versions: ${packageNames.map((n, i) => `${n}=${versions[i]}`).join(" ")}`).toBe(1);
     expect(pkg("render-svg").dependencies?.["@chartdown/core"]).toBe(versions[0]); // and the pin follows
     // The spec and the packages version together: SPEC_VERSION is major.minor.
     expect(SPEC_VERSION).toBe(versions[0]!.split(".").slice(0, 2).join("."));
@@ -41,6 +49,26 @@ describe("basics", () => {
     const readme = readFileSync(join(root, "README.md"), "utf8");
     expect(readme).toContain(`Spec v${SPEC_VERSION}`);
     expect(readme).toContain(`@chartdown/browser@${SPEC_VERSION}`);
+    // The SAME snippet on the browser package's own README (#365). npm publishes
+    // a package README regardless of the `files` array, so this is the install
+    // line on the public package page — and it sat at @0.1 from 0.1 to 0.7,
+    // while this identical assertion kept the root copy correct one file away.
+    expect(readFileSync(join(root, "packages", "browser", "README.md"), "utf8"))
+      .toContain(`@chartdown/browser@${SPEC_VERSION}`);
+  });
+
+  it("the MCP tools a document names are the tools that exist (#365)", () => {
+    // `llms.txt` and the mcp README both listed four tools; five are registered.
+    // `chartdown_frame` shipped unmentioned in the two places an agent looks.
+    // Checked against the source of truth rather than described.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const server = readFileSync(join(root, "packages", "mcp", "src", "mcp.ts"), "utf8");
+    const registered = [...new Set([...server.matchAll(/"(chartdown_[a-z]+)"/g)].map((m) => m[1]!))].sort();
+    expect(registered.length, "found no registered tools — the pattern moved").toBeGreaterThan(3);
+    for (const doc of [join("playground", "llms.txt"), join("packages", "mcp", "README.md")]) {
+      const named = [...new Set([...readFileSync(join(root, doc), "utf8").matchAll(/chartdown_[a-z]+/g)].map((m) => m[0]))].sort();
+      expect(named, `${doc} names a different tool set`).toEqual(registered);
+    }
   });
 
   it("the README's syntax sketch is a document that checks (#351)", () => {
@@ -84,6 +112,35 @@ describe("basics", () => {
     }
   });
 
+  it("no shipped source hardcodes a version (#365)", () => {
+    // `packages/mcp/src/mcp.ts` introduced the server to every MCP host as
+    // `version: "0.2.0"` while the package was 0.7.0, and shipped that way —
+    // the same stale 0.2 as #363, on a surface with more agent traffic than the
+    // file #363 fixed. It was on no list: `bump` had never heard of it, and
+    // #363's derived sweep filters .md/.ebnf, so a .ts is excluded by design.
+    //
+    // The rule is not "keep it in step" — it is that a version stated in source
+    // cannot be kept in step, so it must be DERIVED. `mcp.ts` now imports its
+    // own package.json and esbuild inlines it.
+    const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const offenders: string[] = [];
+    for (const pkg of readdirSync(join(root, "packages"))) {
+      const srcDir = join(root, "packages", pkg, "src");
+      if (!existsSync(srcDir)) continue;
+      const walk = (dir: string): string[] =>
+        readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+          e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]);
+      for (const file of walk(srcDir)) {
+        if (!file.endsWith(".ts") || file.endsWith(".test.ts")) continue;
+        const text = readFileSync(file, "utf8");
+        for (const m of text.matchAll(/version:\s*"(\d+\.\d+\.\d+)"/g)) {
+          offenders.push(`${file.slice(root.length + 1)} states version "${m[1]}" — derive it instead`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("llms.txt names the shipped version, and the corpus it describes (#363)", () => {
     // The FIRST file an agent reads: served at the site root, ahead of the
     // digest it points at. It said "the whole v0.2 language" at 0.7, and
@@ -107,8 +164,32 @@ describe("basics", () => {
       .filter((e) => e.isDirectory())
       .filter((e) => existsSync(join(root, "examples", e.name, `${e.name}.cd`)));
     const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+    const word = (n: number): string => WORDS[n] ?? String(n);
     expect(llms, `the corpus has ${maps.length} map documents`)
-      .toContain(`${WORDS[maps.length]} complete documents`);
+      .toContain(`${word(maps.length)} complete documents`);
+
+    // AND THE SENTENCE, NOT ONLY THE NUMERAL (#365). Swapping one example for
+    // another of a different kind keeps the count right and makes the
+    // description wrong — which is how the old bullet rotted: its word list
+    // went stale while "five" stayed briefly true.
+    const kinds: Record<string, number> = {};
+    for (const e of maps) {
+      const first = readFileSync(join(root, "examples", e.name, `${e.name}.cd`), "utf8")
+        .split("\n").find((l) => l.startsWith("map:"));
+      const kind = first?.replace("map:", "").trim() ?? "unknown";
+      kinds[kind] = (kinds[kind] ?? 0) + 1;
+    }
+    expect(llms, `the corpus holds ${kinds.battlemap} battlemaps`).toContain(`${word(kinds.battlemap ?? 0)} battlemaps`);
+    expect(llms, `the corpus holds ${kinds.region} region maps`).toContain(`${word(kinds.region ?? 0)} gridless region maps`);
+
+    // NO SUPERSEDED VERSION IS NAMED ANYWHERE IN IT. The assertion above matches
+    // one PHRASING, so "Targets Spec v0.2" escaped it; this catches a stale
+    // version however it is worded. The licence is the one legitimate exception.
+    for (const [, v] of llms.replace(/CC-BY-4\.0/g, "").matchAll(/\bv?(\d+\.\d+)(?:\.\d+)?\b/g)) {
+      const [a, b] = v!.split(".").map(Number);
+      const [x, y] = SPEC_VERSION.split(".").map(Number);
+      expect(a! < x! || (a === x && b! < y!), `llms.txt names superseded version ${v}`).toBe(false);
+    }
   });
 
   it("no shipped doc calls a released version unreleased (#331)", () => {
