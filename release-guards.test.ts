@@ -74,10 +74,18 @@ describe("the matcher against this repository's real history", () => {
     expect(breakingEntries(sectionOf(v as string))).toHaveLength(n as number);
   });
 
-  it("finds every one of them, and nothing else in the file says BREAKING", () => {
-    const all = [...CHANGELOG.matchAll(/BREAKING/g)].length;
-    const matched = breakingEntries(CHANGELOG).length;
-    expect(matched).toBe(all); // no occurrence escapes the bullet form
+  it("no BREAKING bullet escapes the matcher", () => {
+    // This asserted that the word appeared NOWHERE but a marked bullet, which
+    // was true when written and is not an invariant: #367's entry says "read as
+    // a fix rather than BREAKING under ADR 0041" — a legitimate sentence
+    // explaining why a change is NOT breaking, and the kind of prose this
+    // changelog is full of.
+    //
+    // What matters is that no marked bullet is MISSED, so that is what is
+    // asserted now.
+    const bulletLines = CHANGELOG.split("\n").filter((l) => /^- \*\*BREAKING\b/.test(l.trim()));
+    expect(bulletLines.length, "no BREAKING bullets found — the anchor moved").toBeGreaterThan(10);
+    expect(breakingEntries(CHANGELOG)).toHaveLength(bulletLines.length);
   });
 
   it("the live [Unreleased] section is consistent with the version being prepared", () => {
