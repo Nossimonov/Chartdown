@@ -11,7 +11,7 @@
 // The Obsidian plugin versions on its own lane, deliberately.
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { refuseBump } from "./release-guards.mjs";
+import { refuseBump, refuseDriftedSection, releasedSection } from "./release-guards.mjs";
 
 const next = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(next ?? "")) {
@@ -72,6 +72,25 @@ const today = new Date().toISOString().slice(0, 10);
   if (refusal) {
     console.error(refusal);
     process.exit(1);
+  }
+
+  // A RELEASED SECTION IS FROZEN (#378). Twice now an entry aimed at
+  // [Unreleased] landed in a shipped section instead, crediting a release with
+  // a fix it does not contain and guaranteeing that fix reaches no release's
+  // notes at all, since only [Unreleased] is ever rolled. Checked here because
+  // this is the last moment before the sections stop being editable.
+  for (const [, version] of changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)) {
+    let tagged;
+    try {
+      tagged = execSync(`git show v${version}:CHANGELOG.md`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      continue; // no such tag reachable — nothing to compare against
+    }
+    const drift = refuseDriftedSection(version, releasedSection(changelog, version), releasedSection(tagged, version));
+    if (drift) {
+      console.error(drift);
+      process.exit(1);
+    }
   }
 }
 
