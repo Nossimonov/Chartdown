@@ -19,9 +19,9 @@
     "@rgrove/parse-xml": "^4.2.3",
     "@types/node": "^26.2.0",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.11.2",
+    "happy-dom": "^20.11.6",
     "typescript": "^7.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"
