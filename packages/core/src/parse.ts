@@ -490,6 +490,63 @@ function edgePlacements(placements: Placement[]): Edge[] {
  * which are the spec's own forms — measured, they carry a relational placement
  * before the `at`, or fold the point into an `on`.
  */
+/**
+ * The map's own unit, or null when it declares none (#376).
+ *
+ * A gridless map states it in `extent: 900x600mi`; a grid map in `scale: 5ft`.
+ * Either may omit it — `extent: 800x600`, `scale: 5` are both grammar-legal —
+ * and a map with no unit has nothing for an explicit one to disagree with.
+ */
+function mapUnit(header: HeaderEntry[]): string | null {
+  const extent = header.find((h) => h.key === "extent")?.value;
+  const fromExtent = extent ? /^\d+x\d+([a-z]+)$/.exec(extent)?.[1] : undefined;
+  if (fromExtent) return fromExtent;
+  const scale = header.find((h) => h.key === "scale")?.value;
+  return (scale ? /^\d+(?:\.\d+)?([a-z]+)$/.exec(scale)?.[1] : undefined) ?? null;
+}
+
+/**
+ * An explicit unit must be the map's own (#376, spec 02 §1).
+ *
+ * > Explicit units (`70mi`, `20ft`) are always legal and MUST match the map's
+ * > unit dimension.
+ *
+ * `grammar.ebnf` said the same in a parenthetical, and nothing implemented it:
+ * `measureToNumber` reads the digits and discards the unit entirely. So on a
+ * `20x14mi` map, `width=60ft` drew a stroke THREE TIMES THE WIDTH OF THE MAP —
+ * a 5280x error, silently — and `width=1.5km` drew exactly what `width=1.5mi`
+ * drew. An invented unit rode through the same way.
+ *
+ * Refusing rather than converting is the owner's ruling (#376): a closed unit
+ * table is unavoidable either way, since `furlongs` has to be rejected
+ * regardless, and refusal needs no table at all.
+ *
+ * Scoped by the VALUE'S SHAPE — digits then letters — rather than by a list of
+ * measure-valued parameters, because no such list exists and inventing one
+ * would go stale the first time a facet was added. `facing=south` has no
+ * leading digits, `size=2x2` is not this shape, and `detail=map.cd` is neither.
+ */
+function checkUnitMatchesMap(
+  pairs: Pair[],
+  unit: string | null,
+  line: number,
+  diags: Diagnostic[],
+): void {
+  if (unit === null) return;
+  for (const pair of pairs) {
+    const written = /^\d+(?:\.\d+)?([a-z]+)$/.exec(pair.value)?.[1];
+    if (written === undefined || written === unit) continue;
+    diags.push(
+      error(
+        line,
+        `'${pair.key}=${pair.value}' is in ${written}, and this map is in ${unit} — `
+        + `an explicit unit must be the map's own (spec 02 §1). `
+        + `Write it in ${unit}, or drop the unit to mean ${unit}`,
+      ),
+    );
+  }
+}
+
 function checkUnframedAnchor(placements: Placement[], line: number, diags: Diagnostic[]): void {
   const shape = placements.find((p) => p.kind === "shape");
   if (!shape || shape.kind !== "shape" || shape.frame) return;
@@ -926,6 +983,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     if (!gridless) {
       checkNoCorner(predicate.placements, raw.line, diags);
       checkUnframedAnchor(predicate.placements, raw.line, diags);
+      checkUnitMatchesMap(predicate.pairs, mapUnit(document.header), raw.line, diags);
       // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
       // one job -- "walls, doors, and windows live on cell edges" -- and at
       // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
