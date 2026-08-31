@@ -20,6 +20,17 @@ import { impassableCells } from "./walls";
 import type { Model } from "./model";
 
 /**
+ * The stdlib words that describe a CHANGE OF FLOOR, and so are a way into the
+ * room they stand in (#301, ADR 0052, spec 04 §2's load-bearing table).
+ *
+ * Spec 06 §5 names three traversable connections. `slope` is deliberately not
+ * here: it is a graded surface *within* one level — `slope : terrain`, where
+ * the other two are `: feature` — and walking up one does not arrive from a
+ * storey the map never drew, which is the whole reason the other two count.
+ */
+const INGRESS_WORDS = ["stairs", "ramp"] as const;
+
+/**
  * Warning-level only, by decision (#80). These reason about intent rather than
  * legality, so a false positive must cost an author a line of output and never
  * a blocked render.
@@ -232,7 +243,22 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
     }
   }
 
-  // 3 — unreachable-room: no opening on its perimeter and no connector inside.
+  // 3 — unreachable-room: no opening on its perimeter, and nothing inside it
+  // that gets you in — a level connector, or a stair.
+  //
+  // Which cell an entity occupies: the explicit `at=` landing of spec 06 §8 if
+  // it has one, else its own address placements. Those are already resolved
+  // against a referent by the time they reach here, so `on cellar at A1`
+  // correctly tests the cellar's B2 rather than the sheet's A1.
+  const landsIn = (e: Pick<EntityNode, "pairs" | "placements">, cells: ReturnType<typeof structureCells>): boolean => {
+    const landing = e.pairs.find((p) => p.key === "at")?.value ?? null;
+    const addresses = e.placements.filter((p): p is Address => p.kind === "address");
+    const targets = landing ? [landing] : addresses.map((a) => `${a.col}${a.row}`);
+    return targets.some((t) => {
+      const m = /^([A-Z]+)(\d+)$/.exec(t);
+      return m !== null && cells.has(cellKey({ col: colNum(m[1]!), row: Number(m[2]) }));
+    });
+  };
   for (const s of structures) {
     const cells = structureCells(s);
     if (cells.size === 0) continue;
@@ -253,17 +279,18 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       // (battlemap.ts), and the two must agree or a shaft's middle floors warn
       // unreachable while the render draws a landing into them (#322).
       const reachesHere = e.level === level || levelSpan(ctx?.levels ?? [level], to).includes(level);
-      if (!reachesHere) return false;
-      const atValue = e.pairs.find((p) => p.key === "at")?.value;
-      const landing = atValue ?? null;
-      const addresses = e.placements.filter((p): p is Address => p.kind === "address");
-      const targets = landing ? [landing] : addresses.map((a) => `${a.col}${a.row}`);
-      return targets.some((t) => {
-        const m = /^([A-Z]+)(\d+)$/.exec(t);
-        return m !== null && cells.has(cellKey({ col: colNum(m[1]!), row: Number(m[2]) }));
-      });
+      return reachesHere && landsIn(e, cells);
     });
-    if (!hasOpening && !hasConnector) {
+    // A STAIR IS A WAY IN, with or without `to=` (#301, ADR 0052). The test
+    // above is for LEVEL CONNECTION, and a SINGLE-LEVEL map has no level to
+    // point at — so a cellar whose only entrance was its stair reported that
+    // nothing could reach it, and the only ways to silence it were to invent a
+    // door the map does not have or to invent a second level to connect to.
+    // Matched through the chain, so `ladder : stairs` counts (spec 04 §2).
+    const hasIngress = on(all).some(
+      (e) => INGRESS_WORDS.some((w) => model.chainOf(e.typeWord).includes(w)) && landsIn(e, cells),
+    );
+    if (!hasOpening && !hasConnector && !hasIngress) {
       diagnostics.push({
         severity: "warning",
         line: s.line,

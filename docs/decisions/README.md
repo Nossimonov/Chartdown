@@ -62,3 +62,4 @@ A contentious decision that closes off alternatives — syntax choices, technolo
 | [0049](0049-a-cell-address-on-a-gridless-map-is-refused-not-dropped.md) | A cell address on a gridless map is refused, not dropped; a grid-only header key that has nothing to do warns | Accepted |
 | [0050](0050-a-pool-that-fills-its-field-is-reported-not-redrawn.md) | A pool that fills its whole map field is reported, not redrawn | Accepted |
 | [0051](0051-the-renderers-answer-is-data-before-it-is-ink.md) | The renderer's answer is data before it is ink: `resolveScene` exports resolved geometry in map units, and `render` consumes the same pass | Accepted |
+| [0052](0052-a-stair-is-a-way-in.md) | A stair is a way in: `stairs` and `ramp` become load-bearing words, so a single-level room entered by its stair checks clean | Accepted |
