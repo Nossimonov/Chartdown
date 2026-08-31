@@ -14,7 +14,7 @@
 import { parse, type Diagnostic, type DocumentNode } from "@chartdown/core";
 import { CELL, cellCenter, MARGIN, measureToCells, rangeRect, titleBand } from "./grid";
 import { render } from "./index";
-import { buildModel, pairOf, type RenderMode } from "./model";
+import { buildModel, emitterOf, pairOf, type RenderMode } from "./model";
 import { Theme } from "./theme";
 import type { XY } from "./util";
 import { collectWalls } from "./walls";
@@ -59,10 +59,12 @@ const AMBIENT_LIGHT: Record<string, string> = {
   daylight: "ffffffff",
 };
 
-function ambientLight(doc: DocumentNode, header: Map<string, string>, level: string | undefined): string {
+function ambientLight(doc: DocumentNode, header: Map<string, string>, level: string | undefined, isLight: (word: string) => boolean): string {
   let value: string | undefined;
   for (const h of doc.header) {
-    if (h.key !== "light") continue;
+    // A derived ambient is still an ambient (#395, ADR 0016): `glow: dark`,
+    // where `glow : light` darkened the SVG but exported a fully-lit scene.
+    if (!isLight(h.key)) continue;
     if (h.qualifier === undefined) value = h.value;
     else if (level !== undefined && h.qualifier === level) return AMBIENT_LIGHT[h.value] ?? "ffffffff";
   }
@@ -109,9 +111,18 @@ export function exportUvtt(doc: DocumentNode, options: UvttOptions = {}): UvttRe
 
   const lights: Record<string, unknown>[] = [];
   for (const e of panelModel.entities) {
-    // Entity pair overrides the vocab facet default (#64, spec 06 §2).
-    const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
-    if (light === undefined) continue;
+    // Entity pair overrides the vocab facet default (#64, spec 06 §2), and
+    // the parameter resolves through the VOCABULARY rather than the literal
+    // key `light` (#395, spec 04 §5) — so `glow : light` exports.
+    //
+    // Scoped to fields deriving from `light`: UVTT `lights` means
+    // ILLUMINATION, so a setting's `radiation : field` emitter must not arrive
+    // in a VTT as a lamp. It still renders as ink (spec 04 §5); this is the
+    // interop boundary, not a second class of field.
+    const emitter = emitterOf(model, e);
+    if (emitter === undefined) continue;
+    if (!model.chainOf(emitter.field).includes("light")) continue;
+    const light = emitter.value;
     const address = e.placements.find((p) => p.kind === "address");
     const range = e.placements.find((p) => p.kind === "range");
     let center: XY | null = null;
@@ -150,7 +161,7 @@ export function exportUvtt(doc: DocumentNode, options: UvttOptions = {}): UvttRe
       closed: p.closed,
       freestanding: false,
     })),
-    environment: { baked_lighting: false, ambient_light: ambientLight(doc, model.header, level) },
+    environment: { baked_lighting: false, ambient_light: ambientLight(doc, model.header, level, (w) => model.chainOf(w).includes("light")) },
     lights,
     image: options.image ?? "",
   };
