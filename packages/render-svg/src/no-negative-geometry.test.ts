@@ -29,12 +29,21 @@ describe("no render emits a negative geometry attribute", () => {
     expect(examples.length).toBeGreaterThan(5); // guards the sweep below
   });
 
-  it.each(examples)("%s, both modes", (name) => {
-    const src = readFileSync(join(root, "examples", name, `${name}.cd`), "utf8");
-    for (const mode of ["gm", "player"] as const) {
-      const svg = renderSource(src, { mode }).svg;
-      const hit = NEGATIVE.exec(svg);
-      expect(hit?.[0], `${name} (${mode}) emitted ${hit?.[0]}`).toBeUndefined();
+  it.each(examples)("%s, both modes, with and without its committed theme", (name) => {
+    const dir = join(root, "examples", name);
+    const src = readFileSync(join(dir, `${name}.cd`), "utf8");
+    // THE THEMED ROUTE COUNTS (#375 review). This swept only the default theme,
+    // while its own comment claimed to assert the property rather than one
+    // route to it — and a theme is the other route a number reaches an
+    // attribute. A malformed theme still gets there; that is its own issue.
+    const themes = readdirSync(dir).filter((f) => f.endsWith(".theme.cd"));
+    for (const theme of [undefined, ...themes]) {
+      const opts = theme === undefined ? {} : { theme: readFileSync(join(dir, theme), "utf8") };
+      for (const mode of ["gm", "player"] as const) {
+        const svg = renderSource(src, { ...opts, mode }).svg;
+        const hit = NEGATIVE.exec(svg);
+        expect(hit?.[0], `${name} (${mode}${theme ? ", " + theme : ""}) emitted ${hit?.[0]}`).toBeUndefined();
+      }
     }
   });
 
