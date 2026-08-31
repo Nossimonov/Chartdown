@@ -47,6 +47,27 @@ describe("no render emits a negative geometry attribute", () => {
     }
   });
 
+
+  it("a MALFORMED theme cannot reach the output either (#388)", () => {
+    // The route the review found open: this test swept renders, and a theme is
+    // the other way a number reaches an attribute. Theme values are now
+    // validated and dropped at parse time, so the defaults apply — but the
+    // property is asserted here rather than assumed from that.
+    const bad = ["kind: theme", "", "[theme]",
+      "building : stroke=#2e2217 width=-4",
+      "light.dark : fill=#001122 opacity=80",
+      "forest : fill=#2f4f2f dash=abc"].join("\n");
+    const src = ["map: battlemap", "grid: square 12x10", "scale: 5ft", "light: dark", "",
+      "[terrain]", "earth : area A1..L10", "forest : area A1..C3", "",
+      "[structures]", "building room1 : B2..F6"].join("\n");
+    for (const mode of ["gm", "player"] as const) {
+      const svg = renderSource(src, { theme: bad, mode }).svg;
+      expect(NEGATIVE.exec(svg)?.[0], `${mode} emitted a negative`).toBeUndefined();
+      expect(svg, `${mode} emitted an out-of-range opacity`).not.toContain('opacity="80"');
+      expect(svg, `${mode} emitted a non-numeric dash`).not.toContain('stroke-dasharray="abc"');
+    }
+  });
+
   it("and the check is not vacuous", () => {
     // Positive control: the pattern must actually match a negative attribute,
     // or the sweep above proves nothing.
