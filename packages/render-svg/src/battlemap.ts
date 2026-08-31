@@ -6,7 +6,7 @@
 
 import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, scaleOf, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
-import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
+import { anchorAttr, emitterOf, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
 import { coherenceLints } from "./lints";
@@ -506,8 +506,17 @@ export function renderBattlemap(
    * the choice for itself they could disagree, and the identical branch stood
    * in three places.
    */
-  function emitterShape(at: XY, radius: number): EmitterCover["shape"] {
-    const occluded = model.facetOf("light", "occluded") ?? "sight";
+  /** A surface lookup that walks a word's derivation chain (spec 04 §4). */
+  function chainSurface(word: string, key: "fill" | "stroke", fallback: string): string {
+    for (const w of model.chainOf(word)) {
+      const found = model.theme.surface(w, key, "");
+      if (found) return found;
+    }
+    return fallback;
+  }
+
+  function emitterShape(at: XY, radius: number, field: string): EmitterCover["shape"] {
+    const occluded = model.facetOf(field, "occluded") ?? "sight";
     if (occluded !== "none" && sightBlockers.length > 0) {
       return { kind: "poly", pts: visibilityPolygon(at, radius, sightBlockers) };
     }
@@ -532,8 +541,10 @@ export function renderBattlemap(
    * here would move renders this change promises not to move, and would ship an
    * unfiled fix inside a filed one. Left exactly as it was, on purpose.
    */
-  function emitterPool(at: XY, radius: number): string {
-    const fill = model.theme.surface("light", "fill", "#ffd98a");
+  function emitterPool(at: XY, radius: number, field: string): string {
+    // Walk the field's CHAIN, so a themed `light.fill` still reaches
+    // `glow : light`, and a field's own entry wins where it has one (#395).
+    const fill = chainSurface(field, "fill", "#ffd98a");
     return sightBlockers.length > 0
       ? el("polygon", { points: pointsAttr(visibilityPolygon(at, radius, sightBlockers)), fill, opacity: 0.22, "clip-path": clipToField() })
       : el("circle", { cx: at.x, cy: at.y, r: radius, fill, opacity: 0.22, "clip-path": clipToField() });
@@ -2051,12 +2062,12 @@ export function renderBattlemap(
       const footprintParts: string[] = [titleEl];
       if (!e.name && !titleEl && e.typeWord) footprintParts.unshift(svgTitle(e.typeWord));
       // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.
-      const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
-      if (light) {
-        const radius = measureToCells(light, model) * CELL;
-        const shape = emitterShape(center, radius);
-        noteHole("light", emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: light, line: e.line });
-        footprintParts.push(emitterPool(center, radius));
+      const emitter = emitterOf(model, e);
+      if (emitter) {
+        const radius = measureToCells(emitter.value, model) * CELL;
+        const shape = emitterShape(center, radius, emitter.field);
+        noteHole(emitter.field, emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: emitter.value, line: e.line });
+        footprintParts.push(emitterPool(center, radius, emitter.field));
       }
       const themed0 = model.theme.glyphFor(chainR, center.x, center.y);
       const glyphless = !themed0 && !["campfire", "torch", "brazier", "lantern", "wagon", "stairs", "ramp"].some((w) => chainR.includes(w));
@@ -2105,12 +2116,12 @@ export function renderBattlemap(
       return;
     }
     // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told otherwise.
-    const light = pairOf(e.pairs, "light") ?? model.facetOf(e.typeWord, "light");
-    if (light) {
-      const radius = measureToCells(light, model) * CELL;
-      const shape = emitterShape(c, radius);
-      noteHole("light", emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: light, line: e.line });
-      parts.push(emitterPool(c, radius));
+    const emitter = emitterOf(model, e);
+    if (emitter) {
+      const radius = measureToCells(emitter.value, model) * CELL;
+      const shape = emitterShape(c, radius, emitter.field);
+      noteHole(emitter.field, emitterHole(shape), { shape, label: e.name ?? e.ids[0] ?? e.typeWord ?? "emitter", measure: emitter.value, line: e.line });
+      parts.push(emitterPool(c, radius, emitter.field));
     }
     const chain = model.chainOf(e.typeWord);
     const themedGlyph = model.theme.glyphFor(chain, c.x, c.y);

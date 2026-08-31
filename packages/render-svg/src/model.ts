@@ -55,6 +55,18 @@ export interface Model {
   archetypeOf(word: string | null): string | null;
   /** Vocab facet default for a word (chain-walked); entity pairs override it. */
   facetOf(word: string | null, key: string): string | undefined;
+  /**
+   * Every word that is a FIELD (spec 04 §5) — the emitter parameter namespace.
+   *
+   * A field's name IS its parameter, so the set of legal emitter keys is
+   * derived from the vocabulary and cannot be a static list. The renderer read
+   * the literal key `light` instead, so `glow : light` emitted nothing and a
+   * setting's own `radiation : field` was read, discarded, and never mentioned
+   * (#395).
+   */
+  fieldWords(): Set<string>;
+  /** Every facet key a word declares, unioned along its derivation chain (#195). */
+  facetKeysOf(word: string | null): Set<string>;
   /** Declared states for a word, unioned along its derivation chain (spec 04 §2). */
   statesOf(word: string | null): Set<string>;
   /**
@@ -72,6 +84,35 @@ export function entityAnchor(e: { ids: string[]; name: string | null }): string 
   if (e.ids.length > 0) return e.ids[0]!;
   if (e.name) return slugify(e.name);
   return null;
+}
+
+/**
+ * The emitter on an entity: the `key=value` pair whose KEY IS A FIELD WORD,
+ * else the vocabulary facet default of the same shape (#395, spec 04 §5).
+ *
+ * A field's name IS its parameter, so this namespace is derived from the
+ * vocabulary and cannot be a static list — `radiation : field` is what makes
+ * `radiation=40ft` mean something. Reading the literal key `light` instead
+ * meant `glow : light` drew no pool while its ambient wash still darkened the
+ * sheet (a dark room with an invisible lamp, worse than either half alone),
+ * and a setting's own field was read, discarded and never mentioned — the
+ * exact failure spec 04 §2's #195 unconsumed-key warning exists to close, and
+ * which it cannot catch here because a declared field word IS consumable.
+ *
+ * ADR 0016 requires the chain, not the word: `glow : light` is a light.
+ */
+export function emitterOf(model: Model, e: EntityNode): { field: string; value: string } | undefined {
+  const fields = model.fieldWords();
+  const pair = e.pairs.find((p) => fields.has(p.key));
+  if (pair) return { field: pair.key, value: pair.value };
+  // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told
+  // otherwise, and so does a setting's own `reactor : feature radiation=40ft`.
+  for (const key of model.facetKeysOf(e.typeWord)) {
+    if (!fields.has(key)) continue;
+    const value = model.facetOf(e.typeWord, key);
+    if (value !== undefined) return { field: key, value };
+  }
+  return undefined;
 }
 
 export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, diagnostics: Diagnostic[] = []): Model {
@@ -143,6 +184,9 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   const archetypeOf = (word: string | null): string | null => (word ? vocab.archetypeOf(word) : null);
   const facetOf = (word: string | null, key: string): string | undefined =>
     word ? vocab.facetOf(word, key) : undefined;
+  const fieldWords = (): Set<string> => vocab.fieldWords();
+  const facetKeysOf = (word: string | null): Set<string> =>
+    word ? vocab.facetKeysOf(word) : new Set<string>();
   const statesOf = (word: string | null): Set<string> => (word ? vocab.statesOf(word) : new Set<string>());
 
   const labelsHeader = header.get("labels");
@@ -179,7 +223,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   // named rooms — not "a map in key mode", which renumbers every display name.
   // In `names` mode only explicitly pinned entities take a number.
   const keys = labelsMode === "none" ? new Map<object, number>() : assignKeys(entities, hexLines, diagnostics, labelsMode === "keyed");
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, statesOf, resolvedNotes };
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, fieldWords, facetKeysOf, facetOf, statesOf, resolvedNotes };
 }
 
 /**
