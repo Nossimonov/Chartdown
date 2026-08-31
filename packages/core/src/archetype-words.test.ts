@@ -131,7 +131,7 @@ ${parent} : C3..F6
 d1 : at C3`);
     expect(diagnostics(doc(`structure "Hall"`))).toEqual([
       expect.stringMatching(/'structure' is an archetype/),
-      "unresolved reference 'd1' — no earlier entity has this id",
+      "unresolved reference 'd1' — no earlier entity has this id or display name",
     ]);
     // The control: beneath a parent that stands, the id registers as always.
     expect(diagnostics(doc(`hall "Hall"`))).toEqual([]);
