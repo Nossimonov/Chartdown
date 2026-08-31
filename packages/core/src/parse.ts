@@ -526,6 +526,51 @@ function mapUnit(header: HeaderEntry[]): string | null {
  * would go stale the first time a facet was added. `facing=south` has no
  * leading digits, `size=2x2` is not this shape, and `detail=map.cd` is neither.
  */
+/**
+ * A value that is plainly an attempted number, and is not one (#375).
+ *
+ * `measureToNumber` matches `^(\d+(?:\.\d+)?)` and returns 0 when nothing
+ * matches, so a malformed measure is not refused — it becomes zero, and the
+ * feature silently disappears. `check` said `ok` for all of these:
+ *
+ *   width=.5mi   -> 0     half a mile, written the way people write it
+ *   width=+2     -> 0
+ *   width=1e3    -> 41    parses `1`, discards `e3` — draws something WRONG
+ *   width=-2     -> 0 on a region map, and on a battlemap `stroke-width="-54.4"`,
+ *                  which is invalid SVG: consumers may drop the attribute, drop
+ *                  the element, or refuse the document
+ *
+ * SCOPED TO UNAMBIGUOUS NUMERIC MALFORMATIONS, and deliberately no wider. A
+ * bare word (`width=abc`, `width=mi`) is indistinguishable from a legitimate
+ * word value like `facing=south` without a list of which parameters take
+ * measures — and no such list exists. Inventing one would go stale the first
+ * time a facet was added, which is the defect class this cycle was made of.
+ * Those still become 0, and #375 says so rather than pretending otherwise.
+ *
+ * A NEGATIVE is safe to refuse without that list: no pair value is written
+ * negative anywhere in the corpus or the spec, and the negative numbers that
+ * ARE legitimate — shape offsets like `(-2,-40)` — are points inside a
+ * placement, never a `key=value` pair.
+ */
+function checkMalformedMeasure(pairs: Pair[], line: number, diags: Diagnostic[]): void {
+  for (const pair of pairs) {
+    const v = pair.value;
+    let why: string | null = null;
+    if (/^-\d/.test(v)) why = "a magnitude cannot be negative";
+    else if (/^\+\d/.test(v)) why = "drop the leading '+'";
+    else if (/^\.\d/.test(v)) why = `write it as '0${v}'`;
+    else if (/^\d+(?:\.\d+)?e[+-]?\d/i.test(v)) why = "exponent notation is not a measure; write the number out";
+    if (why === null) continue;
+    diags.push(
+      error(
+        line,
+        `'${pair.key}=${v}' is not a measure — ${why}. `
+        + `A measure is a number with an optional unit, like '2' or '20ft' (spec 02 §1)`,
+      ),
+    );
+  }
+}
+
 function checkUnitMatchesMap(
   pairs: Pair[],
   unit: string | null,
@@ -984,6 +1029,7 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
       checkNoCorner(predicate.placements, raw.line, diags);
       checkUnframedAnchor(predicate.placements, raw.line, diags);
       checkUnitMatchesMap(predicate.pairs, mapUnit(document.header), raw.line, diags);
+      checkMalformedMeasure(predicate.pairs, raw.line, diags);
       // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
       // one job -- "walls, doors, and windows live on cell edges" -- and at
       // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)

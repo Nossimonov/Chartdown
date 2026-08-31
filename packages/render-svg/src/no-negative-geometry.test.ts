@@ -1,0 +1,48 @@
+/**
+ * No negative geometry attribute reaches the output (#375).
+ *
+ * A negative `stroke-width`, `r`, `width` or `height` is invalid SVG: a
+ * consumer may drop the attribute, drop the element, or refuse the document.
+ * `width=-2` produced `stroke-width="-54.4"` and `size=-2` produced
+ * `r="-24.32"`, both with `check` reporting ok.
+ *
+ * The parser now refuses a negative pair value, so this asserts the PROPERTY
+ * rather than that one route to it — a negative arriving from arithmetic
+ * instead of from a document would be just as invalid, and nothing else was
+ * watching for it.
+ */
+import { describe, expect, it } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { renderSource } from "./index";
+
+const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+const NEGATIVE = /(stroke-width|width|height|\br|rx|ry)="-[0-9.]/;
+
+describe("no render emits a negative geometry attribute", () => {
+  const examples = readdirSync(join(root, "examples"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  it("finds the corpus at all", () => {
+    expect(examples.length).toBeGreaterThan(5); // guards the sweep below
+  });
+
+  it.each(examples)("%s, both modes", (name) => {
+    const src = readFileSync(join(root, "examples", name, `${name}.cd`), "utf8");
+    for (const mode of ["gm", "player"] as const) {
+      const svg = renderSource(src, { mode }).svg;
+      const hit = NEGATIVE.exec(svg);
+      expect(hit?.[0], `${name} (${mode}) emitted ${hit?.[0]}`).toBeUndefined();
+    }
+  });
+
+  it("and the check is not vacuous", () => {
+    // Positive control: the pattern must actually match a negative attribute,
+    // or the sweep above proves nothing.
+    expect(NEGATIVE.test('<circle r="-24.32"/>')).toBe(true);
+    expect(NEGATIVE.test('<polyline stroke-width="-54.4"/>')).toBe(true);
+    expect(NEGATIVE.test('<circle r="24.32"/>')).toBe(false);
+  });
+});
