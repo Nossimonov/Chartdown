@@ -4,6 +4,10 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING — an explicit unit must be the map's own** ([#376](https://github.com/Nossimonov/Chartdown/issues/376)). Spec 02 §1 has always said *"explicit units are always legal and MUST match the map's unit dimension"*, and `grammar.ebnf` said it too in a parenthetical. Nothing implemented either: `measureToNumber` read the digits and **discarded the unit entirely**. So on a `20x14mi` map, `width=60ft` — a perfectly ordinary thing for a GM to write — drew a stroke **three times the width of the map**, blacking the sheet out. A 5280× error, in silence. `width=1.5km` drew exactly what `width=1.5mi` drew, and `3furlongs` rode through as though the unit had been understood. [#367](https://github.com/Nossimonov/Chartdown/issues/367) did not cause this but made it reachable: a unit-suffixed width used to be `NaN` and drew nothing, so loud garbage replaced quiet garbage. This replaces both. **Refused, not converted** — the owner's ruling. A closed unit table is unavoidable either way, since an invented unit has to be rejected regardless, and refusal needs no table. The diagnostic names the map's unit and both ways out. Scoped by the value's **shape** rather than by a list of measure-valued parameters, because no such list exists and one would go stale the first time a facet was added; `facing=south`, `size=2x2` and `detail=map.cd` are untouched, asserted directly. A map that declares no unit — `extent: 800x600` is grammar-legal — has nothing to disagree with and is left alone. The rule is now in `digest.md`, which had never carried it, so an agent meets it before the error rather than after. No committed example moves; all nine still check clean.
+
 ## [0.8.0] — 2026-08-30
 
 ### Changed
