@@ -1,6 +1,6 @@
 # Fairwater Manor
 
-**Status: spec-aligned** — valid under spec v0.6 (sections 01–08). Fulfills [#28](https://github.com/Nossimonov/Chartdown/issues/28): the flagship battlemap showcase, and the playground's opening document.
+**Status: spec-aligned** — valid under spec v0.8 (sections 01–08). Fulfills [#28](https://github.com/Nossimonov/Chartdown/issues/28): the flagship battlemap showcase, and the playground's opening document.
 
 ## The scene
 

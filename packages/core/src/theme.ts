@@ -17,6 +17,42 @@ export const THEME_PROPS = new Set(["fill", "stroke", "width", "dash", "opacity"
  * That ambiguity is structural rather than anybody's choice, so the spelling
  * for it is removed rather than defaulted.
  */
+/**
+ * The numeric appearance properties, and what each will accept (#388).
+ *
+ * Spec 08 §3's `THEME_PROPS` is a CLOSED set of nine, so unlike a document's
+ * `key=value` pairs there is no list to invent here and nothing to go stale —
+ * which is exactly why #375 could not do this and this can. `bank=` has been
+ * validated against its own closed set since ADR 0034; these were simply never
+ * given the same treatment, and every one of them was read later with
+ * `Number(...) || <default>` or pasted verbatim into an SVG attribute.
+ *
+ * What that cost: `opacity=80` — a themer reaching for a percentage — emitted
+ * `opacity="80"`, which consumers clamp to 1, so the darkness wash blacked the
+ * whole sheet out. `width=-4` emitted `stroke-width="-4"`, invalid SVG. And
+ * `width=abc` silently became the default, so the line the themer wrote did
+ * nothing at all and said nothing about it.
+ *
+ * WARN AND DROP, matching `bank=`: the value is discarded so the default
+ * applies, which keeps a bad theme rendering a usable map rather than failing
+ * the document. A theme is presentation; refusing the whole map over a stroke
+ * width would be the wrong trade.
+ */
+const THEME_NUMERIC: Record<string, { ok: (v: string) => boolean; want: string }> = {
+  // Canvas units, and ink is never negative (ADR 0037). Zero is a deliberate
+  // "draw no stroke" and stays legal.
+  width: { ok: (v) => /^\d+(\.\d+)?$/.test(v), want: "a number, like '2' or '1.5'" },
+  edge: { ok: (v) => /^\d+(\.\d+)?$/.test(v), want: "a number, like '3'" },
+  // SVG's own range. `80` is the case worth naming: it is the percentage a
+  // themer means, and it renders as fully opaque.
+  opacity: {
+    ok: (v) => /^\d+(\.\d+)?$/.test(v) && Number(v) <= 1,
+    want: "a number from 0 to 1 — 80% is '0.8', not '80'",
+  },
+  // A dash pattern: numbers separated by commas or spaces.
+  dash: { ok: (v) => /^\d+(\.\d+)?([ ,]\s*\d+(\.\d+)?)*$/.test(v), want: "numbers, like '4,4'" },
+};
+
 export const BANK_VALUES = new Set(["land", "water", "both"]);
 export const SURFACE_WORDS = new Set(["paper", "grid", "fog", "ink", "light", "ledge", "leader"]);
 export const ZONE_WORDS = new Set(["core", "edge"]);
@@ -110,6 +146,11 @@ export function parseThemeDocument(source: string, diagnostics: Diagnostic[]): T
       if (t.kind === "pair") {
         if (!THEME_PROPS.has(t.key)) {
           diagnostics.push(warning(raw.line, `unknown theme property '${t.key}' — the appearance vocabulary is closed (spec 08 §3)`));
+          continue;
+        }
+        const numeric = THEME_NUMERIC[t.key];
+        if (numeric && !numeric.ok(t.value)) {
+          diagnostics.push(warning(raw.line, `'${t.key}=${t.value}' is not ${numeric.want} — the declaration is ignored (spec 08 §3)`));
           continue;
         }
         if (t.key === "bank" && !BANK_VALUES.has(t.value)) {

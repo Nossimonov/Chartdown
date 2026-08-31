@@ -8,7 +8,7 @@
  * sit on a marker declared later in the document.
  */
 
-import type { EntityNode, Placement, Point, Ref } from "@chartdown/core";
+import type { EntityNode, Pair, Placement, Point, Ref } from "@chartdown/core";
 import { slugify } from "@chartdown/core";
 import { SideLabelPlacer } from "./labels";
 import { ASPECT, deformCurve, type Morph, type PlacedFeature } from "./morphology";
@@ -1261,6 +1261,30 @@ export function resolveRegionGeometry(
   return { items, resolved, byName, chainByKey, mapUnit, toXY, lookup, assembleWaterBoundary };
 }
 
+/**
+ * A declared `width=` in CANVAS units, or the fallback ink width (#367).
+ *
+ * Spec 05 §4 says `width=<measure>`, and `grammar.ebnf` has
+ * `measure = number , [ unit ]` — so `1.5mi` and `1.5` are the same kind of
+ * thing, a breadth in the map's own units. Both were wrong here in opposite
+ * directions: `Number("1.5mi")` is **NaN**, which shipped into the SVG as
+ * `stroke-width="NaN"` with `check` silent, and `Number("1.5")` was passed
+ * through as 1.5 CANVAS pixels — a hairline on a 20-mile map and the same
+ * hairline on a 40-mile one, so the breadth did not depend on the map at all.
+ *
+ * A band's breadth is how wide the marsh IS, which is geometry, and ADR 0037
+ * puts geometry in map units. The ridge path had this right all along
+ * (`measureToNumber(declared) * scale`), which is why ridges were the only
+ * region geometry whose width worked.
+ *
+ * The FALLBACK stays in canvas units deliberately: it is not a measure anybody
+ * declared, it is the ink weight a line gets when nothing says otherwise.
+ */
+function declaredWidth(pairs: Pair[], scale: number, fallbackPx: number): number {
+  const declared = pairOf(pairs, "width");
+  return declared === undefined ? fallbackPx : measureToNumber(declared) * scale;
+}
+
 export function renderRegion(model: Model, body: string[], size: { w: number; h: number; scale: number }, diagnostics: { severity: "error" | "warning"; line: number; message: string }[] = []): void {
   const { w, h, scale } = size;
   const theme = model.theme;
@@ -1408,7 +1432,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
       // than it buys, because overlapping obstacle boxes double-count in the
       // cost sum and shut out labels the narrower corridor had just admitted.
       // The Deepflow/Deep Road pair this guards is covered by its own test.
-      const strokeW = Number(pairOf(e.pairs, "width") ?? (model.chainOf(e.typeWord).includes("coastline") ? 1.2 : 2));
+      const strokeW = declaredWidth(e.pairs, size.scale, model.chainOf(e.typeWord).includes("coastline") ? 1.2 : 2);
       const half = strokeW / 2 + 1;
       for (const pt of r.polyline) {
         placer.block(pt.x - half, pt.y - half, half * 2, half * 2, 0.35);
@@ -1973,7 +1997,7 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
         const stroke = theme.pathStroke(chain);
         // Coastlines are shorelines, not rivers: hairline by default (the
         // island outline weight the owner preferred), unless width= says so.
-        const width = Number(pairOf(e.pairs, "width") ?? (chain.includes("coastline") ? 1.2 : 2));
+        const width = declaredWidth(e.pairs, size.scale, chain.includes("coastline") ? 1.2 : 2);
         const lineParts: string[] = [titleEl];
         // Double where the stroke will be clipped to one side, so the half that
         // survives is the width that was asked for.

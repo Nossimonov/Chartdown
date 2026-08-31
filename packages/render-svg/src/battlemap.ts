@@ -5,7 +5,7 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
+import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, scaleOf, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
@@ -245,7 +245,7 @@ export function renderBattlemap(
         }
       }
     } else if (e.archetype === "token" && !hasOnlyRange(e)) {
-      const size = Number(pairOf(e.pairs, "size") ?? 1) || 1;
+      const size = measureInCells(pairOf(e.pairs, "size"), scaleOf(model));
       for (const p of e.placements) {
         if (p.kind !== "address") continue;
         const o = cellOrigin(p);
@@ -1118,7 +1118,9 @@ export function renderBattlemap(
         // Drawn to the edges of the terminal cells; RECORDED as the declared
         // spine (#145) — see extendToCellEdge.
         const drawn = extendToCellEdge(pts, p.joinsAtEnd === true);
-        const width = Number(pairOf(e.pairs, "width") ?? 1) * CELL * 0.85;
+        // Unit-aware, and shared with `surfaceCells` so the ink and the ground
+        // agree (#374). `width=10ft` at `scale: 5ft` is `width=2`.
+        const width = measureInCells(pairOf(e.pairs, "width"), scaleOf(model)) * CELL * 0.85;
         const stroke = model.theme.pathStroke(chain);
         const bandStroke = chain.includes("river") ? model.theme.terrainFill(["sea"]) : stroke.stroke;
         // Zones on a path BAND (spec 08 §2, #150): the full width in the edge
@@ -1960,7 +1962,7 @@ export function renderBattlemap(
   }
 
   function renderToken(e: EntityNode, into: string[], labels: string[], titleEl: string, anchor: string | undefined): void {
-    const size = Number(pairOf(e.pairs, "size") ?? 1) || 1;
+    const size = measureInCells(pairOf(e.pairs, "size"), scaleOf(model));
     const fill = model.theme.side(pairOf(e.pairs, "side"));
     const addresses = e.placements.filter((p): p is Address => p.kind === "address");
     addresses.forEach((a, idx) => {

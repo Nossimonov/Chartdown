@@ -28,10 +28,14 @@ export const rangeRect = (r: AddressRange): { x: number; y: number; w: number; h
   return { x, y, w: Math.abs(b.x - a.x) + CELL, h: Math.abs(b.y - a.y) + CELL };
 };
 
+/** `scale:` as a number, the one derivation everything shares (#374). */
+export function scaleOf(model: { header: Map<string, string> }): number {
+  return measureToNumber(model.header.get("scale") ?? "5") || 5;
+}
+
 /** Real-world measure → cells, via the scale: header (e.g. light=20ft at 5ft scale = 4 cells). */
 export function measureToCells(measure: string, model: { header: Map<string, string> }): number {
-  const scale = measureToNumber(model.header.get("scale") ?? "5") || 5;
-  return measureToNumber(measure) / scale;
+  return measureToNumber(measure) / scaleOf(model);
 }
 
 /**
@@ -109,11 +113,36 @@ export function structureCells(
  * the wall collector, and the UVTT exporter cannot disagree about what ground
  * a cell has on it — two definitions of "solid" is the shape of #131.
  */
+/**
+ * A declared measure in CELLS — `width=`, `size=` (#374, #387).
+ *
+ * On a battlemap a bare `width=2` already means two cells, and a unit-suffixed
+ * one is a real-world measure: at `scale: 5ft`, `width=10ft` IS `width=2`. Both
+ * were read with `Number(...)`, so a unit gave NaN — invisible ink in the
+ * renderer, and here a fall through `|| 1` to a ONE-CELL band.
+ *
+ * That second half is the worse one, because this function exists precisely so
+ * "the lints, the wall collector and the UVTT exporter cannot disagree about
+ * what ground a cell has on it" — and they did: three cells to the author, NaN
+ * to the ink, one cell to everything that reasons about ground. A door opening
+ * onto a `width=15ft` road reported `door-onto-void`.
+ *
+ * `light=` has always converted correctly through `measureToCells`; only
+ * `width=` was left reading raw digits.
+ */
+export function measureInCells(value: string | undefined, scale: number): number {
+  if (value === undefined) return 1;
+  // A unit is what distinguishes "two cells" from "ten feet".
+  const measure = measureToNumber(value);
+  if (!/[a-z]/i.test(value)) return measure || 1;
+  return scale > 0 ? measure / scale || 1 : measure || 1;
+}
+
 export function surfaceCells(
   e: { pairs: { key: string; value: string }[]; placements: Placement[] },
   ctx?: HalfPlaneContext,
 ): Map<string, Cell> {
-  const width = Number(e.pairs.find((p) => p.key === "width")?.value ?? 1) || 1;
+  const width = measureInCells(e.pairs.find((p) => p.key === "width")?.value, ctx?.scale ?? 5);
   const cells = new Map<string, Cell>();
   for (const p of e.placements) {
     // A relational extent (spec 06 §6, ADR 0038). Resolved HERE rather than in
@@ -146,6 +175,8 @@ export function surfaceCells(
 export interface HalfPlaneContext {
   cols: number;
   rows: number;
+  /** `scale:` in its own units, so a unit-suffixed width resolves to cells (#374). */
+  scale: number;
   /** The referenced entity's declared course in grid cells, or null if it has none. */
   courseOf: (ref: { form: string; value: string }) => Cell[] | null;
 }
@@ -167,6 +198,7 @@ export function halfPlaneContext(
   return {
     cols: doc.grid?.cols ?? 20,
     rows: doc.grid?.rows ?? 15,
+    scale: measureToNumber(doc.header.find((h) => h.key === "scale")?.value ?? "5") || 5,
     courseOf: (ref) => {
       const host = entities.find((e) => (ref.form === "id" ? e.ids.includes(ref.value) : e.name === ref.value));
       if (!host) return null;

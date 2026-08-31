@@ -10,8 +10,8 @@
 // [Unreleased] items roll into the new section with compare links).
 // The Obsidian plugin versions on its own lane, deliberately.
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { refuseBump } from "./release-guards.mjs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { refuseBump, refuseDriftedSection, releasedSection } from "./release-guards.mjs";
 
 const next = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(next ?? "")) {
@@ -73,6 +73,33 @@ const today = new Date().toISOString().slice(0, 10);
     console.error(refusal);
     process.exit(1);
   }
+
+  // A RELEASED SECTION IS FROZEN (#378). Twice now an entry aimed at
+  // [Unreleased] landed in a shipped section instead, crediting a release with
+  // a fix it does not contain and guaranteeing that fix reaches no release's
+  // notes at all, since only [Unreleased] is ever rolled. Checked here because
+  // this is the last moment before the sections stop being editable.
+  for (const [, version] of changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)) {
+    let tagged;
+    try {
+      tagged = execSync(`git show v${version}:CHANGELOG.md`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      continue; // no such tag reachable — nothing to compare against
+    }
+    const drift = refuseDriftedSection(version, releasedSection(changelog, version), releasedSection(tagged, version));
+    if (drift) {
+      console.error(drift);
+      process.exit(1);
+    }
+  }
+}
+
+/** Every `examples/<slug>/README.md`. Derived, because a hand list is what failed. */
+function globExampleReadmes() {
+  return readdirSync("examples", { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => `examples/${e.name}/README.md`)
+    .filter((p) => existsSync(p));
 }
 
 /** Replace exact text, byte-preserving everything else; loud when absent. */
@@ -96,6 +123,20 @@ for (const artifact of ["docs/spec/digest.md", "docs/spec/grammar.ebnf", "docs/s
   replaceIn(artifact, `spec v${spec(current)}`, `spec v${spec(next)}`, { optional: spec(current) === spec(next) });
 }
 replaceIn("README.md", `Spec v${spec(current)}`, `Spec v${spec(next)}`, { optional: spec(current) === spec(next) });
+// llms.txt is the FIRST file an agent reads — served at the site root, ahead of
+// the digest it points at — and it was never on this list, so it told every
+// agent the language was v0.2 for five minor versions (#363). Found by the owner
+// writing a map for an actual game, which is the one test nothing here performs.
+replaceIn("playground/llms.txt", `whole v${spec(current)} language`, `whole v${spec(next)} language`, { optional: spec(current) === spec(next) });
+// Package READMEs and example status lines both went stale unnoticed (#365):
+// npm publishes a package README regardless of `files`, so browser's CDN pin is
+// the install line on its public page, and it sat at 0.1 through 0.7. The
+// example status lines were WORSE — #352 corrected them from a stale v0.1 to a
+// hardcoded v0.6, fixing the instance and reproducing the defect.
+replaceIn("packages/browser/README.md", `@chartdown/browser@${spec(current)}`, `@chartdown/browser@${spec(next)}`, { optional: spec(current) === spec(next) });
+for (const readme of globExampleReadmes()) {
+  replaceIn(readme, `spec v${spec(current)}`, `spec v${spec(next)}`, { optional: true });
+}
 replaceIn("README.md", `@chartdown/browser@${spec(current)}`, `@chartdown/browser@${spec(next)}`, { optional: spec(current) === spec(next) });
 
 // CHANGELOG: the [Unreleased] items become the new section; links follow.

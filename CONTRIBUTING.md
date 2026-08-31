@@ -50,6 +50,28 @@ Syntax is the product, so changing it has its own process. A syntax proposal iss
 
 Proposals are decided by discussion on the issue. Acceptance means: an ADR is written if the decision was contentious, the spec in [docs/spec/](docs/spec/) is updated, and an example is added to [examples/](examples/). Only then is the issue closed.
 
+## Independent review
+
+Work of any size gets a second reader before it merges. For substantial changes that reader is an **independent agent**, briefed to hunt the defect's class rather than to audit the diff.
+
+**The brief is the whole technique.** *"Does this problem exist elsewhere?"* and *"do you see problems with this?"* are not variations on one question — the first presumes the finding and searches for siblings; the second invites a reviewer to re-derive what the author has already checked. In this project's experience the second returns confirmations and the first returns defects. The quality of the answer is bounded by the quality of the question.
+
+Every finding worth the token cost so far came from the first form:
+
+| the change under review | what the reviewer found |
+|---|---|
+| `llms.txt` said `v0.2` at 0.7 ([#363](https://github.com/Nossimonov/Chartdown/issues/363)) | six more stale surfaces, including `@chartdown/mcp` introducing itself to every host as `version: "0.2.0"` ([#365](https://github.com/Nossimonov/Chartdown/issues/365)) |
+| a region `width=` read with `Number()` ([#367](https://github.com/Nossimonov/Chartdown/issues/367)) | the same read on the battlemap path, where the lints and the renderer then disagreed about one road ([#374](https://github.com/Nossimonov/Chartdown/issues/374)) |
+| the 0.7.0 release notes ([#351](https://github.com/Nossimonov/Chartdown/issues/351)) | ten disagreements between documents, including a fix filed under a release that shipped before it |
+
+None of those was a bug *in* the change being reviewed.
+
+**When it earns its cost.** A change that touches a pattern rather than a single site; a claim headed for a permanent record, since [ADRs are immutable](#adrs-architecture-decision-records) and a wrong number in one stays wrong; anything large enough that the author's own verification has blind spots. A small self-contained fix with a mutation-tested guard does not need one.
+
+**What to put in the brief.** Name the defect and its shape. State that the diff is assumed correct. Say which surfaces to sweep. And require the reviewer to **prove its instrument can detect a known positive before trusting any null result** — a check that reports "nothing found" without that proof has told you nothing, and this repository has been misled by exactly that more than once.
+
+**A clean result is a result.** Recorded as checked, not padded into findings.
+
 ## Git conventions
 
 - Branch names: `issue-<number>-<short-slug>` (e.g. `issue-12-hex-coordinates`) for work that has an issue — which is most work, because of rule 1. **Release and chore lanes are exempt and always were**: `release-0.6.0`, `plugin-0.4.0`, `chore-nanoid-advisory` reference no issue because they answer to no issue. Nothing enforces this, and it is not worth enforcing — a branch name is read by people ([#335](https://github.com/Nossimonov/Chartdown/issues/335)).

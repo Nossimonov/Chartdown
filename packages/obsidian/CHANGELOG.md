@@ -2,6 +2,26 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [0.6.0] - 2026-08-30
+
+Carries the Chartdown 0.8.0 renderer. A smaller release than 0.5.0, and mostly one thing: widths written with a unit now work.
+
+### A width with a unit draws the right width
+
+`width=1mi` on a river, or `width=15ft` on a road, used to draw **nothing at all** — the value came out as `NaN` and most renderers quietly skip a stroke they cannot parse. The map checked clean, so there was no hint anything was wrong; the feature was simply missing.
+
+Bare numbers drew, but not at the size you asked for. On a region map `width=1.5` meant one and a half *pixels* rather than one and a half miles, so a broad marsh band came out as a hairline — and it stayed the same hairline however large the map was.
+
+Both now mean what they say. `width=1.5mi` and `width=1.5` are the same width, and on a battlemap at `scale: 5ft`, `width=15ft` is exactly `width=3`.
+
+### A road's width now reaches the warnings too
+
+The same value decided how wide a road was *drawn* and how much ground it *covered*, and those had drifted apart. A door opening onto a road written `width=15ft` was reported as opening onto nothing, because the road covered one cell rather than three. That warning is gone, and it was never about your map.
+
+### Also
+
+A shape anchored with `at (x,y)` but written with its own absolute coordinates is now an error rather than a shape drawn off the edge of the map. If you have been pasting output from `chartdown frame`, it needs a relation in front of it — the error says so, and says what to write instead.
+
 ## [0.5.0] - 2026-08-25
 
 Carries the Chartdown 0.7.0 renderer. Most of this release is about secrets — three separate ways a hidden thing could reach a player's screen anyway, all of which showed up in a note rendered in this plugin.

@@ -31,7 +31,7 @@ import { ARCHETYPE_FACETS, checkFacetValues, checkTypeWordNotArchetype, inferArc
 
 // The spec and the packages version together (see CHANGELOG): a release's
 // major.minor IS the spec version its documents may target.
-export const SPEC_VERSION = "0.7";
+export const SPEC_VERSION = "0.8";
 
 export interface ParseOptions {
   /** Sources for `use:` libraries, keyed by the exact `use:` value. */
@@ -271,13 +271,52 @@ class SymbolTable {
     this.entries.push(entry);
   }
 
+  /**
+   * Entries whose display name slugs to this word (#369, ADR 0004).
+   *
+   * ADR 0004's title is "Explicit ids and display names are BOTH reference
+   * keys", and its body lists display names among the identity keys and
+   * anticipates this usage directly — "renaming a display name can break quoted
+   * references and SLUG ANCHORS", a sentence that only means anything if slugs
+   * resolve. `digest.md` reads the same way: "explicit id, display name;
+   * neither = anonymous (renderable, unreferenceable)", so having either one
+   * makes an entity referenceable.
+   *
+   * A QUOTED reference already worked — `"Gralk"` matches `e.name` exactly.
+   * What did not was the bare word, which parses as an id, missed `byId`, and
+   * came back as a suggested misspelling. The reporter was reading the
+   * documentation correctly and the implementation disagreed with it.
+   *
+   * An explicit id still wins: it is looked up first and never shadowed, so
+   * nothing that resolves today resolves differently.
+   */
+  /** Public for the [gm] diagnostic, which needs to say WHY a word resolved to nothing. */
+  slugMatches(word: string): SymbolEntry[] {
+    return this.bySlug(word, this.entries.length);
+  }
+
+  private bySlug(word: string, bound: number): SymbolEntry[] {
+    return this.entries.filter(
+      (e) => e.index < bound && e.name !== null && slugify(e.name) === word,
+    );
+  }
+
   /** Order-bounded resolution (spec 02 §8.1, spec 03 §2). Returns the entry or null with a diagnostic. */
   resolve(ref: Ref, line: number, diagnostics: Diagnostic[]): SymbolEntry | null {
     const bound = this.entries.length;
     if (ref.form === "id") {
       const entry = this.byId.get(ref.value);
       if (!entry) {
-        diagnostics.push(error(line, `unresolved reference '${ref.value}' — no earlier entity has this id`));
+        // No id by that name — a display-name slug is a reference key too.
+        const slugged = this.bySlug(ref.value, bound);
+        if (slugged.length === 1) return slugged[0]!;
+        if (slugged.length > 1) {
+          diagnostics.push(
+            error(line, `ambiguous reference '${ref.value}' — it is the display-name slug of entities on lines ${slugged.map((m) => m.line).join(", ")}; give the intended one an explicit id`),
+          );
+          return null;
+        }
+        diagnostics.push(error(line, `unresolved reference '${ref.value}' — no earlier entity has this id or display name`));
         return null;
       }
       if (entry.index >= bound) {
@@ -304,7 +343,12 @@ class SymbolTable {
 
   /** Resolution without emitting diagnostics — used to classify [gm] lines. */
   tryResolve(ref: Ref): SymbolEntry | null {
-    if (ref.form === "id") return this.byId.get(ref.value) ?? null;
+    if (ref.form === "id") {
+      const byId = this.byId.get(ref.value);
+      if (byId) return byId;
+      const slugged = this.bySlug(ref.value, this.entries.length);
+      return slugged.length === 1 ? slugged[0]! : null;
+    }
     const matches = this.entries.filter((e) => e.name === ref.value);
     return matches.length === 1 ? matches[0]! : null;
   }
@@ -472,6 +516,150 @@ function edgePlacements(placements: Placement[]): Edge[] {
  * might have consumed it, because there are none: an address form nothing can
  * honour is a mistake wherever it appears.
  */
+/**
+ * An `at (x,y)` that frames nothing is refused (#368).
+ *
+ * Spec 05 §4's anchored outline is `island whidbey : near shore at (40,100)
+ * area (…)`, and its points are offsets "the referent-frame rule of ADR 0009
+ * and spec 02 §9" — it is the RELATION that gives `at` a frame. Written bare,
+ * with no relation before it, there is no frame: the shape is placed by its own
+ * coordinates and the anchor contributes nothing.
+ *
+ * `chartdown frame` emits exactly that fragment, so an author pasting the CLI's
+ * own output got a shape at negative coordinates, off-canvas, with `check`
+ * silent. A placement that renders identically to its own absence is the defect
+ * this project spent 0.7.0 removing; this is one more of them.
+ *
+ * NOT refused: `near <ref> at (…) area (…)` and `on <ref> at (…) area (…)`,
+ * which are the spec's own forms — measured, they carry a relational placement
+ * before the `at`, or fold the point into an `on`.
+ */
+/**
+ * The map's own unit, or null when it declares none (#376).
+ *
+ * A gridless map states it in `extent: 900x600mi`; a grid map in `scale: 5ft`.
+ * Either may omit it — `extent: 800x600`, `scale: 5` are both grammar-legal —
+ * and a map with no unit has nothing for an explicit one to disagree with.
+ */
+function mapUnit(header: HeaderEntry[]): string | null {
+  const extent = header.find((h) => h.key === "extent")?.value;
+  const fromExtent = extent ? /^\d+x\d+([a-z]+)$/.exec(extent)?.[1] : undefined;
+  if (fromExtent) return fromExtent;
+  const scale = header.find((h) => h.key === "scale")?.value;
+  return (scale ? /^\d+(?:\.\d+)?([a-z]+)$/.exec(scale)?.[1] : undefined) ?? null;
+}
+
+/**
+ * An explicit unit must be the map's own (#376, spec 02 §1).
+ *
+ * > Explicit units (`70mi`, `20ft`) are always legal and MUST match the map's
+ * > unit dimension.
+ *
+ * `grammar.ebnf` said the same in a parenthetical, and nothing implemented it:
+ * `measureToNumber` reads the digits and discards the unit entirely. So on a
+ * `20x14mi` map, `width=60ft` drew a stroke THREE TIMES THE WIDTH OF THE MAP —
+ * a 5280x error, silently — and `width=1.5km` drew exactly what `width=1.5mi`
+ * drew. An invented unit rode through the same way.
+ *
+ * Refusing rather than converting is the owner's ruling (#376): a closed unit
+ * table is unavoidable either way, since `furlongs` has to be rejected
+ * regardless, and refusal needs no table at all.
+ *
+ * Scoped by the VALUE'S SHAPE — digits then letters — rather than by a list of
+ * measure-valued parameters, because no such list exists and inventing one
+ * would go stale the first time a facet was added. `facing=south` has no
+ * leading digits, `size=2x2` is not this shape, and `detail=map.cd` is neither.
+ */
+/**
+ * A value that is plainly an attempted number, and is not one (#375).
+ *
+ * `measureToNumber` matches `^(\d+(?:\.\d+)?)` and returns 0 when nothing
+ * matches, so a malformed measure is not refused — it becomes zero, and the
+ * feature silently disappears. `check` said `ok` for all of these:
+ *
+ *   width=.5mi   -> 0     half a mile, written the way people write it
+ *   width=+2     -> 0
+ *   width=1e3    -> 41    parses `1`, discards `e3` — draws something WRONG
+ *   width=-2     -> 0 on a region map, and on a battlemap `stroke-width="-54.4"`,
+ *                  which is invalid SVG: consumers may drop the attribute, drop
+ *                  the element, or refuse the document
+ *
+ * SCOPED TO UNAMBIGUOUS NUMERIC MALFORMATIONS, and deliberately no wider. A
+ * bare word (`width=abc`, `width=mi`) is indistinguishable from a legitimate
+ * word value like `facing=south` without a list of which parameters take
+ * measures — and no such list exists. Inventing one would go stale the first
+ * time a facet was added, which is the defect class this cycle was made of.
+ * Those still become 0, and #375 says so rather than pretending otherwise.
+ *
+ * A NEGATIVE is safe to refuse without that list: no pair value is written
+ * negative anywhere in the corpus or the spec, and the negative numbers that
+ * ARE legitimate — shape offsets like `(-2,-40)` — are points inside a
+ * placement, never a `key=value` pair.
+ */
+function checkMalformedMeasure(pairs: Pair[], line: number, diags: Diagnostic[]): void {
+  for (const pair of pairs) {
+    const v = pair.value;
+    let why: string | null = null;
+    if (/^-\d/.test(v)) why = "a magnitude cannot be negative";
+    else if (/^\+\d/.test(v)) why = "drop the leading '+'";
+    else if (/^\.\d/.test(v)) why = `write it as '0${v}'`;
+    else if (/^\d+(?:\.\d+)?e[+-]?\d/i.test(v)) why = "exponent notation is not a measure; write the number out";
+    if (why === null) continue;
+    diags.push(
+      error(
+        line,
+        `'${pair.key}=${v}' is not a measure — ${why}. `
+        + `A measure is a number with an optional unit, like '2' or '20ft' (spec 02 §1)`,
+      ),
+    );
+  }
+}
+
+function checkUnitMatchesMap(
+  pairs: Pair[],
+  unit: string | null,
+  line: number,
+  diags: Diagnostic[],
+): void {
+  if (unit === null) return;
+  for (const pair of pairs) {
+    const written = /^\d+(?:\.\d+)?([a-z]+)$/.exec(pair.value)?.[1];
+    if (written === undefined || written === unit) continue;
+    diags.push(
+      error(
+        line,
+        `'${pair.key}=${pair.value}' is in ${written}, and this map is in ${unit} — `
+        + `an explicit unit must be the map's own (spec 02 §1). `
+        + `Write it in ${unit}, or drop the unit to mean ${unit}`,
+      ),
+    );
+  }
+}
+
+function checkUnframedAnchor(placements: Placement[], line: number, diags: Diagnostic[]): void {
+  const shape = placements.find((p) => p.kind === "shape");
+  if (!shape || shape.kind !== "shape" || shape.frame) return;
+  // ONLY WHEN THE SHAPE BRINGS ITS OWN COORDINATES. A sized blob carries no
+  // points at all — `forest wood : blob at (200,150) size=120mi`, ADR 0025's
+  // "a blob declares an extent, not an outline" — so there the `at` IS the
+  // placement and is doing the whole job. Caught by the existing suite when the
+  // first version of this check refused it.
+  if (shape.args.length === 0) return;
+  const anchorAt = placements.findIndex((p) => p.kind === "relational" && p.form === "at");
+  if (anchorAt === -1) return;
+  // A relation BEFORE the `at` is what gives it a frame.
+  const framed = placements.slice(0, anchorAt).some((p) => p.kind === "relational" && p.form !== "at");
+  if (framed) return;
+  diags.push(
+    error(
+      line,
+      `this 'at' frames nothing — the shape carries its own coordinates, so the anchor is discarded. `
+      + `A shape's points are offsets from a REFERENT's frame: write 'near <ref> at (x,y) area …' `
+      + `(spec 05 §4), or drop the 'at' and give the shape absolute points`,
+    ),
+  );
+}
+
 function checkNoCorner(placements: Placement[], line: number, diags: Diagnostic[]): void {
   for (const edge of edgePlacements(placements)) {
     if (!CORNER_DIRS.has(edge.dir)) continue;
@@ -883,6 +1071,9 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const gridless = checkGridlessAddress(predicate.placements, document.mapType, raw.line, diags);
     if (!gridless) {
       checkNoCorner(predicate.placements, raw.line, diags);
+      checkUnframedAnchor(predicate.placements, raw.line, diags);
+      checkUnitMatchesMap(predicate.pairs, mapUnit(document.header), raw.line, diags);
+      checkMalformedMeasure(predicate.pairs, raw.line, diags);
       // AN EDGE TOKEN PLACES A WALL (#281, ADR 0043). Spec 02 §5 gives the form
       // one job -- "walls, doors, and windows live on cell edges" -- and at
       // entity level that is a barrier (`wall w1 : C3.e C4.e`, §5's own example)
@@ -1212,8 +1403,17 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // Otherwise: a new GM-only entity — which requires a placement (anti-typo rule).
     const entity = parseEntityLine(raw, tokens, into, table, vocabTable, diags, true);
     if (entity && entity.placements.length === 0) {
+      // NAME THE ACTUAL PROBLEM WHEN WE KNOW IT (#369). A word that is the
+      // display-name slug of TWO entities resolves to neither, and "a
+      // misspelled attachment target?" sends the author hunting for a typo
+      // that is not there — which is the complaint that opened this issue,
+      // arriving by a second route.
+      const word = entity.ids[0] ?? entity.typeWord;
+      const rival = word === null ? [] : table.slugMatches(word);
       diags.push(
-        error(raw.line, `[gm] line resolves no existing entity and declares no placement — a misspelled attachment target? (spec 03 §5)`),
+        rival.length > 1
+          ? error(raw.line, `ambiguous [gm] target '${word}' — it is the display-name slug of entities on lines ${rival.map((m) => m.line).join(", ")}; give the intended one an explicit id (spec 03 §5)`)
+          : error(raw.line, `[gm] line resolves no existing entity and declares no placement — a misspelled attachment target? (spec 03 §5)`),
       );
     }
   }
