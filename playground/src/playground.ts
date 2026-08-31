@@ -412,6 +412,31 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")
   });
 }
 
+/**
+ * What the editor shows when a share link cannot be decoded (#389).
+ *
+ * A VALID document, deliberately. A comment-only file has no `map:` header, so
+ * it fails to check and the reader gets "missing required 'map:' header line"
+ * — noise about the wrong problem. This checks clean and renders, so the title
+ * carries the explanation onto the CANVAS, where a recipient is looking.
+ *
+ * Loading a real map here is what caused the defect: a plausible substitute is
+ * indistinguishable from success, and the recipient discussed the wrong map.
+ */
+const BROKEN_LINK = [
+  "# This share link could not be read",
+  "",
+  "map: battlemap",
+  "grid: square 8x5",
+  "scale: 5ft",
+  "",
+  "; The map travels inside the URL itself, so a link that was truncated -",
+  "; wrapped by a chat client, clipped by an email footer, or copied short -",
+  "; cannot be recovered. Ask whoever sent it for a fresh one.",
+  ";",
+  "; Or pick an example from the menu above and start from there.",
+  "",
+].join("\n");
 async function init(): Promise<void> {
   const hash = new URLSearchParams(location.hash.slice(1));
   const encoded = hash.get("s");
@@ -426,7 +451,19 @@ async function init(): Promise<void> {
       const t = hash.get("t");
       if (t === "candyworld" || t === "vellum") themeSelect.value = t;
     } catch {
-      editor.value = manor;
+      // A BROKEN LINK SAYS SO (#389).
+      //
+      // This loaded the manor demo silently. The recipient of a truncated link
+      // — wrapped by a chat client, clipped by an email footer, copied short —
+      // saw a complete, plausible map with nothing to suggest it was not the
+      // one that had been shared, and discussed the wrong map.
+      //
+      // The toast alone is not enough here: it lasts 2.6 seconds, and the whole
+      // failure is that the substitute looks legitimate. So the reason also
+      // goes into the editor as a Chartdown comment — inert, persistent, and
+      // sitting exactly where a reader looks to see what they were sent.
+      editor.value = BROKEN_LINK;
+      flash("This share link could not be read — ask the sender for a fresh one.");
     }
   } else {
     editor.value = manor;
