@@ -271,13 +271,52 @@ class SymbolTable {
     this.entries.push(entry);
   }
 
+  /**
+   * Entries whose display name slugs to this word (#369, ADR 0004).
+   *
+   * ADR 0004's title is "Explicit ids and display names are BOTH reference
+   * keys", and its body lists display names among the identity keys and
+   * anticipates this usage directly — "renaming a display name can break quoted
+   * references and SLUG ANCHORS", a sentence that only means anything if slugs
+   * resolve. `digest.md` reads the same way: "explicit id, display name;
+   * neither = anonymous (renderable, unreferenceable)", so having either one
+   * makes an entity referenceable.
+   *
+   * A QUOTED reference already worked — `"Gralk"` matches `e.name` exactly.
+   * What did not was the bare word, which parses as an id, missed `byId`, and
+   * came back as a suggested misspelling. The reporter was reading the
+   * documentation correctly and the implementation disagreed with it.
+   *
+   * An explicit id still wins: it is looked up first and never shadowed, so
+   * nothing that resolves today resolves differently.
+   */
+  /** Public for the [gm] diagnostic, which needs to say WHY a word resolved to nothing. */
+  slugMatches(word: string): SymbolEntry[] {
+    return this.bySlug(word, this.entries.length);
+  }
+
+  private bySlug(word: string, bound: number): SymbolEntry[] {
+    return this.entries.filter(
+      (e) => e.index < bound && e.name !== null && slugify(e.name) === word,
+    );
+  }
+
   /** Order-bounded resolution (spec 02 §8.1, spec 03 §2). Returns the entry or null with a diagnostic. */
   resolve(ref: Ref, line: number, diagnostics: Diagnostic[]): SymbolEntry | null {
     const bound = this.entries.length;
     if (ref.form === "id") {
       const entry = this.byId.get(ref.value);
       if (!entry) {
-        diagnostics.push(error(line, `unresolved reference '${ref.value}' — no earlier entity has this id`));
+        // No id by that name — a display-name slug is a reference key too.
+        const slugged = this.bySlug(ref.value, bound);
+        if (slugged.length === 1) return slugged[0]!;
+        if (slugged.length > 1) {
+          diagnostics.push(
+            error(line, `ambiguous reference '${ref.value}' — it is the display-name slug of entities on lines ${slugged.map((m) => m.line).join(", ")}; give the intended one an explicit id`),
+          );
+          return null;
+        }
+        diagnostics.push(error(line, `unresolved reference '${ref.value}' — no earlier entity has this id or display name`));
         return null;
       }
       if (entry.index >= bound) {
@@ -304,7 +343,12 @@ class SymbolTable {
 
   /** Resolution without emitting diagnostics — used to classify [gm] lines. */
   tryResolve(ref: Ref): SymbolEntry | null {
-    if (ref.form === "id") return this.byId.get(ref.value) ?? null;
+    if (ref.form === "id") {
+      const byId = this.byId.get(ref.value);
+      if (byId) return byId;
+      const slugged = this.bySlug(ref.value, this.entries.length);
+      return slugged.length === 1 ? slugged[0]! : null;
+    }
     const matches = this.entries.filter((e) => e.name === ref.value);
     return matches.length === 1 ? matches[0]! : null;
   }
@@ -1359,8 +1403,17 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     // Otherwise: a new GM-only entity — which requires a placement (anti-typo rule).
     const entity = parseEntityLine(raw, tokens, into, table, vocabTable, diags, true);
     if (entity && entity.placements.length === 0) {
+      // NAME THE ACTUAL PROBLEM WHEN WE KNOW IT (#369). A word that is the
+      // display-name slug of TWO entities resolves to neither, and "a
+      // misspelled attachment target?" sends the author hunting for a typo
+      // that is not there — which is the complaint that opened this issue,
+      // arriving by a second route.
+      const word = entity.ids[0] ?? entity.typeWord;
+      const rival = word === null ? [] : table.slugMatches(word);
       diags.push(
-        error(raw.line, `[gm] line resolves no existing entity and declares no placement — a misspelled attachment target? (spec 03 §5)`),
+        rival.length > 1
+          ? error(raw.line, `ambiguous [gm] target '${word}' — it is the display-name slug of entities on lines ${rival.map((m) => m.line).join(", ")}; give the intended one an explicit id (spec 03 §5)`)
+          : error(raw.line, `[gm] line resolves no existing entity and declares no placement — a misspelled attachment target? (spec 03 §5)`),
       );
     }
   }
