@@ -1056,10 +1056,36 @@ export function resolveRegionGeometry(
           //    feature's finished curve (ADR 0012) and re-splining them would
           //    pull the border off the thing it is defined to follow.
           const literal = e.flags.includes("raw") || e.section === "water" || spans.length > 0;
-          out.polygon =
-            e.section === "water" ? assembleWaterBoundary(spliced)
-            : literal || e.archetype !== "terrain" || spliced.length < 3 ? spliced
-            : organicOutline(spliced, hashSeed(model.seed, hashString(entityAnchor(e) ?? e.typeWord ?? "area"), spliced.length));
+          if (spliced.length < 3) {
+            // FEWER THAN THREE POINTS IS NOT AN OUTLINE (#343). The framed
+            // route has said so since #340; this one never asked, so
+            // `area (100,100) (200,200)` drew a LINE where the document asked
+            // for an area, and checked clean. One declaration should not get
+            // two answers depending on which route resolved it, so this is the
+            // same rule in the same words rather than a second opinion.
+            //
+            // AND IT DRAWS NOTHING, which is the other half of that rule: the
+            // framed route returns with no polygon set, and leaving this one
+            // drawing a two-vertex "polygon" would keep on the page the very
+            // line the warning says is not an area. `nogeometry.test.ts`'s
+            // thesis is exactly that — no geometry means no element, asserted
+            // at the render rather than at the diagnostic.
+            //
+            // Counted AFTER `along` splicing, since a span contributes the
+            // vertices it follows: two declared points with a coastline spliced
+            // between them is a real outline, and judging the written points
+            // alone would refuse it.
+            diagnostics.push({
+              severity: "warning",
+              line: e.line,
+              message: `'${e.name ?? e.typeWord}' has an outline of ${spliced.length} point${spliced.length === 1 ? "" : "s"} — an outline needs at least three (spec 05 §4)`,
+            });
+          } else {
+            out.polygon =
+              e.section === "water" ? assembleWaterBoundary(spliced)
+              : literal || e.archetype !== "terrain" ? spliced
+              : organicOutline(spliced, hashSeed(model.seed, hashString(entityAnchor(e) ?? e.typeWord ?? "area"), spliced.length));
+          }
         } else {
           // The TRUE curve: a spline through the declared points, no noise
           // (spec 02 §9, affirmed by ADR 0023) — then the features DECLARED
