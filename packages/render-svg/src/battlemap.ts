@@ -432,6 +432,26 @@ export function renderBattlemap(
     }
   }
 
+  // A REDACTION IS NOT THE DOCUMENT (#397, ADR 0045). `crossingCells` is
+  // filled while DRAWING, so a `hidden` ford was absent from it and the warning
+  // below reported a crossing the author had declared three lines up. The only
+  // edit that silenced it deleted `hidden` and destroyed the secret, and player
+  // is the default mode, so it arrived by default — the same shape ADR 0045
+  // fixed for the six coherence lints, in a §6 warning its letter did not reach.
+  //
+  // Matched by LINE, since the declared set is a second `buildModel` and shares
+  // no object identity with the drawn one. In GM mode nothing is stripped, so
+  // this loop is empty and the two modes agree — which is the point.
+  if (levelCtx?.declaredEntities) {
+    const drawn = new Set(model.entities.map((e) => e.line));
+    for (const e of levelCtx.declaredEntities) {
+      if (e.level !== levelCtx.level || drawn.has(e.line) || e.section !== "terrain") continue;
+      const chain = model.chainOf(e.typeWord);
+      if (!chain.includes("ford") && !chain.includes("bridge")) continue;
+      renderCrossing({ e, chain, titleEl: "", anchor: undefined }, true);
+    }
+  }
+
   // Implied-crossing warnings (spec 06 §6): water × road overlap with no crossing.
   for (const water of pathRecords.filter((p) => p.isWater)) {
     for (const road of pathRecords.filter((p) => p.isRoad)) {
@@ -741,7 +761,7 @@ export function renderBattlemap(
    * from the bands' intersection — location is a consequence, not a fact.
    * Explicit cells remain the fallback for underivable cases.
    */
-  function renderCrossing(pending: PendingCrossing): void {
+  function renderCrossing(pending: PendingCrossing, collectOnly = false): void {
     const { e, chain, titleEl, anchor } = pending;
     const isBridge = chain.includes("bridge");
     const findRecord = (ref: { form: string; value: string }): PathRecord | undefined =>
@@ -796,6 +816,11 @@ export function renderBattlemap(
       host = pathRecords.find((p) => (isBridge ? p.isRoad : p.isWater) && [...p.cells].some((c) => cellKeys.has(c)));
     }
     for (const c of cells) crossingCells.add(`${c.col}:${c.row}`);
+    // The declared-crossing pass stops HERE, before a single mark is made. The
+    // level context says outright that nothing which draws may read
+    // `declaredEntities`, and this honours that: it takes the cells and leaves
+    // the ink (#397).
+    if (collectOnly) return;
 
     const parts: string[] = [titleEl];
     const derivedRecords = onRefs.map((p) => findRecord(p.ref)).filter((r): r is PathRecord => r !== undefined);
