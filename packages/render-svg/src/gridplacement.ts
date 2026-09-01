@@ -177,10 +177,11 @@ export function resolveGridPlacements(
     // Scoped to `[terrain]`, which is where a crossing is drawn: the terrain
     // renderer is what resolves the intersection, so exempting an entity that
     // no renderer resolves would strand it nowhere.
-    const bareOn = e.placements.filter(
-      (p) => p.kind === "relational" && p.form === "on" && p.at === undefined && p.point === undefined,
-    );
-    const isCrossing = e.section === "terrain" && bareOn.length >= 2;
+    // Every `on` ref, not only the bare ones: `at <cell>` on the second is how
+    // spec 06 §6 says to choose between two intersections, and requiring both
+    // to be bare refused the remedy the ambiguity error names (#408).
+    const onRefs = e.placements.filter((p) => p.kind === "relational" && p.form === "on");
+    const isCrossing = e.section === "terrain" && onRefs.length >= 2;
     // `from … to … along <ref>` is one placement plus a shape HINT, which is
     // spec 02 §7's own example (`road "Coast Road" : from … to … along coast`).
     // Judged alone the hint names no cell, so without this the spec's own

@@ -450,7 +450,12 @@ export function renderBattlemap(
     for (const e of levelCtx.declaredEntities) {
       if (e.level !== levelCtx.level || drawn.has(e.line) || e.section !== "terrain") continue;
       const chain = model.chainOf(e.typeWord);
-      if (!chain.includes("ford") && !chain.includes("bridge")) continue;
+      // The same test the render gate uses (ADR 0053) — NOT the words. This
+      // was written for #397 while crossing-hood was still word-keyed, and
+      // #398 changed the gate without changing it, so a `hidden` causeway
+      // re-opened exactly the defect #397 closed: clean in gm, warned in
+      // player, silenceable only by deleting `hidden`.
+      if (!declaresOver(model, e) && !isCrossingShape(e)) continue;
       renderCrossing({ e, chain, titleEl: "", anchor: undefined }, true);
     }
   }
