@@ -19,6 +19,11 @@ import { splitLines, tokenize } from "./lex";
 export const CLOSED_FACETS: Record<string, Set<string>> = {
   passes: new Set(["open", "closed", "none"]),
   sight: new Set(["all", "none"]),
+  // Which band is drawn ON TOP where two cross (spec 06 §6, ADR 0053). The
+  // words `ford` and `bridge` were invented to carry this rendering hint and
+  // ended up carrying three other jobs with it; the facet takes the hint back,
+  // so an author can say what a thing IS and how it STACKS separately.
+  over: new Set(["path", "water"]),
   // How a placed morphology feature relates to the line it sits on (spec 05
   // §4, ADR 0023). The WORD says what a thing is and how it is coloured; this
   // says what its geometry does to the host — so `bay` and `cove` both bite,
@@ -83,7 +88,7 @@ export const ARCHETYPES = new Set([
 export const ARCHETYPE_FACETS: Record<string, readonly string[]> = {
   terrain: [],                      // `difficult` is a STATE, not a facet
   path: ["width"],
-  feature: ["facing"],
+  feature: ["facing", "over"],
   structure: [],
   barrier: ["passes", "sight"],
   opening: ["passes", "sight"],
@@ -185,8 +190,8 @@ atoll : island
 oxbow : terrain morph=detached
 
 ; crossings
-ford : feature states=difficult
-bridge : feature
+ford : feature states=difficult over=water
+bridge : feature over=path
 
 ; settlements
 settlement : feature

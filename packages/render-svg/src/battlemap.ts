@@ -6,7 +6,7 @@
 
 import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
 import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, scaleOf, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
-import { anchorAttr, emitterOf, gmTitleFor, labelsOn, labelTextFor, pairOf, type Model } from "./model";
+import { anchorAttr, declaresOver, emitterOf, gmTitleFor, isCrossingShape, labelsOn, labelTextFor, overOf, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
 import { coherenceLints } from "./lints";
@@ -280,7 +280,10 @@ export function renderBattlemap(
 
     if (e.section === "terrain") {
       const chain = model.chainOf(e.typeWord);
-      if (chain.includes("ford") || chain.includes("bridge")) {
+      // A crossing is made by its PLACEMENT, not its word (#398, ADR 0053):
+      // two bare `on` references name the intersection of two bands, however
+      // the entity is spelled.
+      if (declaresOver(model, e) || isCrossingShape(e)) {
         pendingCrossings.push({ e, chain, titleEl, anchor });
       } else {
         renderTerrain(e, titleEl, anchor);
@@ -463,7 +466,7 @@ export function renderBattlemap(
         diagnostics.push({
           severity: "warning",
           line: road.e.line,
-          message: `'${roadName}' crosses '${waterName}' at ${colLetters(col)}${row} with no ford or bridge — the render implies one (spec 06 §6)`,
+          message: `'${roadName}' crosses '${waterName}' at ${colLetters(col)}${row} with no crossing — the render implies one; declare one there, or say which band is over with 'over=' (spec 06 §6)`,
         });
       }
     }
@@ -763,7 +766,11 @@ export function renderBattlemap(
    */
   function renderCrossing(pending: PendingCrossing, collectOnly = false): void {
     const { e, chain, titleEl, anchor } = pending;
-    const isBridge = chain.includes("bridge");
+    // WHICH BAND IS OVER, from the facet rather than the word (ADR 0053).
+    // `ford` and `bridge` still decide it, because the standard library now
+    // declares the hint they were standing in for — and `causeway : feature
+    // over=path` gets it without having to claim to be a bridge.
+    const isBridge = overOf(model, e) === "path";
     const findRecord = (ref: { form: string; value: string }): PathRecord | undefined =>
       pathRecords.find((p) => (ref.form === "id" ? p.e.ids.includes(ref.value) : p.e.name === ref.value));
 

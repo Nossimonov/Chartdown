@@ -452,13 +452,13 @@ describe("crossings and layering (spec 06 §6)", () => {
 
   it("a road×river overlap with no crossing warns about the implied bridge", () => {
     const { diagnostics } = renderSource(base.join("\n"));
-    expect(diagnostics.map((d) => d.message).join()).toMatch(/crosses 'river' at E5 with no ford or bridge/);
+    expect(diagnostics.map((d) => d.message).join()).toMatch(/crosses 'river' at E5 with no crossing/);
   });
 
   it("a derived ford (on X on Y) claims the crossing and draws the water band", () => {
     const src = [...base, "ford : on r1 on r2 difficult"].join("\n");
     const { svg, diagnostics } = renderSource(src);
-    expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+    expect(diagnostics.filter((d) => /with no crossing/.test(d.message))).toEqual([]);
     // The ford's band takes the fill the THEME declares for `ford` (#208).
     // It used to be a literal at the draw site, so `ford : fill=` reached
     // nothing — including the built-in theme's own declaration, which had
@@ -471,7 +471,7 @@ describe("crossings and layering (spec 06 §6)", () => {
   it("explicit cells remain a legal fallback", () => {
     const src = [...base, "ford : E5 difficult"].join("\n");
     const { diagnostics } = renderSource(src);
-    expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+    expect(diagnostics.filter((d) => /with no crossing/.test(d.message))).toEqual([]);
   });
 
   // #208: the three crossing colours were literals at the draw site, so a
@@ -507,7 +507,7 @@ describe("crossings and layering (spec 06 §6)", () => {
   it("a bridge also satisfies the crossing rule", () => {
     const src = [...base, "bridge : on r1 on r2"].join("\n");
     const { diagnostics } = renderSource(src);
-    expect(diagnostics.filter((d) => /no ford or bridge/.test(d.message))).toEqual([]);
+    expect(diagnostics.filter((d) => /with no crossing/.test(d.message))).toEqual([]);
   });
 
   it("two crossings without a disambiguator is a loud error; at <cell> resolves it", () => {
