@@ -63,3 +63,4 @@ A contentious decision that closes off alternatives — syntax choices, technolo
 | [0050](0050-a-pool-that-fills-its-field-is-reported-not-redrawn.md) | A pool that fills its whole map field is reported, not redrawn | Accepted |
 | [0051](0051-the-renderers-answer-is-data-before-it-is-ink.md) | The renderer's answer is data before it is ink: `resolveScene` exports resolved geometry in map units, and `render` consumes the same pass | Accepted |
 | [0052](0052-a-stair-is-a-way-in.md) | A stair is a way in: `stairs` and `ramp` become load-bearing words, so a single-level room entered by its stair checks clean | Accepted |
+| [0053](0053-a-crossing-declares-which-band-is-over.md) | A crossing declares which band is over: the overlap hint is the closed facet `over=`, and the placement — not the word — makes it a crossing | Accepted |
