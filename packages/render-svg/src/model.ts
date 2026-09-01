@@ -115,6 +115,40 @@ export function emitterOf(model: Model, e: EntityNode): { field: string; value: 
   return undefined;
 }
 
+/** Two bare `on` references name the intersection of two bands (spec 06 §6). */
+export function isCrossingShape(e: Pick<EntityNode, "placements">): boolean {
+  return e.placements.filter(
+    (p) => p.kind === "relational" && p.form === "on" && p.at === undefined && p.point === undefined,
+  ).length >= 2;
+}
+
+/**
+ * Does this entity DECLARE which band is over, itself or through its vocabulary?
+ *
+ * Presence, not value — the difference between "this is a crossing" and "this
+ * is how it stacks". A crossing may be placed by explicit cells rather than by
+ * `on <water> on <road>` (`ford : E5 difficult` is in the corpus), so the
+ * placement shape cannot be the whole test; what makes that a crossing is that
+ * `ford` declares `over=water`. Together with the shape, this is what replaces
+ * the old test for the literal words (ADR 0053).
+ */
+export function declaresOver(model: Model, e: Pick<EntityNode, "pairs" | "typeWord">): boolean {
+  return pairOf(e.pairs, "over") !== undefined || model.facetOf(e.typeWord, "over") !== undefined;
+}
+
+/**
+ * Which band a crossing draws on top: `path` or `water` (spec 06 §6, ADR 0053).
+ *
+ * The entity's own pair wins, then the vocabulary facet along the derivation
+ * chain, then `path` — a road continuing over water is the common case, the
+ * placement has already declared the intent to cross, and a wrong default is
+ * visible on the page and one word to correct.
+ */
+export function overOf(model: Model, e: Pick<EntityNode, "pairs" | "typeWord">): "path" | "water" {
+  const declared = pairOf(e.pairs, "over") ?? model.facetOf(e.typeWord, "over");
+  return declared === "water" ? "water" : "path";
+}
+
 export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, diagnostics: Diagnostic[] = []): Model {
   const entities: EntityNode[] = [];
   const hexLines: HexLineNode[] = [];

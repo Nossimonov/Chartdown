@@ -1,7 +1,7 @@
 /**
  * A hidden ford still satisfies the implied-crossing warning (#397).
  *
- * Spec 06 §6 warns when a road crosses water with no ford or bridge, because
+ * Spec 06 §6 warns when a road crosses water with no crossing declared, because
  * the render implies one. It read the DRAWN model, so `hidden` stripped the
  * crossing and the warning fired about a crossing the author had declared on
  * the line above. The only edit that silenced it deleted `hidden` and destroyed
@@ -34,7 +34,7 @@ const VISIBLE = doc('ford f "The Ford" : on redford on tollroad');
 
 const warnings = (d: string, mode: "gm" | "player"): string[] =>
   renderSource(d, { mode }).diagnostics
-    .filter((x) => x.message.includes("with no ford or bridge")).map((x) => x.message);
+    .filter((x) => x.message.includes("with no crossing")).map((x) => x.message);
 const svg = (d: string, mode: "gm" | "player"): string => renderSource(d, { mode }).svg;
 
 describe("the declared crossing counts, in either mode", () => {
@@ -69,8 +69,8 @@ describe("the redaction is still fail-closed", () => {
 
 describe("what must not move", () => {
   it("a genuine missing crossing still warns, in both modes", () => {
-    expect(warnings(NONE, "player").join("\n")).toContain("with no ford or bridge");
-    expect(warnings(NONE, "gm").join("\n")).toContain("with no ford or bridge");
+    expect(warnings(NONE, "player").join("\n")).toContain("with no crossing");
+    expect(warnings(NONE, "gm").join("\n")).toContain("with no crossing");
   });
 
   it("a visible crossing still silences it", () => {

@@ -163,11 +163,24 @@ export function resolveGridPlacements(
     // Judging it by the general rules below would refuse a caption the spec
     // spells out.
     if (chainOf(e.typeWord).includes("note")) return;
-    const chain = chainOf(e.typeWord);
     // A crossing derives its position from the INTERSECTION of two bands
     // (spec 06 §6), so its bare `on` references are the whole idiom and are
     // resolved by the renderer, not here.
-    const isCrossing = chain.includes("ford") || chain.includes("bridge");
+    //
+    // THE SHAPE SAYS SO, NOT THE WORD (#398, ADR 0053). Spec 06 §6's table of
+    // which placement forms a grid answers gives `on <ref> on <ref>` → "a
+    // crossing, at the intersection of the two bands", with no condition on
+    // vocabulary. Testing for `ford`/`bridge` refused every other word a GM
+    // might reach for — a causeway, a culvert, a line of stepping stones —
+    // and refused an unknown word, which spec 04 §3 permits outright.
+    //
+    // Scoped to `[terrain]`, which is where a crossing is drawn: the terrain
+    // renderer is what resolves the intersection, so exempting an entity that
+    // no renderer resolves would strand it nowhere.
+    const bareOn = e.placements.filter(
+      (p) => p.kind === "relational" && p.form === "on" && p.at === undefined && p.point === undefined,
+    );
+    const isCrossing = e.section === "terrain" && bareOn.length >= 2;
     // `from … to … along <ref>` is one placement plus a shape HINT, which is
     // spec 02 §7's own example (`road "Coast Road" : from … to … along coast`).
     // Judged alone the hint names no cell, so without this the spec's own

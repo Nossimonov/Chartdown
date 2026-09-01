@@ -10,7 +10,7 @@ The language defines only **archetypes**: closed, setting-free behavioral catego
 |---|---|
 | `terrain` | area-filling ground cover; may carry `difficult` |
 | `path` | linear feature; optional `width=` |
-| `feature` | point-placed glyph; optional `facing=` |
+| `feature` | point-placed glyph; optional `facing=`; `over=` where it crosses two bands (06 §6) |
 | `structure` | encloses space; has walls, may contain openings |
 | `barrier` | blocks; facets `passes=` / `sight=` |
 | `opening` | passage through a barrier; same facets (door: `passes=closed sight=none`; window: `passes=none sight=all`) |
