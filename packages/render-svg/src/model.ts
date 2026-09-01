@@ -411,9 +411,23 @@ function resolveRelativePlacements(
   });
 }
 
-/** Derived-label gate (spec 07 §3): `labels: none` silences everything except `note` free text. */
+/**
+ * Derived-label gate (spec 07 §3): `labels: none` silences everything except
+ * `note` free text.
+ *
+ * Matched through the CHAIN, not the literal word (#400). `note` is in spec 04
+ * §2's load-bearing table and ADR 0016 makes literal matching non-conforming,
+ * so `waypoint : note` is free text too.
+ *
+ * NOTHING OBSERVES THE DIFFERENCE TODAY, and that is why it was worth changing
+ * rather than leaving. The only caller that passes `e` is `region.ts`'s label
+ * pass, and the note branch there returns before reaching this — so the literal
+ * comparison was dead, and a second caller passing `e` would have inherited a
+ * silent non-conformance. Do not "simplify" this back to `=== "note"`: the
+ * simplification is invisible until the day it is not.
+ */
 export function labelsOn(model: Model, e?: { typeWord?: string | null }): boolean {
-  return model.labelsMode !== "none" || e?.typeWord === "note";
+  return model.labelsMode !== "none" || model.chainOf(e?.typeWord ?? null).includes("note");
 }
 
 /** What a label site draws for a named node: the name — or its key number in keyed mode (spec 07 §3). */
