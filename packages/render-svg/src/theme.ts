@@ -401,7 +401,14 @@ export function wordTint(word: string): string {
   let h = 0;
   for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) >>> 0;
   const hue = Math.round((h * 137.508) % 360);
-  return `hsl(${hue} 32% 55%)`;
+  // COMMA form, deliberately (#370). CSS Color 4's space-separated `hsl(h s% l%)`
+  // parses in browsers and NOT in older SVG rasterizers: cairosvg and friends
+  // drop the fill and the realm overlays arrive opaque black — a valid
+  // document, a valid render, and unusable output with no error anywhere. The
+  // audience for these files is VTT importers and map pipelines, the consumers
+  // least likely to track CSS Color 4, and the space form buys nothing an
+  // author can perceive.
+  return `hsl(${hue}, 32%, 55%)`;
 }
 
 export const tierOf = (word: string | null): { r: number; font: number; weight: string } =>
