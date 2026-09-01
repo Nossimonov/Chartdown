@@ -237,7 +237,16 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       diagnostics.push({
         severity: "warning",
         line: s.line,
-        message: `this structure stands on '${word}' with nothing beneath it on level '${levelBelow ?? "(none)"}' — a building on open air (spec 06 §5)`,
+        // On a SINGLE-LEVEL document there is no level below to name. The
+        // message interpolated the string `(none)` and pointed at an edit that
+        // cannot be made there — put a structure on the level underneath —
+        // which is an edit requiring a `levels:` header the document does not
+        // have (#399). The defect is real either way: the author declared the
+        // ground unfloored and built on it. What differs is the remedy, so the
+        // message names the one actually available.
+        message: levelBelow === null
+          ? `this structure stands on '${word}' with no solid ground under it — declare a surface beneath its footprint (spec 06 §5)`
+          : `this structure stands on '${word}' with nothing beneath it on level '${levelBelow}' — a building on open air (spec 06 §5)`,
       });
       break;
     }
