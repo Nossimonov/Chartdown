@@ -902,7 +902,7 @@ describe("levels (spec 06 §8)", () => {
       "well : E2",
     ].join("\n");
     const { svg } = renderSource(source, {});
-    const tints = [...svg.matchAll(/fill="(hsl\([\d.]+ 32% 55%\))"/g)].map((m) => m[1]!);
+    const tints = [...svg.matchAll(/fill="(hsl\([\d.]+, 32%, 55%\))"/g)].map((m) => m[1]!);
     const distinct = new Set(tints);
     // table, barrel(+keg sharing the family tint), well → 3 distinct colors
     expect(distinct.size).toBe(3);
