@@ -1,0 +1,2 @@
+  on redford on tollroad                     errors=1 'ford' on 'R' and 'T' is ambiguous — they cross at C9 and H9; add 'at <cell>' to choose (s
+  on redford on tollroad at C9               errors=0 

@@ -115,11 +115,21 @@ export function emitterOf(model: Model, e: EntityNode): { field: string; value: 
   return undefined;
 }
 
-/** Two bare `on` references name the intersection of two bands (spec 06 §6). */
+/**
+ * Two `on` references name the intersection of two bands (spec 06 §6).
+ *
+ * Counted the same way `renderCrossing` counts them — every `on` ref, whatever
+ * it carries. An earlier version required both to be BARE, which quietly broke
+ * the documented way out of an ambiguous crossing: spec 06 §6 says `at <cell>`
+ * chooses between two intersections, and it is spelled by hanging `at` off the
+ * second reference (`on redford on tollroad at C9`), so the ambiguity error
+ * named a remedy that then failed with a different error (#408).
+ *
+ * One `on` with an `at` is spec 02 §7's local frame (`table t : on kitchen at
+ * B2`) and is not a crossing; two references are.
+ */
 export function isCrossingShape(e: Pick<EntityNode, "placements">): boolean {
-  return e.placements.filter(
-    (p) => p.kind === "relational" && p.form === "on" && p.at === undefined && p.point === undefined,
-  ).length >= 2;
+  return e.placements.filter((p) => p.kind === "relational" && p.form === "on").length >= 2;
 }
 
 /**
@@ -236,7 +246,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   // placements, exactly as `every … in <range>` already does.
   expandEveryAlong(entities, doc, diagnostics);
   if (doc.mapType === "battlemap") {
-    resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
+    resolveRelativePlacements(entities, chainOf, facetOf, resolvedNotes, diagnostics);
     // The rest of spec 02 §7's forms (#239): `at <cell>` is the bare cell,
     // `from … to …` draws a course, and anything a grid cannot site is
     // REPORTED. Six of the nine forms used to render byte-identically to
@@ -343,6 +353,7 @@ function footprintCells(e: EntityNode): Set<string> {
 function resolveRelativePlacements(
   entities: EntityNode[],
   chainOf: (word: string | null) => string[],
+  facetOf: (word: string | null, key: string) => string | undefined,
   resolvedNotes: Map<EntityNode, string>,
   diagnostics: Diagnostic[],
 ): void {
@@ -401,7 +412,12 @@ function resolveRelativePlacements(
       if (!parent) return p; // unresolved refs are the parser's errors, not ours
       if (parent.archetype !== "structure") {
         const chain = chainOf(e.typeWord);
-        if (chain.includes("ford") || chain.includes("bridge")) return p; // crossing chooser: a path's frame IS the document grid (spec 06 §6)
+        // A crossing may name a path's frame to choose among ambiguous
+        // intersections: a path's frame IS the document grid (spec 06 §6).
+        // Keyed to the crossing, not to two words (ADR 0053) — `causeway
+        // c1 : on redford at K9` was refused where the same line spelled
+        // `ford` was allowed.
+        if (facetOf(e.typeWord, "over") !== undefined || pairOf(e.pairs, "over") !== undefined || isCrossingShape(e)) return p; // crossing chooser: a path's frame IS the document grid (spec 06 §6)
         diagnostics.push({
           severity: "error",
           line: e.line,
