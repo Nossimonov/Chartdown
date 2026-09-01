@@ -252,6 +252,17 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
     }
   }
 
+  // An EDGE or CORNER token names a cell and a side of it — `A1.n`, `A1.nw` —
+  // and the cell is right there in the token: `A1.n` is on `A1` (#326). Two
+  // lints read placements and both saw only `address`, with opposite symptoms:
+  // `unreachable-room` stopped counting the stair (a false warning about the
+  // room below), and `dangling-connector` skipped the entity outright (a check
+  // that never ran at all). Spec 06 §5 calls a transition "placed spanning a
+  // boundary", so the edge spelling is the one its own language leads an author
+  // to write.
+  const cellOf = (p: EntityNode["placements"][number]): Address | null =>
+    p.kind === "address" ? p : p.kind === "edge" ? p.at : null;
+
   // 3 — unreachable-room: no opening on its perimeter, and nothing inside it
   // that gets you in — a level connector, or a stair.
   //
@@ -261,10 +272,23 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   // correctly tests the cellar's B2 rather than the sheet's A1.
   const landsIn = (e: Pick<EntityNode, "pairs" | "placements">, cells: ReturnType<typeof structureCells>): boolean => {
     const landing = e.pairs.find((p) => p.key === "at")?.value ?? null;
-    const addresses = e.placements.filter((p): p is Address => p.kind === "address");
-    const targets = landing ? [landing] : addresses.map((a) => `${a.col}${a.row}`);
+    // An EDGE or CORNER token names a cell and a side of it — `A1.n`, `A1.nw` —
+    // and the cell is right there in the token: `A1.n` is on `A1` (#326).
+    // Reading only `address` placements meant one changed token turned a stair
+    // into nothing, and the spelling that broke is the one spec 06 §5's own
+    // language leads an author to write: a transition is "placed spanning a
+    // boundary". The warning then advised adding a door to a room already
+    // reached by a stair.
+    const targets = landing
+      ? [landing]
+      : e.placements.map(cellOf).filter((a): a is Address => a !== null).map((a) => `${a.col}${a.row}`);
     return targets.some((t) => {
-      const m = /^([A-Z]+)(\d+)$/.exec(t);
+      // The `at=` PAIR takes the same tolerance, for the same reason: found
+      // while fixing the placement form, and leaving one silent failure in the
+      // function being repaired is how #408 happened. Whether `at=<edge>`
+      // should be refused outright (spec 06 §8 says `at=<cell>`) is a separate
+      // question; reporting an unrelated room as unreachable answers it badly.
+      const m = /^([A-Z]+)(\d+)(?:\.(?:[nsew]|[ns][ew]))?$/.exec(t);
       return m !== null && cells.has(cellKey({ col: colNum(m[1]!), row: Number(m[2]) }));
     });
   };
@@ -312,7 +336,7 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   for (const e of on(lintModel.entities)) {
     const to = e.pairs.find((p) => p.key === "to")?.value;
     if (to === undefined || to.includes("..")) continue; // a range lands on many; checked per level as each renders
-    const landing = e.placements.find((p): p is Address => p.kind === "address");
+    const landing = e.placements.map(cellOf).find((a): a is Address => a !== null);
     if (!landing) continue;
     const key = cellKey({ col: colNum(landing.col), row: landing.row });
     if (roomsOn(to).has(key)) continue; // it lands in a room, which is a floor
