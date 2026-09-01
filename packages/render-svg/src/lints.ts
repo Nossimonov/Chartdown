@@ -335,20 +335,39 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   // 4 — dangling-connector: the landing cell is not walkable on the target level.
   for (const e of on(lintModel.entities)) {
     const to = e.pairs.find((p) => p.key === "to")?.value;
-    if (to === undefined || to.includes("..")) continue; // a range lands on many; checked per level as each renders
+    if (to === undefined) continue;
     const landing = e.placements.map(cellOf).find((a): a is Address => a !== null);
     if (!landing) continue;
     const key = cellKey({ col: colNum(landing.col), row: landing.row });
-    if (roomsOn(to).has(key)) continue; // it lands in a room, which is a floor
-    const word = surfaceByCell(all, to, hp).get(key);
-    if (word === undefined) continue;
-    const chain = model.chainOf(word);
-    if (chain.includes("terrace") || (!chain.includes("air") && !chain.includes("earth"))) continue;
-    diagnostics.push({
-      severity: "warning",
-      line: e.line,
-      message: `this connector lands on '${word}' on level '${to}', which cannot be stood on (spec 06 §8)`,
-    });
+    // EVERY LANDING OF THE FLIGHT, not only an unranged one (#344). A range was
+    // skipped outright, so a shaft declared `to=upper..cellar` could land in
+    // solid rock on every floor it passed through and nothing said so, while
+    // the identical document written as separate single-level connectors was
+    // checked normally. #338 named this as the sibling when it fixed the same
+    // blind spot in `unreachable-room`. It is a check that never RAN rather
+    // than one that fired wrongly, which is the kind found only by asking what
+    // a check covers.
+    //
+    // A `through=` level declares NO LANDING (spec 06 §8): a shaft boring
+    // through rock is what `through=` means, so reporting it would report the
+    // feature as the defect. ADR 0048 subtracts them the same way when it
+    // computes a flight's landings.
+    const through = e.pairs.find((p) => p.key === "through")?.value;
+    const levels = ctx?.levels ?? [level];
+    const bored = new Set(through ? levelSpan(levels, through) : []);
+    for (const lvl of levelSpan(levels, to)) {
+      if (bored.has(lvl)) continue;
+      if (roomsOn(lvl).has(key)) continue; // it lands in a room, which is a floor
+      const word = surfaceByCell(all, lvl, hp).get(key);
+      if (word === undefined) continue;
+      const chain = model.chainOf(word);
+      if (chain.includes("terrace") || (!chain.includes("air") && !chain.includes("earth"))) continue;
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `this connector lands on '${word}' on level '${lvl}', which cannot be stood on (spec 06 §8)`,
+      });
+    }
   }
 
   // 5 — overlapping-structures: two on one level sharing cells.
