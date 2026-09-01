@@ -858,17 +858,25 @@ export function renderBattlemap(
       // Resolution goes through the CHAIN, so a derived word (`plank : bridge`,
       // `stepping-stones : ford`) inherits its base's styling per ADR 0016.
       //
-      // The lookup stops AT the crossing word. Read down the whole chain it
-      // reaches `feature`, whose generic tint is not a ford — measured, that
-      // repainted every existing ford from the water colour to #cfd4b8, which
-      // is a default change nobody asked for rather than the themability this
-      // is about. Slicing keeps derivation working (`stepping-stones : ford`
-      // still inherits `ford`'s styling, ADR 0016) while a word's archetype
-      // default stays out of it.
-      const stop = chain.findIndex((w) => w === "ford" || w === "bridge");
-      const xingChain = stop >= 0 ? chain.slice(0, stop + 1) : chain;
-      const themedFill = model.theme.prop(xingChain, "fill");
-      const themedStroke = model.theme.prop(xingChain, "stroke");
+      // The lookup walks the word's own chain and stops there. It must not
+      // reach the ARCHETYPE: `feature`'s generic tint is not a ford, and
+      // reading down to it once repainted every existing ford from the water
+      // colour to #cfd4b8 — a default change nobody asked for rather than the
+      // themability this is about.
+      //
+      // It cannot reach it. `VocabTable.chain` stops before the archetype
+      // (`while (current && !current.baseIsArchetype)`), so a chain holds only
+      // vocabulary words, and `Theme.prop` walks exactly the chain it is given
+      // with no archetype fallback. The slice that used to sit here cut the
+      // chain at the literal words `ford`/`bridge` and was measured to be a
+      // no-op in every case: a crossing word is always LAST in its own chain,
+      // so the slice kept all of it (#409). It was the last site deciding a
+      // crossing by word (ADR 0053), and it was deciding nothing.
+      //
+      // The invariant it relied on is now asserted in crossing-theme.test.ts,
+      // because if `chain` ever grows an archetype the repaint above returns.
+      const themedFill = model.theme.prop(chain, "fill");
+      const themedStroke = model.theme.prop(chain, "stroke");
       if (isBridge) {
         // The deck's outline, then its planking. A theme naming only one gets
         // the other from the pair it belongs to rather than a clashing default.
