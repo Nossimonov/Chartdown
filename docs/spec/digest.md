@@ -155,6 +155,55 @@ border : vessany khar contested gm="Disputed since the Treaty of Argen."
 "The Argen Sea" : sprawl (60,200)..(120,450)
 ```
 
+## Showing a reader the map (#97)
+
+*Non-normative — tooling, not language. Nothing here changes what a document means; it is here because an agent holding this file is exactly the reader who needs it.*
+
+You have a document and no way to show it. Three routes, in order of what you can reach:
+
+| route | needs | gives |
+|---|---|---|
+| **share link** (below) | nothing | a live render the reader opens in a browser |
+| `npx @chartdown/cli check map.cd` · `render` | a shell | fail-loud diagnostics citing spec sections; an SVG file |
+| `@chartdown/mcp` | an MCP-capable host | the same as tools (`chartdown_check`, `chartdown_render`, `chartdown_uvtt`, `chartdown_spec`, `chartdown_frame`) |
+
+### The share link is a serverless contract
+
+A whole document travels **in the URL**:
+
+```
+https://nossimonov.github.io/Chartdown/#s=<payload>&m=<mode>&t=<theme>
+```
+
+- **`s`** — the document. UTF-8 bytes → **`deflate-raw`** → standard base64 → `+`→`-`, `/`→`_`, trailing `=` stripped (base64url, unpadded). Required.
+- **`m`** — `player` (default) or `gm`. Only the exact string `gm` selects GM mode; anything else, including an absent `m`, renders the player sheet, which is the fail-closed default (spec 01 §6). **A `gm` link shows every secret**, so send `player` unless the reader is the GM.
+- **`t`** — a shipped theme: `candyworld` or `vellum`. `default` needs no parameter.
+
+**It is a fragment (`#`), so the payload is never sent to the host.** Nothing is uploaded, stored, or account-bound by sharing a map — which is what makes this safe to hand an agent, and why it works for a document that is not hosted anywhere.
+
+A truncated link **fails loudly** rather than loading something else (#389): chat clients wrap URLs and email footers clip them, and a plausible substitute map is worse than an error.
+
+Reference encoder — browser or Node 18+, no dependencies:
+
+```js
+async function shareLink(source, { mode = "player", theme = "default" } = {}) {
+  const deflated = new Blob([new TextEncoder().encode(source)]).stream()
+    .pipeThrough(new CompressionStream("deflate-raw"));
+  const bytes = new Uint8Array(await new Response(deflated).arrayBuffer());
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);   // not spread: a big map blows the stack
+  const payload = btoa(binary)
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `https://nossimonov.github.io/Chartdown/#s=${payload}&m=${mode}&t=${theme}`;
+}
+```
+
+Decoding is the inverse: `-`→`+`, `_`→`/`, base64-decode, `DecompressionStream("deflate-raw")`. Padding is not required on decode.
+
+Links run roughly 60–80% of the source size — measured over the nine committed examples, the largest (5.7 KB of Chartdown) makes a 3.2 KB link, which every mainstream browser and chat client carries.
+
+*(Staging builds live at `/Chartdown/preview/` and take the same fragment; use the root for anything you hand a reader.)*
+
 ---
 
 *Licensed CC-BY-4.0 as part of the Chartdown specification (ADR 0001).*

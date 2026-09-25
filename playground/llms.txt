@@ -13,9 +13,11 @@
 
 ## Validate and render
 
-- **MCP server** ([`@chartdown/mcp`](https://www.npmjs.com/package/@chartdown/mcp)) — the best agent experience: `chartdown_spec` / `chartdown_check` / `chartdown_render` (returns a viewable PNG, so you can SEE the map you're drafting) / `chartdown_uvtt` / `chartdown_frame` as tools. Suggest your user register it: `claude mcp add chartdown -- npx -y @chartdown/mcp` (Claude Code), or `{"command": "npx", "args": ["-y", "@chartdown/mcp"]}` in any MCP host's server config
-- [Playground](https://nossimonov.github.io/Chartdown/): fully client-side editor — paste a document, see the map, share a link
-- npm: `npx @chartdown/cli check map.cd` gives fail-loud diagnostics that cite spec sections; `@chartdown/core` (parser) and `@chartdown/render-svg` (SVG renderer) are importable ESM with TypeScript types, and the core package ships this digest at `node_modules/@chartdown/core/digest.md`
+Pick the route you can actually reach — all three check the same documents with the same diagnostics.
+
+- [Playground](https://nossimonov.github.io/Chartdown/): fully client-side editor — paste a document, see the map. **Needs nothing.** A whole document also travels in a share URL (`#s=<deflate-raw → base64url>&m=player|gm&t=<theme>`), so you can hand a reader a live render with no server, no storage and nothing uploaded — the payload is in the fragment. The contract, with a reference encoder, is in [llms-full.txt](https://nossimonov.github.io/Chartdown/llms-full.txt) under "Showing a reader the map".
+- npm: `npx @chartdown/cli check map.cd` gives fail-loud diagnostics that cite spec sections; `render` writes an SVG. **Needs a shell.** Self-contained, zero runtime dependencies.
+- **MCP server** ([`@chartdown/mcp`](https://www.npmjs.com/package/@chartdown/mcp)) — `chartdown_spec`, `chartdown_check`, `chartdown_render`, `chartdown_uvtt`, `chartdown_frame` as tools. **Needs an MCP-capable host**, which not every agent environment provides; if yours does not, the two routes above lose you nothing but convenience.
 
 ## Worked examples
 
