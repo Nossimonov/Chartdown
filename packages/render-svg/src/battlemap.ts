@@ -5,7 +5,7 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, scaleOf, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
+import { CELL, cellCenter, cellKey, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, scaleOf, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, declaresOver, emitterOf, gmTitleFor, isCrossingShape, labelsOn, labelTextFor, overOf, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
 import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
@@ -953,22 +953,64 @@ export function renderBattlemap(
   /**
    * The `drop` flag (spec 06 §5): an area's boundary is a fall edge, rendered
    * as the classic ticked cliff line — boundary stroke plus short outward ticks.
+   *
+   * THE BOUNDARY IS THE FOOTPRINT'S PERIMETER, not one rectangle (#424). Drawn
+   * per range rect, this was two faces of one bug: a cell-list area produces no
+   * `range` arg and so got no cliff at all, silently, while a multi-range area
+   * ticked each rectangle in full — drawing a cliff straight through the seam
+   * where two of its own ranges abut. A reporter reshaped their map around it:
+   * the hills became single rectangles, the only form that got a clean edge.
+   *
+   * Structures already solved this. Union the cells, derive the perimeter
+   * (spec 06 §3) — which is how an L-shaped building gets one outline. Same
+   * tools, same answer, and the two spellings of one footprint now agree.
    */
-  function dropEdge(r: { x: number; y: number; w: number; h: number }): string {
+  function dropEdge(cells: Map<string, Cell>): string {
     const ink = model.theme.surface("ledge", "stroke", "#6b5d4a");
-    const parts: string[] = [
-      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, ...inkStroke(2), class: "drop" }),
-    ];
+    const parts: string[] = [];
     const tick = 4;
-    for (let x = r.x + 5; x < r.x + r.w; x += 9) {
-      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, ...inkStroke(1.2)}));
-      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, ...inkStroke(1.2)}));
-    }
-    for (let y = r.y + 5; y < r.y + r.h; y += 9) {
-      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
-      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
+    for (const run of mergeEdgeRuns(perimeterEdges(cells))) {
+      parts.push(el("line", { x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2, stroke: ink, ...inkStroke(2), class: "drop" }));
+      // Ticks fall OUTWARD, away from the ground that ends here.
+      if (run.dir === "n" || run.dir === "s") {
+        const out = run.dir === "n" ? -tick : tick;
+        for (let x = Math.min(run.x1, run.x2) + 5; x < Math.max(run.x1, run.x2); x += 9) {
+          parts.push(el("line", { x1: x, y1: run.y1, x2: x - 2, y2: run.y1 + out, stroke: ink, ...inkStroke(1.2) }));
+        }
+      } else {
+        const out = run.dir === "w" ? -tick : tick;
+        for (let y = Math.min(run.y1, run.y2) + 5; y < Math.max(run.y1, run.y2); y += 9) {
+          parts.push(el("line", { x1: run.x1, y1: y, x2: run.x1 + out, y2: y - 2, stroke: ink, ...inkStroke(1.2) }));
+        }
+      }
     }
     return el("g", {}, ...parts);
+  }
+
+  /** Every cell an `area` placement covers — ranges and single cells alike. */
+  function areaCells(e: EntityNode): Map<string, Cell> {
+    const cells = new Map<string, Cell>();
+    const add = (col: number, row: number): void => void cells.set(cellKey({ col, row }), { col, row });
+    const block = (a: AddressRange): void => {
+      const c1 = colToNumber(a.from.col);
+      const c2 = colToNumber(a.to.col);
+      for (let col = Math.min(c1, c2); col <= Math.max(c1, c2); col++) {
+        for (let row = Math.min(a.from.row, a.to.row); row <= Math.max(a.from.row, a.to.row); row++) add(col, row);
+      }
+    };
+    // Both spellings a terrain area reaches `renderTerrain` by: an explicit
+    // `area` shape, and a bare range or cell placed directly.
+    for (const p of e.placements) {
+      if (p.kind === "address") add(colToNumber(p.col), p.row);
+      else if (p.kind === "range") block(p);
+      else if (p.kind === "shape" && p.shape === "area") {
+        for (const arg of p.args) {
+          if (arg.kind === "address") add(colToNumber(arg.col), arg.row);
+          else if (arg.kind === "range") block(arg);
+        }
+      }
+    }
+    return cells;
   }
 
   /**
@@ -1147,7 +1189,6 @@ export function renderBattlemap(
             const r = rangeRect(arg);
             areaParts.push(bandRect(r));
             if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
-            if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
             // An unfloored area falls to the level below (spec 06 §5); `to=`
             // states where it actually lands when that is further down (#112).
             // The most famous fall in fantasy literature was a GM note,
@@ -1166,6 +1207,13 @@ export function renderBattlemap(
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
             areaParts.push(bandRect({ x: o.x, y: o.y, w: CELL, h: CELL }));
+            // The hatch reaches a single cell too. Range-only, `difficult` on a
+            // cell-list area drew plain ground — the same impoverished branch
+            // as the missing cliff, and this half changes what the square COSTS
+            // to cross, not only how it looks (#424).
+            if (e.flags.includes("difficult")) {
+              areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+            }
           }
         }
       } else if (p.kind === "shape" && p.shape === "path") {
@@ -1207,11 +1255,20 @@ export function renderBattlemap(
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
         if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
-        if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
       } else if (p.kind === "address") {
         const o = cellOrigin(p);
         areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
+        if (e.flags.includes("difficult")) {
+          areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+        }
       }
+    }
+    // ONE cliff for the whole footprint, after every placement is laid down —
+    // so two ranges that abut are one area with one outline, and a cell list
+    // gets an edge at all (#424).
+    if (e.flags.includes("drop")) {
+      const cells = areaCells(e);
+      if (cells.size > 0) areaParts.push(dropEdge(cells));
     }
     if (areaParts.length > 0 && !pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
     if (areaParts.length > 0) layers.areas.push(el("g", { id: pathParts.length === 0 ? anchor : undefined }, titleEl, ...areaParts));
