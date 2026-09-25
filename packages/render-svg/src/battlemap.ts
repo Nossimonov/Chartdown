@@ -8,8 +8,8 @@ import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placemen
 import { CELL, cellCenter, cellKey, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, scaleOf, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, declaresOver, emitterOf, gmTitleFor, isCrossingShape, labelsOn, labelTextFor, overOf, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
-import { coherenceLints } from "./lints";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, measureToNumber, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
+import { coherenceLints, laysSurface } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 export interface Frame {
@@ -81,6 +81,8 @@ export function renderBattlemap(
   // entity loop below, before any later let would initialise.
   // Emitter pools per field, as mask holes for the ambient wash (#106).
   const fieldHoles = new Map<string, string[]>();
+  /** Cell edges a `drop` has already ticked — an edge carries ONE cliff (#425). */
+  const droppedEdges = new Set<string>();
   /**
    * The same pools as GEOMETRY, with the emitter that made each one (#290).
    *
@@ -357,6 +359,13 @@ export function renderBattlemap(
     }
   }
 
+  // Ledges are cross-entity: two areas at different heights make an edge that
+  // belongs to neither alone, so this runs once over the level rather than
+  // inside renderTerrain (spec 06 §5, #425).
+  {
+    const edges = ledgeEdges(model.entities, droppedEdges);
+    if (edges.length > 0) layers.areas.push(el("g", { class: "ledge" }, cliffRuns(edges)));
+  }
   for (const pending of pendingHalfPlanes) renderHalfPlane(pending);
   for (const pending of pendingCrossings) renderCrossing(pending);
   // Spec 07 §5's claim order, on a battlemap: a line feature's name reads as
@@ -951,6 +960,61 @@ export function renderBattlemap(
   }
 
   /**
+   * EMERGENT LEDGES (spec 06 §5, #425). "Wherever adjacent placements'
+   * elevations differ, the renderer draws a theme-styled edge... There is no
+   * cliff-tracing grammar." That sentence was the one thing §5 promised and did
+   * not do: `elevation=` changed a zone's tint and drew no edge anywhere, so
+   * the only way to get a cliff was `drop`, the explicit spelling the sentence
+   * says an author should not need.
+   *
+   * A cell's elevation is the WINNING declaration on it — the last placement to
+   * cover it, as §3 resolves solidity ("always the winning declaration on a
+   * cell, never merely one that was made"). Ground nobody declared is `0`,
+   * including off-grid, which is what lets a terrace raised over open ground be
+   * bounded all the way round without the author declaring the plain about it.
+   *
+   * The HIGHER side owns the edge, so the ticks fall outward, away from the
+   * ground that ends — the same mark `drop` makes, which is why an edge already
+   * marked by `drop` is skipped rather than drawn twice.
+   */
+  function ledgeEdges(levelEntities: EntityNode[], taken: Set<string>): ReturnType<typeof perimeterEdges> {
+    const height = new Map<string, number>();
+    const cells = new Map<string, Cell>();
+    // WHAT SETS A CELL'S HEIGHT: anything that lays ground, plus anything that
+    // declares a height of its own — so a zone perch counts (§5's own example)
+    // and a chest standing on a terrace does not. `laysSurface` is shared with
+    // the lints rather than restated, because two readings of "is this ground"
+    // drifting apart is how #396 and #408 happened.
+    //
+    // A ground layer that declares NOTHING still participates, at the default
+    // 0: the winning declaration decides, and a blanket laid over a terrace
+    // flattens it. That is the cost of the winning-declaration rule, and the
+    // reason §5's idiom lays the level first and paints the raised thing after.
+    for (const e of levelEntities) {
+      const declared = pairOf(e.pairs, "elevation");
+      if (declared === undefined && !laysSurface(e)) continue;
+      const value = declared === undefined ? 0 : measureToNumber(declared);
+      for (const [key, cell] of surfaceCells(e, halfPlaneContext(model.doc, model.entities))) {
+        height.set(key, value);
+        cells.set(key, cell);
+      }
+    }
+    const edges: ReturnType<typeof perimeterEdges> = [];
+    const NEIGHBOR = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] } as const;
+    for (const [key, cell] of [...cells.entries()].sort()) {
+      const mine = height.get(key) ?? 0;
+      for (const dir of ["n", "e", "s", "w"] as const) {
+        const [dc, dr] = NEIGHBOR[dir];
+        const theirs = height.get(cellKey({ col: cell.col + dc, row: cell.row + dr })) ?? 0;
+        if (mine <= theirs) continue; // the higher side owns it; equal draws nothing
+        if (taken.has(segKey(edgeSegment({ kind: "address", col: colLetters(cell.col), row: cell.row }, dir)))) continue;
+        edges.push({ cell, dir });
+      }
+    }
+    return edges;
+  }
+
+  /**
    * The `drop` flag (spec 06 §5): an area's boundary is a fall edge, rendered
    * as the classic ticked cliff line — boundary stroke plus short outward ticks.
    *
@@ -966,10 +1030,22 @@ export function renderBattlemap(
    * tools, same answer, and the two spellings of one footprint now agree.
    */
   function dropEdge(cells: Map<string, Cell>): string {
+    return cliffRuns(perimeterEdges(cells));
+  }
+
+  /**
+   * The ticked cliff line along a set of boundary edges — the one mark a fall
+   * edge makes, wherever the reason for it came from (spec 06 §5, #425).
+   *
+   * `drop` says "this boundary is a fall"; an elevation difference says the
+   * same thing about the edge between two heights. A cell edge carries at most
+   * ONE cliff, so both reach here and the caller unions them first.
+   */
+  function cliffRuns(edges: ReturnType<typeof perimeterEdges>): string {
     const ink = model.theme.surface("ledge", "stroke", "#6b5d4a");
     const parts: string[] = [];
     const tick = 4;
-    for (const run of mergeEdgeRuns(perimeterEdges(cells))) {
+    for (const run of mergeEdgeRuns(edges)) {
       parts.push(el("line", { x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2, stroke: ink, ...inkStroke(2), class: "drop" }));
       // Ticks fall OUTWARD, away from the ground that ends here.
       if (run.dir === "n" || run.dir === "s") {
@@ -1268,7 +1344,14 @@ export function renderBattlemap(
     // gets an edge at all (#424).
     if (e.flags.includes("drop")) {
       const cells = areaCells(e);
-      if (cells.size > 0) areaParts.push(dropEdge(cells));
+      if (cells.size > 0) {
+        areaParts.push(dropEdge(cells));
+        // Remember where, so an elevation difference along the same edge does
+        // not draw a second cliff over the first (spec 06 §5, #425).
+        for (const pe of perimeterEdges(cells)) {
+          droppedEdges.add(segKey(edgeSegment({ kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row }, pe.dir)));
+        }
+      }
     }
     if (areaParts.length > 0 && !pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
     if (areaParts.length > 0) layers.areas.push(el("g", { id: pathParts.length === 0 ? anchor : undefined }, titleEl, ...areaParts));
