@@ -2686,7 +2686,13 @@ export function renderRegion(model: Model, body: string[], size: { w: number; h:
           // Not a road: a soft tinted band with an atlas dash-dot on top —
           // the classic political-boundary treatment, unmistakable at a
           // glance (owner: a thin solid stroke read as a river or road).
-          const stateFill = theme.terrainFill([current.state]);
+          // A border STATE word, not terrain. It asked `terrainFill` only for
+          // "the theme's fill, else something neutral" — and once an unknown
+          // TERRAIN word began taking a deterministic tint (#427), that borrowed
+          // fallback would have given every unstyled border state a hash-derived
+          // hue. A political boundary's default is deliberate, so it says so
+          // here rather than inheriting terrain's.
+          const stateFill = theme.prop([current.state], "fill") ?? "#d8d3c5";
           const stroke = shade(stateFill);
           const title = gmTitleFor(model, current.decl);
           layers.lines.push(
