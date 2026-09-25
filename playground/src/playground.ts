@@ -20,6 +20,7 @@ import reach from "../../examples/sundered-reach/sundered-reach.cd";
 import greyhallow from "../../examples/greyhallow/greyhallow.cd";
 import undercellar from "../../examples/undercellar/undercellar.cd";
 import vessany from "../../examples/vessany/vessany.cd";
+import { decodeShare, encodeShare } from "./share";
 
 const EXAMPLES: Record<string, string> = {
   "Fairwater Manor (battlemap)": manor,
@@ -274,24 +275,13 @@ function bindViewer(): void {
 }
 
 // ---------- serverless sharing: deflate → base64url → URL fragment ----------
-
-async function compress(text: string): Promise<string> {
-  const stream = new Blob([new TextEncoder().encode(text)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function decompress(encoded: string): Promise<string> {
-  const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
-  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Response(stream).text();
-}
+//
+// The codec lives in `share.ts` so the contract documented for agents in
+// `docs/spec/digest.md` is exercised by the same functions the playground runs
+// (#97) — documentation that cannot drift without a test failing.
 
 async function share(): Promise<void> {
-  const encoded = await compress(editor.value);
+  const encoded = await encodeShare(editor.value);
   const params = new URLSearchParams({ m: mode, t: themeSelect.value });
   const url = `${location.origin}${location.pathname}#s=${encoded}&${params}`;
   history.replaceState(null, "", `#s=${encoded}&${params}`);
@@ -442,7 +432,7 @@ async function init(): Promise<void> {
   const encoded = hash.get("s");
   if (encoded) {
     try {
-      editor.value = await decompress(encoded);
+      editor.value = await decodeShare(encoded);
       if (hash.get("m") === "gm") {
         mode = "gm";
         document.querySelector<HTMLButtonElement>('[data-mode="gm"]')?.setAttribute("aria-pressed", "true");
