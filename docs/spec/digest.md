@@ -67,6 +67,7 @@ Header keys: `map:` (REQUIRED, always the first header line: `battlemap` | `hexc
 - **Crossings/sites**: ford(difficult) bridge keep castle tower ruin dungeon lair camp mine shrine temple port cave landmark stairs ramp
 - **A feature's footprint is CELLS, a drawn shape is REFUSED** (06 §2, #207): a feature takes a cell (`F6`) or a range (`D4..F6`); `area`/`blob`/`path`/`ridge` are TERRAIN's forms and a feature given one MUST be an ERROR naming the word and offering both working spellings. Silence is the one certainly-wrong answer and it was the behaviour — `pit p : area D4..F6` rendered byte-identical to a document with no pit in it, no mark, no label, no diagnostic, so an author who wrote `area` having just written it for terrain three lines above could only find out by noticing an absence. Refused rather than drawn: the range form already says "these cells", and two spellings for one meaning is a choice the language need not offer. BATTLEMAP ONLY — on a region map an `area` on a feature is a DECLARED OUTLINE (05 §4, ADR 0026) and means something else entirely.
 - **A redaction is not the document** (06 §6/§10, ADR 0045, #320, #397): `hidden`/`[gm]` decide what is DRAWN, never what is REASONED ABOUT. Every diagnostic reads the DECLARED model, so a document produces the same diagnostics in `gm` and `player` — a renderer whose diagnostics depend on render mode is non-conforming. Not only §10’s six lints: §6’s implied-crossing warning read the drawn model and reported a `hidden` ford as a missing crossing (#397).
+- **Ledges are emergent** (06 §5, #425): a cell’s elevation is the WINNING declaration on it (last wins, as §3 resolves solidity); undeclared ground — including off-grid — is `0`, so a raised area is ledged all the way round with no plain declared about it; adjacent means sharing a cell EDGE, not a corner; the HIGHER side owns the edge and ticks outward; a cell edge carries at most ONE cliff, so `drop` and an elevation difference are two reasons for one mark.
 - **A stair is a way in** (06 §3, #301, ADR 0052): a `stairs` or `ramp` standing INSIDE a footprint is an entrance to it, with or without `to=`, and derived words count (`ladder : stairs`). §8's `to=` states level CONNECTION; reaching a room is a separate question, and a single-level document has no level to name. `slope` is excluded — a grade within a level, not a change of floor. So `unreachable-room` needs an opening, a connector, OR a stair.
 - **A path's ends reach the edges of its terminal cells** (06 §6, #145): a band is drawn through cell CENTRES, so a path drawn only that far stops halfway through the square it was declared to occupy — a road running to a wall, a shoreline or the map edge visibly falls short. The drawn band MUST span its terminal cells, extended along the DIRECTION OF TRAVEL so a diagonal leaves through the corner. Same rule 06 §10 states for lints (a path is its band, and a band is ground) applied to the INK: a road ending at M13 covers M13. Stopping at the centre is NON-CONFORMING and not cosmetic — it makes authors bend documents around it, as Fairwater Manor's King's Road once ran a cell INSIDE the gatehouse so the two would meet, putting a road's band in a building's interior. The DECLARED SPINE is unaffected: cells, crossings and lints keep reading the centres, so a band's own footprint never depends on its stroke width at the ends.
 - **Named water** (05 §2, #160): a `zone` in `[water]` names a STRETCH of the sea it sits in — label + at most a faint boundary in the water's tint, NEVER a fill (neither the land tint a `[terrain]` zone drew ON the water nor the opaque sea polygon a `[water]` one drew). Still an ordinary entity: id, `gm=`, `detail=`, referenceable. A zone on land is unchanged. A PASSAGE anchored to the lands it separates is staged (#162).
@@ -154,6 +155,55 @@ border : vessany khar contested gm="Disputed since the Treaty of Argen."
 [labels]
 "The Argen Sea" : sprawl (60,200)..(120,450)
 ```
+
+## Showing a reader the map (#97)
+
+*Non-normative — tooling, not language. Nothing here changes what a document means; it is here because an agent holding this file is exactly the reader who needs it.*
+
+You have a document and no way to show it. Three routes, in order of what you can reach:
+
+| route | needs | gives |
+|---|---|---|
+| **share link** (below) | nothing | a live render the reader opens in a browser |
+| `npx @chartdown/cli check map.cd` · `render` | a shell | fail-loud diagnostics citing spec sections; an SVG file |
+| `@chartdown/mcp` | an MCP-capable host | the same as tools (`chartdown_check`, `chartdown_render`, `chartdown_uvtt`, `chartdown_spec`, `chartdown_frame`) |
+
+### The share link is a serverless contract
+
+A whole document travels **in the URL**:
+
+```
+https://nossimonov.github.io/Chartdown/#s=<payload>&m=<mode>&t=<theme>
+```
+
+- **`s`** — the document. UTF-8 bytes → **`deflate-raw`** → standard base64 → `+`→`-`, `/`→`_`, trailing `=` stripped (base64url, unpadded). Required.
+- **`m`** — `player` (default) or `gm`. Only the exact string `gm` selects GM mode; anything else, including an absent `m`, renders the player sheet, which is the fail-closed default (spec 01 §6). **A `gm` link shows every secret**, so send `player` unless the reader is the GM.
+- **`t`** — a shipped theme: `candyworld` or `vellum`. `default` needs no parameter.
+
+**It is a fragment (`#`), so the payload is never sent to the host.** Nothing is uploaded, stored, or account-bound by sharing a map — which is what makes this safe to hand an agent, and why it works for a document that is not hosted anywhere.
+
+A truncated link **fails loudly** rather than loading something else (#389): chat clients wrap URLs and email footers clip them, and a plausible substitute map is worse than an error.
+
+Reference encoder — browser or Node 18+, no dependencies:
+
+```js
+async function shareLink(source, { mode = "player", theme = "default" } = {}) {
+  const deflated = new Blob([new TextEncoder().encode(source)]).stream()
+    .pipeThrough(new CompressionStream("deflate-raw"));
+  const bytes = new Uint8Array(await new Response(deflated).arrayBuffer());
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);   // not spread: a big map blows the stack
+  const payload = btoa(binary)
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `https://nossimonov.github.io/Chartdown/#s=${payload}&m=${mode}&t=${theme}`;
+}
+```
+
+Decoding is the inverse: `-`→`+`, `_`→`/`, base64-decode, `DecompressionStream("deflate-raw")`. Padding is not required on decode.
+
+Links run roughly 60–80% of the source size — measured over the nine committed examples, the largest (5.7 KB of Chartdown) makes a 3.2 KB link, which every mainstream browser and chat client carries.
+
+*(Staging builds live at `/Chartdown/preview/` and take the same fragment; use the root for anything you hand a reader.)*
 
 ---
 

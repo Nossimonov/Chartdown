@@ -69,7 +69,7 @@ function surfaceByCell(entities: EntityNode[], level: string, hp?: HalfPlaneCont
  * classified. Barriers and tokens are excluded — a wall drawn along a line is
  * not a floor, and a token stands ON ground rather than being it.
  */
-function laysSurface(e: EntityNode): boolean {
+export function laysSurface(e: EntityNode): boolean {
   if (e.archetype === "terrain" || e.archetype === "path") return true;
   if (e.archetype !== "feature") return false;
   return e.placements.some((p) => p.kind === "shape" && p.shape === "path");

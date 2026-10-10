@@ -5,11 +5,11 @@
  */
 
 import type { Address, AddressRange, Diagnostic, EntityNode, LabelHint, Placement } from "@chartdown/core";
-import { CELL, cellCenter, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, scaleOf, mergeEdgeRuns, perimeterEdges, rangeRect, segKey, structureCells, surfaceCells, type Cell } from "./grid";
+import { CELL, cellCenter, cellKey, cellOrigin, edgeSegment, halfPlaneContext, MARGIN, measureInCells, measureToCells, mergeEdgeRuns, perimeterEdges, rangeRect, scaleOf, segKey, structureCells, surfaceCells, type Cell } from "./grid";
 import { anchorAttr, declaresOver, emitterOf, gmTitleFor, isCrossingShape, labelsOn, labelTextFor, overOf, pairOf, type Model } from "./model";
 import { GRID_LINE, hasBattlemapGlyph, INK, PAPER, wordTint } from "./theme";
-import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
-import { coherenceLints } from "./lints";
+import { colLetters, colToNumber, el, esc as escapeText, fmt, inkStroke, levelSpan, measureToNumber, nearestOnPolyline, pip, pointsAttr, type Segment, shade, svgTitle, text, visibilityPolygon, type XY } from "./util";
+import { coherenceLints, laysSurface } from "./lints";
 import { barrierSides, collectWalls, impassableCells, SIDE_NAME } from "./walls";
 
 export interface Frame {
@@ -81,6 +81,11 @@ export function renderBattlemap(
   // entity loop below, before any later let would initialise.
   // Emitter pools per field, as mask holes for the ambient wash (#106).
   const fieldHoles = new Map<string, string[]>();
+  /** Cell edges a `drop` has already ticked — an edge carries ONE cliff (#425). */
+  const droppedEdges = new Set<string>();
+  /** Every path course on this level, for junction detection (#437), computed once on demand. */
+  let courseCache: ReturnType<typeof pathCourses> | null = null;
+  const coursesOnce = (): ReturnType<typeof pathCourses> => (courseCache ??= pathCourses());
   /**
    * The same pools as GEOMETRY, with the emitter that made each one (#290).
    *
@@ -357,6 +362,13 @@ export function renderBattlemap(
     }
   }
 
+  // Ledges are cross-entity: two areas at different heights make an edge that
+  // belongs to neither alone, so this runs once over the level rather than
+  // inside renderTerrain (spec 06 §5, #425).
+  {
+    const edges = ledgeEdges(model.entities, droppedEdges);
+    if (edges.length > 0) layers.areas.push(el("g", { class: "ledge" }, cliffRuns(edges)));
+  }
   for (const pending of pendingHalfPlanes) renderHalfPlane(pending);
   for (const pending of pendingCrossings) renderCrossing(pending);
   // Spec 07 §5's claim order, on a battlemap: a line feature's name reads as
@@ -689,6 +701,71 @@ export function renderBattlemap(
     return out;
   }
 
+  /**
+   * The cells every OTHER path's course runs through, with its elevation.
+   *
+   * Built from the whole level up front, because a junction is a fact about two
+   * entities and the render loop meets them one at a time — the problem
+   * `pendingCrossings` solves for crossings. Keyed on the course, not on the
+   * declared vertices: a road's band covers the cells between its corners, and
+   * resolving a junction against the vertices alone is the mistake #438 is
+   * about.
+   */
+  function pathCourses(): { e: EntityNode; cells: Set<string>; elevation: string | undefined; termini: Set<string> }[] {
+    const out: { e: EntityNode; cells: Set<string>; elevation: string | undefined; termini: Set<string> }[] = [];
+    for (const e of model.entities) {
+      for (const p of e.placements) {
+        if (p.kind !== "shape" || p.shape !== "path") continue;
+        const vertices = p.args.filter((a): a is Address => a.kind === "address").map(cellCenter);
+        if (vertices.length < 2) continue;
+        const key = (v: XY): string => `${Math.floor((v.x - MARGIN) / CELL) + 1}:${Math.floor((v.y - MARGIN) / CELL) + 1}`;
+        out.push({
+          e, cells: cellsAlong(vertices), elevation: pairOf(e.pairs, "elevation"),
+          // Its OWN ends, so a course that merely terminates in the same cell
+          // is not mistaken for one running through it.
+          termini: new Set([key(vertices[0]!), key(vertices[vertices.length - 1]!)]),
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Which ends of this course MEET another course, and so must not be pushed
+   * out to the cell face (ADR 0044, #437).
+   *
+   * ADR 0044 decided it: "A joining end stops at its meeting point and is not
+   * extended to the cell face... a course that joins another does not terminate
+   * in a cell of its own." The rule was reachable only through the `join`
+   * keyword, which a cell-placed `path` cannot spell — so every street placed
+   * by cells ran through the road it met and out the far side, which is the
+   * "stub road going nowhere" a dogfooding pass reported.
+   *
+   * ADR 0044 exempts the FIRST point, because in `from <ref> … join <ref>` the
+   * `from` end is a declared origin that really does terminate in its own cell.
+   * A cell path has no declared origin — both ends are cells, and a lane can
+   * meet a road at both (the reported map has one). So both ends are inferred
+   * here. That is a divergence from the ADR's letter, following its reasoning.
+   *
+   * A differing `elevation=` is a flyover, not a junction: the Sky Bridge
+   * passing over a street keeps its own geometry.
+   */
+  function meetingEnds(e: EntityNode, vertices: XY[], courses: ReturnType<typeof pathCourses>): { start: boolean; end: boolean } {
+    const mine = pairOf(e.pairs, "elevation");
+    const meets = (p: XY): boolean => {
+      // The same arithmetic `cellsAlong` uses, so the two agree which cell a
+      // point is in. A second way of deriving that is what caused #396/#408.
+      const key = `${Math.floor((p.x - MARGIN) / CELL) + 1}:${Math.floor((p.y - MARGIN) / CELL) + 1}`;
+      // The other course must run THROUGH this cell, not merely end in it.
+      // Two courses sharing a terminus are meeting end to end — both should
+      // still fill their own cell (#145). Suppressing there shortened a stream
+      // that happened to be where another one joined it: the host, not the
+      // joiner (caught by `undercellar` drifting).
+      return courses.some((c) => c.e !== e && c.elevation === mine && c.cells.has(key) && !c.termini.has(key));
+    };
+    return { start: meets(vertices[0]!), end: meets(vertices[vertices.length - 1]!) };
+  }
+
   function cellsAlong(pts: XY[]): Set<string> {
     const cells = new Set<string>();
     for (let i = 0; i < pts.length - 1; i++) {
@@ -951,24 +1028,133 @@ export function renderBattlemap(
   }
 
   /**
+   * EMERGENT LEDGES (spec 06 §5, #425). "Wherever adjacent placements'
+   * elevations differ, the renderer draws a theme-styled edge... There is no
+   * cliff-tracing grammar." That sentence was the one thing §5 promised and did
+   * not do: `elevation=` changed a zone's tint and drew no edge anywhere, so
+   * the only way to get a cliff was `drop`, the explicit spelling the sentence
+   * says an author should not need.
+   *
+   * A cell's elevation is the WINNING declaration on it — the last placement to
+   * cover it, as §3 resolves solidity ("always the winning declaration on a
+   * cell, never merely one that was made"). Ground nobody declared is `0`,
+   * including off-grid, which is what lets a terrace raised over open ground be
+   * bounded all the way round without the author declaring the plain about it.
+   *
+   * The HIGHER side owns the edge, so the ticks fall outward, away from the
+   * ground that ends — the same mark `drop` makes, which is why an edge already
+   * marked by `drop` is skipped rather than drawn twice.
+   */
+  function ledgeEdges(levelEntities: EntityNode[], taken: Set<string>): ReturnType<typeof perimeterEdges> {
+    const height = new Map<string, number>();
+    const cells = new Map<string, Cell>();
+    // WHAT SETS A CELL'S HEIGHT: anything that lays ground, plus anything that
+    // declares a height of its own — so a zone perch counts (§5's own example)
+    // and a chest standing on a terrace does not. `laysSurface` is shared with
+    // the lints rather than restated, because two readings of "is this ground"
+    // drifting apart is how #396 and #408 happened.
+    //
+    // A ground layer that declares NOTHING still participates, at the default
+    // 0: the winning declaration decides, and a blanket laid over a terrace
+    // flattens it. That is the cost of the winning-declaration rule, and the
+    // reason §5's idiom lays the level first and paints the raised thing after.
+    for (const e of levelEntities) {
+      const declared = pairOf(e.pairs, "elevation");
+      if (declared === undefined && !laysSurface(e)) continue;
+      const value = declared === undefined ? 0 : measureToNumber(declared);
+      for (const [key, cell] of surfaceCells(e, halfPlaneContext(model.doc, model.entities))) {
+        height.set(key, value);
+        cells.set(key, cell);
+      }
+    }
+    const edges: ReturnType<typeof perimeterEdges> = [];
+    const NEIGHBOR = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] } as const;
+    for (const [key, cell] of [...cells.entries()].sort()) {
+      const mine = height.get(key) ?? 0;
+      for (const dir of ["n", "e", "s", "w"] as const) {
+        const [dc, dr] = NEIGHBOR[dir];
+        const theirs = height.get(cellKey({ col: cell.col + dc, row: cell.row + dr })) ?? 0;
+        if (mine <= theirs) continue; // the higher side owns it; equal draws nothing
+        if (taken.has(segKey(edgeSegment({ kind: "address", col: colLetters(cell.col), row: cell.row }, dir)))) continue;
+        edges.push({ cell, dir });
+      }
+    }
+    return edges;
+  }
+
+  /**
    * The `drop` flag (spec 06 §5): an area's boundary is a fall edge, rendered
    * as the classic ticked cliff line — boundary stroke plus short outward ticks.
+   *
+   * THE BOUNDARY IS THE FOOTPRINT'S PERIMETER, not one rectangle (#424). Drawn
+   * per range rect, this was two faces of one bug: a cell-list area produces no
+   * `range` arg and so got no cliff at all, silently, while a multi-range area
+   * ticked each rectangle in full — drawing a cliff straight through the seam
+   * where two of its own ranges abut. A reporter reshaped their map around it:
+   * the hills became single rectangles, the only form that got a clean edge.
+   *
+   * Structures already solved this. Union the cells, derive the perimeter
+   * (spec 06 §3) — which is how an L-shaped building gets one outline. Same
+   * tools, same answer, and the two spellings of one footprint now agree.
    */
-  function dropEdge(r: { x: number; y: number; w: number; h: number }): string {
+  function dropEdge(cells: Map<string, Cell>): string {
+    return cliffRuns(perimeterEdges(cells));
+  }
+
+  /**
+   * The ticked cliff line along a set of boundary edges — the one mark a fall
+   * edge makes, wherever the reason for it came from (spec 06 §5, #425).
+   *
+   * `drop` says "this boundary is a fall"; an elevation difference says the
+   * same thing about the edge between two heights. A cell edge carries at most
+   * ONE cliff, so both reach here and the caller unions them first.
+   */
+  function cliffRuns(edges: ReturnType<typeof perimeterEdges>): string {
     const ink = model.theme.surface("ledge", "stroke", "#6b5d4a");
-    const parts: string[] = [
-      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: ink, ...inkStroke(2), class: "drop" }),
-    ];
+    const parts: string[] = [];
     const tick = 4;
-    for (let x = r.x + 5; x < r.x + r.w; x += 9) {
-      parts.push(el("line", { x1: x, y1: r.y, x2: x - 2, y2: r.y - tick, stroke: ink, ...inkStroke(1.2)}));
-      parts.push(el("line", { x1: x, y1: r.y + r.h, x2: x - 2, y2: r.y + r.h + tick, stroke: ink, ...inkStroke(1.2)}));
-    }
-    for (let y = r.y + 5; y < r.y + r.h; y += 9) {
-      parts.push(el("line", { x1: r.x, y1: y, x2: r.x - tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
-      parts.push(el("line", { x1: r.x + r.w, y1: y, x2: r.x + r.w + tick, y2: y - 2, stroke: ink, ...inkStroke(1.2)}));
+    for (const run of mergeEdgeRuns(edges)) {
+      parts.push(el("line", { x1: run.x1, y1: run.y1, x2: run.x2, y2: run.y2, stroke: ink, ...inkStroke(2), class: "drop" }));
+      // Ticks fall OUTWARD, away from the ground that ends here.
+      if (run.dir === "n" || run.dir === "s") {
+        const out = run.dir === "n" ? -tick : tick;
+        for (let x = Math.min(run.x1, run.x2) + 5; x < Math.max(run.x1, run.x2); x += 9) {
+          parts.push(el("line", { x1: x, y1: run.y1, x2: x - 2, y2: run.y1 + out, stroke: ink, ...inkStroke(1.2) }));
+        }
+      } else {
+        const out = run.dir === "w" ? -tick : tick;
+        for (let y = Math.min(run.y1, run.y2) + 5; y < Math.max(run.y1, run.y2); y += 9) {
+          parts.push(el("line", { x1: run.x1, y1: y, x2: run.x1 + out, y2: y - 2, stroke: ink, ...inkStroke(1.2) }));
+        }
+      }
     }
     return el("g", {}, ...parts);
+  }
+
+  /** Every cell an `area` placement covers — ranges and single cells alike. */
+  function areaCells(e: EntityNode): Map<string, Cell> {
+    const cells = new Map<string, Cell>();
+    const add = (col: number, row: number): void => void cells.set(cellKey({ col, row }), { col, row });
+    const block = (a: AddressRange): void => {
+      const c1 = colToNumber(a.from.col);
+      const c2 = colToNumber(a.to.col);
+      for (let col = Math.min(c1, c2); col <= Math.max(c1, c2); col++) {
+        for (let row = Math.min(a.from.row, a.to.row); row <= Math.max(a.from.row, a.to.row); row++) add(col, row);
+      }
+    };
+    // Both spellings a terrain area reaches `renderTerrain` by: an explicit
+    // `area` shape, and a bare range or cell placed directly.
+    for (const p of e.placements) {
+      if (p.kind === "address") add(colToNumber(p.col), p.row);
+      else if (p.kind === "range") block(p);
+      else if (p.kind === "shape" && p.shape === "area") {
+        for (const arg of p.args) {
+          if (arg.kind === "address") add(colToNumber(arg.col), arg.row);
+          else if (arg.kind === "range") block(arg);
+        }
+      }
+    }
+    return cells;
   }
 
   /**
@@ -1147,7 +1333,6 @@ export function renderBattlemap(
             const r = rangeRect(arg);
             areaParts.push(bandRect(r));
             if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
-            if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
             // An unfloored area falls to the level below (spec 06 §5); `to=`
             // states where it actually lands when that is further down (#112).
             // The most famous fall in fantasy literature was a GM note,
@@ -1166,6 +1351,13 @@ export function renderBattlemap(
           } else if (arg.kind === "address") {
             const o = cellOrigin(arg);
             areaParts.push(bandRect({ x: o.x, y: o.y, w: CELL, h: CELL }));
+            // The hatch reaches a single cell too. Range-only, `difficult` on a
+            // cell-list area drew plain ground — the same impoverished branch
+            // as the missing cliff, and this half changes what the square COSTS
+            // to cross, not only how it looks (#424).
+            if (e.flags.includes("difficult")) {
+              areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+            }
           }
         }
       } else if (p.kind === "shape" && p.shape === "path") {
@@ -1173,7 +1365,12 @@ export function renderBattlemap(
         const pts = addresses.map(cellCenter);
         // Drawn to the edges of the terminal cells; RECORDED as the declared
         // spine (#145) — see extendToCellEdge.
-        const drawn = extendToCellEdge(pts, p.joinsAtEnd === true);
+        // A JUNCTION DOES NOT OVERSHOOT (ADR 0044, #437). An end landing on
+        // another course stops there instead of being pushed to the cell face
+        // — which is what `join` has always done, and what a cell-placed path
+        // could never say.
+        const met = meetingEnds(e, pts, coursesOnce());
+        const drawn = extendToCellEdge(pts, p.joinsAtEnd === true || met.end, !met.start);
         // Unit-aware, and shared with `surfaceCells` so the ink and the ground
         // agree (#374). `width=10ft` at `scale: 5ft` is `width=2`.
         const width = measureInCells(pairOf(e.pairs, "width"), scaleOf(model)) * CELL * 0.85;
@@ -1207,10 +1404,26 @@ export function renderBattlemap(
         const r = rangeRect(p);
         areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill, opacity: 0.85 }));
         if (e.flags.includes("difficult")) areaParts.push(el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "url(#hatch)" }));
-        if (e.flags.includes("drop")) areaParts.push(dropEdge(r));
       } else if (p.kind === "address") {
         const o = cellOrigin(p);
         areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill }));
+        if (e.flags.includes("difficult")) {
+          areaParts.push(el("rect", { x: o.x, y: o.y, width: CELL, height: CELL, fill: "url(#hatch)" }));
+        }
+      }
+    }
+    // ONE cliff for the whole footprint, after every placement is laid down —
+    // so two ranges that abut are one area with one outline, and a cell list
+    // gets an edge at all (#424).
+    if (e.flags.includes("drop")) {
+      const cells = areaCells(e);
+      if (cells.size > 0) {
+        areaParts.push(dropEdge(cells));
+        // Remember where, so an elevation difference along the same edge does
+        // not draw a second cliff over the first (spec 06 §5, #425).
+        for (const pe of perimeterEdges(cells)) {
+          droppedEdges.add(segKey(edgeSegment({ kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row }, pe.dir)));
+        }
       }
     }
     if (areaParts.length > 0 && !pendingTerrainLabels.some((t) => t.e === e)) pendingTerrainLabels.push({ e, course: null });
@@ -2337,7 +2550,7 @@ function halfPlaneArea(compass: string, course: XY[], frame: { cols: number; row
  * it through the trunk and out the far side. The first point is unaffected —
  * `from` is always a free end.
  */
-function extendToCellEdge(pts: XY[], joinsAtEnd = false): XY[] {
+function extendToCellEdge(pts: XY[], joinsAtEnd = false, freeStart = true): XY[] {
   if (pts.length < 2) return pts;
   const out = pts.map((p) => ({ ...p }));
   const reach = (end: XY, inward: XY): void => {
@@ -2357,7 +2570,7 @@ function extendToCellEdge(pts: XY[], joinsAtEnd = false): XY[] {
     end.x += ux * t;
     end.y += uy * t;
   };
-  reach(out[0]!, out[1]!);
+  if (freeStart) reach(out[0]!, out[1]!);
   if (!joinsAtEnd) reach(out[out.length - 1]!, out[out.length - 2]!);
   return out;
 }
