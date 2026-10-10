@@ -55,6 +55,18 @@ export interface Model {
   archetypeOf(word: string | null): string | null;
   /** Vocab facet default for a word (chain-walked); entity pairs override it. */
   facetOf(word: string | null, key: string): string | undefined;
+  /**
+   * Every word that is a FIELD (spec 04 §5) — the emitter parameter namespace.
+   *
+   * A field's name IS its parameter, so the set of legal emitter keys is
+   * derived from the vocabulary and cannot be a static list. The renderer read
+   * the literal key `light` instead, so `glow : light` emitted nothing and a
+   * setting's own `radiation : field` was read, discarded, and never mentioned
+   * (#395).
+   */
+  fieldWords(): Set<string>;
+  /** Every facet key a word declares, unioned along its derivation chain (#195). */
+  facetKeysOf(word: string | null): Set<string>;
   /** Declared states for a word, unioned along its derivation chain (spec 04 §2). */
   statesOf(word: string | null): Set<string>;
   /**
@@ -72,6 +84,79 @@ export function entityAnchor(e: { ids: string[]; name: string | null }): string 
   if (e.ids.length > 0) return e.ids[0]!;
   if (e.name) return slugify(e.name);
   return null;
+}
+
+/**
+ * The emitter on an entity: the `key=value` pair whose KEY IS A FIELD WORD,
+ * else the vocabulary facet default of the same shape (#395, spec 04 §5).
+ *
+ * A field's name IS its parameter, so this namespace is derived from the
+ * vocabulary and cannot be a static list — `radiation : field` is what makes
+ * `radiation=40ft` mean something. Reading the literal key `light` instead
+ * meant `glow : light` drew no pool while its ambient wash still darkened the
+ * sheet (a dark room with an invisible lamp, worse than either half alone),
+ * and a setting's own field was read, discarded and never mentioned — the
+ * exact failure spec 04 §2's #195 unconsumed-key warning exists to close, and
+ * which it cannot catch here because a declared field word IS consumable.
+ *
+ * ADR 0016 requires the chain, not the word: `glow : light` is a light.
+ */
+export function emitterOf(model: Model, e: EntityNode): { field: string; value: string } | undefined {
+  const fields = model.fieldWords();
+  const pair = e.pairs.find((p) => fields.has(p.key));
+  if (pair) return { field: pair.key, value: pair.value };
+  // Vocab facet defaults (#64, spec 06 §2): a campfire glows unless told
+  // otherwise, and so does a setting's own `reactor : feature radiation=40ft`.
+  for (const key of model.facetKeysOf(e.typeWord)) {
+    if (!fields.has(key)) continue;
+    const value = model.facetOf(e.typeWord, key);
+    if (value !== undefined) return { field: key, value };
+  }
+  return undefined;
+}
+
+/**
+ * Two `on` references name the intersection of two bands (spec 06 §6).
+ *
+ * Counted the same way `renderCrossing` counts them — every `on` ref, whatever
+ * it carries. An earlier version required both to be BARE, which quietly broke
+ * the documented way out of an ambiguous crossing: spec 06 §6 says `at <cell>`
+ * chooses between two intersections, and it is spelled by hanging `at` off the
+ * second reference (`on redford on tollroad at C9`), so the ambiguity error
+ * named a remedy that then failed with a different error (#408).
+ *
+ * One `on` with an `at` is spec 02 §7's local frame (`table t : on kitchen at
+ * B2`) and is not a crossing; two references are.
+ */
+export function isCrossingShape(e: Pick<EntityNode, "placements">): boolean {
+  return e.placements.filter((p) => p.kind === "relational" && p.form === "on").length >= 2;
+}
+
+/**
+ * Does this entity DECLARE which band is over, itself or through its vocabulary?
+ *
+ * Presence, not value — the difference between "this is a crossing" and "this
+ * is how it stacks". A crossing may be placed by explicit cells rather than by
+ * `on <water> on <road>` (`ford : E5 difficult` is in the corpus), so the
+ * placement shape cannot be the whole test; what makes that a crossing is that
+ * `ford` declares `over=water`. Together with the shape, this is what replaces
+ * the old test for the literal words (ADR 0053).
+ */
+export function declaresOver(model: Model, e: Pick<EntityNode, "pairs" | "typeWord">): boolean {
+  return pairOf(e.pairs, "over") !== undefined || model.facetOf(e.typeWord, "over") !== undefined;
+}
+
+/**
+ * Which band a crossing draws on top: `path` or `water` (spec 06 §6, ADR 0053).
+ *
+ * The entity's own pair wins, then the vocabulary facet along the derivation
+ * chain, then `path` — a road continuing over water is the common case, the
+ * placement has already declared the intent to cross, and a wrong default is
+ * visible on the page and one word to correct.
+ */
+export function overOf(model: Model, e: Pick<EntityNode, "pairs" | "typeWord">): "path" | "water" {
+  const declared = pairOf(e.pairs, "over") ?? model.facetOf(e.typeWord, "over");
+  return declared === "water" ? "water" : "path";
 }
 
 export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, diagnostics: Diagnostic[] = []): Model {
@@ -143,6 +228,9 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   const archetypeOf = (word: string | null): string | null => (word ? vocab.archetypeOf(word) : null);
   const facetOf = (word: string | null, key: string): string | undefined =>
     word ? vocab.facetOf(word, key) : undefined;
+  const fieldWords = (): Set<string> => vocab.fieldWords();
+  const facetKeysOf = (word: string | null): Set<string> =>
+    word ? vocab.facetKeysOf(word) : new Set<string>();
   const statesOf = (word: string | null): Set<string> => (word ? vocab.statesOf(word) : new Set<string>());
 
   const labelsHeader = header.get("labels");
@@ -158,7 +246,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   // placements, exactly as `every … in <range>` already does.
   expandEveryAlong(entities, doc, diagnostics);
   if (doc.mapType === "battlemap") {
-    resolveRelativePlacements(entities, chainOf, resolvedNotes, diagnostics);
+    resolveRelativePlacements(entities, chainOf, facetOf, resolvedNotes, diagnostics);
     // The rest of spec 02 §7's forms (#239): `at <cell>` is the bare cell,
     // `from … to …` draws a course, and anything a grid cannot site is
     // REPORTED. Six of the nine forms used to render byte-identically to
@@ -179,7 +267,7 @@ export function buildModel(doc: DocumentNode, mode: RenderMode, theme: Theme, di
   // named rooms — not "a map in key mode", which renumbers every display name.
   // In `names` mode only explicitly pinned entities take a number.
   const keys = labelsMode === "none" ? new Map<object, number>() : assignKeys(entities, hexLines, diagnostics, labelsMode === "keyed");
-  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, facetOf, statesOf, resolvedNotes };
+  return { doc, mode, entities, hexLines, labelOverrides, gmNotes, header, seed, theme, labelsMode, keys, chainOf, archetypeOf, fieldWords, facetKeysOf, facetOf, statesOf, resolvedNotes };
 }
 
 /**
@@ -265,6 +353,7 @@ function footprintCells(e: EntityNode): Set<string> {
 function resolveRelativePlacements(
   entities: EntityNode[],
   chainOf: (word: string | null) => string[],
+  facetOf: (word: string | null, key: string) => string | undefined,
   resolvedNotes: Map<EntityNode, string>,
   diagnostics: Diagnostic[],
 ): void {
@@ -323,7 +412,12 @@ function resolveRelativePlacements(
       if (!parent) return p; // unresolved refs are the parser's errors, not ours
       if (parent.archetype !== "structure") {
         const chain = chainOf(e.typeWord);
-        if (chain.includes("ford") || chain.includes("bridge")) return p; // crossing chooser: a path's frame IS the document grid (spec 06 §6)
+        // A crossing may name a path's frame to choose among ambiguous
+        // intersections: a path's frame IS the document grid (spec 06 §6).
+        // Keyed to the crossing, not to two words (ADR 0053) — `causeway
+        // c1 : on redford at K9` was refused where the same line spelled
+        // `ford` was allowed.
+        if (facetOf(e.typeWord, "over") !== undefined || pairOf(e.pairs, "over") !== undefined || isCrossingShape(e)) return p; // crossing chooser: a path's frame IS the document grid (spec 06 §6)
         diagnostics.push({
           severity: "error",
           line: e.line,
@@ -367,9 +461,23 @@ function resolveRelativePlacements(
   });
 }
 
-/** Derived-label gate (spec 07 §3): `labels: none` silences everything except `note` free text. */
+/**
+ * Derived-label gate (spec 07 §3): `labels: none` silences everything except
+ * `note` free text.
+ *
+ * Matched through the CHAIN, not the literal word (#400). `note` is in spec 04
+ * §2's load-bearing table and ADR 0016 makes literal matching non-conforming,
+ * so `waypoint : note` is free text too.
+ *
+ * NOTHING OBSERVES THE DIFFERENCE TODAY, and that is why it was worth changing
+ * rather than leaving. The only caller that passes `e` is `region.ts`'s label
+ * pass, and the note branch there returns before reaching this — so the literal
+ * comparison was dead, and a second caller passing `e` would have inherited a
+ * silent non-conformance. Do not "simplify" this back to `=== "note"`: the
+ * simplification is invisible until the day it is not.
+ */
 export function labelsOn(model: Model, e?: { typeWord?: string | null }): boolean {
-  return model.labelsMode !== "none" || e?.typeWord === "note";
+  return model.labelsMode !== "none" || model.chainOf(e?.typeWord ?? null).includes("note");
 }
 
 /** What a label site draws for a named node: the name — or its key number in keyed mode (spec 07 §3). */

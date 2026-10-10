@@ -21,7 +21,7 @@ describe("MCP tool logic (issue #58)", () => {
       ["map: battlemap", "grid: square 10x10", "scale: 5ft", "[terrain]", "river r1 : path A5 J5 width=1", "road r2 : path E1 E10"].join("\n"),
     );
     expect(warny.isError).toBeUndefined();
-    expect(warny.text).toContain("no ford or bridge");
+    expect(warny.text).toContain("with no crossing");
   });
 
   it("check: errors fail loud with line numbers and spec citations", () => {

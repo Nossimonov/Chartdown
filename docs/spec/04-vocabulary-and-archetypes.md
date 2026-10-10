@@ -10,7 +10,7 @@ The language defines only **archetypes**: closed, setting-free behavioral catego
 |---|---|
 | `terrain` | area-filling ground cover; may carry `difficult` |
 | `path` | linear feature; optional `width=` |
-| `feature` | point-placed glyph; optional `facing=` |
+| `feature` | point-placed glyph; optional `facing=`; `over=` where it crosses two bands (06 §6) |
 | `structure` | encloses space; has walls, may contain openings |
 | `barrier` | blocks; facets `passes=` / `sight=` |
 | `opening` | passage through a barrier; same facets (door: `passes=closed sight=none`; window: `passes=none sight=all`) |
@@ -80,6 +80,8 @@ Most of the standard library is ordinary vocabulary: a word, an archetype, some 
 | `start` | staging zone (where the party begins) | 06 §4 | yes |
 | `note` | free text — renders as its text, no marker | 07 §2 | yes |
 | `light` | the shipped **field**: `light=<measure>` emitters over a `light:` ambient | §5, 06 §2 | yes |
+| `stairs` | a change of floor, and so a **way into** the room it stands in | 06 §3, §5 | yes |
+| `ramp` | the same, on a grade rather than steps | 06 §3, §5 | yes |
 
 Every row inherits, per the rule above — a table of exceptions would be a maintenance hazard, and a uniform answer is one an author can predict. **A spec section that attaches behaviour to a word is committing to that behaviour being inheritable, and MUST register the word here** or use a facet instead.
 

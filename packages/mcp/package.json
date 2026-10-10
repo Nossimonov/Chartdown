@@ -1,6 +1,6 @@
 {
   "name": "@chartdown/mcp",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Chartdown MCP server — check, render, and spec tools so AI agents can draft, validate, and visually verify plain-text TTRPG maps.",
   "license": "MIT",
   "type": "module",
@@ -36,6 +36,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@resvg/resvg-wasm": "^2.6.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }

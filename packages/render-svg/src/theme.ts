@@ -281,8 +281,29 @@ export class Theme {
     return value;
   }
 
+  /**
+   * A terrain word's fill: the theme, then a deterministic tint for a word
+   * nobody has styled (#427).
+   *
+   * Every known terrain word is already in the built-in theme (TERRAIN_FILLS is
+   * folded into it below), so this fallback is reached only by a word the
+   * language has never seen — and those all came out the same grey. An author
+   * sketching a settlement writes `houses`, `garden`, `plaza`, `graveyard` and
+   * got four identical rectangles, in the case where telling them apart matters
+   * most.
+   *
+   * An unknown FEATURE word has always taken `wordTint`, and so have realms.
+   * Terrain was the one archetype that did not, which is the asymmetry rather
+   * than a rule — spec 04 §3 promises an unknown word works, and four
+   * indistinguishable blocks is working the way an empty page is working.
+   *
+   * The chain's BASE word is hashed, so a derived family shares its tint.
+   */
   terrainFill(chain: string[], ctx: ResolveContext = {}): string {
-    return this.prop(chain, "fill", ctx) ?? "#d8d3c5";
+    const themed = this.prop(chain, "fill", ctx);
+    if (themed !== undefined) return themed;
+    const base = chain[chain.length - 1];
+    return base ? wordTint(base) : "#d8d3c5";
   }
 
   pathStroke(chain: string[]): { stroke: string; dash?: string } {
@@ -388,7 +409,7 @@ export class Theme {
   }
 }
 
-export const terrainFill = (word: string): string => TERRAIN_FILLS[word] ?? "#d8d3c5";
+
 
 /**
  * Deterministic tint for glyphless words (#71): the vocabulary is open, so no
@@ -401,7 +422,14 @@ export function wordTint(word: string): string {
   let h = 0;
   for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) >>> 0;
   const hue = Math.round((h * 137.508) % 360);
-  return `hsl(${hue} 32% 55%)`;
+  // COMMA form, deliberately (#370). CSS Color 4's space-separated `hsl(h s% l%)`
+  // parses in browsers and NOT in older SVG rasterizers: cairosvg and friends
+  // drop the fill and the realm overlays arrive opaque black — a valid
+  // document, a valid render, and unusable output with no error anywhere. The
+  // audience for these files is VTT importers and map pipelines, the consumers
+  // least likely to track CSS Color 4, and the space form buys nothing an
+  // author can perceive.
+  return `hsl(${hue}, 32%, 55%)`;
 }
 
 export const tierOf = (word: string | null): { r: number; font: number; weight: string } =>

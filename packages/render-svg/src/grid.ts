@@ -114,7 +114,7 @@ export function structureCells(
  * a cell has on it — two definitions of "solid" is the shape of #131.
  */
 /**
- * A declared `width=` in CELLS (#374).
+ * A declared measure in CELLS — `width=`, `size=` (#374, #387).
  *
  * On a battlemap a bare `width=2` already means two cells, and a unit-suffixed
  * one is a real-world measure: at `scale: 5ft`, `width=10ft` IS `width=2`. Both
@@ -130,7 +130,7 @@ export function structureCells(
  * `light=` has always converted correctly through `measureToCells`; only
  * `width=` was left reading raw digits.
  */
-export function widthInCells(value: string | undefined, scale: number): number {
+export function measureInCells(value: string | undefined, scale: number): number {
   if (value === undefined) return 1;
   // A unit is what distinguishes "two cells" from "ten feet".
   const measure = measureToNumber(value);
@@ -142,7 +142,7 @@ export function surfaceCells(
   e: { pairs: { key: string; value: string }[]; placements: Placement[] },
   ctx?: HalfPlaneContext,
 ): Map<string, Cell> {
-  const width = widthInCells(e.pairs.find((p) => p.key === "width")?.value, ctx?.scale ?? 5);
+  const width = measureInCells(e.pairs.find((p) => p.key === "width")?.value, ctx?.scale ?? 5);
   const cells = new Map<string, Cell>();
   for (const p of e.placements) {
     // A relational extent (spec 06 §6, ADR 0038). Resolved HERE rather than in

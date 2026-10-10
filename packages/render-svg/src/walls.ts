@@ -109,6 +109,29 @@ export function barrierSides(
   return replaced;
 }
 
+/**
+ * Does this barrier stop sight? THE FACET DECIDES AND THE WORD DOES NOT —
+ * spec 06 §3 states that outright, and spec 04 §1 makes `sight=` the thing
+ * that "decides whether an edge is a hole in `line_of_sight`" (#396).
+ *
+ * A barrier's sight default is the opposite of an opening's: `sightOf` assumes
+ * no leaf means sight passes, which is right for an arch and exactly wrong for
+ * a wall. So the default here is `none` — a cave-in is opaque, a `fence`-derived
+ * choke passes sight.
+ *
+ * ONE predicate for both paths. They disagreed: the structure-detail path read
+ * the facet while the freestanding path tested the literal word `fence`, so
+ * `hedge : barrier sight=all` exported three occluding segments standing on its
+ * own and none replacing a room's side — the same declaration, opposite
+ * exports, decided by which slot it was written in. A hedge, a rope line, a row
+ * of stakes: anything that stops bodies but not sight, declared honestly, went
+ * to a VTT as a wall. And `thicket : fence sight=none` did the reverse, ignoring
+ * an explicit override because its chain mentioned `fence`.
+ */
+export function barrierOccludes(model: Model, word: string | null): boolean {
+  return (model.facetOf(word, "sight") ?? "none") !== "all";
+}
+
 export function collectWalls(model: Model): WallGeometry {
   // Openings first, keyed geometrically across ALL owners: an opening declared
   // by either side of a shared edge opens it (spec 06 §3) — and an opening may
@@ -165,16 +188,10 @@ export function collectWalls(model: Model): WallGeometry {
         const address: Address = { kind: "address", col: colLetters(pe.cell.col), row: pe.cell.row };
         const seg = edgeSegment(address, pe.dir);
         const word = replaced.get(segKey(seg));
-        // A BARRIER's sight default is the opposite of an opening's: `sightOf`
-        // assumes no leaf means sight passes, which is right for an arch and
-        // exactly wrong for a wall. Reading the facet directly and defaulting
-        // to `none` keeps a cave-in opaque while letting a `fence`-derived
-        // choke pass sight, which is the facet doing the deciding rather than
-        // the word.
-        if (word !== undefined && (model.facetOf(word, "sight") ?? "none") === "all") continue;
+        if (word !== undefined && !barrierOccludes(model, word)) continue;
         push(seg);
       }
-    } else if (e.archetype === "barrier" && !model.chainOf(e.typeWord).includes("fence")) {
+    } else if (e.archetype === "barrier" && barrierOccludes(model, e.typeWord)) {
       for (const p of e.placements) {
         if (p.kind === "edge") push(edgeSegment(p.at, p.dir));
       }

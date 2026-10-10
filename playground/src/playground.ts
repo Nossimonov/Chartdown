@@ -20,6 +20,7 @@ import reach from "../../examples/sundered-reach/sundered-reach.cd";
 import greyhallow from "../../examples/greyhallow/greyhallow.cd";
 import undercellar from "../../examples/undercellar/undercellar.cd";
 import vessany from "../../examples/vessany/vessany.cd";
+import { decodeShare, encodeShare } from "./share";
 
 const EXAMPLES: Record<string, string> = {
   "Fairwater Manor (battlemap)": manor,
@@ -274,24 +275,13 @@ function bindViewer(): void {
 }
 
 // ---------- serverless sharing: deflate → base64url → URL fragment ----------
-
-async function compress(text: string): Promise<string> {
-  const stream = new Blob([new TextEncoder().encode(text)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function decompress(encoded: string): Promise<string> {
-  const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
-  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Response(stream).text();
-}
+//
+// The codec lives in `share.ts` so the contract documented for agents in
+// `docs/spec/digest.md` is exercised by the same functions the playground runs
+// (#97) — documentation that cannot drift without a test failing.
 
 async function share(): Promise<void> {
-  const encoded = await compress(editor.value);
+  const encoded = await encodeShare(editor.value);
   const params = new URLSearchParams({ m: mode, t: themeSelect.value });
   const url = `${location.origin}${location.pathname}#s=${encoded}&${params}`;
   history.replaceState(null, "", `#s=${encoded}&${params}`);
@@ -412,12 +402,37 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")
   });
 }
 
+/**
+ * What the editor shows when a share link cannot be decoded (#389).
+ *
+ * A VALID document, deliberately. A comment-only file has no `map:` header, so
+ * it fails to check and the reader gets "missing required 'map:' header line"
+ * — noise about the wrong problem. This checks clean and renders, so the title
+ * carries the explanation onto the CANVAS, where a recipient is looking.
+ *
+ * Loading a real map here is what caused the defect: a plausible substitute is
+ * indistinguishable from success, and the recipient discussed the wrong map.
+ */
+const BROKEN_LINK = [
+  "# This share link could not be read",
+  "",
+  "map: battlemap",
+  "grid: square 8x5",
+  "scale: 5ft",
+  "",
+  "; The map travels inside the URL itself, so a link that was truncated -",
+  "; wrapped by a chat client, clipped by an email footer, or copied short -",
+  "; cannot be recovered. Ask whoever sent it for a fresh one.",
+  ";",
+  "; Or pick an example from the menu above and start from there.",
+  "",
+].join("\n");
 async function init(): Promise<void> {
   const hash = new URLSearchParams(location.hash.slice(1));
   const encoded = hash.get("s");
   if (encoded) {
     try {
-      editor.value = await decompress(encoded);
+      editor.value = await decodeShare(encoded);
       if (hash.get("m") === "gm") {
         mode = "gm";
         document.querySelector<HTMLButtonElement>('[data-mode="gm"]')?.setAttribute("aria-pressed", "true");
@@ -426,7 +441,19 @@ async function init(): Promise<void> {
       const t = hash.get("t");
       if (t === "candyworld" || t === "vellum") themeSelect.value = t;
     } catch {
-      editor.value = manor;
+      // A BROKEN LINK SAYS SO (#389).
+      //
+      // This loaded the manor demo silently. The recipient of a truncated link
+      // — wrapped by a chat client, clipped by an email footer, copied short —
+      // saw a complete, plausible map with nothing to suggest it was not the
+      // one that had been shared, and discussed the wrong map.
+      //
+      // The toast alone is not enough here: it lasts 2.6 seconds, and the whole
+      // failure is that the substitute looks legitimate. So the reason also
+      // goes into the editor as a Chartdown comment — inert, persistent, and
+      // sitting exactly where a reader looks to see what they were sent.
+      editor.value = BROKEN_LINK;
+      flash("This share link could not be read — ask the sender for a fresh one.");
     }
   } else {
     editor.value = manor;

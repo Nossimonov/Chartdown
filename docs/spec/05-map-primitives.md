@@ -39,8 +39,8 @@ pass : path
 coastline : path
 
 ; crossings — features that sit on paths by relation
-ford : feature states=difficult
-bridge : feature
+ford : feature states=difficult over=water
+bridge : feature over=path
 
 ; settlements — one base word, tiers by derivation
 settlement : feature

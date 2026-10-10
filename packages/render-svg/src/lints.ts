@@ -20,6 +20,17 @@ import { impassableCells } from "./walls";
 import type { Model } from "./model";
 
 /**
+ * The stdlib words that describe a CHANGE OF FLOOR, and so are a way into the
+ * room they stand in (#301, ADR 0052, spec 04 §2's load-bearing table).
+ *
+ * Spec 06 §5 names three traversable connections. `slope` is deliberately not
+ * here: it is a graded surface *within* one level — `slope : terrain`, where
+ * the other two are `: feature` — and walking up one does not arrive from a
+ * storey the map never drew, which is the whole reason the other two count.
+ */
+const INGRESS_WORDS = ["stairs", "ramp"] as const;
+
+/**
  * Warning-level only, by decision (#80). These reason about intent rather than
  * legality, so a false positive must cost an author a line of output and never
  * a blocked render.
@@ -58,7 +69,7 @@ function surfaceByCell(entities: EntityNode[], level: string, hp?: HalfPlaneCont
  * classified. Barriers and tokens are excluded — a wall drawn along a line is
  * not a floor, and a token stands ON ground rather than being it.
  */
-function laysSurface(e: EntityNode): boolean {
+export function laysSurface(e: EntityNode): boolean {
   if (e.archetype === "terrain" || e.archetype === "path") return true;
   if (e.archetype !== "feature") return false;
   return e.placements.some((p) => p.kind === "shape" && p.shape === "path");
@@ -226,13 +237,61 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       diagnostics.push({
         severity: "warning",
         line: s.line,
-        message: `this structure stands on '${word}' with nothing beneath it on level '${levelBelow ?? "(none)"}' — a building on open air (spec 06 §5)`,
+        // On a SINGLE-LEVEL document there is no level below to name. The
+        // message interpolated the string `(none)` and pointed at an edit that
+        // cannot be made there — put a structure on the level underneath —
+        // which is an edit requiring a `levels:` header the document does not
+        // have (#399). The defect is real either way: the author declared the
+        // ground unfloored and built on it. What differs is the remedy, so the
+        // message names the one actually available.
+        message: levelBelow === null
+          ? `this structure stands on '${word}' with no solid ground under it — declare a surface beneath its footprint (spec 06 §5)`
+          : `this structure stands on '${word}' with nothing beneath it on level '${levelBelow}' — a building on open air (spec 06 §5)`,
       });
       break;
     }
   }
 
-  // 3 — unreachable-room: no opening on its perimeter and no connector inside.
+  // An EDGE or CORNER token names a cell and a side of it — `A1.n`, `A1.nw` —
+  // and the cell is right there in the token: `A1.n` is on `A1` (#326). Two
+  // lints read placements and both saw only `address`, with opposite symptoms:
+  // `unreachable-room` stopped counting the stair (a false warning about the
+  // room below), and `dangling-connector` skipped the entity outright (a check
+  // that never ran at all). Spec 06 §5 calls a transition "placed spanning a
+  // boundary", so the edge spelling is the one its own language leads an author
+  // to write.
+  const cellOf = (p: EntityNode["placements"][number]): Address | null =>
+    p.kind === "address" ? p : p.kind === "edge" ? p.at : null;
+
+  // 3 — unreachable-room: no opening on its perimeter, and nothing inside it
+  // that gets you in — a level connector, or a stair.
+  //
+  // Which cell an entity occupies: the explicit `at=` landing of spec 06 §8 if
+  // it has one, else its own address placements. Those are already resolved
+  // against a referent by the time they reach here, so `on cellar at A1`
+  // correctly tests the cellar's B2 rather than the sheet's A1.
+  const landsIn = (e: Pick<EntityNode, "pairs" | "placements">, cells: ReturnType<typeof structureCells>): boolean => {
+    const landing = e.pairs.find((p) => p.key === "at")?.value ?? null;
+    // An EDGE or CORNER token names a cell and a side of it — `A1.n`, `A1.nw` —
+    // and the cell is right there in the token: `A1.n` is on `A1` (#326).
+    // Reading only `address` placements meant one changed token turned a stair
+    // into nothing, and the spelling that broke is the one spec 06 §5's own
+    // language leads an author to write: a transition is "placed spanning a
+    // boundary". The warning then advised adding a door to a room already
+    // reached by a stair.
+    const targets = landing
+      ? [landing]
+      : e.placements.map(cellOf).filter((a): a is Address => a !== null).map((a) => `${a.col}${a.row}`);
+    return targets.some((t) => {
+      // The `at=` PAIR takes the same tolerance, for the same reason: found
+      // while fixing the placement form, and leaving one silent failure in the
+      // function being repaired is how #408 happened. Whether `at=<edge>`
+      // should be refused outright (spec 06 §8 says `at=<cell>`) is a separate
+      // question; reporting an unrelated room as unreachable answers it badly.
+      const m = /^([A-Z]+)(\d+)(?:\.(?:[nsew]|[ns][ew]))?$/.exec(t);
+      return m !== null && cells.has(cellKey({ col: colNum(m[1]!), row: Number(m[2]) }));
+    });
+  };
   for (const s of structures) {
     const cells = structureCells(s);
     if (cells.size === 0) continue;
@@ -253,17 +312,18 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
       // (battlemap.ts), and the two must agree or a shaft's middle floors warn
       // unreachable while the render draws a landing into them (#322).
       const reachesHere = e.level === level || levelSpan(ctx?.levels ?? [level], to).includes(level);
-      if (!reachesHere) return false;
-      const atValue = e.pairs.find((p) => p.key === "at")?.value;
-      const landing = atValue ?? null;
-      const addresses = e.placements.filter((p): p is Address => p.kind === "address");
-      const targets = landing ? [landing] : addresses.map((a) => `${a.col}${a.row}`);
-      return targets.some((t) => {
-        const m = /^([A-Z]+)(\d+)$/.exec(t);
-        return m !== null && cells.has(cellKey({ col: colNum(m[1]!), row: Number(m[2]) }));
-      });
+      return reachesHere && landsIn(e, cells);
     });
-    if (!hasOpening && !hasConnector) {
+    // A STAIR IS A WAY IN, with or without `to=` (#301, ADR 0052). The test
+    // above is for LEVEL CONNECTION, and a SINGLE-LEVEL map has no level to
+    // point at — so a cellar whose only entrance was its stair reported that
+    // nothing could reach it, and the only ways to silence it were to invent a
+    // door the map does not have or to invent a second level to connect to.
+    // Matched through the chain, so `ladder : stairs` counts (spec 04 §2).
+    const hasIngress = on(all).some(
+      (e) => INGRESS_WORDS.some((w) => model.chainOf(e.typeWord).includes(w)) && landsIn(e, cells),
+    );
+    if (!hasOpening && !hasConnector && !hasIngress) {
       diagnostics.push({
         severity: "warning",
         line: s.line,
@@ -275,20 +335,39 @@ export function coherenceLints(model: Model, level: string, diagnostics: Lint[],
   // 4 — dangling-connector: the landing cell is not walkable on the target level.
   for (const e of on(lintModel.entities)) {
     const to = e.pairs.find((p) => p.key === "to")?.value;
-    if (to === undefined || to.includes("..")) continue; // a range lands on many; checked per level as each renders
-    const landing = e.placements.find((p): p is Address => p.kind === "address");
+    if (to === undefined) continue;
+    const landing = e.placements.map(cellOf).find((a): a is Address => a !== null);
     if (!landing) continue;
     const key = cellKey({ col: colNum(landing.col), row: landing.row });
-    if (roomsOn(to).has(key)) continue; // it lands in a room, which is a floor
-    const word = surfaceByCell(all, to, hp).get(key);
-    if (word === undefined) continue;
-    const chain = model.chainOf(word);
-    if (chain.includes("terrace") || (!chain.includes("air") && !chain.includes("earth"))) continue;
-    diagnostics.push({
-      severity: "warning",
-      line: e.line,
-      message: `this connector lands on '${word}' on level '${to}', which cannot be stood on (spec 06 §8)`,
-    });
+    // EVERY LANDING OF THE FLIGHT, not only an unranged one (#344). A range was
+    // skipped outright, so a shaft declared `to=upper..cellar` could land in
+    // solid rock on every floor it passed through and nothing said so, while
+    // the identical document written as separate single-level connectors was
+    // checked normally. #338 named this as the sibling when it fixed the same
+    // blind spot in `unreachable-room`. It is a check that never RAN rather
+    // than one that fired wrongly, which is the kind found only by asking what
+    // a check covers.
+    //
+    // A `through=` level declares NO LANDING (spec 06 §8): a shaft boring
+    // through rock is what `through=` means, so reporting it would report the
+    // feature as the defect. ADR 0048 subtracts them the same way when it
+    // computes a flight's landings.
+    const through = e.pairs.find((p) => p.key === "through")?.value;
+    const levels = ctx?.levels ?? [level];
+    const bored = new Set(through ? levelSpan(levels, through) : []);
+    for (const lvl of levelSpan(levels, to)) {
+      if (bored.has(lvl)) continue;
+      if (roomsOn(lvl).has(key)) continue; // it lands in a room, which is a floor
+      const word = surfaceByCell(all, lvl, hp).get(key);
+      if (word === undefined) continue;
+      const chain = model.chainOf(word);
+      if (chain.includes("terrace") || (!chain.includes("air") && !chain.includes("earth"))) continue;
+      diagnostics.push({
+        severity: "warning",
+        line: e.line,
+        message: `this connector lands on '${word}' on level '${lvl}', which cannot be stood on (spec 06 §8)`,
+      });
+    }
   }
 
   // 5 — overlapping-structures: two on one level sharing cells.
