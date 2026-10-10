@@ -83,6 +83,9 @@ export function renderBattlemap(
   const fieldHoles = new Map<string, string[]>();
   /** Cell edges a `drop` has already ticked — an edge carries ONE cliff (#425). */
   const droppedEdges = new Set<string>();
+  /** Every path course on this level, for junction detection (#437), computed once on demand. */
+  let courseCache: ReturnType<typeof pathCourses> | null = null;
+  const coursesOnce = (): ReturnType<typeof pathCourses> => (courseCache ??= pathCourses());
   /**
    * The same pools as GEOMETRY, with the emitter that made each one (#290).
    *
@@ -698,6 +701,71 @@ export function renderBattlemap(
     return out;
   }
 
+  /**
+   * The cells every OTHER path's course runs through, with its elevation.
+   *
+   * Built from the whole level up front, because a junction is a fact about two
+   * entities and the render loop meets them one at a time — the problem
+   * `pendingCrossings` solves for crossings. Keyed on the course, not on the
+   * declared vertices: a road's band covers the cells between its corners, and
+   * resolving a junction against the vertices alone is the mistake #438 is
+   * about.
+   */
+  function pathCourses(): { e: EntityNode; cells: Set<string>; elevation: string | undefined; termini: Set<string> }[] {
+    const out: { e: EntityNode; cells: Set<string>; elevation: string | undefined; termini: Set<string> }[] = [];
+    for (const e of model.entities) {
+      for (const p of e.placements) {
+        if (p.kind !== "shape" || p.shape !== "path") continue;
+        const vertices = p.args.filter((a): a is Address => a.kind === "address").map(cellCenter);
+        if (vertices.length < 2) continue;
+        const key = (v: XY): string => `${Math.floor((v.x - MARGIN) / CELL) + 1}:${Math.floor((v.y - MARGIN) / CELL) + 1}`;
+        out.push({
+          e, cells: cellsAlong(vertices), elevation: pairOf(e.pairs, "elevation"),
+          // Its OWN ends, so a course that merely terminates in the same cell
+          // is not mistaken for one running through it.
+          termini: new Set([key(vertices[0]!), key(vertices[vertices.length - 1]!)]),
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Which ends of this course MEET another course, and so must not be pushed
+   * out to the cell face (ADR 0044, #437).
+   *
+   * ADR 0044 decided it: "A joining end stops at its meeting point and is not
+   * extended to the cell face... a course that joins another does not terminate
+   * in a cell of its own." The rule was reachable only through the `join`
+   * keyword, which a cell-placed `path` cannot spell — so every street placed
+   * by cells ran through the road it met and out the far side, which is the
+   * "stub road going nowhere" a dogfooding pass reported.
+   *
+   * ADR 0044 exempts the FIRST point, because in `from <ref> … join <ref>` the
+   * `from` end is a declared origin that really does terminate in its own cell.
+   * A cell path has no declared origin — both ends are cells, and a lane can
+   * meet a road at both (the reported map has one). So both ends are inferred
+   * here. That is a divergence from the ADR's letter, following its reasoning.
+   *
+   * A differing `elevation=` is a flyover, not a junction: the Sky Bridge
+   * passing over a street keeps its own geometry.
+   */
+  function meetingEnds(e: EntityNode, vertices: XY[], courses: ReturnType<typeof pathCourses>): { start: boolean; end: boolean } {
+    const mine = pairOf(e.pairs, "elevation");
+    const meets = (p: XY): boolean => {
+      // The same arithmetic `cellsAlong` uses, so the two agree which cell a
+      // point is in. A second way of deriving that is what caused #396/#408.
+      const key = `${Math.floor((p.x - MARGIN) / CELL) + 1}:${Math.floor((p.y - MARGIN) / CELL) + 1}`;
+      // The other course must run THROUGH this cell, not merely end in it.
+      // Two courses sharing a terminus are meeting end to end — both should
+      // still fill their own cell (#145). Suppressing there shortened a stream
+      // that happened to be where another one joined it: the host, not the
+      // joiner (caught by `undercellar` drifting).
+      return courses.some((c) => c.e !== e && c.elevation === mine && c.cells.has(key) && !c.termini.has(key));
+    };
+    return { start: meets(vertices[0]!), end: meets(vertices[vertices.length - 1]!) };
+  }
+
   function cellsAlong(pts: XY[]): Set<string> {
     const cells = new Set<string>();
     for (let i = 0; i < pts.length - 1; i++) {
@@ -1297,7 +1365,12 @@ export function renderBattlemap(
         const pts = addresses.map(cellCenter);
         // Drawn to the edges of the terminal cells; RECORDED as the declared
         // spine (#145) — see extendToCellEdge.
-        const drawn = extendToCellEdge(pts, p.joinsAtEnd === true);
+        // A JUNCTION DOES NOT OVERSHOOT (ADR 0044, #437). An end landing on
+        // another course stops there instead of being pushed to the cell face
+        // — which is what `join` has always done, and what a cell-placed path
+        // could never say.
+        const met = meetingEnds(e, pts, coursesOnce());
+        const drawn = extendToCellEdge(pts, p.joinsAtEnd === true || met.end, !met.start);
         // Unit-aware, and shared with `surfaceCells` so the ink and the ground
         // agree (#374). `width=10ft` at `scale: 5ft` is `width=2`.
         const width = measureInCells(pairOf(e.pairs, "width"), scaleOf(model)) * CELL * 0.85;
@@ -2477,7 +2550,7 @@ function halfPlaneArea(compass: string, course: XY[], frame: { cols: number; row
  * it through the trunk and out the far side. The first point is unaffected —
  * `from` is always a free end.
  */
-function extendToCellEdge(pts: XY[], joinsAtEnd = false): XY[] {
+function extendToCellEdge(pts: XY[], joinsAtEnd = false, freeStart = true): XY[] {
   if (pts.length < 2) return pts;
   const out = pts.map((p) => ({ ...p }));
   const reach = (end: XY, inward: XY): void => {
@@ -2497,7 +2570,7 @@ function extendToCellEdge(pts: XY[], joinsAtEnd = false): XY[] {
     end.x += ux * t;
     end.y += uy * t;
   };
-  reach(out[0]!, out[1]!);
+  if (freeStart) reach(out[0]!, out[1]!);
   if (!joinsAtEnd) reach(out[out.length - 1]!, out[out.length - 2]!);
   return out;
 }
