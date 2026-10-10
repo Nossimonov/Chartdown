@@ -1,0 +1,55 @@
+# After a release reaches `main`, bring `preview` back to it (#445).
+#
+# Every `preview -> main` PR merge creates a merge commit on `main` ONLY, and
+# `preview` never receives it back — so the lanes separate by one commit per
+# release. The content was never different (`git log preview..main` showed
+# nothing but merge commits), but GitHub reports the next release PR's branch
+# as "out of date with the base branch", and a lane that is permanently behind
+# production is a worse thing to explain than to fix.
+#
+# It is a FAST-FORWARD, not a rebase: immediately after a release merge
+# `preview`'s tip is an ancestor of `main`, so the pointer just advances. A
+# rebase would rewrite `preview`'s commits for no benefit.
+#
+# THE PUSH IS NOT FORCED, and that is the whole safety argument. If `preview`
+# has moved on since the release merge, an ordinary push is rejected: this job
+# fails and nothing is discarded. It can lose no work — only report that a
+# human should look. The `--is-ancestor` check runs first so the failure says
+# which situation it is rather than leaving git's rejection text to be read.
+#
+# A push made with the default GITHUB_TOKEN does not trigger further workflow
+# runs, so this does not start `close-on-preview`, CI, or the playground
+# deploy. Were that ever to change, `close-on-preview` would resolve this
+# push's SHA to the release PR and close the issues its body CLOSING-REFS —
+# and a release PR's body names issues in prose without closing keywords, so
+# `closing-refs.mjs` extracts nothing from it. Checked against #442 and #444.
+name: Sync preview to main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-preview
+
+jobs:
+  fast-forward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Fast-forward preview to main
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          if git merge-base --is-ancestor origin/preview HEAD; then
+            git push origin "HEAD:refs/heads/preview"
+            echo "preview fast-forwarded to $(git rev-parse --short HEAD)."
+          else
+            echo "::error::preview is not an ancestor of main — it has commits main does not, so this is not a fast-forward. Nothing was pushed; sync it by hand."
+            exit 1
+          fi
