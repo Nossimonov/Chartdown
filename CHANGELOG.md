@@ -4,6 +4,8 @@ All notable changes to the Chartdown language and its reference implementation. 
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-10
+
 ### Added
 
 - **The playground's share link is a documented contract for agents** ([#97](https://github.com/Nossimonov/Chartdown/issues/97)). An agent that authors a map had no sanctioned way to show its reader the result: the fragment URL carries a whole document with no server, no storage and nothing uploaded, but nothing said it existed or how to build one. `digest.md` — which ships as `llms-full.txt` and is what `chartdown_spec` returns — now specifies the encoding (`deflate-raw` → base64url, unpadded), the `m`/`t` parameters and the fail-closed `player` default, with a reference encoder. A test **extracts that encoder from the digest and runs it**, requiring byte-identical output to the function the playground itself calls, so the documentation cannot drift from the code. The codec moved to `playground/src/share.ts` so both read one implementation. `llms.txt` now orders the three validate-and-render routes by what an agent can actually reach, since an MCP server is not available in every host.
@@ -311,7 +313,8 @@ The first public release: the Chartdown language v0.1 and its reference implemen
 - `@chartdown/browser` — one script tag renders ` ```chartdown ` fenced blocks in place
 - The [playground](https://nossimonov.github.io/Chartdown/) — fully client-side editing, level switcher, share links
 
-[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Nossimonov/Chartdown/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Nossimonov/Chartdown/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Nossimonov/Chartdown/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Nossimonov/Chartdown/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Nossimonov/Chartdown/compare/v0.5.0...v0.6.0
