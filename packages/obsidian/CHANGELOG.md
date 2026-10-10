@@ -2,6 +2,58 @@
 
 The plugin versions on its own lane; the renderer it embeds versions with the [Chartdown language](https://github.com/Nossimonov/Chartdown/blob/main/CHANGELOG.md). Most releases here are the renderer moving underneath.
 
+## [0.7.0] - 2026-10-10
+
+Carries the Chartdown 0.9.0 renderer — a large release, and the first where most
+of what changed is visible on the page rather than in a diagnostic.
+
+### Two things that used to be accepted are now refused
+
+A measure that is plainly an attempted number, and is not one, is reported
+instead of becoming zero. `width=.5mi` — half a mile, with the leading zero
+left off — used to make the river **vanish**, with the note pane reporting no
+problem at all. So did `width=1e3`, which parsed the `1` and drew something
+much too small.
+
+An explicit unit must now be the map's own. On a map measured in miles,
+`width=60ft` drew a stroke three times the width of the whole map — a 5280×
+error, in silence. Both of these now say what is wrong and how to write it.
+
+**If a map of yours suddenly shows an error, this is the likely reason, and the
+map was almost certainly rendering wrongly before.** The error names the fix.
+
+### Cliffs follow the shape you drew
+
+`drop` ticked each rectangle of a footprint rather than its outline, so an area
+written as a list of cells got **no cliff at all** — the flag was accepted and
+nothing was drawn — while an area written as two abutting ranges got a cliff
+through its own middle. One shape now gets one outline, however you spell it.
+
+### Ledges appear where ground changes height
+
+`elevation=` drew no edge anywhere, so the only way to get a cliff was to say
+`drop` explicitly. Now a raised area is bounded by a ledge without your
+declaring the ground around it, which is what the spec always promised.
+
+### Streets meet the roads they join
+
+A street ending on a road ran through it and out the far side, leaving a small
+spur. It now stops where it meets.
+
+### Unknown terrain words get their own colour
+
+`houses`, `garden`, `plaza`, `graveyard` all rendered the same grey, which is
+exactly the case where telling them apart matters. Each now takes a colour of
+its own, and the same word is always the same colour. A theme still wins.
+
+### Also
+
+A derived field word now emits light — `glow : light` with `glow=20ft` drew a
+dark room with an invisible lamp. A barrier that passes sight no longer blocks
+it on export. A stair is now a way into a room, so a cellar reached only by its
+stair stops reporting that nothing can reach it. Crossings take a new `over=`
+facet, so a causeway no longer has to call itself a bridge.
+
 ## [0.6.0] - 2026-08-30
 
 Carries the Chartdown 0.8.0 renderer. A smaller release than 0.5.0, and mostly one thing: widths written with a unit now work.
