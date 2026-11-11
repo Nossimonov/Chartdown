@@ -16,12 +16,12 @@
     "preflight:plugin": "node plugin-preflight.mjs"
   },
   "devDependencies": {
-    "@rgrove/parse-xml": "^5.0.0",
-    "@types/node": "^26.6.3",
+    "@rgrove/parse-xml": "^5.1.0",
+    "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.14.5",
+    "happy-dom": "^21.0.4",
     "typescript": "^7.0.0",
-    "vitest": "^5.0.2"
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": ">=20"
